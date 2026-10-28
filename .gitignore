@@ -1,0 +1,24 @@
+# Dependencias y salidas
+node_modules/
+coverage/
+*.log
+
+# Credenciales y configuración local (nunca al repositorio)
+.clasprc.json
+.clasp.json
+.env
+.env.*
+*.pem
+*.key
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Archivos de trabajo de Claude Code
+.claude/
+
+# Proyecto anterior (referencia local; contiene datos personales)
+legacy/

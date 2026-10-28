@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Moni">
+  <title>Moni</title>
+  <?!= include('tokens'); ?>
+  <?!= include('app_css'); ?>
+</head>
+<body>
+  <a class="m-skip" href="#contenido">Saltar al contenido</a>
+
+  <!-- Iconos: trazo uniforme de 1,75 px, a la manera de SF Symbols -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6"/></symbol>
+    <symbol id="i-bolsillos" viewBox="0 0 24 24"><path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zm0 0V6a2 2 0 0 1 2-2h11M16 14h2"/></symbol>
+    <symbol id="i-presupuesto" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-tarjetas" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 10h18M7 15h4"/></symbol>
+    <symbol id="i-mas" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-der" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-izq" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-ajustes" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+    <symbol id="i-banco" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/></symbol>
+    <symbol id="i-cuenta" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h2"/></symbol>
+    <symbol id="i-etiqueta" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12zM7.5 8h.01"/></symbol>
+    <symbol id="i-personas" viewBox="0 0 24 24"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19v-1a3 3 0 0 0-2-2.8M16 5.2a3 3 0 0 1 0 5.6"/></symbol>
+    <symbol id="i-edificio" viewBox="0 0 24 24"><path d="M5 21V4h9v17M14 9h5v12M9 8h1M9 12h1M9 16h1M3 21h18"/></symbol>
+    <symbol id="i-capas" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
+    <symbol id="i-prueba" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></symbol>
+    <symbol id="i-usuario" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-paleta" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.5-2s0-2 1.5-2h2a3 3 0 0 0 3-3 9 9 0 0 0-8-11zM7.5 11h.01M10 7h.01M15 7h.01"/></symbol>
+    <symbol id="i-pulso" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+    <symbol id="i-hogar" viewBox="0 0 24 24"><path d="M4 21V9l8-6 8 6v12M9 21v-7h6v7"/></symbol>
+  </svg>
+
+  <div id="progreso" role="progressbar" aria-label="Cargando" aria-hidden="true"></div>
+
+  <div id="app">
+    <nav id="lateral" aria-label="Principal"></nav>
+
+    <main id="contenido" tabindex="-1">
+      <header id="barra">
+        <div id="barra-izq"></div>
+        <div id="barra-titulo" aria-hidden="true"></div>
+        <div id="barra-der"></div>
+      </header>
+      <div id="vista" class="m-pagina"><div class="m-cargando">Cargando…</div></div>
+    </main>
+
+    <nav id="tabbar" aria-label="Principal"></nav>
+  </div>
+
+  <button id="fab" class="m-fab" data-acc="registrar" hidden aria-label="Registrar un movimiento"><svg class="m-icon" aria-hidden="true" focusable="false"><use href="#i-plus"/></svg><span>Registrar</span></button>
+
+  <div id="avisos" role="status" aria-live="polite" aria-atomic="true"></div>
+  <dialog id="hoja" class="m-hoja" aria-labelledby="hoja-titulo"></dialog>
+
+  <?!= include('app_js'); ?>
+</body>
+</html>

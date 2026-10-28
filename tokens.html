@@ -1,0 +1,175 @@
+<style>
+/* ==========================================================================
+   Moni — Tokens de diseño y componentes base (alineados a las HIG de Apple)
+   Prefijo --m- / .m-  para convivir con css.html mientras se reconstruye la interfaz.
+   Se incluye con <?!= include('tokens'); ?> cuando una pantalla se migra (Fase 1 en adelante).
+   Contraste verificado por tests/contraste.js (AA: 4.5:1 texto, 3:1 elementos grandes).
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Color semántico: claro ---- */
+  --m-bg: #FAF5F7;              /* fondo de pantalla */
+  --m-bg-grouped: #FFFFFF;      /* tarjetas y listas agrupadas */
+  --m-bg-elevated: #FFFFFF;     /* hojas modales */
+  --m-fill: rgba(60, 40, 50, 0.07);   /* relleno de controles */
+  --m-separator: rgba(60, 40, 50, 0.16);
+
+  --m-label: #2C2226;           /* texto principal */
+  --m-label-2: #6C5A63;         /* texto secundario */
+  --m-label-3: #A8949E;         /* solo decorativo / placeholder: NO usar para texto que se debe leer */
+
+  --m-tint: #CC2B65;            /* acento (rosa); personalizable en Ajustes */
+  --m-on-tint: #FFFFFF;         /* texto sobre el acento */
+  --m-tint-soft: rgba(214, 51, 108, 0.10);
+
+  --m-success: #187A4E;
+  --m-danger: #C62828;
+  --m-warning: #A15C00;
+
+  /* ---- Tipografía (rem; escala con el tamaño de texto del usuario) ---- */
+  --m-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Helvetica Neue", sans-serif;
+  --m-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --m-text-large-title: 2.125rem;   /* 34 */
+  --m-text-title-1: 1.75rem;        /* 28 */
+  --m-text-title-2: 1.375rem;       /* 22 */
+  --m-text-title-3: 1.25rem;        /* 20 */
+  --m-text-headline: 1.0625rem;     /* 17, semibold */
+  --m-text-body: 1.0625rem;         /* 17 */
+  --m-text-callout: 1rem;           /* 16 */
+  --m-text-subheadline: 0.9375rem;  /* 15 */
+  --m-text-footnote: 0.8125rem;     /* 13 */
+  --m-text-caption: 0.75rem;        /* 12: mínimo permitido */
+
+  /* ---- Espaciado (rejilla de 8 pt), radios y áreas táctiles ---- */
+  --m-space-1: 0.25rem;
+  --m-space-2: 0.5rem;
+  --m-space-3: 0.75rem;
+  --m-space-4: 1rem;
+  --m-space-5: 1.5rem;
+  --m-space-6: 2rem;
+  --m-radius-sm: 8px;
+  --m-radius-md: 12px;
+  --m-radius-lg: 16px;
+  --m-radius-pill: 9999px;
+  --m-hit: 44px;                /* tamaño táctil mínimo */
+
+  /* ---- Movimiento ---- */
+  --m-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --m-dur-fast: 150ms;
+  --m-dur: 250ms;
+
+  /* ---- Seguridad de pantalla (iPhone) ---- */
+  --m-safe-top: env(safe-area-inset-top, 0px);
+  --m-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ---- Color semántico: oscuro (automático o forzado desde Ajustes) ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --m-bg: #000000;
+    --m-bg-grouped: #1C1C1E;
+    --m-bg-elevated: #2C2C2E;
+    --m-fill: rgba(235, 235, 245, 0.12);
+    --m-separator: rgba(235, 235, 245, 0.20);
+    --m-label: #F5F0F2;
+    --m-label-2: #BDB0B6;
+    --m-label-3: #7C6F75;
+    --m-tint: #FF7A9E;
+    --m-on-tint: #1C1C1E;
+    --m-tint-soft: rgba(255, 122, 158, 0.16);
+    --m-success: #4CD08A;
+    --m-danger: #FF6B6B;
+    --m-warning: #FFB454;
+  }
+}
+:root[data-theme="dark"] {
+  --m-bg: #000000;
+  --m-bg-grouped: #1C1C1E;
+  --m-bg-elevated: #2C2C2E;
+  --m-fill: rgba(235, 235, 245, 0.12);
+  --m-separator: rgba(235, 235, 245, 0.20);
+  --m-label: #F5F0F2;
+  --m-label-2: #BDB0B6;
+  --m-label-3: #7C6F75;
+  --m-tint: #FF7A9E;
+  --m-on-tint: #1C1C1E;
+  --m-tint-soft: rgba(255, 122, 158, 0.16);
+  --m-success: #4CD08A;
+  --m-danger: #FF6B6B;
+  --m-warning: #FFB454;
+}
+
+/* ---- Base ---- */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--m-font);
+  font-size: var(--m-text-body);
+  color: var(--m-label);
+  background: var(--m-bg);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+.m-num { font-variant-numeric: tabular-nums; }   /* cifras alineadas para dinero */
+
+/* Foco visible para teclado y lectores de pantalla */
+:focus-visible {
+  outline: 3px solid var(--m-tint);
+  outline-offset: 2px;
+  border-radius: var(--m-radius-sm);
+}
+
+/* Texto solo para lectores de pantalla */
+.m-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ---- Botones: mínimo 44 pt ---- */
+.m-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--m-space-2);
+  min-height: var(--m-hit); min-width: var(--m-hit);
+  padding: 0 var(--m-space-4);
+  font: inherit; font-size: var(--m-text-callout); font-weight: 600;
+  border: 0; border-radius: var(--m-radius-md);
+  cursor: pointer;
+  transition: opacity var(--m-dur-fast) var(--m-ease), transform var(--m-dur-fast) var(--m-ease);
+}
+.m-btn:active { transform: scale(0.97); }
+.m-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.m-btn-primary { background: var(--m-tint); color: var(--m-on-tint); }
+.m-btn-secondary { background: var(--m-tint-soft); color: var(--m-tint); }
+.m-btn-destructive { background: transparent; color: var(--m-danger); }
+
+/* ---- Campos: 16 px mínimo (iOS no amplía la pantalla al enfocar) ---- */
+.m-input {
+  width: 100%; min-height: var(--m-hit);
+  padding: 0 var(--m-space-3);
+  font: inherit; font-size: var(--m-text-callout);
+  color: var(--m-label); background: var(--m-fill);
+  border: 1px solid transparent; border-radius: var(--m-radius-md);
+}
+.m-input:focus { border-color: var(--m-tint); background-color: var(--m-bg-grouped); }
+.m-label { display: block; margin-bottom: var(--m-space-1); font-size: var(--m-text-footnote); font-weight: 600; color: var(--m-label-2); }
+
+/* ---- Lista agrupada (inset) ---- */
+.m-group { background: var(--m-bg-grouped); border-radius: var(--m-radius-lg); overflow: hidden; }
+.m-row {
+  display: flex; align-items: center; gap: var(--m-space-3);
+  min-height: var(--m-hit); padding: var(--m-space-3) var(--m-space-4);
+  border-bottom: 0.5px solid var(--m-separator);
+}
+.m-row:last-child { border-bottom: 0; }
+
+/* ---- Movimiento reducido ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>

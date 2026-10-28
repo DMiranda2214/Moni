@@ -1,0 +1,17 @@
+{
+  "name": "moni",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moni: finanzas personales sobre Google Sheets con Apps Script",
+  "scripts": {
+    "test": "node tests/run.js",
+    "sintaxis": "node tests/sintaxis.js",
+    "login": "npx --yes @google/clasp login",
+    "push": "npx --yes @google/clasp push",
+    "pull": "npx --yes @google/clasp pull",
+    "abrir": "npx --yes @google/clasp open-script",
+    "contraste": "node tests/contraste.js",
+    "verificar": "node tests/sintaxis.js && node tests/run.js && node tests/contraste.js",
+    "vista": "node tests/dev_server.js"
+  }
+}
