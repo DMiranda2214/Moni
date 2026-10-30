@@ -368,7 +368,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -400,8 +400,9 @@ function render(enfocar) {
   $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + vista.html;
   document.title = (vista.titulo ? vista.titulo + ' · ' : '') + 'Moni';
 
+  document.body.classList.toggle('m-asistente', !!vista.asistente);
   const fab = $('#fab');
-  if (fab) fab.hidden = !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
+  if (fab) fab.hidden = !!vista.asistente || !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
 
   if (vista.despues) vista.despues();
   if (enfocar) {
@@ -441,6 +442,7 @@ function pantalla(ruta) {
       if (partes[1] === 'plantilla') return vPlantilla();
       if (partes[1] === 'respaldos') return vRespaldos();
       if (partes[1] === 'arranque') return vArranque();
+      if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'parametros') return vParametros();
       if (partes[1] === 'diagnostico') return vDiagnostico();
       if (CAT[partes[1]]) return vCatalogo(partes[1]);
@@ -521,6 +523,7 @@ function bannerDemo() {
 }
 
 function vInicio() {
+  if (asistenteVisible()) return vAsistente();
   const nombre = cfg('Nombre_Usuario');
   const estado = App.boot.estado || {};
   const s = App.boot.saldos || { cuentas: [] };
@@ -528,8 +531,11 @@ function vInicio() {
 
   if (estado.pasos && !estado.completo) {
     const hechos = estado.pasos.filter(p => p.hecho).length;
+    // Quien dejó el asistente "para más tarde" lo retoma desde aquí; con datos de demostración no aplica.
+    const retomar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'))
+      ? fila({ icono: 'capas', titulo: 'Continuar con el asistente', sub: 'Te lleva paso a paso', chevron: true, attrs: 'data-acc="asist-reanudar"' }) : '';
     html += '<section class="m-seccion" aria-label="Primeros pasos"><h2 class="m-seccion-titulo">Primeros pasos · ' + hechos + ' de ' + estado.pasos.length + '</h2>' +
-      '<div class="m-group">' + estado.pasos.map(p =>
+      '<div class="m-group">' + retomar + estado.pasos.map(p =>
         fila({
           icono: p.hecho ? 'check' : 'plus',
           titulo: esc(p.titulo),
@@ -684,7 +690,9 @@ function vAjustes() {
         irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
         irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
-        irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' }))
+        irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
+      seccion('Privacidad',
+        irA('ajustes/borrar', { icono: 'alerta', titulo: 'Borrar todos mis datos', sub: 'Empieza de cero. No se puede deshacer', clase: 'm-fila-peligro' }))
   };
 }
 
@@ -703,10 +711,18 @@ function vPerfil() {
   };
 }
 
-function vApariencia() {
+/** Muestras de color de acento (radios). Las usan Apariencia y el asistente; el cambio lo guarda el oyente de 'change'. */
+function htmlMuestrasAcento() {
   const tema = cfg('Tema') || 'Automatico';
   const acento = cfg('Color_Acento') || 'rosa';
   const oscuro = document.documentElement.getAttribute('data-theme') === 'dark' || (tema === 'Automatico' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  return '<div class="m-muestras" role="radiogroup">' +
+    Object.keys(ACENTOS).map(k => '<label title="' + esc(ACENTOS[k].nombre) + '"><input type="radio" name="acento" value="' + k + '" aria-label="' + esc(ACENTOS[k].nombre) + '"' + (acento === k ? ' checked' : '') + '>' +
+      '<span style="--muestra:' + (oscuro ? ACENTOS[k].oscuro : ACENTOS[k].claro) + '">' + ico('check') + '</span></label>').join('') + '</div>';
+}
+
+function vApariencia() {
+  const tema = cfg('Tema') || 'Automatico';
   return {
     titulo: 'Apariencia',
     html:
@@ -714,10 +730,8 @@ function vApariencia() {
       '<fieldset class="m-campo" style="border:0;padding:0;margin:0 0 var(--m-space-5)"><legend class="m-label">Tema</legend><div class="m-segmentado" role="radiogroup">' +
       Object.keys(ETIQUETAS.Tema).map(k => '<label><input type="radio" name="tema" value="' + k + '"' + (tema === k ? ' checked' : '') + '><span>' + esc(ETIQUETAS.Tema[k]) + '</span></label>').join('') +
       '</div></fieldset>' +
-      '<fieldset class="m-campo" style="border:0;padding:0;margin:0"><legend class="m-label">Color de acento</legend><div class="m-muestras" role="radiogroup">' +
-      Object.keys(ACENTOS).map(k => '<label title="' + esc(ACENTOS[k].nombre) + '"><input type="radio" name="acento" value="' + k + '" aria-label="' + esc(ACENTOS[k].nombre) + '"' + (acento === k ? ' checked' : '') + '>' +
-        '<span style="--muestra:' + (oscuro ? ACENTOS[k].oscuro : ACENTOS[k].claro) + '">' + ico('check') + '</span></label>').join('') +
-      '</div><p class="m-ayuda">Los colores están elegidos para que el texto se lea bien en tema claro y oscuro.</p></fieldset></div>'
+      '<fieldset class="m-campo" style="border:0;padding:0;margin:0"><legend class="m-label">Color de acento</legend>' + htmlMuestrasAcento() +
+      '<p class="m-ayuda">Los colores están elegidos para que el texto se lea bien en tema claro y oscuro.</p></fieldset></div>'
   };
 }
 
@@ -3086,7 +3100,353 @@ async function abrirCodigoServicio(id) {
 // Acciones (delegación de eventos)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Asistente de bienvenida y primeros pasos: un paso por pantalla, con el progreso a la vista.
+// Reutiliza los campos de los catálogos (CAT) y guarda con los mismos servicios que Ajustes.
+// Aparece en Inicio mientras falten pasos obligatorios; "Seguir más tarde" lo deja y Inicio muestra la lista.
+// ---------------------------------------------------------------------------
+
+const PASOS_ASIST = [
+  { id: 'perfil', corto: 'Tú' },
+  { id: 'bancos', corto: 'Bancos', tabla: 'Bancos', uno: 'un banco', otro: 'Guardar y agregar otro' },
+  { id: 'cuentas', corto: 'Cuentas', tabla: 'Cuentas', uno: 'una cuenta', otro: 'Guardar y agregar otra' },
+  { id: 'bolsillos', corto: 'Bolsillos', tabla: 'Bolsillos', uno: 'un bolsillo', otro: 'Guardar y agregar otro' },
+  { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' }
+];
+const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
+
+/** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
+const CAMPOS_ASIST = {
+  Bancos: ['Nombre'],
+  Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
+  Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura']
+};
+const TEXTOS_ASIST = {
+  perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
+  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios.' },
+  cuentas: { titulo: 'Crea tu primera cuenta', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito.' },
+  bolsillos: { titulo: 'Reparte tu cuenta en bolsillos', sub: 'Un bolsillo es una parte de tu cuenta con un propósito: casa, mercado, un viaje. Escribe cuánto dinero hay hoy en cada uno.' },
+  tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas.' }
+};
+
+const CLAVE_ASIST_OMITIDO = 'moni.asistente.omitido';
+function asistenteOmitido() { try { return localStorage.getItem(CLAVE_ASIST_OMITIDO) === '1'; } catch (e) { return false; } }
+function recordarAsistenteOmitido(v) { try { if (v) localStorage.setItem(CLAVE_ASIST_OMITIDO, '1'); else localStorage.removeItem(CLAVE_ASIST_OMITIDO); } catch (e) {} }
+
+/** activo: el asistente ya arrancó en esta sesión (sigue visible aunque se complete lo obligatorio, hasta el cierre). */
+App.asist = { activo: false, paso: null, omitido: asistenteOmitido(), ultimo: {} };
+
+function asistenteVisible() {
+  const e = App.boot && App.boot.estado;
+  if (!e || !e.instalado || !e.pasos) return false;
+  if (App.asist.omitido || esVerdad(cfg('Datos_Demo')) || esVerdad(cfg('Arranque_Hecho'))) return false;
+  if (!App.asist.activo && !e.completo) App.asist.activo = true;
+  return App.asist.activo;
+}
+
+/** Sin nada hecho: bienvenida. Con avance (por ejemplo, de otra sesión): el primer paso pendiente. */
+function pasoInicialAsist() {
+  const pasos = App.boot.estado.pasos;
+  if (pasos.every(p => !p.hecho)) return 'bienvenida';
+  const pendiente = pasos.find(p => !p.hecho && !p.opcional) || pasos.find(p => !p.hecho);
+  return pendiente ? pendiente.id : 'fin';
+}
+
+function aplicaPasoAsist(id) {
+  if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
+  return true;
+}
+
+function moverAsist(delta) {
+  let i = ORDEN_ASIST.indexOf(App.asist.paso);
+  do { i += delta; } while (i > 0 && i < ORDEN_ASIST.length - 1 && !aplicaPasoAsist(ORDEN_ASIST[i]));
+  App.asist.paso = ORDEN_ASIST[Math.max(0, Math.min(ORDEN_ASIST.length - 1, i))];
+  render(true);
+}
+
+function terminarAsistente(omitido) {
+  App.asist.activo = false; App.asist.paso = null;
+  if (omitido) { App.asist.omitido = true; recordarAsistenteOmitido(true); }
+  App.pila = ['inicio'];
+  render(true);
+}
+
+const camposAsist = tabla => CAT[tabla].campos.filter(c => CAMPOS_ASIST[tabla].indexOf(c.k) !== -1);
+const listaAsist = tabla => activos(tabla).filter(f => !esVerdad(f.Es_Interno));
+
+function valorInicialAsist(c) {
+  const preseleccion = (lista, idCol, recordado) => lista.some(f => f[idCol] === recordado) ? recordado : (lista.length === 1 ? lista[0][idCol] : '');
+  if (c.k === 'ID_Banco') return preseleccion(activos('Bancos'), 'ID_Banco', App.asist.ultimo.ID_Banco);
+  if (c.k === 'ID_Cuenta') return preseleccion(activos('Cuentas').filter(x => esVerdad(x.Permite_Bolsillos)), 'ID_Cuenta', App.asist.ultimo.ID_Cuenta);
+  return c.defecto !== undefined ? c.defecto : '';
+}
+
+function htmlPasosAsist(actual) {
+  const estado = {};
+  App.boot.estado.pasos.forEach(p => { estado[p.id] = p; });
+  return '<ol class="m-pasos" aria-label="Progreso de la configuración">' + PASOS_ASIST.map((p, i) => {
+    const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
+    const nota = { actual: 'paso actual', hecho: 'completado', pendiente: 'pendiente' }[clase];
+    return '<li class="m-paso m-paso-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '>' +
+      '<span class="m-paso-punto" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
+      '<span class="m-paso-nombre">' + esc(p.corto) + '<span class="m-sr-only"> (' + nota + ')</span></span></li>';
+  }).join('') + '</ol>';
+}
+
+/** Lo que ya se agregó en este paso, con el mismo texto que las listas de Ajustes. */
+function htmlHechosAsist(tabla) {
+  const lista = listaAsist(tabla);
+  if (!lista.length) return '';
+  const def = CAT[tabla];
+  return '<section class="m-seccion" aria-label="Ya agregaste"><h2 class="m-seccion-titulo">Ya agregaste</h2><div class="m-group">' +
+    lista.map(f => {
+      const x = def.fila(f);
+      return '<div class="m-row m-hecho"><span class="m-row-icono">' + ico('check', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + x.titulo + '</span>' +
+        (x.sub ? '<span class="m-row-sub" style="display:block">' + x.sub + '</span>' : '') + '</span>' + (x.final ? '<span class="m-row-final">' + x.final + '</span>' : '') + '</div>';
+    }).join('') + '</div></section>';
+}
+
+function vAsistente() {
+  if (!App.asist.paso || ORDEN_ASIST.indexOf(App.asist.paso) === -1) App.asist.paso = pasoInicialAsist();
+  if (App.asist.paso === 'bienvenida') return vBienvenida();
+  if (App.asist.paso === 'fin') return vFinAsistente();
+  return vPasoAsistente(App.asist.paso);
+}
+
+function vBienvenida() {
+  const dato = (icono, titulo, sub) => '<div class="m-row"><span class="m-row-icono">' + ico(icono, 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(titulo) + '</span><span class="m-row-sub" style="display:block">' + esc(sub) + '</span></span></div>';
+  return {
+    titulo: 'Bienvenida', ocultarTitulo: true, asistente: true,
+    html: '<div class="m-asist m-asist-centro">' +
+      '<div class="m-asist-hero" aria-hidden="true">' + ico('bolsillos') + '</div>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">Te damos la bienvenida a Moni</h1>' +
+      '<p class="m-subtitulo">Tu dinero, ordenado: cuánto tienes, para qué es cada parte y qué te toca pagar. Prepararlo toma unos 3 minutos.</p>' +
+      '<div class="m-group m-asist-lista">' +
+        dato('usuario', 'Tu nombre', 'Para saludarte') +
+        dato('banco', 'Tus bancos y cuentas', 'Dónde está tu dinero') +
+        dato('bolsillos', 'Tus bolsillos', 'Para qué es cada parte') +
+        dato('tarjetas', 'Tus tarjetas', 'Opcional') + '</div>' +
+      '<div class="m-asist-acciones">' +
+        '<button type="button" class="m-btn m-btn-primary" data-acc="asist-empezar">Empezar</button>' +
+        '<button type="button" class="m-btn m-btn-secondary" data-acc="sembrar-demo">Explorar primero con datos de ejemplo</button>' +
+        '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Ahora no</button></div></div>'
+  };
+}
+
+function vPasoAsistente(id) {
+  const p = PASOS_ASIST.find(x => x.id === id);
+  const t = TEXTOS_ASIST[id];
+  const campos = p.tabla && CAMPOS_ASIST[p.tabla] ? camposAsist(p.tabla) : null;
+  let cuerpo, hechos = '', continuar = 'Continuar';
+
+  if (id === 'perfil') {
+    cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
+      '<div class="m-campo"><label class="m-label" for="asist-nombre">Nombre</label>' +
+      '<input class="m-input" id="asist-nombre" maxlength="60" autocomplete="given-name" value="' + esc(cfg('Nombre_Usuario')) + '"></div>' +
+      '<fieldset class="m-campo" style="border:0;padding:0;margin:0"><legend class="m-label">Elige tu color</legend>' + htmlMuestrasAcento() +
+      '<p class="m-ayuda">Puedes cambiarlo cuando quieras en Ajustes → Apariencia.</p></fieldset>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  } else if (campos) {
+    cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
+      campos.map(c => htmlCampo(c, valorInicialAsist(c), {})).join('') +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+    hechos = htmlHechosAsist(p.tabla);
+  } else {
+    // Tarjetas: se abre el mismo formulario de Ajustes (necesita una cuenta con bolsillos para su reserva).
+    cuerpo = activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos))
+      ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-tarjeta">' + ico('plus', 'm-icon-sm') + 'Agregar una tarjeta</button>'
+      : '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Cada tarjeta aparta su pago en una reserva, que vive en una cuenta con bolsillos. Cuando tengas una, podrás registrarla en Ajustes → Tarjetas.</p></div>';
+    hechos = htmlHechosAsist(p.tabla);
+    if (!listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
+  }
+
+  return {
+    titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true,
+    html: '<div class="m-asist">' + htmlPasosAsist(id) +
+      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + '</p>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(t.titulo) + '</h1>' +
+      '<p class="m-subtitulo">' + esc(t.sub) + '</p>' +
+      '<div class="m-error-form" id="asist-error" role="alert" hidden></div>' + cuerpo +
+      '<div class="m-asist-acciones">' +
+        '<button type="button" class="m-btn m-btn-primary" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
+        (p.otro && campos ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-otro">' + esc(p.otro) + '</button>' : '') +
+        '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
+        '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button></div></div>' +
+      hechos + '</div>',
+    despues: () => {
+      const f = $('#asist-form');
+      if (!f || !campos) return;
+      activarEcoDinero(f);
+      actualizarVisibilidad(f, campos, {});
+      f.addEventListener('input', () => actualizarVisibilidad(f, campos, {}));
+      f.addEventListener('change', () => actualizarVisibilidad(f, campos, {}));
+      // Igual que en Ajustes: una cuenta débito se maneja, por defecto, como un solo saldo.
+      const sel = $('#' + idCampo('Tipo'), f), sw = $('#' + idCampo('Permite_Bolsillos'), f);
+      if (sel && sw) {
+        sw.addEventListener('change', () => { sw.dataset.tocado = '1'; });
+        sel.addEventListener('change', () => { if (!sw.dataset.tocado) { sw.checked = sel.value !== 'Debito'; actualizarVisibilidad(f, campos, {}); } });
+      }
+    }
+  };
+}
+
+function vFinAsistente() {
+  const nombre = cfg('Nombre_Usuario');
+  const dato = (titulo, n) => '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(titulo) + '</span></span><span class="m-row-final m-num"><strong>' + n + '</strong></span></div>';
+  return {
+    titulo: 'Todo listo', ocultarTitulo: true, asistente: true,
+    html: '<div class="m-asist m-asist-centro">' +
+      '<div class="m-asist-hero" aria-hidden="true">' + ico('check') + '</div>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + (nombre ? '¡Todo listo, ' + esc(nombre) + '!' : '¡Todo listo!') + '</h1>' +
+      '<p class="m-subtitulo">Ya tienes lo básico para empezar. Esto es lo que dejaste configurado:</p>' +
+      '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
+        dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) + '</div>' +
+      '<p class="m-ayuda" style="text-align:left">Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.</p>' +
+      '<div class="m-asist-acciones">' +
+        '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
+        '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button></div></div></div>'
+  };
+}
+
+/**
+ * Guarda lo escrito en un paso de catálogo. Devuelve true si guardó algo; false si el formulario estaba
+ * vacío pero ya había uno guardado (se puede seguir). Valida igual que el formulario de Ajustes.
+ */
+async function guardarCatalogoAsist(paso, f, otro) {
+  const p = PASOS_ASIST.find(x => x.id === paso);
+  const campos = camposAsist(p.tabla);
+  const v = leerFormulario(f, campos);
+  if (!v.Nombre) {
+    if (otro) throw new Error('Escribe el nombre para agregar ' + p.uno + ' más.');
+    if (!listaAsist(p.tabla).length) throw new Error('Agrega al menos ' + p.uno + ' para continuar.');
+    return false;
+  }
+  campos.forEach(c => {
+    if (c.visible && !c.visible(v, {})) delete v[c.k];
+    if (c.tipo === 'dinero' && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
+  });
+  const falta = campos.find(c => c.requerido && (!c.visible || c.visible(v, {})) && (v[c.k] === '' || v[c.k] === undefined));
+  if (falta) throw new Error(falta.label + ' es obligatorio.');
+
+  const envio = Object.assign({}, v);
+  Object.keys(envio).forEach(k => { if (envio[k] === '') delete envio[k]; });
+  await api('saveCatalogo', p.tabla, envio, {});
+  if (v.ID_Banco) App.asist.ultimo.ID_Banco = v.ID_Banco;
+  if (v.ID_Cuenta) App.asist.ultimo.ID_Cuenta = v.ID_Cuenta;
+  return true;
+}
+
+/** Continuar (o "agregar otro") en el paso actual: guarda, actualiza lo que Moni sabe y avanza. */
+async function enviarPasoAsist(f, otro) {
+  const paso = App.asist.paso;
+  const caja = $('#asist-error');
+  const botones = $$('.m-asist button');
+  caja.hidden = true;
+  botones.forEach(b => { b.disabled = true; });
+  try {
+    if (paso === 'perfil') {
+      const nombre = $('#asist-nombre', f).value.trim();
+      if (!nombre) throw new Error('Escribe tu nombre para continuar.');
+      if (nombre !== cfg('Nombre_Usuario')) await api('saveConfigParam', 'Nombre_Usuario', nombre);
+    } else {
+      await guardarCatalogoAsist(paso, f, otro);
+    }
+    await refrescar();
+    if (otro) {
+      render();
+      aviso('Se agregó ' + CAT[PASOS_ASIST.find(x => x.id === paso).tabla].singular);
+      const nombre = $('#' + idCampo('Nombre'));
+      if (nombre) nombre.focus();
+    } else {
+      moverAsist(1);
+    }
+  } catch (e) {
+    caja.textContent = e.message; caja.hidden = false;
+    botones.forEach(b => { b.disabled = false; });
+    caja.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Borrar todos los datos de la persona (Ajustes → Privacidad)
+// ---------------------------------------------------------------------------
+
+function vBorrar() {
+  const n = t => listaAsist(t).length;
+  const q = (cant, uno, varios) => cant + ' ' + (cant === 1 ? uno : varios);
+  return {
+    titulo: 'Borrar mis datos',
+    html:
+      '<div class="m-group" style="padding:var(--m-space-4)">' +
+      '<p><strong>Esta acción no se puede deshacer.</strong></p>' +
+      '<p class="m-subtitulo-cuerpo">Moni queda como recién instalada y vuelves a ver la bienvenida. Úsala para empezar de cero o si ya no vas a usar la app.</p>' +
+      '<h2 class="m-seccion-titulo" style="padding-left:0">Se borra</h2><ul class="m-lista-simple">' +
+      '<li>' + esc(q(n('Bancos'), 'banco', 'bancos') + ', ' + q(n('Cuentas'), 'cuenta', 'cuentas') + ', ' + q(n('Bolsillos'), 'bolsillo', 'bolsillos') + ' y ' + q(n('Tarjetas'), 'tarjeta', 'tarjetas')) + '</li>' +
+      '<li>Todos tus movimientos, presupuestos, nóminas, créditos, regalos y suscripciones</li>' +
+      '<li>Tu nombre y tus preferencias de apariencia</li></ul>' +
+      '<h2 class="m-seccion-titulo" style="padding-left:0">No se borra</h2><ul class="m-lista-simple">' +
+      '<li>Las copias de seguridad en tu Drive (carpeta “Moni Respaldos”): guardan tus datos. Al confirmar puedes mandarlas a la papelera.</li>' +
+      '<li>Los archivos que hayas guardado en tu Drive, como extractos en PDF</li></ul>' +
+      '<button class="m-btn m-btn-peligro" style="width:100%" data-acc="borrar-todo">Borrar todos mis datos…</button></div>' +
+      seccion('¿Quieres conservar una copia?', irA('ajustes/respaldos', { icono: 'capas', titulo: 'Crear un respaldo', sub: 'Se guarda en tu Drive antes de borrar' }))
+  };
+}
+
+/** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
+function olvidarDatosLocales() {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag].forEach(s => {
+    s.data = null; s.error = null; s.cargando = false;
+    ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
+    if ('idEsc' in s) s.idEsc = '';
+    if ('texto' in s) s.texto = '';
+    if ('anulados' in s) s.anulados = false;
+  });
+  App.plantillaEsc = null; App.inactivos = {}; App.proximosViejos = false;
+  App.asist = { activo: false, paso: null, omitido: false, ultimo: {} };
+  recordarAsistenteOmitido(false);
+  try { localStorage.removeItem('moni.ultimoBolsillo'); } catch (e) {}
+}
+
+/** Ventana de confirmación: hay que escribir BORRAR; el servidor lo vuelve a exigir. */
+async function abrirBorrar() {
+  let borrado = false;
+  await abrirHoja({
+    titulo: 'Borrar todo', sinGuardar: true,
+    cuerpo: '<form novalidate data-form="borrar">' +
+      '<p class="m-hoja-mensaje"><strong>Se borrará para siempre toda tu información</strong>: bancos, cuentas, bolsillos, tarjetas, movimientos, presupuestos, nómina, créditos, regalos y suscripciones. Moni volverá a pedirte los primeros pasos.</p>' +
+      '<div class="m-campo"><label class="m-label" for="f-frase">Para confirmar, escribe BORRAR</label>' +
+      '<input class="m-input" id="f-frase" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>' +
+      htmlCampo({ k: 'respaldos', label: 'También mandar a la papelera mis respaldos de Drive', tipo: 'interruptor', ayuda: 'Las copias de “Moni Respaldos” guardan tus datos. Si no las borras, siguen en tu Drive.' }, false) +
+      '<button type="button" class="m-btn m-btn-peligro" style="width:100%" data-hoja-acc="borrar" disabled>Borrar todos mis datos</button>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      const frase = $('#f-frase', raiz), boton = $('[data-hoja-acc="borrar"]', raiz);
+      frase.addEventListener('input', () => { boton.disabled = frase.value.trim().toUpperCase() !== 'BORRAR'; });
+    },
+    extra: {
+      borrar: async raiz => {
+        await api('resetAllData', $('#f-frase', raiz).value, { respaldos: $('#f-respaldos', raiz).checked });
+        borrado = true;
+      }
+    }
+  });
+  if (!borrado) return;
+  olvidarDatosLocales();
+  App.pila = ['inicio'];
+  await cargar(); // vuelve a leer todo: como no queda nada, aparece la bienvenida
+  aviso('Listo: se borró toda tu información');
+}
+
 const ACCIONES = {
+  'asist-empezar': () => moverAsist(1),
+  'asist-atras': () => moverAsist(-1),
+  'asist-omitir': () => terminarAsistente(true),
+  'asist-fin': () => terminarAsistente(false),
+  'asist-reanudar': () => { App.asist.omitido = false; recordarAsistenteOmitido(false); App.asist.activo = false; App.asist.paso = null; render(true); },
+  'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
+  'asist-otro': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, true); },
+  'asist-tarjeta': () => abrirFormulario('Tarjetas'),
+  'borrar-todo': () => abrirBorrar(),
   'recargar-pag': () => { App.pag.error = null; App.pag.data = null; render(); },
   susc: el => abrirDetalleCobro(el.dataset.id),
   codigo: el => abrirCodigoServicio(el.dataset.id),
@@ -3271,6 +3631,7 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('submit', async ev => {
   const f = ev.target;
+  if (f.dataset.form === 'asistente') { ev.preventDefault(); enviarPasoAsist(f, false); return; }
   if (f.dataset.form === 'parametros' || f.dataset.form === 'respaldos') {
     ev.preventDefault();
     const caja = $('#param-error', f), boton = $('button[type=submit]', f);

@@ -26,6 +26,7 @@
 
   --m-success: #187A4E;
   --m-danger: #C62828;
+  --m-on-danger: #FFFFFF;       /* texto sobre un botón de peligro */
   --m-warning: #A15C00;
 
   /* ---- Tipografía (rem; escala con el tamaño de texto del usuario) ---- */
@@ -82,6 +83,7 @@
     --m-tint-soft: rgba(255, 122, 158, 0.16);
     --m-success: #4CD08A;
     --m-danger: #FF6B6B;
+    --m-on-danger: #1C1C1E;
     --m-warning: #FFB454;
   }
 }
@@ -99,6 +101,7 @@
   --m-tint-soft: rgba(255, 122, 158, 0.16);
   --m-success: #4CD08A;
   --m-danger: #FF6B6B;
+  --m-on-danger: #1C1C1E;
   --m-warning: #FFB454;
 }
 
@@ -142,6 +145,7 @@ body {
 .m-btn-primary { background: var(--m-tint); color: var(--m-on-tint); }
 .m-btn-secondary { background: var(--m-tint-soft); color: var(--m-tint); }
 .m-btn-destructive { background: transparent; color: var(--m-danger); }
+.m-btn-peligro { background: var(--m-danger); color: var(--m-on-danger); }
 
 /* ---- Campos: 16 px mínimo (iOS no amplía la pantalla al enfocar) ---- */
 .m-input {

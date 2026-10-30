@@ -117,6 +117,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `setRespaldoAuto` | `activar` |
 | `seedDemo` | — |
 | `clearDemo` | — |
+| `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
 | `saveConfigParam` | `clave, valor` |
 | `saveConfigParams` | `mapa` |
 | `resetConfigParam` | `clave` |

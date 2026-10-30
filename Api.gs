@@ -473,6 +473,11 @@ function clearDemo() {
   return responder_(function () { return limpiarDatosDemo(); });
 }
 
+/** Borra toda la información de la persona. Exige la frase de confirmación. */
+function resetAllData(confirmacion, opciones) {
+  return responder_(function () { return borrarTodosLosDatos(confirmacion, opciones); });
+}
+
 // ==========================================================================
 // Configuración
 // ==========================================================================

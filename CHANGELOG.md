@@ -2,6 +2,12 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Bienvenida y borrado de datos
+- **Nuevo** asistente de bienvenida y primeros pasos: un paso por pantalla con barra de progreso (nombre y color, bancos, cuentas, bolsillos, tarjetas), validación en línea, "Guardar y agregar otro" y "Seguir más tarde". Reutiliza los campos de los catálogos y se retoma desde Inicio.
+- **Nuevo** Ajustes → Privacidad → **Borrar todos mis datos**: pantalla informativa, ventana de confirmación que exige escribir `BORRAR` y opción de mandar también los respaldos de Drive a la papelera (`Reinicio.gs`, `resetAllData`).
+- **Nuevo** token `--m-on-danger` y botón `m-btn-peligro` (legible en tema claro y oscuro; entra en `npm run contraste`).
+- **Pruebas** `tests/test_reinicio.js`.
+
 ## Ajustes tras probar en el Sheet real (28 oct)
 - **Corrige** pantallas que se quedaban cargando para siempre (presupuesto y otras seis) cuando llegaba una respuesta vieja; añade tope de 45 s.
 - **Corrige** la barra superior en PC (margen duplicado).

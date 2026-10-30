@@ -45,6 +45,7 @@ const pares = [
   ['tint', 'bg-grouped', 4.5, 'acento como texto sobre tarjeta'],
   ['success', 'bg-grouped', 4.5, 'verde sobre tarjeta'],
   ['danger', 'bg-grouped', 4.5, 'rojo sobre tarjeta'],
+  ['on-danger', 'danger', 4.5, 'texto sobre botón de peligro'],
   ['warning', 'bg-grouped', 4.5, 'ámbar sobre tarjeta'],
   ['label', 'bg-elevated', 4.5, 'texto sobre hoja modal']
 ];
