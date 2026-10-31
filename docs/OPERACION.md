@@ -15,6 +15,9 @@ Desde ahí, si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: d
 - Las copias se guardan en tu Drive, carpeta **"Moni Respaldos"**, con el nombre `Moni_Respaldo_AAAAMMDD_HHMMSS`. Las más viejas van a la papelera.
 - **Recuperar:** abre la copia que quieras, y o bien (a) úsala como Sheet nuevo (copia el ID con `vincularHojaMoni('<ID>')`), o (b) copia las pestañas necesarias al Sheet actual.
 
+## Tasa de referencia (Google Finance)
+`TasasGoogle.gs`. `GOOGLEFINANCE` solo existe como fórmula de hoja: Moni crea la pestaña auxiliar **`Tasas_Google`** (una fórmula `=GOOGLEFINANCE("CURRENCY:USDCOP")` por moneda) y lee el resultado desde el código. **Actualizar ahora** y la actualización diaria (6:00, `actualizarTasasAuto`) guardan `Tasa_USD`/`Tasa_EUR` con su fecha y fuente. Si Google aún no devolvió el valor (hoja recién creada, `#N/A`), se avisa y se reintenta; si falla el disparador, queda en el Registro de errores. No es la TRM oficial: no se usa para saldos ni para conversiones. Para dejar de usarla, desactiva la opción en Ajustes → Divisas (la pestaña auxiliar se puede borrar).
+
 ## Recordatorios en Google Calendar
 `Recordatorios.gs`. Activarlos (Ajustes → Recordatorios) crea el calendario "Moni", sincroniza y deja un disparador diario a las 5:00 (`sincronizarRecordatoriosAuto`). La sincronización es idempotente: cada evento lleva la etiqueta `moni_clave` (`tipo|id|fecha`) y solo se tocan los que la tienen. Si el disparador falla, queda en el **Registro de errores**. Desactivar quita el disparador pero conserva los eventos; **Quitar** borra el calendario; **Borrar todos mis datos** también lo hace.
 - Requiere el permiso `calendar` en `appsscript.json`: tras desplegar, Google lo pide al abrir la app (hay que **crear una versión nueva** de la implementación).

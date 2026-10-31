@@ -168,15 +168,21 @@ function saveTasaDivisa(divisa, tasa) {
     if (t === '') {
       guardarConfig_('Tasa_' + divisa, '');
       guardarConfig_('Tasa_' + divisa + '_Fecha', '');
+      guardarConfig_('Tasa_' + divisa + '_Fuente', '');
       return { divisa: divisa, tasa: '', fecha: '' };
     }
     const n = Number(t);
     if (!isFinite(n) || n <= 0 || n > 1e7) throw new Error('La tasa debe ser un número mayor que cero.');
     guardarConfig_('Tasa_' + divisa, String(n));
     guardarConfig_('Tasa_' + divisa + '_Fecha', hoyIso_());
+    guardarConfig_('Tasa_' + divisa + '_Fuente', 'Manual');
     return { divisa: divisa, tasa: String(n), fecha: hoyIso_() };
   });
 }
+
+/** Trae la tasa de referencia de Google Finance (la hoja auxiliar Tasas_Google). */
+function updateTasasGoogle() { return responder_(function () { return actualizarTasasGoogle(); }); }
+function saveTasaAuto(activar) { return responder_(function () { return configurarTasaAuto(!!activar); }); }
 
 function addTransferencia(t, vista) {
   return responder_(function () {

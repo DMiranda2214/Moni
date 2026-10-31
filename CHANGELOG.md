@@ -2,6 +2,11 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Tasa de referencia con Google Finance
+- **Nuevo** Ajustes → Divisas: botón *Actualizar ahora* e interruptor *Traerla sola de Google Finance cada día* (hoja auxiliar `Tasas_Google` con `GOOGLEFINANCE`; `TasasGoogle.gs`). La tasa muestra su fecha y fuente (Manual o Google Finance).
+- Solo informativa: no interviene en saldos ni conversiones.
+- **Pendiente de validar en el Sheet real:** el simulador no calcula `GOOGLEFINANCE`; las pruebas cubren la lectura y el guardado.
+
 ## Conversión con tasa del banco y comisión
 - **Cambia** Convertir divisas: se escribe la cantidad y la tasa que dio el banco por unidad (la TRM solo se muestra como referencia); Moni calcula cuánto sale y cuánto llega.
 - **Nuevo** comisión opcional, cobrada aparte del bolsillo de origen o de destino: gasto de la categoría *Comisión bancaria* (se crea sola) dentro de la misma conversión (`Subtipo = Comision`); se anula y restaura junto.

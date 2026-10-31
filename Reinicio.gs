@@ -53,6 +53,7 @@ function borrarTodosLosDatos(confirmacion, opciones) {
   // Sin datos no hay nada que copiar: las copias automáticas se vuelven a activar al iniciar la operación.
   configurarRespaldoAutomatico(false);
   disparadoresRecordatorios_().forEach(t => ScriptApp.deleteTrigger(t));
+  disparadoresTasas_().forEach(t => ScriptApp.deleteTrigger(t));
   const props = PropertiesService.getScriptProperties();
   props.deleteProperty('ULTIMO_RESPALDO');
   props.deleteProperty('ULTIMO_RESPALDO_MS');

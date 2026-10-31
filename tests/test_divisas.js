@@ -3,7 +3,7 @@
  */
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'Api.gs'];
+  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
   const hoy = () => new Date().toISOString().slice(0, 10);
 
   function equipar(e) {
@@ -252,5 +252,46 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(a.totalApertura, 2000000);
     assert.ok(a.aperturas.some(x => x.Divisa === 'USD' && x.Saldo_Apertura === 1000));
     assert.ok(a.aperturas.some(x => x.Divisa === 'COP' && x.ID_Bolsillo === casa.ID_Bolsillo));
+  });
+
+  prueba('tasa de Google Finance: crea la hoja con fórmulas, guarda lo que Google devuelve y marca la fuente', () => {
+    const { e } = escenario();
+    assert.throws(() => e.ejecutar('actualizarTasasGoogle()'), /todavía no devolvió la tasa/, 'recién creada, la fórmula aún no tiene valor');
+    const hoja = e.hojas.Tasas_Google;
+    assert.ok(hoja, 'se creó la hoja auxiliar');
+    assert.strictEqual(hoja.filas[1][0], 'USD');
+    hoja.filas[1][1] = 4012.4567; hoja.filas[2][1] = '#N/A'; // el euro aún no responde
+    const r = e.llamar('updateTasasGoogle').data;
+    assert.deepStrictEqual(r, { actualizadas: [{ moneda: 'USD', tasa: 4012.46 }], pendientes: ['EUR'] });
+    const s = e.llamar('obtenerSaldos');
+    assert.strictEqual(s.divisas[0].Tasa, 4012.46);
+    const cfg = {}; e.llamar('getTableData', 'Config').forEach(c => { cfg[c.Clave] = c.Valor; });
+    assert.strictEqual(cfg.Tasa_USD_Fuente, 'Google Finance');
+    assert.strictEqual(cfg.Tasa_USD_Fecha, hoy());
+    assert.strictEqual(cfg.Tasa_EUR, '', 'lo que no llegó no se toca');
+  });
+
+  prueba('tasa de Google Finance: una tasa anotada a mano queda como Manual y la automática la reemplaza solo si está activa', () => {
+    const { e } = escenario();
+    e.llamar('saveTasaDivisa', 'USD', '4000');
+    assert.strictEqual(e.llamar('getTableData', 'Config').find(c => c.Clave === 'Tasa_USD_Fuente').Valor, 'Manual');
+    e.llamar('updateTasasGoogle'); // crea la hoja
+    e.hojas.Tasas_Google.filas[1][1] = 4100;
+    assert.strictEqual(e.llamar('actualizarTasasAuto').omitido, true, 'desactivada, el disparador no hace nada');
+    const a = e.llamar('saveTasaAuto', true).data;
+    assert.strictEqual(a.automatico, true);
+    assert.strictEqual(a.resultado.actualizadas[0].tasa, 4100);
+    e.hojas.Tasas_Google.filas[1][1] = 4150;
+    assert.strictEqual(e.llamar('actualizarTasasAuto').actualizadas[0].tasa, 4150);
+    assert.strictEqual(e.llamar('saveTasaAuto', false).data.automatico, false);
+  });
+
+  prueba('tasa de Google Finance: al activar sin respuesta todavía no falla, avisa; y el borrado total apaga el disparador', () => {
+    const { e } = escenario();
+    const a = e.llamar('saveTasaAuto', true).data;
+    assert.strictEqual(a.automatico, true);
+    assert.ok(/todavía no devolvió/.test(a.aviso));
+    e.llamar('borrarTodosLosDatos', 'BORRAR');
+    assert.strictEqual(e.ctx.ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'actualizarTasasAuto'), false);
   });
 };

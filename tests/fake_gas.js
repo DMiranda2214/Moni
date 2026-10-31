@@ -176,7 +176,8 @@ function crearEntorno(hojasIniciales, opciones) {
     SpreadsheetApp: {
       openById: () => hoja,
       getActiveSpreadsheet: () => null,
-      newDataValidation: () => inerte()
+      newDataValidation: () => inerte(),
+      flush() {}
     },
     Session: { getActiveUser: () => ({ getEmail: () => 'ana@example.com' }) },
     DriveApp: drive.api,

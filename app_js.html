@@ -3480,15 +3480,20 @@ function activarGraficos() {
 
 function vDivisas() {
   const filas = ['USD', 'EUR'].map(d => {
-    const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha');
+    const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha'), fuente = cfg('Tasa_' + d + '_Fuente');
     return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(NOMBRE_DIVISA[d].toLowerCase()) + ') vale, en pesos</label>' +
       '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" data-tipo="dinero" data-divisa="COP" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
-      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + '</p>' : '') + '</div>';
+      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + (fuente ? ' · ' + esc(fuente) : '') + '</p>' : '') + '</div>';
   }).join('');
   return {
     titulo: 'Divisas',
-    html: '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
-      '<p class="m-subtitulo-cuerpo">Moni guarda cada cuenta en su moneda y no mezcla los saldos. Si anotas cuánto vale cada moneda en pesos, el Inicio te muestra el equivalente. Es solo una referencia: no cambia tus saldos. Las monedas se eligen al crear el banco.</p>' +
+    html: '<div class="m-group" style="padding:var(--m-space-4);margin-bottom:var(--m-space-4)">' +
+      '<p class="m-subtitulo-cuerpo">Moni guarda cada cuenta en su moneda y no mezcla los saldos. La tasa de referencia solo sirve para ver cuánto equivale un saldo en pesos y para compararla con lo que te cobró el banco: <strong>no cambia tus saldos ni tus conversiones</strong>, porque cada banco cambia a su propio precio.</p>' +
+      '<div class="m-interruptor-fila"><label for="tasa-auto">Traerla sola de Google Finance cada día</label><span class="m-interruptor"><input type="checkbox" role="switch" id="tasa-auto" data-acc-cambio="tasa-auto"' + (esVerdad(cfg('Tasa_Auto')) ? ' checked' : '') + '><i></i></span></div>' +
+      '<p class="m-ayuda">Es la tasa del mercado, no la TRM oficial. Si la actualización automática está activa, reemplaza lo que escribas aquí.</p>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-top:var(--m-space-3)" data-acc="tasas-google">Actualizar ahora con Google Finance</button></div>' +
+      '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
+      '<p class="m-subtitulo-cuerpo">O anótala tú. Las monedas se eligen al crear el banco.</p>' +
       filas + '<div class="m-error-form" id="tasas-error" role="alert" hidden></div>' +
       '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>',
     despues: () => { const f = $('form[data-form="tasas"]'); if (f) activarEcoDinero(f); }
@@ -3974,6 +3979,14 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  'tasas-google': async el => {
+    el.disabled = true; el.textContent = 'Consultando…';
+    try {
+      const r = await api('updateTasasGoogle');
+      await refrescar(); render();
+      aviso('Tasa actualizada: ' + r.actualizadas.map(x => '1 ' + x.moneda + ' = ' + tasaPesos(x.tasa)).join(' · '));
+    } catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Actualizar ahora con Google Finance'; }
+  },
   'rec-sync': async el => {
     el.disabled = true; el.textContent = 'Sincronizando…';
     try { const r = await api('syncRecordatorios'); App.rec.data = r; $('#rec-estado').innerHTML = htmlEstadoRecordatorios(r); aviso('Calendario al día: ' + r.sincronizado.total + ' pagos'); }
@@ -4149,6 +4162,14 @@ document.addEventListener('change', async ev => {
   if (t.dataset.accCambio === 'pagado') {
     try { aplicarPresupuesto(await api('payRenglonMes', t.dataset.id, t.checked)); render(); }
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
+    return;
+  }
+  if (t.dataset.accCambio === 'tasa-auto') {
+    try {
+      const r = await api('saveTasaAuto', t.checked);
+      await refrescar(); render();
+      aviso(r.activa ? (r.resultado ? 'Se actualizará sola cada día' : 'Activada. ' + (r.aviso || '')) : 'Actualización automática desactivada');
+    } catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
   if (t.name === 'graf-rango') { App.graf.meses = Number(t.value); App.graf.data = null; render(); return; }

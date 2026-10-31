@@ -29,7 +29,7 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 
 ### Dólares y otras monedas
 - La moneda se elige **al crear el banco** (pesos, dólares o euros). Sus cuentas y bolsillos la heredan, y todo se muestra en esa moneda.
-- Los saldos **no se mezclan**: el Total del Inicio es solo en pesos y, aparte, aparece **Otras monedas**. Si anotas cuánto vale el dólar en **Ajustes → Divisas**, se ve el equivalente en pesos (solo como referencia).
+- Los saldos **no se mezclan**: el Total del Inicio es solo en pesos y, aparte, aparece **Otras monedas**. Si anotas cuánto vale el dólar en **Ajustes → Divisas** (o activas **Traerla sola de Google Finance**), se ve el equivalente en pesos. Es solo una referencia: cada banco cambia a su propio precio, así que los saldos y las conversiones nunca la usan.
 - Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Bolsillos → Convertir divisas**: escribes **cuántos dólares compras o vendes** y **la tasa que te dio el banco por cada uno**; Moni calcula cuánto sale y cuánto llega. La TRM de referencia (si la anotaste) solo se muestra para comparar.
 - Si el banco cobra **comisión aparte**, escríbela en el mismo panel y elige de qué bolsillo se cobra (origen o destino). Queda como un gasto de la categoría *Comisión bancaria*, dentro de la misma conversión: al deshacerla se deshace todo junto.
 - Entre bolsillos de la misma moneda, **Mover dinero** funciona igual que siempre.
