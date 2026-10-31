@@ -21,6 +21,7 @@
 | **Tarjeta de crédito** | Compras que pagas después, en el extracto |
 | **Reserva (de una tarjeta)** | Bolsillo donde apartas lo que ya sabes que vas a pagar de esa tarjeta |
 | **Extracto** | Las compras de un período de la tarjeta; se paga completo |
+| **Gasto con tarjeta** | Cuenta como gasto el día de la compra, en su renglón y categoría. Pagar el extracto solo liquida la deuda |
 | **Fuente (de una compra)** | De dónde sale el dinero: *Personal* (se completa al pagar el extracto), *Presupuesto* y *Guardar* (apartan ya a la reserva, desde el bolsillo del renglón o el personal) u *Otro* |
 | **Crédito de autopago** | Un préstamo que te haces a ti: sale de una cuenta de ahorro y lo devuelves en cuotas; cada cuota vuelve al ahorro |
 | **Amortización francesa** | Cuota fija; al principio pagas más interés y al final más capital |

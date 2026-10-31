@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '2';
+const ESQUEMA_VERSION = '3';
 
 /** Define una tabla: encabezados propios + auditoría. `anchos` cubre solo las columnas propias. */
 function tabla_(headers, anchos) {
@@ -44,8 +44,8 @@ const SCHEMAS = {
     ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
     [170, 170, 110, 180, 150, 260, 200, 70]),
   Suscripciones: tabla_(
-    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 260, 120, 220, 70, 60]),
+    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
   Escenarios: tabla_(['ID_Escenario', 'Nombre', 'Es_Base', 'Descripcion', 'Activo'], [170, 200, 80, 300, 70]),
 
   // ---- Operación ----
@@ -59,11 +59,11 @@ const SCHEMAS = {
     ['ID_Extracto', 'ID_Tarjeta', 'Mes', 'Total', 'Estado', 'Fecha_Pago', 'ID_Grupo_Pago', 'URL_PDF', 'Notas', 'Anulado'],
     [170, 170, 90, 120, 90, 110, 170, 260, 200, 80]),
   Presupuesto_Plantilla: tabla_(
-    ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'Activo', 'Orden'],
-    [170, 170, 240, 120, 90, 170, 170, 170, 70, 60]),
+    ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'Activo', 'Orden'],
+    [170, 170, 240, 120, 90, 170, 170, 170, 170, 70, 60]),
   Presupuesto_Mes: tabla_(
-    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'Notas'],
-    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 220]),
+    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas'],
+    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220]),
 
   // ---- Nómina (una vez al mes) ----
   Subsidios: tabla_(['ID_Subsidio', 'Nombre', 'Valor', 'Es_Salarial', 'Vigente_Desde', 'Vigente_Hasta', 'Activo'], [170, 260, 120, 100, 120, 120, 70]),
@@ -253,7 +253,10 @@ function verificarEsquema(spreadsheet, opciones) {
  * Una pestaña con otras diferencias no se toca: se reporta en el diagnóstico.
  */
 const MIGRACIONES_COLUMNAS = [
-  { tabla: 'Bancos', columna: 'Divisa', valor: DIVISA_BASE }
+  { tabla: 'Bancos', columna: 'Divisa', valor: DIVISA_BASE },
+  { tabla: 'Presupuesto_Plantilla', columna: 'ID_Tarjeta', valor: '' },
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Tarjeta', valor: '' },
+  { tabla: 'Suscripciones', columna: 'Renglon', valor: '' }
 ];
 
 function migrarColumnas_(ss) {

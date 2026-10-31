@@ -51,7 +51,10 @@ function registrarCompraTC(c) {
   const concepto = textoRequerido_(c.Concepto, 'El concepto').slice(0, 120);
   const valor = numero_(c.Valor, 'El valor', { requerido: true, max: VALOR_MAXIMO });
   if (valor <= 0) throw new Error('El valor debe ser mayor que cero.');
-  const fuente = opcion_(c.Fuente || 'Personal', ENUMS.Compras_TC.Fuente, 'La fuente');
+  const idItemPedido = texto_(c.ID_Item_Ppto);
+  // Con renglón del presupuesto, el dinero sale de su bolsillo en el momento de la compra (el sobre se vacía el día
+  // que gastas). Sin renglón no se aparta nada: al pagar el extracto se indica de dónde sale el dinero.
+  const fuente = opcion_(c.Fuente || (idItemPedido ? 'Ppto' : 'Personal'), ENUMS.Compras_TC.Fuente, 'La fuente');
 
   let mes = texto_(c.Mes_Extracto);
   if (mes) mes = mesValido_(mes); else mes = calcularMesExtracto_(fecha, tarjeta.Dia_Corte);
@@ -119,7 +122,7 @@ function restaurarCompraTC(idCompra) {
  * Paga el extracto de un mes en una sola operación. Si algo falla a medias, deshace lo hecho.
  * @returns {{idExtracto, total, falta, ids}} `falta` = lo que se completó desde el bolsillo personal.
  */
-function pagarExtracto(idTarjeta, mes, fecha) {
+function pagarExtracto(idTarjeta, mes, fecha, idOrigen) {
   const tarjeta = exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
   const m = mesValido_(mes);
   const f = fechaMovimiento_(fecha);
@@ -131,8 +134,15 @@ function pagarExtracto(idTarjeta, mes, fecha) {
 
   const saldoReserva = mapaSaldosBolsillos_()[tarjeta.ID_Bolsillo_Reserva] || 0;
   const falta = Math.max(0, redondear2_(total - saldoReserva));
-  if (falta >= SALDO_CERO && !tarjeta.ID_Bolsillo_Personal) {
-    throw new Error('A la reserva le faltan ' + pesos_(falta) + ' para pagar. Aparta ese dinero en la reserva o define el bolsillo personal de la tarjeta en Ajustes.');
+  // De dónde sale lo que falta lo indica quien paga; si no, se usa el bolsillo personal de la tarjeta (si lo tiene).
+  const origen = texto_(idOrigen) || tarjeta.ID_Bolsillo_Personal;
+  if (falta >= SALDO_CERO && !origen) {
+    throw new Error('A la reserva le faltan ' + pesos_(falta) + ' para pagar. Elige de qué bolsillo sale ese dinero.');
+  }
+  if (falta >= SALDO_CERO) {
+    exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', origen, 'El bolsillo de donde sale el dinero');
+    exigirPesos_(origen, 'El bolsillo de donde sale el dinero');
+    if (origen === tarjeta.ID_Bolsillo_Reserva) throw new Error('El dinero que falta no puede salir de la propia reserva.');
   }
 
   const idExtracto = nuevoId_('ext');
@@ -141,7 +151,7 @@ function pagarExtracto(idTarjeta, mes, fecha) {
   const creados = [];
   try {
     if (falta >= SALDO_CERO) {
-      const t = registrarTransferencia(tarjeta.ID_Bolsillo_Personal, tarjeta.ID_Bolsillo_Reserva, falta, f, 'Completar la reserva de ' + tarjeta.Nombre, marca, 'App', { Subtipo: 'Reserva_TC' });
+      const t = registrarTransferencia(origen, tarjeta.ID_Bolsillo_Reserva, falta, f, 'Completar la reserva de ' + tarjeta.Nombre, marca, 'App', { Subtipo: 'Reserva_TC' });
       t.patas.forEach(p => creados.push(p.ID_Mov));
     }
     const pago = registrarMovimiento({

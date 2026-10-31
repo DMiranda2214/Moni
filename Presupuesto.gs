@@ -20,6 +20,10 @@ function mesValido_(mes) {
  */
 function realPorRenglon_() {
   const real = {};
+  // Una compra con tarjeta cuenta en su renglón el día de la compra. Las de fuente "Del presupuesto" ya cuentan por
+  // el traslado que aparta el dinero a la reserva (lleva el renglón), y las "De otra persona" se reembolsan.
+  const compras = comprasPorRenglon_();
+  Object.keys(compras).forEach(id => { if (compras[id].contable) real[id] = redondear2_(compras[id].contable); });
   getTableData('Movimientos', { excludeAnulados: true }).forEach(m => {
     if (!m.ID_Item_Ppto) return;
     let v = 0;
@@ -30,11 +34,30 @@ function realPorRenglon_() {
   return real;
 }
 
+/**
+ * Compras de tarjeta enlazadas a renglones, sin las anuladas ni las "De otra persona".
+ * @returns {Object} { ID_Item: { total, pendiente, contable } } — `pendiente` = aún sin pagar en un extracto;
+ *   `contable` = lo que falta sumar al real del renglón (las de fuente "Del presupuesto" ya cuentan por su traslado).
+ */
+function comprasPorRenglon_() {
+  const r = {};
+  getTableData('Compras_TC').forEach(c => {
+    if (!c.ID_Item_Ppto || esVerdadero(c.Anulado) || c.Fuente === 'Otro') return;
+    const v = Number(c.Valor) || 0;
+    const x = r[c.ID_Item_Ppto] || (r[c.ID_Item_Ppto] = { total: 0, pendiente: 0, contable: 0 });
+    x.total += v;
+    if (!esVerdadero(c.Pagado)) x.pendiente += v;
+    if (c.Fuente !== 'Ppto') x.contable += v;
+  });
+  return r;
+}
+
 /** Todo lo que necesita la pantalla del presupuesto de un mes, en una sola llamada. */
 function obtenerPresupuestoMes(mes) {
   const m = mesValido_(mes || hoyIso_().slice(0, 7));
   const items = getTableData('Presupuesto_Mes').filter(i => i.Mes === m);
   const real = realPorRenglon_();
+  const conTarjeta = comprasPorRenglon_();
   const bolsillos = getTableData('Bolsillos');
   const escenarios = getTableData('Escenarios');
   const plantilla = getTableData('Presupuesto_Plantilla').filter(p => estaActivo(p));
@@ -49,9 +72,10 @@ function obtenerPresupuestoMes(mes) {
     if (pagado) { pagados++; ahorro += p - r; }
     return {
       ID_Item: i.ID_Item, Concepto: i.Concepto, Tipo: i.Tipo || 'Gasto', Plan: p, Real: r, Pagado: pagado,
+      ConTarjeta: redondear2_((conTarjeta[i.ID_Item] || {}).total || 0), PendienteTarjeta: redondear2_((conTarjeta[i.ID_Item] || {}).pendiente || 0),
       Ahorro: pagado ? redondear2_(p - r) : 0,
       Restante: redondear2_(p - r),
-      ID_Bolsillo_Destino: i.ID_Bolsillo_Destino || '', Bolsillo: b ? b.Nombre : '', ID_Credito: i.ID_Credito || '',
+      ID_Bolsillo_Destino: i.ID_Bolsillo_Destino || '', Bolsillo: b ? b.Nombre : '', ID_Credito: i.ID_Credito || '', ID_Tarjeta: i.ID_Tarjeta || '',
       Notas: i.Notas || ''
     };
   });
@@ -115,7 +139,7 @@ function generarPresupuestoMes(mes, idEscenario, reemplazar) {
   insertRows('Presupuesto_Mes', plantilla.map(p => ({
     ID_Item: nuevoId_('itm'), Mes: m, ID_Escenario: esc.ID_Escenario, ID_Plantilla: p.ID_Plantilla,
     Concepto: p.Concepto, Tipo: p.Tipo || 'Gasto', Plan: Number(p.Monto_Plan) || 0, Pagado: false,
-    ID_Bolsillo_Destino: p.ID_Bolsillo_Destino || '', ID_Credito: p.ID_Credito || '', Notas: ''
+    ID_Bolsillo_Destino: p.ID_Bolsillo_Destino || '', ID_Credito: p.ID_Credito || '', ID_Tarjeta: p.ID_Tarjeta || '', Notas: ''
   })));
   return { mes: m, creados: plantilla.length, escenario: esc.Nombre };
 }
@@ -137,8 +161,14 @@ function guardarRenglonMes(item) {
   if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo de destino'); exigirPesos_(idBolsillo, 'El bolsillo de destino'); }
   if (tipo !== 'Gasto' && !idBolsillo) throw new Error('Un renglón de ' + tipo.toLowerCase() + ' necesita un bolsillo de destino.');
 
+  const idTarjeta = item.ID_Tarjeta !== undefined ? texto_(item.ID_Tarjeta) : (actual ? actual.ID_Tarjeta || '' : '');
+  if (idTarjeta) {
+    if (tipo !== 'Gasto') throw new Error('Solo un renglón de gasto puede pagarse con tarjeta.');
+    exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
+  }
+
   const datos = {
-    Mes: mes, Concepto: concepto, Tipo: tipo,
+    Mes: mes, Concepto: concepto, Tipo: tipo, ID_Tarjeta: idTarjeta,
     Plan: numero_(item.Plan !== undefined ? item.Plan : actual && actual.Plan, 'El plan', { requerido: true, min: 0, max: VALOR_MAXIMO }),
     ID_Bolsillo_Destino: idBolsillo || '',
     ID_Credito: item.ID_Credito !== undefined ? texto_(item.ID_Credito) : (actual ? actual.ID_Credito || '' : ''),
@@ -164,7 +194,8 @@ function guardarRenglonMes(item) {
 function eliminarRenglonMes(idItem) {
   const fila = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
   if (!fila) throw new Error('El renglón no existe.');
-  const enlazados = getTableData('Movimientos', { excludeAnulados: true }).filter(m => m.ID_Item_Ppto === idItem).length;
+  const enlazados = getTableData('Movimientos', { excludeAnulados: true }).filter(m => m.ID_Item_Ppto === idItem).length +
+    getTableData('Compras_TC').filter(c => c.ID_Item_Ppto === idItem && !esVerdadero(c.Anulado)).length;
   if (enlazados) throw new Error('No se puede quitar "' + fila.Concepto + '": tiene ' + enlazados + ' movimiento(s) enlazado(s). Anúlalos primero.');
   deleteRow('Presupuesto_Mes', fila._rowIndex);
   return { mes: fila.Mes };

@@ -200,7 +200,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(v.meses.length, 12);
     assert.deepStrictEqual([f.ingreso, f.plan, f.real, f.ahorro, f.tc], [3000000, 1200000, 1150000, 50000, 200000]);
     assert.strictEqual(f.restante, 3000000 - 1200000 - 200000, 'restante = ingreso − plan − TTCC');
-    assert.strictEqual(f.saldo, 3000000 - 1150000);
+    assert.strictEqual(f.saldo, 3000000 - 1150000 - 200000, 'saldo = ingreso − real − tarjetas sin renglón');
     assert.strictEqual(f.conPresupuesto, true);
     assert.strictEqual(v.totales.ingreso, 3000000);
     const otro = v.meses.find(x => x.mes !== m);
@@ -457,5 +457,117 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('obtenerSaldos').total, 500000, 'el dinero que ya había no se pierde');
     const bols = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.ID_Cuenta === deb.ID_Cuenta);
     assert.strictEqual(bols.length, 2, 'el saldo de la cuenta (ahora un bolsillo) y la reserva');
+  });
+
+  // ============================================================ presupuesto y tarjetas (gasto en el mes de la compra)
+  function escenarioTC() {
+    const e = E();
+    const banco = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'B' });
+    const cta = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'P', Tipo: 'Billetera' });
+    const mercado = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cta.ID_Cuenta, Nombre: 'Mercado', Saldo_Apertura: 400000 });
+    const personal = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cta.ID_Cuenta, Nombre: 'Personal', Saldo_Apertura: 500000 });
+    const reserva = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cta.ID_Cuenta, Nombre: 'Reserva', Rol: 'Reserva_Tarjeta' });
+    const t = e.llamar('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Visa', Dia_Corte: 28, Dia_Pago: 10, ID_Bolsillo_Reserva: reserva.ID_Bolsillo });
+    const esc = e.llamar('listarCatalogo', 'Escenarios')[0];
+    e.llamar('guardarCatalogo', 'Presupuesto_Plantilla', { ID_Escenario: esc.ID_Escenario, Concepto: 'Mercado', Monto_Plan: 400000, Tipo: 'Gasto', ID_Bolsillo_Destino: mercado.ID_Bolsillo, ID_Tarjeta: t.ID_Tarjeta });
+    const m = mes();
+    e.llamar('generarPresupuestoMes', m, esc.ID_Escenario);
+    const item = e.llamar('obtenerPresupuestoMes', m).items[0];
+    const saldo = id => e.llamar('mapaSaldosBolsillos_')[id];
+    return { e, t, mercado, personal, reserva, m, item, saldo };
+  }
+
+  prueba('gasto con tarjeta: con renglón, el sobre se vacía el día de la compra y el renglón cuenta una sola vez', () => {
+    const { e, t, mercado, reserva, m, item, saldo } = escenarioTC();
+    assert.strictEqual(item.ID_Tarjeta, t.ID_Tarjeta, 'el renglón recuerda su tarjeta habitual (viene de la plantilla)');
+    const c = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Mercado', Valor: 120000, Fecha: hoy(), ID_Item_Ppto: item.ID_Item });
+    assert.strictEqual(c.Fuente, 'Ppto', 'con renglón, el apartado es lo predeterminado');
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), 280000);
+    assert.strictEqual(saldo(reserva.ID_Bolsillo), 120000);
+    const p = e.llamar('obtenerPresupuestoMes', m).items[0];
+    assert.strictEqual(p.Real, 120000, 'sin doble conteo: el traslado a la reserva y la compra son lo mismo');
+    assert.strictEqual(p.ConTarjeta, 120000);
+    assert.strictEqual(p.PendienteTarjeta, 120000);
+  });
+
+  prueba('gasto con tarjeta: sin renglón no aparta nada; con renglón pero fuente personal igual cuenta en el renglón; "de otra persona" no cuenta', () => {
+    const { e, t, mercado, m, item, saldo } = escenarioTC();
+    const sin = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Salida', Valor: 50000, Fecha: hoy() });
+    assert.strictEqual(sin.Fuente, 'Personal');
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), 400000, 'no se apartó nada');
+    e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Mercado', Valor: 30000, Fecha: hoy(), Fuente: 'Personal', ID_Item_Ppto: item.ID_Item });
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 30000, 'cuenta en el renglón aunque no mueva dinero');
+    e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Para mi hermano', Valor: 80000, Fecha: hoy(), Fuente: 'Otro', ID_Item_Ppto: item.ID_Item });
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 30000, 'lo que se reembolsa no cuenta');
+    // anular la compra la saca del renglón
+    const id = e.llamar('getTableData', 'Compras_TC').find(c => c.Concepto === 'Mercado').ID_Compra;
+    e.llamar('anularCompraTC', id);
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 0);
+  });
+
+  prueba('pagar el extracto: se indica de dónde sale lo que falta; el pago no cuenta como gasto en los gráficos', () => {
+    const { e, t, personal, reserva, saldo } = escenarioTC();
+    const cat = e.llamar('guardarCatalogo', 'Categorias', { Nombre: 'Ropa', Tipo: 'Gasto' });
+    const compra = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Ropa', Valor: 200000, Fecha: hoy(), ID_Categoria: cat.ID_Categoria });
+    assert.throws(e.falla('pagarExtracto', t.ID_Tarjeta, compra.Mes_Extracto, hoy()), /Elige de qué bolsillo/);
+    assert.throws(e.falla('pagarExtracto', t.ID_Tarjeta, compra.Mes_Extracto, hoy(), reserva.ID_Bolsillo), /propia reserva/);
+    const r = e.llamar('payExtracto', t.ID_Tarjeta, compra.Mes_Extracto, hoy(), personal.ID_Bolsillo);
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(saldo(personal.ID_Bolsillo), 300000, 'salió del bolsillo indicado');
+    assert.strictEqual(saldo(reserva.ID_Bolsillo), 0);
+
+    const g = e.llamar('obtenerGraficos', { mes: mes(), meses: 3 });
+    assert.deepStrictEqual(g.categorias.map(c => [c.Nombre, c.Valor]), [['Ropa', 200000]], 'una sola vez, con su categoría, y sin la barra "Pago de tarjetas"');
+    const f = g.serie.find(x => x.mes === mes());
+    assert.strictEqual(f.gastos, 200000);
+  });
+
+  prueba('suscripciones: ligadas a un renglón, el pago cuenta en el presupuesto (con bolsillo y con tarjeta) y se deshace', () => {
+    const { e, t, mercado, personal, m, item, saldo } = escenarioTC();
+    const sus = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Tienda', Valor: 40000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo, Renglon: 'mercado' });
+    const r1 = e.llamar('paySuscripcion', sus.ID_Suscripcion, {});
+    assert.strictEqual(r1.ok, true, r1.error && r1.error.message);
+    assert.strictEqual(r1.data.idItem, item.ID_Item);
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 40000);
+    assert.strictEqual(r1.data.presupuesto.items[0].Real, 40000, 'la pantalla del presupuesto llega actualizada');
+
+    e.llamar('undoPagoSuscripcion', sus.ID_Suscripcion, r1.data.anterior, r1.data.idMov, '');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 0);
+
+    // Con tarjeta: aparta del bolsillo del renglón y cuenta una vez.
+    const sus2 = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Nube', Valor: 25000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Tarjeta: t.ID_Tarjeta, Renglon: 'Mercado' });
+    const r2 = e.llamar('paySuscripcion', sus2.ID_Suscripcion, {});
+    assert.strictEqual(r2.ok, true, r2.error && r2.error.message);
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), 400000 - 25000);
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items[0].Real, 25000);
+  });
+
+  prueba('esquema: una base ya instalada gana las columnas nuevas sin perder datos', () => {
+    const e = E();
+    // Se simula una base de la versión anterior: sin la columna ID_Tarjeta.
+    e.ejecutar("(function () { const h = getSpreadsheet().getSheetByName('Presupuesto_Mes'); const col = SCHEMAS.Presupuesto_Mes.headers.indexOf('ID_Tarjeta') + 1; h.deleteColumn(col); })()");
+    assert.strictEqual(e.llamar('verificarEsquema').listo, false);
+    const r = e.llamar('setupDatabase');
+    assert.ok(r.migradas.indexOf('Presupuesto_Mes.ID_Tarjeta') !== -1, JSON.stringify(r.migradas));
+    assert.strictEqual(r.ok, true);
+  });
+
+  prueba('API: un gasto con tarjeta devuelve lo mismo que un gasto normal (saldos y presupuesto) y se anula completo', () => {
+    const { e, t, mercado, m, item, saldo } = escenarioTC();
+    const r = e.llamar('addGastoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Valor: 90000, Concepto: 'Mercado', Fecha: hoy(), ID_Item_Ppto: item.ID_Item }, null);
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(r.data.aparto, true);
+    assert.strictEqual(r.data.items.length, 1, 'el traslado a la reserva');
+    assert.strictEqual(r.data.presupuesto.items[0].Real, 90000);
+    assert.strictEqual(r.data.saldos.bolsillos[mercado.ID_Bolsillo], 310000);
+
+    const sin = e.llamar('addGastoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Valor: 20000, Concepto: 'Salida', Fecha: hoy() }, null);
+    assert.strictEqual(sin.data.aparto, false);
+    assert.strictEqual(sin.data.items.length, 0);
+
+    const u = e.llamar('voidGastoTarjeta', r.data.idCompra, r.data.idItem, null);
+    assert.strictEqual(u.ok, true);
+    assert.strictEqual(u.data.presupuesto.items[0].Real, 0);
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), 400000);
   });
 };

@@ -3,7 +3,8 @@
  * Vista anual (la hoja "Año" del Excel): mes a mes, lo que entró, lo planeado, lo real, lo ahorrado,
  * lo que se debe en tarjetas y lo que queda.
  *   Restante = Ingreso − Plan − TTCC   (la misma fórmula del Excel)
- *   Saldo    = Ingreso − Real
+ *   Saldo    = Ingreso − Real − TTCC
+ * TTCC = compras con tarjeta sin renglón, en el mes de la compra (las de un renglón ya están en su real).
  */
 
 const NOMBRES_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -34,8 +35,11 @@ function obtenerVistaAnual(anio) {
     const m = porMes[mv.Fecha.slice(0, 7)];
     if (m) m.ingreso += Number(mv.Valor) || 0;
   });
+  // TTCC: lo comprado con tarjeta que NO está en ningún renglón (lo de un renglón ya cuenta en su plan y su real).
+  // Cuenta en el mes de la compra; lo "De otra persona" se reembolsa y no cuenta.
   compras.forEach(c => {
-    const m = porMes[c.Mes_Extracto];
+    if (c.ID_Item_Ppto || c.Fuente === 'Otro') return;
+    const m = porMes[String(c.Fecha || '').slice(0, 7)];
     if (m) m.tc += Number(c.Valor) || 0;
   });
 
@@ -43,7 +47,7 @@ function obtenerVistaAnual(anio) {
   meses.forEach(m => {
     ['ingreso', 'plan', 'real', 'ahorro', 'tc'].forEach(k => { m[k] = redondear2_(m[k]); });
     m.restante = redondear2_(m.ingreso - m.plan - m.tc);
-    m.saldo = redondear2_(m.ingreso - m.real);
+    m.saldo = redondear2_(m.ingreso - m.real - m.tc);
     Object.keys(tot).forEach(k => { tot[k] += m[k]; });
   });
   Object.keys(tot).forEach(k => { tot[k] = redondear2_(tot[k]); });
@@ -51,7 +55,7 @@ function obtenerVistaAnual(anio) {
   // Años con datos, para el selector
   const anios = {}; anios[a] = true;
   const marca = f => { const y = Number(String(f || '').slice(0, 4)); if (y >= 2000 && y <= 2100) anios[y] = true; };
-  items.forEach(i => marca(i.Mes)); movs.forEach(m => marca(m.Fecha)); compras.forEach(c => marca(c.Mes_Extracto));
+  items.forEach(i => marca(i.Mes)); movs.forEach(m => marca(m.Fecha)); compras.forEach(c => marca(c.Fecha));
 
   return { anio: a, anios: Object.keys(anios).map(Number).sort((x, y) => y - x), meses: meses, totales: tot };
 }

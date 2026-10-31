@@ -37,7 +37,7 @@ function resumenSuscripcion_(s, hoy, ctx) {
     Proximo_Cobro: s.Proximo_Cobro, dias: dias, estado: dias < 0 ? 'vencida' : (dias <= DIAS_PRONTO ? 'pronto' : 'ok'),
     mensual: costoMensual_(valor, s.Periodicidad), anual: redondear2_(valor * 12 / (MESES_PERIODO[s.Periodicidad] || 1)),
     ID_Bolsillo: s.ID_Bolsillo || '', ID_Tarjeta: s.ID_Tarjeta || '', medio: tar ? tar.Nombre : (bol ? bol.Nombre : ''),
-    ID_Servicio: s.ID_Servicio || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || '' : ''),
+    ID_Servicio: s.ID_Servicio || '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || '' : ''),
     Ultimo_Pago: s.Ultimo_Pago || '', Notas: s.Notas || ''
   };
 }
@@ -69,6 +69,13 @@ function suscripcionActiva_(id) {
   return exigirActivo_(leer_('Suscripciones'), 'ID_Suscripcion', id, 'La suscripción');
 }
 
+/** El renglón del presupuesto de ese mes al que está ligado un cobro (por el nombre del renglón), o null. */
+function renglonDeCobro_(s, mes) {
+  const nombre = texto_(s.Renglon).toLowerCase();
+  if (!nombre) return null;
+  return leer_('Presupuesto_Mes').find(i => i.Mes === mes && texto_(i.Concepto).toLowerCase() === nombre) || null;
+}
+
 /**
  * Registra el pago de un cobro y avanza el próximo.
  * @param {Object} d { Valor, Fecha, ID_Bolsillo, ID_Tarjeta } — lo que falte sale de la suscripción.
@@ -84,17 +91,25 @@ function pagarSuscripcion(id, d) {
   if (idBolsillo) exigirPesos_(idBolsillo, 'El bolsillo de pago');
 
   const anterior = { Proximo_Cobro: s.Proximo_Cobro, Ultimo_Pago: s.Ultimo_Pago || '', Valor: Number(s.Valor) || 0 };
-  const resultado = { idMov: '', idCompra: '' };
+  const resultado = { idMov: '', idCompra: '', idItem: '' };
+
+  // Si el cobro está ligado a un renglón del presupuesto, el pago cuenta en el renglón del mes en que se paga.
+  const item = renglonDeCobro_(s, fecha.slice(0, 7));
+  if (item) resultado.idItem = item.ID_Item;
+
   if (idTarjeta) {
+    // Con renglón, el dinero se aparta ahora desde el bolsillo del renglón; sin renglón no se aparta nada.
     const compra = registrarCompraTC({
-      ID_Tarjeta: idTarjeta, Concepto: s.Nombre, Valor: valor, Fecha: fecha, Fuente: 'Personal',
+      ID_Tarjeta: idTarjeta, Concepto: s.Nombre, Valor: valor, Fecha: fecha,
+      Fuente: item && item.ID_Bolsillo_Destino ? 'Ppto' : 'Personal', ID_Item_Ppto: item ? item.ID_Item : '',
       ID_Categoria: s.ID_Categoria, Notas: MARCA_SUSCRIPCION + s.ID_Suscripcion
     });
     resultado.idCompra = compra.ID_Compra;
+    resultado.idMovReserva = compra.ID_Mov_Reserva || '';
   } else {
     const mov = registrarMovimiento({
       Tipo_Mov: 'Gasto', Valor: valor, Fecha: fecha, ID_Bolsillo: idBolsillo, ID_Categoria: s.ID_Categoria,
-      Concepto: s.Nombre, Notas: MARCA_SUSCRIPCION + s.ID_Suscripcion
+      Concepto: s.Nombre, Notas: MARCA_SUSCRIPCION + s.ID_Suscripcion, ID_Item_Ppto: item ? item.ID_Item : ''
     });
     resultado.idMov = mov.ID_Mov;
   }

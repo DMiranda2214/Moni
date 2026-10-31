@@ -13,7 +13,8 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 
 ## 2. Presupuesto
 - **Plantilla** por escenario (uno es el base). **Generar** crea los renglones del mes; si el mes ya existe, reemplazarlo solo se permite si ningún renglón tiene movimientos.
-- **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma.
+- **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma; y una **compra con tarjeta** enlazada suma el día de la compra (las de fuente *Del presupuesto* ya cuentan por su traslado a la reserva, así que no se cuentan dos veces; las *De otra persona* no cuentan).
+- Cada renglón puede recordar **con qué se paga** (`ID_Tarjeta`: su bolsillo, o una tarjeta). Al registrar un gasto de ese renglón, Moni propone ese medio.
 - **Ahorro** de un renglón = Plan − Real, **solo si está pagado**. Resto (restante) = Plan − Real.
 - **Ingresos del mes** = ingresos registrados en el mes; **Saldo** = ingresos − real.
 - **Repartir la nómina:** un traslado por destino (gastos y cuotas agrupados por bolsillo; ahorro y fondos por renglón). Cada mes se reparte una vez salvo que se fuerce.
@@ -26,10 +27,12 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 
 ## 4. Tarjetas de crédito
 - El **mes del extracto** de una compra depende del día de corte: hasta el corte entra al extracto de ese mes; después, al siguiente.
-- **Fuente** de una compra: *Personal* (no aparta nada ahora: al pagar el extracto, lo que falte en la reserva se completa desde el bolsillo personal de la tarjeta), *Presupuesto* (aparta ya desde el bolsillo del renglón), *Guardar* (aparta ya desde el bolsillo personal) u *Otro*. Las que apartan crean un traslado a la **reserva** de la tarjeta.
-- **Pagar el extracto** es atómico: si algo falla, todo se revierte. Suma las compras del mes, completa la reserva desde el bolsillo personal si le falta, paga el total desde la reserva y marca extracto y compras como pagados. Si falta dinero y la tarjeta no tiene bolsillo personal, la app lo dice y no hace nada. Anular el pago los reabre.
+- **El gasto cuenta el día de la compra**, en su renglón y su categoría, sin importar el medio de pago. Pagar el extracto **no es un gasto nuevo**: liquida la deuda y no cuenta en los gráficos.
+- **Fuente** de una compra (se elige sola): con renglón, *Del presupuesto* (aparta ahora el dinero desde el bolsillo del renglón a la **reserva**); sin renglón, *Sin apartar ahora* (no mueve dinero). También *Apartar de otro bolsillo* y *De otra persona* (no cuenta como gasto tuyo).
+- **Pagar el extracto** es atómico: si algo falla, todo se revierte. Suma las compras del mes, completa la reserva con el bolsillo que **indiques al pagar** (por defecto, el personal de la tarjeta), paga el total desde la reserva y marca extracto y compras como pagados. Si falta dinero y no hay de dónde sacarlo, la app lo dice y no hace nada. Anular el pago los reabre.
 - No se agregan compras a un extracto ya pagado.
 - **Cupo disponible** = cupo − compras no pagadas.
+- **Vista anual:** *TTCC* = compras con tarjeta **sin renglón**, en el mes de la compra; *Saldo* = ingreso − real − TTCC.
 
 ## 5. Créditos de autopago
 - Te prestas desde una **cuenta de ahorro** (el desembolso sale del ahorro) y pagas con **amortización francesa**; cada cuota **vuelve al ahorro**.
@@ -46,7 +49,8 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 ## 7. Servicios y suscripciones
 - Cada cobro guarda su **próximo cobro** y su **día**; al pagar avanza *N* meses según la periodicidad (1, 2, 3, 6 o 12) conservando el día (31 → 28 → 31).
 - **Costo mensual** = valor / meses del período; **anual** = valor × 12 / meses.
-- Se paga con **un** medio: un bolsillo (gasto) o una tarjeta (compra, fuente *Personal*). El pago queda marcado `Suscripción <ID>`.
+- Se paga con **un** medio: un bolsillo (gasto) o una tarjeta (compra). El pago queda marcado `Suscripción <ID>`.
+- Si el cobro tiene un **renglón del presupuesto** (`Renglon`, por nombre), el pago se enlaza al renglón del mes en que se paga; con tarjeta, además aparta el dinero del bolsillo del renglón. Sin renglón, con tarjeta no aparta nada.
 - *Pronto* = vence en 7 días o menos; *vencida* = fecha pasada. Los próximos pagos de Inicio muestran los de 14 días.
 - En un **servicio**, el valor pasa a ser el último pagado.
 

@@ -1001,6 +1001,8 @@ const CAT = {
       { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre])) },
       { k: 'ID_Servicio', label: 'Servicio público enlazado', tipo: 'select', visible: v => v.Tipo === 'Servicio',
         opciones: () => [['', 'Ninguno']].concat(activos('Servicios_Publicos').map(x => [x.ID_Servicio, x.Tipo + (x.Empresa ? ' · ' + x.Empresa : '')])), ayuda: 'Trae su código de pago y su enlace.' },
+      { k: 'Renglon', label: 'Renglón del presupuesto (opcional)', tipo: 'texto', maxlength: 80, lista: ['Suscripciones', 'Servicios públicos', 'Internet', 'Entretenimiento'],
+        ayuda: 'El nombre de un renglón de tu presupuesto. Al pagar, el gasto cuenta ahí.' },
       { k: 'URL_Pago', label: 'Enlace para pagar (opcional)', tipo: 'texto', inputmode: 'url', ayuda: 'Debe empezar por https://' },
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
@@ -1033,6 +1035,7 @@ const CAT = {
         ayuda: 'Si es un gasto, el bolsillo desde donde lo pagas. Si es ahorro, fondo o cuota, donde se aparta el dinero.' },
       { k: 'ID_Credito', label: 'Crédito que paga', tipo: 'select', visible: v => v.Tipo === 'Cuota', opciones: () => [['', 'Ninguno']].concat((App.boot.creditos || []).map(c => [c.ID_Credito, c.Nombre])),
         ayuda: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.' },
+      { k: 'ID_Tarjeta', label: 'Se paga con', tipo: 'select', visible: v => v.Tipo === 'Gasto', opciones: () => MEDIOS_RENGLON() },
       { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre])) }
     ]
   },
@@ -1129,6 +1132,7 @@ const INFO_CAMPOS = {
     ID_Tarjeta: 'Si lo cobran a una tarjeta de crédito, la compra queda en su extracto.',
     ID_Categoria: 'Para que el gasto salga en los gráficos por categoría.',
     ID_Servicio: 'Trae el código de pago y el enlace del servicio público que ya guardaste.',
+    Renglon: 'Escribe el nombre de un renglón de tu presupuesto (por ejemplo, “Suscripciones”). Al pagar, el gasto cuenta en ese renglón del mes.',
     URL_Pago: 'La página donde se paga. Aparece como “Ir a pagar” en el cobro.',
     Notas: 'Lo que quieras recordar de este cobro.'
   },
@@ -1146,6 +1150,7 @@ const INFO_CAMPOS = {
     Tipo: 'Gasto: algo que pagas. Cuota: la cuota de un crédito. Ahorro o Fondo: dinero que apartas para ti.',
     ID_Bolsillo_Destino: 'En un gasto, el bolsillo desde donde lo pagas. En un ahorro, fondo o cuota, el bolsillo donde se aparta el dinero.',
     ID_Credito: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.',
+    ID_Tarjeta: 'Cómo sueles pagar este gasto. Si eliges una tarjeta, al registrar el gasto Moni la propone y aparta el dinero de este renglón en la reserva.',
     ID_Categoria: 'Para que lo gastado en este renglón salga en los gráficos por categoría.'
   },
   Subsidios: {
@@ -1767,10 +1772,15 @@ async function abrirRegistrar(o) {
   const renglones = App.boot.renglones || [];
   const itemInicial = edit ? (edit.ID_Item_Ppto || '') : (o.idItem || '');
 
+  // Un gasto se puede pagar con un bolsillo o con una tarjeta: se elige en la misma lista ("Con qué pagaste").
+  const conTarjetas = !edit && activos('Tarjetas').length > 0;
+  const grupoTarjetas = k => k === 'ID_Bolsillo' && conTarjetas
+    ? '<optgroup label="Con tarjeta de crédito" data-tarjetas>' + activos('Tarjetas').map(t => '<option value="T:' + esc(t.ID_Tarjeta) + '"' + (o.medio === 'T:' + t.ID_Tarjeta ? ' selected' : '') + '>' + esc(t.Nombre) + '</option>').join('') + '</optgroup>' : '';
   const selBolsillo = (k, label, valor, solo) =>
     '<div class="m-campo" data-campo="' + k + '" data-solo="' + solo + '"><div class="m-label-fila"><label class="m-label" for="' + idCampo(k) + '">' + esc(label) + '</label>' + htmlInfo(INFO_GENERAL[k]) + '</div>' +
     '<select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' +
-    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>';
+    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + grupoTarjetas(k) + '</select>' +
+    (k === 'ID_Bolsillo' && conTarjetas ? '<p class="m-ayuda" id="reg-tc-ayuda" hidden></p>' : '') + '</div>';
 
   const segmento = ['Gasto', 'Ingreso', 'Mover'].map(t => '<label><input type="radio" name="tipo" value="' + t + '"' + (t === tipoInicial ? ' checked' : '') + '><span>' + (t === 'Mover' ? 'Mover' : t) + '</span></label>').join('');
   const valorInicial = edit ? (edit.Tipo_Mov === 'Ajuste' ? edit.Valor : Math.abs(edit.Valor)) : (o.valor || '');
@@ -1802,6 +1812,28 @@ async function abrirRegistrar(o) {
     sel.innerHTML = cat.map(c => '<option value="' + esc(c[0]) + '"' + (c[0] === (previa || (edit && edit.ID_Categoria) || '') ? ' selected' : '') + '>' + esc(c[1]) + '</option>').join('');
     const etq = $('[data-etiqueta] label', raiz);
     if (etq) etq.textContent = t === 'Mover' ? 'Concepto (opcional)' : 'Concepto';
+    // La tarjeta solo sirve para gastos; en un ingreso o un ajuste se vuelve al primer bolsillo.
+    const medio = $('#f-ID_Bolsillo', raiz);
+    if (medio) {
+      $$('optgroup[data-tarjetas]', raiz).forEach(g => { g.disabled = t !== 'Gasto'; });
+      if (t !== 'Gasto' && medio.value.indexOf('T:') === 0) medio.value = bolsilloInicial;
+      const lbl = $('label[for="f-ID_Bolsillo"]', raiz);
+      if (lbl) lbl.textContent = t === 'Gasto' && conTarjetas ? 'Con qué pagaste' : 'Bolsillo';
+    }
+    ayudaTarjeta(raiz);
+  };
+  // Qué pasará con el dinero cuando se paga con tarjeta, dicho antes de guardar.
+  const ayudaTarjeta = raiz => {
+    const caja = $('#reg-tc-ayuda', raiz), medio = $('#f-ID_Bolsillo', raiz);
+    if (!caja || !medio) return;
+    const esTarjeta = medio.value.indexOf('T:') === 0;
+    caja.hidden = !esTarjeta;
+    if (!esTarjeta) return;
+    const r = renglones.find(x => x.ID_Item === ($('#f-ID_Item_Ppto', raiz) || {}).value);
+    const b = r && r.ID_Bolsillo_Destino ? porId('Bolsillos', 'ID_Bolsillo', r.ID_Bolsillo_Destino) : null;
+    caja.textContent = r && b
+      ? 'Cuenta como gasto de “' + r.Concepto + '” y se aparta el dinero de “' + b.Nombre + '” en la reserva de la tarjeta.'
+      : 'No se aparta dinero ahora: cuando pagues el extracto indicarás de qué bolsillo sale.';
   };
 
   await abrirHoja({
@@ -1813,10 +1845,24 @@ async function abrirRegistrar(o) {
       // El valor se escribe en la moneda del bolsillo elegido (en un traslado, la del que sale)
       const monedaDelValor = () => {
         const sel = $(tipoActual(raiz) === 'Mover' ? '#f-Origen' : '#f-ID_Bolsillo', raiz), v = $('#f-Valor', raiz);
-        if (sel && v) { v.dataset.divisa = divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
+        if (sel && v) { v.dataset.divisa = sel.value.indexOf('T:') === 0 ? 'COP' : divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
       };
+      // Un renglón que se paga con tarjeta propone la tarjeta (si todavía no se eligió el medio a mano).
+      const proponerMedio = () => {
+        const medio = $('#f-ID_Bolsillo', raiz), sel = $('#f-ID_Item_Ppto', raiz);
+        if (!medio || !sel || medio.dataset.tocado || tipoActual(raiz) !== 'Gasto') return;
+        const r = renglones.find(x => x.ID_Item === sel.value);
+        if (r && r.ID_Tarjeta && $('option[value="T:' + r.ID_Tarjeta + '"]', medio)) medio.value = 'T:' + r.ID_Tarjeta;
+      };
+      proponerMedio(); actualizar(raiz);
       monedaDelValor();
-      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipo') actualizar(raiz); monedaDelValor(); });
+      raiz.addEventListener('change', ev => {
+        if (ev.target.name === 'tipo') actualizar(raiz);
+        if (ev.target.id === 'f-ID_Bolsillo') ev.target.dataset.tocado = '1';
+        if (ev.target.id === 'f-ID_Item_Ppto') { proponerMedio(); ayudaTarjeta(raiz); }
+        if (ev.target.id === 'f-ID_Bolsillo') ayudaTarjeta(raiz);
+        monedaDelValor();
+      });
       const v = $('#f-Valor', raiz); if (v) v.focus();
     },
     alGuardar: async raiz => {
@@ -1838,6 +1884,12 @@ async function abrirRegistrar(o) {
         if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
         res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '' }, vistaActual());
         recordarBolsillo(v.Origen);
+      } else if (t === 'Gasto' && v.ID_Bolsillo.indexOf('T:') === 0) {
+        // Gasto con tarjeta: con renglón aparta de su bolsillo; sin renglón no aparta nada.
+        res = await api('addGastoTarjeta', { ID_Tarjeta: v.ID_Bolsillo.slice(2), Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
+        aplicarEscritura(res); App.tar.data = null; App.deudas.data = null; render();
+        aviso(res.aparto ? 'Gasto con tarjeta registrado y dinero apartado' : 'Gasto con tarjeta registrado', { deshacer: () => anularGastoTarjeta(res.idCompra, res.idItem) });
+        return;
       } else {
         res = await api('addMovimiento', { Tipo_Mov: t, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
         recordarBolsillo(v.ID_Bolsillo);
@@ -1847,6 +1899,14 @@ async function abrirRegistrar(o) {
       aviso(t === 'Mover' ? 'Dinero movido' : (t === 'Gasto' ? 'Gasto registrado' : 'Ingreso registrado'), { deshacer: () => anularYAvisar(id) });
     }
   });
+}
+
+async function anularGastoTarjeta(idCompra, idItem) {
+  try {
+    const res = await api('voidGastoTarjeta', idCompra, idItem || '', vistaActual());
+    aplicarEscritura(res); App.tar.data = null; App.deudas.data = null; render();
+    aviso('Gasto con tarjeta anulado');
+  } catch (e) { aviso(e.message, true); }
 }
 
 async function anularYAvisar(id) {
@@ -1966,6 +2026,8 @@ function aplicarPresupuesto(data) {
   }
 }
 
+/** "Se paga con": el bolsillo del renglón (efectivo o débito) o una de tus tarjetas, que se propone al registrar el gasto. */
+const MEDIOS_RENGLON = () => [['', 'Su bolsillo (efectivo o débito)']].concat(activos('Tarjetas').map(t => [t.ID_Tarjeta, 'Tarjeta ' + t.Nombre]));
 const TIPOS_RENGLON = [['Gasto', 'Gasto'], ['Cuota', 'Cuota de un crédito'], ['Ahorro', 'Ahorro'], ['Fondo', 'Fondo para una meta']];
 
 function opcionesDestino(conNinguno) {
@@ -2033,7 +2095,8 @@ function filaRenglon(i) {
   return '<div class="m-row m-renglon' + (i.Pagado ? ' m-hecho' : '') + '">' +
     '<label class="m-check"><input type="checkbox" data-acc-cambio="pagado" data-id="' + esc(i.ID_Item) + '"' + (i.Pagado ? ' checked' : '') + ' aria-label="Pagado: ' + esc(i.Concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
     '<button class="m-row-main" data-acc="renglon" data-id="' + esc(i.ID_Item) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(i.Concepto) + '</span>' +
-    '<span class="m-row-sub" style="display:block">Plan ' + dinero(i.Plan) + ' · Real ' + dinero(i.Real) + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span></span>' +
+    '<span class="m-row-sub" style="display:block">Plan ' + dinero(i.Plan) + ' · Real ' + dinero(i.Real) + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span>' +
+    (i.ConTarjeta > 0 ? '<span class="m-row-sub" style="display:block">' + ico('tarjetas', 'm-icon-sm') + ' ' + dinero(i.ConTarjeta) + ' con tarjeta' + (i.PendienteTarjeta > 0 ? ' · ' + dinero(i.PendienteTarjeta) + ' por pagar en el extracto' : '') + '</span>' : '') + '</span>' +
     '<span class="m-row-final">' + final + '</span></button></div>';
 }
 
@@ -2061,6 +2124,8 @@ async function abrirRenglon(id) {
   const filas = [['Tipo', esc(it.Tipo === 'Cuota' ? 'Cuota de un crédito' : it.Tipo)], ['Plan', dinero(it.Plan)], ['Real', dinero(it.Real)],
     [it.Restante < 0 ? 'Excedido' : 'Falta', dinero(Math.abs(it.Restante))]];
   if (it.Bolsillo) filas.push([it.Tipo === 'Gasto' ? 'Se paga desde' : 'Se aparta en', esc(it.Bolsillo)]);
+  if (it.ConTarjeta > 0) filas.push(['Con tarjeta', dinero(it.ConTarjeta) + (it.PendienteTarjeta > 0 ? ' · ' + dinero(it.PendienteTarjeta) + ' sin pagar' : ' · pagado')]);
+  if (it.ID_Tarjeta) { const tj = porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta); if (tj) filas.push(['Se suele pagar con', esc(tj.Nombre)]); }
   if (it.Pagado) filas.push(['Estado', 'Pagado' + (it.Ahorro ? ' · ahorro ' + dinero(it.Ahorro) : '')]);
 
   let siguiente = null;
@@ -2100,7 +2165,8 @@ async function abrirRenglonMes(item) {
     { k: 'ID_Bolsillo_Destino', label: 'Bolsillo de destino', tipo: 'select', opciones: () => opcionesDestino(true),
       ayuda: 'Si es un gasto, el bolsillo desde donde lo pagas. Si es ahorro, fondo o cuota, donde se aparta el dinero.' },
     { k: 'ID_Credito', label: 'Crédito que paga', tipo: 'select', visible: v => v.Tipo === 'Cuota', opciones: () => [['', 'Ninguno']].concat((App.boot.creditos || []).map(c => [c.ID_Credito, c.Nombre])),
-      ayuda: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.' }
+      ayuda: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.' },
+    { k: 'ID_Tarjeta', label: 'Se paga con', tipo: 'select', visible: v => v.Tipo === 'Gasto', opciones: () => MEDIOS_RENGLON(), info: INFO_CAMPOS.Presupuesto_Plantilla.ID_Tarjeta }
   ];
   const v0 = item || { Tipo: 'Gasto', Plan: '' };
   await abrirHoja({
@@ -2115,7 +2181,7 @@ async function abrirRenglonMes(item) {
       const v = leerFormulario(raiz, campos);
       if (!v.Concepto) throw new Error('Escribe el concepto.');
       if (v.Plan === '' || (typeof v.Plan === 'number' && isNaN(v.Plan))) throw new Error('Escribe cuánto planeas.');
-      const envio = { Mes: App.ppto.mes, Concepto: v.Concepto, Plan: v.Plan, Tipo: v.Tipo, ID_Bolsillo_Destino: v.ID_Bolsillo_Destino, ID_Credito: v.Tipo === 'Cuota' ? (v.ID_Credito || '') : '' };
+      const envio = { Mes: App.ppto.mes, Concepto: v.Concepto, Plan: v.Plan, Tipo: v.Tipo, ID_Bolsillo_Destino: v.ID_Bolsillo_Destino, ID_Credito: v.Tipo === 'Cuota' ? (v.ID_Credito || '') : '', ID_Tarjeta: v.Tipo === 'Gasto' ? (v.ID_Tarjeta || '') : '' };
       if (item) envio.ID_Item = item.ID_Item;
       const data = await api('saveRenglonMes', envio);
       aplicarPresupuesto(data); render(); aviso(item ? 'Renglón actualizado' : 'Renglón agregado');
@@ -2354,10 +2420,10 @@ App.tar = { id: null, mes: null, data: null, cargando: false, error: null };
 App.cre = { id: null, data: null, cargando: false, error: null };
 
 const FUENTES = [
-  ['Personal', 'Personal', 'Sale de tu bolsillo personal cuando pagues el extracto.'],
-  ['Ppto', 'Del presupuesto', 'Aparta ahora el dinero desde el bolsillo del renglón del presupuesto (por ejemplo, una suscripción).'],
-  ['Guardar', 'Para guardar', 'Aparta ahora el dinero desde tu bolsillo personal, para tenerlo listo.'],
-  ['Otro', 'De otra persona', 'Compra para alguien más: no mueve dinero hasta que te lo reembolsen.']
+  ['Personal', 'Sin apartar ahora', 'No mueve dinero hoy: al pagar el extracto indicas de qué bolsillo sale. Úsalo para compras que no están en el presupuesto.'],
+  ['Ppto', 'Del presupuesto', 'Aparta ahora el dinero desde el bolsillo del renglón y cuenta como gasto de ese renglón. Es lo recomendado cuando la compra está en tu presupuesto.'],
+  ['Guardar', 'Apartar de otro bolsillo', 'Aparta ahora el dinero desde el bolsillo que elijas, para tenerlo listo en la reserva.'],
+  ['Otro', 'De otra persona', 'Compra para alguien más: no cuenta como tu gasto ni mueve dinero hasta que te lo reembolsen.']
 ];
 const etiquetaFuente = f => (FUENTES.find(x => x[0] === f) || [f, f])[1];
 
@@ -2524,9 +2590,10 @@ async function abrirCompra(idTarjeta) {
   const cuerpo = '<form novalidate data-form="compra">' +
     htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true }, '') +
     htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, '') +
-    campoSel('Fuente', '¿De dónde sale el dinero?', fuenteSel('Personal'), '', '<p class="m-ayuda" id="fuente-ayuda"></p>') +
+    campoSel('Renglon', 'Renglón del presupuesto (opcional)', '<option value="">Ninguno</option>' + renglones.map(r => '<option value="' + esc(r.ID_Item) + '">' + esc(r.Concepto) + '</option>').join(''), '',
+      '<p class="m-ayuda">Si la compra está en tu presupuesto, elígelo: el gasto cuenta en ese renglón y el dinero se aparta de su bolsillo.</p>') +
+    campoSel('Fuente', '¿Qué hacer con el dinero?', fuenteSel('Personal'), '', '<p class="m-ayuda" id="fuente-ayuda"></p>') +
     campoSel('Origen', 'Sale de (bolsillo)', optsBolsillo, 'Ppto,Guardar') +
-    campoSel('Renglon', 'Renglón del presupuesto', '<option value="">Ninguno</option>' + renglones.map(r => '<option value="' + esc(r.ID_Item) + '">' + esc(r.Concepto) + '</option>').join(''), 'Ppto') +
     campoSel('Categoria', 'Categoría (opcional)', cats.map(c => '<option value="' + esc(c[0]) + '">' + esc(c[1]) + '</option>').join(''), '') +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + hoy + '"><p class="m-ayuda" id="mes-extracto"></p></div>' +
     htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
@@ -2538,13 +2605,23 @@ async function abrirCompra(idTarjeta) {
       activarEcoDinero(raiz);
       const actualizar = () => {
         const f = $('#f-Fuente', raiz).value;
-        $$('[data-solo]', raiz).forEach(el => { el.hidden = el.dataset.solo.split(',').indexOf(f) === -1; });
+        $$('[data-solo]', raiz).forEach(el => { el.hidden = el.dataset.solo !== '' && el.dataset.solo.split(',').indexOf(f) === -1; });
         $('#fuente-ayuda', raiz).textContent = (FUENTES.find(x => x[0] === f) || [])[2] || '';
         if (f === 'Guardar' && td.personal && !$('#f-Origen', raiz).value) $('#f-Origen', raiz).value = td.personal.ID_Bolsillo;
         const fecha = $('#f-Fecha', raiz).value;
         $('#mes-extracto', raiz).textContent = fecha ? 'Entra al extracto de ' + mesTexto(mesExtractoDe(fecha, td.tarjeta.Dia_Corte)).toLowerCase() + '.' : '';
       };
-      raiz.addEventListener('change', actualizar); actualizar();
+      // Con renglón, lo natural es apartar de su bolsillo; sin renglón, no apartar nada. Solo mientras no se haya elegido a mano.
+      raiz.addEventListener('change', ev => {
+        if (ev.target.id === 'f-Fuente') ev.target.dataset.tocado = '1';
+        if (ev.target.id === 'f-Renglon') {
+          const r = renglones.find(x => x.ID_Item === ev.target.value), fu = $('#f-Fuente', raiz);
+          if (fu && !fu.dataset.tocado) fu.value = r && r.ID_Bolsillo_Destino ? 'Ppto' : 'Personal';
+          if (r && r.ID_Bolsillo_Destino && fu.value === 'Ppto') $('#f-Origen', raiz).value = r.ID_Bolsillo_Destino;
+        }
+        actualizar();
+      });
+      actualizar();
       $('#f-Valor', raiz).focus();
     },
     alGuardar: async raiz => {
@@ -2555,7 +2632,7 @@ async function abrirCompra(idTarjeta) {
       const fuente = $('#f-Fuente', raiz).value;
       const envio = { ID_Tarjeta: idTarjeta, Valor: valor, Concepto: concepto, Fuente: fuente, Fecha: $('#f-Fecha', raiz).value, ID_Categoria: $('#f-Categoria', raiz).value, Notas: ($('#f-Notas', raiz) || {}).value || '' };
       if (fuente === 'Ppto' || fuente === 'Guardar') envio.ID_Bolsillo_Origen = $('#f-Origen', raiz).value;
-      if (fuente === 'Ppto') envio.ID_Item_Ppto = $('#f-Renglon', raiz).value;
+      envio.ID_Item_Ppto = $('#f-Renglon', raiz).value;
       const res = await api('addCompraTC', envio);
       aplicarEscritura(res); aplicarTarjeta(res); render();
       aviso('Compra registrada', { deshacer: () => anularCompraYAvisar(res.idCompra) });
@@ -2595,19 +2672,26 @@ async function abrirPagoExtracto() {
   const td = App.tar.data;
   if (!td || td.extracto) return;
   const falta = td.totales.faltaParaPagar;
-  const sinPersonal = falta > 0 && !td.personal;
+  const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => x[0] !== td.reserva.ID_Bolsillo) })).filter(g => g.opciones.length);
+  const preferido = td.personal ? td.personal.ID_Bolsillo : '';
   const cuerpo = '<form novalidate data-form="extracto"><dl class="m-detalle">' +
     '<div><dt>Total del extracto</dt><dd class="m-num"><strong>' + dinero(td.totales.total) + '</strong></dd></div>' +
     '<div><dt>Ya apartado en la reserva</dt><dd class="m-num">' + dinero(Math.min(td.reserva.Saldo, td.totales.total)) + '</dd></div>' +
-    '<div><dt>' + (falta > 0 ? 'Se completa desde ' + esc(td.personal ? td.personal.Nombre : 'tu bolsillo personal') : 'Falta completar') + '</dt><dd class="m-num">' + dinero(falta) + '</dd></div></dl>' +
-    (sinPersonal ? '<div class="m-error-form" role="note">Esta tarjeta no tiene un bolsillo personal definido. Aparta el dinero en la reserva o defínelo en Editar.</div>' : '') +
+    '<div><dt>Falta completar</dt><dd class="m-num">' + dinero(falta) + '</dd></div></dl>' +
+    (falta > 0
+      ? '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="f-Origen">¿De qué bolsillo sale lo que falta?</label>' + htmlInfo('Lo que falta en la reserva (compras que no apartaron dinero) sale del bolsillo que elijas, y así queda registrado de dónde salió el dinero.') + '</div>' +
+        '<select class="m-input" id="f-Origen">' + (preferido ? '' : '<option value="" disabled selected>Elegir…</option>') +
+        grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>'
+      : '') +
     '<p class="m-hoja-mensaje">Se paga el total desde la reserva y las compras quedan marcadas como pagadas.</p>' +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha del pago</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
   await abrirHoja({
     titulo: 'Pagar extracto', der: 'Pagar', cuerpo: cuerpo,
     alGuardar: async raiz => {
-      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value);
+      const origen = $('#f-Origen', raiz);
+      if (falta > 0 && (!origen || !origen.value)) throw new Error('Elige de qué bolsillo sale lo que falta.');
+      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, origen ? origen.value : '');
       aplicarEscritura(res); aplicarTarjeta(res); render();
       aviso('Extracto pagado', { deshacer: () => anularPagoExtractoYAvisar(res.idExtracto) });
     }
@@ -3321,7 +3405,7 @@ async function abrirPagarCobro(s) {
       aviso('Pago registrado · próximo cobro ' + res.proximo, {
         deshacer: async () => {
           try {
-            const u = await api('undoPagoSuscripcion', s.ID_Suscripcion, res.anterior, res.idMov, res.idCompra);
+            const u = await api('undoPagoSuscripcion', s.ID_Suscripcion, res.anterior, res.idMov, res.idCompra, res.idItem || '');
             aplicarEscritura(u); App.pag.data = u.suscripciones; render(); aviso('Pago deshecho');
           } catch (e) { aviso(e.message, true); }
         }

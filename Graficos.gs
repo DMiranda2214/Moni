@@ -6,6 +6,7 @@
  *   - el saldo al cierre de cada mes.
  * Todo es de una sola divisa (la que se elige): los pesos y los dólares no se suman.
  * "Entró" y "salió" siguen la misma regla de la pantalla de Movimientos: los traslados no cuentan.
+ * Las compras con tarjeta cuentan como gasto el día de la compra; el pago del extracto no cuenta (liquida la deuda).
  */
 
 /** Meses AAAA-MM que terminan en `mes`, del más viejo al más nuevo. */
@@ -58,7 +59,8 @@ function obtenerGraficos(o) {
     if (!fila) return; // posterior al mes elegido
     hayDatos = true;
     fila.movido += v; // todo cambia el saldo, también los traslados y las conversiones
-    if (m.Tipo_Mov === 'Transferencia') return;
+    // El pago de un extracto liquida una deuda: el gasto ya se contó el día de cada compra.
+    if (m.Tipo_Mov === 'Transferencia' || m.Subtipo === 'Pago_TC') return;
     if (v >= 0) { fila.ingresos += v; return; }
     fila.gastos += -v;
     if (mm === mes) {
@@ -66,6 +68,18 @@ function obtenerGraficos(o) {
       categorias[nombre] = (categorias[nombre] || 0) + (-v);
     }
   });
+
+  // Las compras con tarjeta cuentan el día de la compra (en pesos), con su categoría. Las "De otra persona" se reembolsan.
+  if (divisa === DIVISA_BASE) {
+    getTableData('Compras_TC').forEach(c => {
+      if (esVerdadero(c.Anulado) || c.Fuente === 'Otro' || !c.Fecha) return;
+      const mm = String(c.Fecha).slice(0, 7), fila = porMes[mm], v = Number(c.Valor) || 0;
+      if (!fila) return;
+      hayDatos = true;
+      fila.gastos += v;
+      if (mm === mes) { const nombre = nombreCategoria[c.ID_Categoria] || 'Sin categoría'; categorias[nombre] = (categorias[nombre] || 0) + v; }
+    });
+  }
 
   let saldo = saldoInicial;
   const meses = lista.map(k => {

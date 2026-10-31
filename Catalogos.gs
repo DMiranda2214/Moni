@@ -455,6 +455,7 @@ const CATALOGOS = {
         Periodicidad: opcion_(pick('Periodicidad'), ENUMS.Suscripciones.Periodicidad, 'La periodicidad', 'Mensual'),
         Proximo_Cobro: proximo, Dia_Cobro: Number(proximo.slice(8, 10)),
         ID_Bolsillo: idBolsillo, ID_Tarjeta: idTarjeta, ID_Categoria: idCat, ID_Servicio: idSrv,
+        Renglon: texto_(pick('Renglon')).slice(0, 80),
         URL_Pago: urlSegura_(pick('URL_Pago')), Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
       };
@@ -480,8 +481,15 @@ const CATALOGOS = {
       const idCredito = item.ID_Credito !== undefined ? texto_(item.ID_Credito) : (actual ? actual.ID_Credito || '' : '');
       if (idCredito && !leer_('Creditos').some(c => c.ID_Credito === idCredito && c.Estado === 'Activo')) throw new Error('El crédito no existe o ya está pagado.');
 
+      const idTarjeta = item.ID_Tarjeta !== undefined ? texto_(item.ID_Tarjeta) : (actual ? actual.ID_Tarjeta || '' : '');
+      if (idTarjeta) {
+        if (tipo !== 'Gasto') throw new Error('Solo un renglón de gasto puede pagarse con tarjeta.');
+        exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
+      }
+
       return {
         ID_Credito: idCredito,
+        ID_Tarjeta: idTarjeta,
         ID_Escenario: idEsc,
         Concepto: concepto,
         Monto_Plan: numero_(item.Monto_Plan !== undefined ? item.Monto_Plan : actual && actual.Monto_Plan, 'El monto', { requerido: true, min: 0, max: VALOR_MAXIMO }),

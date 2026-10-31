@@ -45,7 +45,7 @@ Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad 
 **Inmuebles** — `ID_Inmueble, Nombre, Activo, Orden`
 **Servicios_Publicos** — `ID_Servicio, ID_Inmueble, Tipo, Empresa, Codigo_Pago, URL_Pago, Notas, Activo`
 
-**Suscripciones** — `ID_Suscripcion, Nombre, Tipo, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Tarjeta, ID_Categoria, ID_Servicio, URL_Pago, Ultimo_Pago, Notas, Activo, Orden`
+**Suscripciones** — `ID_Suscripcion, Nombre, Tipo, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Tarjeta, ID_Categoria, ID_Servicio, Renglon, URL_Pago, Ultimo_Pago, Notas, Activo, Orden`
 Pagos que se repiten. `Tipo` = `Suscripcion` o `Servicio`; `Periodicidad` = Mensual/Bimestral/Trimestral/Semestral/Anual. `Proximo_Cobro` y `Ultimo_Pago` son texto AAAA-MM-DD. Se paga con **un** medio: `ID_Bolsillo` (gasto) o `ID_Tarjeta` (compra de tarjeta). `Dia_Cobro` conserva el día original (31 → 28 → 31). `ID_Servicio` enlaza un servicio público (código y enlace de pago). Cada pago deja `Notas = "Suscripción <ID>"` en el gasto o la compra.
 
 **Escenarios** — `ID_Escenario, Nombre, Es_Base, Descripcion, Activo`

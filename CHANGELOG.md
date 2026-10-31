@@ -1,5 +1,14 @@
 # Cambios
 
+## Presupuesto y tarjetas: el gasto cuenta el día de la compra (30 oct)
+- **Una compra con tarjeta cuenta en su renglón y su categoría el día de la compra**; pagar el extracto ya no cuenta como gasto (ni en gráficos ni en la vista anual). Sin doble conteo con el traslado a la reserva.
+- **Cada renglón recuerda su medio de pago habitual** ("Se paga con": su bolsillo o una tarjeta); Registrar lo propone.
+- **Registrar un gasto con tarjeta en el mismo formulario** ("Con qué pagaste"): con renglón aparta de su bolsillo; sin renglón no aparta nada.
+- **Pagar el extracto indica de qué bolsillo sale lo que falta.**
+- **Suscripciones y servicios ligados al presupuesto** (columna `Renglon`).
+- El presupuesto muestra cuánto de cada renglón fue con tarjeta y cuánto está por pagar en el extracto.
+- Esquema 3: columnas nuevas `ID_Tarjeta` (plantilla y mes del presupuesto) y `Renglon` (suscripciones); las bases ya instaladas las ganan con **Instalar**, sin perder datos.
+
 ## Primeros pasos más simples (30 oct)
 - **Cuentas con sus bolsillos y saldos en un solo paso:** al crear una cuenta que usa bolsillos se anotan ahí mismo, con lo que hay hoy en cada uno (`saveCuentaCompleta`, todo o nada).
 - **Tarjetas sin callejón:** la reserva puede ir en cualquier cuenta en pesos; si esa cuenta era de un solo saldo, pasa a usar bolsillos sin perder su dinero. El asistente siempre ofrece agregar tarjetas.

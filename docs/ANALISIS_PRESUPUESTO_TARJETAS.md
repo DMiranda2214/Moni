@@ -1,6 +1,6 @@
 # Análisis: presupuesto del mes y compras con tarjeta de crédito
 
-> Estado: **análisis y propuesta** (30/10/2026). No se cambió ninguna regla; falta elegir la opción (sección 5).
+> Estado: **decidido e implementado** (30/10/2026). Decisiones: (1) el gasto con tarjeta cuenta en el **mes de la compra**; (2) cada renglón **recuerda su medio de pago habitual**; (3) una compra **sin renglón no aparta dinero**: al pagar el extracto se indica de qué bolsillo sale. Las reglas resultantes están en [REGLAS_DE_NEGOCIO](REGLAS_DE_NEGOCIO.md) (secciones 2, 4 y 7). El resto de este documento es el análisis que llevó a esa decisión.
 
 ## 1. El problema, con un ejemplo
 Renglón del mes **Mercado: plan 400.000**, con su dinero en el bolsillo *Mercado* (la nómina ya lo repartió). Haces el mercado de 120.000 **con la tarjeta**.

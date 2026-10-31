@@ -65,7 +65,7 @@ function getBootstrap() {
 
     const mesActual = hoyIso_().slice(0, 7);
     const renglones = getTableData('Presupuesto_Mes').filter(i => i.Mes === mesActual)
-      .map(i => ({ ID_Item: i.ID_Item, Concepto: i.Concepto, Pagado: esVerdadero(i.Pagado) }));
+      .map(i => ({ ID_Item: i.ID_Item, Concepto: i.Concepto, Pagado: esVerdadero(i.Pagado), ID_Tarjeta: i.ID_Tarjeta || '', ID_Bolsillo_Destino: i.ID_Bolsillo_Destino || '', Tipo: i.Tipo || 'Gasto' }));
 
     return {
       instalado: true,
@@ -137,14 +137,15 @@ function resultadoEscritura_(ids, vista, extra) {
     saldos: resumenSaldos_()
   };
   // Si algún movimiento afecta un renglón del presupuesto, la pantalla del presupuesto llega ya actualizada.
-  const pp = presupuestoAfectado_(ids);
+  const pp = presupuestoAfectado_(ids, v.idItem);
   if (pp) base.presupuesto = pp;
   return Object.assign(base, extra || {});
 }
 
 /** Presupuesto del mes del primer renglón enlazado por estos movimientos (o undefined). */
-function presupuestoAfectado_(ids) {
-  const enlazado = getTableData('Movimientos').find(m => ids.indexOf(m.ID_Mov) !== -1 && m.ID_Item_Ppto);
+function presupuestoAfectado_(ids, idItem) {
+  // Un gasto con tarjeta puede no dejar movimientos y aun así cambiar el real de su renglón.
+  const enlazado = idItem ? { ID_Item_Ppto: idItem } : getTableData('Movimientos').find(m => ids.indexOf(m.ID_Mov) !== -1 && m.ID_Item_Ppto);
   if (!enlazado) return undefined;
   const item = getTableData('Presupuesto_Mes').find(i => i.ID_Item === enlazado.ID_Item_Ppto);
   return item ? obtenerPresupuestoMes(item.Mes) : undefined;
@@ -326,6 +327,26 @@ function resultadoTarjeta_(idTarjeta, mes, ids) {
   return resultadoEscritura_(ids || [], undefined, { tarjeta: obtenerTarjeta(idTarjeta, mes) });
 }
 
+/**
+ * Un gasto pagado con tarjeta, desde el formulario de Registrar. Con renglón aparta el dinero de su bolsillo
+ * (y cuenta como gasto de ese renglón); sin renglón no aparta nada. Devuelve lo mismo que un gasto normal.
+ */
+function addGastoTarjeta(c, vista) {
+  return responder_(function () {
+    const compra = registrarCompraTC(c);
+    const ids = compra.ID_Mov_Reserva ? filasDelGrupo_(compra.ID_Mov_Reserva).filas.map(f => f.ID_Mov) : [];
+    return resultadoEscritura_(ids, Object.assign({}, vista, { idItem: compra.ID_Item_Ppto }),
+      { idCompra: compra.ID_Compra, idItem: compra.ID_Item_Ppto || '', aparto: !!compra.ID_Mov_Reserva });
+  });
+}
+
+function voidGastoTarjeta(idCompra, idItem, vista) {
+  return responder_(function () {
+    const r = anularCompraTC(idCompra);
+    return resultadoEscritura_(r.ids, Object.assign({}, vista, { idItem: idItem || '' }), {});
+  });
+}
+
 function addCompraTC(c) {
   return responder_(function () {
     const compra = registrarCompraTC(c);
@@ -348,9 +369,9 @@ function restoreCompraTC(idCompra) {
   });
 }
 
-function payExtracto(idTarjeta, mes, fecha) {
+function payExtracto(idTarjeta, mes, fecha, idOrigen) {
   return responder_(function () {
-    const r = pagarExtracto(idTarjeta, mes, fecha);
+    const r = pagarExtracto(idTarjeta, mes, fecha, idOrigen);
     return Object.assign(resultadoTarjeta_(r.tarjeta, r.mes, r.ids), { idExtracto: r.idExtracto, completado: r.falta, total: r.total });
   });
 }
@@ -624,14 +645,14 @@ function paySuscripcion(id, datos) {
   return responder_(function () {
     const r = pagarSuscripcion(id, datos);
     const ids = r.idMov ? [r.idMov] : [];
-    return Object.assign(resultadoEscritura_(ids, null, { suscripciones: obtenerSuscripciones() }), r);
+    return Object.assign(resultadoEscritura_(ids, { idItem: r.idItem }, { suscripciones: obtenerSuscripciones() }), r);
   });
 }
 
-function undoPagoSuscripcion(id, anterior, idMov, idCompra) {
+function undoPagoSuscripcion(id, anterior, idMov, idCompra, idItem) {
   return responder_(function () {
     deshacerPagoSuscripcion(id, anterior, idMov, idCompra);
-    return resultadoEscritura_(idMov ? [idMov] : [], null, { suscripciones: obtenerSuscripciones() });
+    return resultadoEscritura_(idMov ? [idMov] : [], { idItem: idItem || '' }, { suscripciones: obtenerSuscripciones() });
   });
 }
 

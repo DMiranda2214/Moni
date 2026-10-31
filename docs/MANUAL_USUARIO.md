@@ -47,9 +47,9 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 
 ## 7. Deudas
 ### Tarjetas de crédito
-- **Agregar una compra:** concepto, valor, fecha y *fuente* (de dónde saldrá el dinero). Si la fuente aparta dinero, Moni lo pasa a la **reserva** de la tarjeta.
+- **Agregar una compra:** desde **Registrar** (elige la tarjeta en *Con qué pagaste*) o desde la tarjeta. Si la compra está en un renglón de tu presupuesto, elígelo: **cuenta como gasto de ese renglón el día de la compra** y Moni aparta el dinero de su bolsillo a la **reserva** de la tarjeta. Si no está en el presupuesto, no se aparta nada: al pagar el extracto indicas de qué bolsillo sale.
 - El **mes del extracto** se decide por el día de corte.
-- **Pagar el extracto:** una sola acción, todo o nada: si a la reserva le falta, se completa desde el bolsillo personal de la tarjeta; luego se paga el total desde la reserva y se marcan el extracto y las compras como pagados. Se puede **deshacer**.
+- **Pagar el extracto:** una sola acción, todo o nada: si a la reserva le falta, **eliges de qué bolsillo sale** lo que falta; luego se paga el total desde la reserva y se marcan el extracto y las compras como pagados. Se puede **deshacer**.
 ### Créditos de autopago
 - Un crédito es un préstamo desde tu ahorro hacia ti (o a alguien): monto, plazo, tasa y cuenta de ahorro. Moni calcula la cuota (amortización francesa) y el cronograma antes de guardar.
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
