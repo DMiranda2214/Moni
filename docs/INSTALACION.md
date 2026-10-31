@@ -28,7 +28,7 @@ npm run push                        # sube *.gs, *.html y appsscript.json
 En el editor de Apps Script, elige la función en la barra superior y pulsa **Ejecutar**:
 
 1. `vincularHojaMoni` → guarda el ID del Sheet en las propiedades del script. Acepta los permisos (Google avisará "app no verificada": es tu propio script; *Configuración avanzada → Ir a…*).
-2. `setupDatabase` → crea las 27 pestañas con sus encabezados y los valores iniciales. Es **idempotente**: no borra ni cambia nada de lo que ya exista.
+2. `setupDatabase` → crea las 28 pestañas con sus encabezados y los valores iniciales. Es **idempotente**: no borra ni cambia nada de lo que ya exista.
 
 > Si el proyecto no está unido al Sheet, usa `vincularHojaMoni('<ID del Sheet>')`: el ID es lo que está entre `/d/` y `/edit` en la dirección del Sheet.
 
@@ -51,9 +51,9 @@ Las versiones con **recordatorios** agregan el permiso `https://www.googleapis.c
 Al abrir el Sheet aparece el menú **Moni** con: instalar o verificar la base, limpiar la caché, crear un respaldo, activar copias automáticas e instalar las hojas de consulta (`Vista_Bolsillos` y `Vista_Anual`, con fórmulas).
 
 ## Lista de comprobación
-- [ ] El Sheet tiene las 27 pestañas.
+- [ ] El Sheet tiene las 28 pestañas.
 - [ ] La URL `/exec` abre la app y muestra la bienvenida con el asistente de primeros pasos.
-- [ ] Ajustes → Diagnóstico dice *"27 tablas esperadas · todas listas"*.
+- [ ] Ajustes → Diagnóstico dice *"28 tablas esperadas · todas listas"*.
 - [ ] Ajustes → Respaldos → *Crear un respaldo ahora* funciona.
 - [ ] Probado desde el celular y desde el computador.
 

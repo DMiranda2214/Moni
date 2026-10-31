@@ -27,7 +27,7 @@ Desde ahí, si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: d
 **Ajustes → Registro de errores** muestra lo que falló en producción (tabla `Log`, últimas 500 entradas). Niveles: **Error** (fallo inesperado o del navegador), **Aviso** (una regla de negocio rechazó algo) e **Info** (hechos como el borrado total o el inicio de operación). Cada entrada lleva la función, el mensaje, la traza y la versión de Moni. También quedan anotados los fallos del respaldo automático. **Copiar el registro** deja un texto listo para pegar en un reporte.
 
 ## Borrar todos los datos
-**Ajustes → Privacidad → Borrar todos mis datos** (función `resetAllData`, en `Reinicio.gs`). Vacía las 27 tablas conservando sus encabezados, listas desplegables y formato, vuelve a sembrar los parámetros, las categorías y el escenario base, y apaga las copias automáticas. Exige escribir `BORRAR` (la pantalla y el servidor lo validan).
+**Ajustes → Privacidad → Borrar todos mis datos** (función `resetAllData`, en `Reinicio.gs`). Vacía las 28 tablas conservando sus encabezados, listas desplegables y formato, vuelve a sembrar los parámetros, las categorías y el escenario base, y apaga las copias automáticas. Exige escribir `BORRAR` (la pantalla y el servidor lo validan).
 - **No toca:** `SPREADSHEET_ID` ni `USUARIOS_PERMITIDOS` (la app sigue funcionando), los PDF de Drive ni las copias de "Moni Respaldos", salvo que se marque la opción de mandarlas a la papelera (recuperables unos 30 días desde la papelera de Drive).
 - Es irreversible: antes, **Crear un respaldo ahora** si hay duda.
 - Para no perder la configuración de accesos, no borres las propiedades del script.

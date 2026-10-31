@@ -159,7 +159,19 @@ const CATALOGOS = {
       if (actual && divisaBanco_(actual) !== divisa && leer_('Cuentas').some(c => c.ID_Banco === actual.ID_Banco)) {
         throw new Error('No se puede cambiar la divisa de un banco que ya tiene cuentas. Crea otro banco en ' + divisa + '.');
       }
+      // Rendimiento de las cuentas de ahorro de este banco: tasa efectiva anual (decimal) y cuándo lo paga.
+      const eaCrudo = item.Rendimiento_EA !== undefined ? item.Rendimiento_EA : actual && actual.Rendimiento_EA;
+      let ea = '';
+      if (eaCrudo !== '' && eaCrudo !== undefined && eaCrudo !== null) {
+        ea = Number(String(eaCrudo).replace(',', '.'));
+        if (!isFinite(ea) || ea < 0 || ea > 1) throw new Error('La tasa de rendimiento debe estar entre 0 % y 100 %.');
+        ea = Math.round(ea * 100000) / 100000; // hasta 3 decimales en porcentaje (9,525 %)
+      }
+      const pagoDado = item.Rendimiento_Pago !== undefined ? item.Rendimiento_Pago : actual && actual.Rendimiento_Pago;
+      const pago = ea === '' || ea === 0 ? '' : opcion_(pagoDado, ['Diario', 'Mensual'], 'La forma de pago del rendimiento', 'Mensual');
       return {
+        Rendimiento_EA: ea === 0 ? '' : ea,
+        Rendimiento_Pago: pago,
         Divisa: divisa,
         Nombre: nombre,
         Color: colorHex_(item.Color !== undefined ? item.Color : actual && actual.Color),
@@ -463,6 +475,32 @@ const CATALOGOS = {
     bloqueos: function () { return []; }
   },
 
+  Ingresos_Recurrentes: {
+    id: 'ID_Ingreso', prefijo: 'ing', etiqueta: 'El ingreso',
+    normalizar: function (item, actual, filas) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El concepto').slice(0, 80);
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Ingreso');
+      const proximo = fechaIso_(pick('Proximo_Cobro'), 'La fecha del próximo ingreso');
+      if (!proximo) throw new Error('Indica cuándo esperas recibirlo.');
+      const idBolsillo = texto_(pick('ID_Bolsillo'));
+      if (!idBolsillo) throw new Error('Elige a qué cuenta llega el dinero.');
+      exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo');
+      exigirPesos_(idBolsillo, 'El bolsillo donde llega el ingreso');
+      const idCat = texto_(pick('ID_Categoria'));
+      if (idCat) exigirActivo_(leer_('Categorias'), 'ID_Categoria', idCat, 'La categoría');
+      return {
+        Nombre: nombre,
+        Valor: numero_(pick('Valor'), 'El monto', { requerido: true, min: 0.01, max: VALOR_MAXIMO }),
+        Periodicidad: opcion_(pick('Periodicidad'), ENUMS.Ingresos_Recurrentes.Periodicidad, 'La periodicidad', 'Mensual'),
+        Proximo_Cobro: proximo, Dia_Cobro: Number(proximo.slice(8, 10)),
+        ID_Bolsillo: idBolsillo, ID_Categoria: idCat, Notas: texto_(pick('Notas')).slice(0, 300),
+        Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+    },
+    bloqueos: function () { return []; }
+  },
+
   Presupuesto_Plantilla: {
     id: 'ID_Plantilla', prefijo: 'ppl', etiqueta: 'El renglón',
     normalizar: function (item, actual, filas) {
@@ -696,6 +734,29 @@ function reactivarCatalogo(tabla, id) {
 }
 
 /**
+ * Crea tu nómina con sus subsidios de una sola vez (asistente de primeros pasos). Todo o nada.
+ * @param {Object} esc { Nombre, Sueldo_Base }  (queda como el escenario vigente)
+ * @param {Array} subsidios [{ Nombre, Valor, Es_Salarial }]  ingresos fijos como un auxilio o un bono
+ */
+function guardarNominaConSubsidios(esc, subsidios) {
+  if (!esc || typeof esc !== 'object') throw new Error('Faltan los datos de la nómina.');
+  const lista = Array.isArray(subsidios) ? subsidios : [];
+  const existentes = leer_('Subsidios').filter(estaActivo).map(s => texto_(s.Nombre).toLowerCase());
+  const vistos = {};
+  lista.forEach((s, i) => {
+    const nombre = textoRequerido_(s && s.Nombre, 'El nombre del subsidio ' + (i + 1));
+    const k = nombre.toLowerCase();
+    if (vistos[k] || existentes.indexOf(k) !== -1) throw new Error('Ya hay un subsidio llamado "' + nombre + '".');
+    vistos[k] = true;
+    numero_(s.Valor, 'El valor de "' + nombre + '"', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  });
+  numero_(esc.Sueldo_Base, 'El sueldo base', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  const creados = lista.map(s => guardarCatalogo('Subsidios', { Nombre: s.Nombre, Valor: s.Valor, Es_Salarial: !!s.Es_Salarial }));
+  const creado = guardarCatalogo('Nomina_Escenarios', Object.assign({ Nombre: 'Actual' }, esc, { Vigente: true }), { subsidios: creados.map(c => c.ID_Subsidio) });
+  return { escenario: creado, subsidios: creados };
+}
+
+/**
  * Crea una cuenta junto con sus bolsillos y el dinero que hay hoy en cada uno (el caso normal de quien ya
  * tiene su dinero repartido). Se valida todo antes de escribir: si algo no es válido, no se crea nada.
  * @param {Object} cuenta Los campos de la cuenta (ID_Banco, Nombre, Tipo, Permite_Bolsillos, Saldo_Apertura…).
@@ -807,7 +868,9 @@ function obtenerEstadoConfiguracion(verificacionPrevia) {
     { id: 'bancos', titulo: 'Agrega tus bancos o billeteras', hecho: bancos.length > 0, opcional: false, pantalla: 'ajustes/Bancos' },
     { id: 'cuentas', titulo: 'Crea tus cuentas', hecho: cuentas.length > 0, opcional: false, pantalla: 'ajustes/Cuentas' },
     { id: 'bolsillos', titulo: 'Crea tus bolsillos con su saldo inicial', hecho: cuentas.length > 0 && (!hayCuentaConBolsillos || bolsillos.length > 0), opcional: cuentas.length > 0 && !hayCuentaConBolsillos, pantalla: 'ajustes/Bolsillos' },
-    { id: 'tarjetas', titulo: 'Registra tus tarjetas de crédito', hecho: tarjetas.length > 0, opcional: true, pantalla: 'ajustes/Tarjetas' }
+    { id: 'tarjetas', titulo: 'Registra tus tarjetas de crédito', hecho: tarjetas.length > 0, opcional: true, pantalla: 'ajustes/Tarjetas' },
+    { id: 'nomina', titulo: 'Configura tu nómina', hecho: listarCatalogo('Nomina_Escenarios').length > 0, opcional: true, pantalla: 'ajustes/Nomina_Escenarios' },
+    { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' }
   ];
   const completo = pasos.filter(p => !p.opcional).every(p => p.hecho);
 

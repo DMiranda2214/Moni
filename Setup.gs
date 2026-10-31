@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '3';
+const ESQUEMA_VERSION = '4';
 
 /** Define una tabla: encabezados propios + auditoría. `anchos` cubre solo las columnas propias. */
 function tabla_(headers, anchos) {
@@ -27,7 +27,7 @@ function tabla_(headers, anchos) {
 const SCHEMAS = {
   // ---- Configuración ----
   Config: tabla_(['Clave', 'Valor', 'Grupo', 'Tipo', 'Descripcion'], [200, 240, 110, 100, 360]),
-  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa'], [170, 200, 90, 90, 70, 60, 80]),
+  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'], [170, 200, 90, 90, 70, 60, 80, 120, 130]),
   Cuentas: tabla_(
     ['ID_Cuenta', 'ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Fecha_Apertura', 'Saldo_Real', 'Fecha_Saldo_Real', 'Meta', 'Activo', 'Orden'],
     [170, 170, 200, 100, 130, 120, 120, 130, 110, 70, 60]),
@@ -46,6 +46,9 @@ const SCHEMAS = {
   Suscripciones: tabla_(
     ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
     [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
+  Ingresos_Recurrentes: tabla_(
+    ['ID_Ingreso', 'Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Categoria', 'Ultimo_Cobro', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 120, 110, 120, 80, 170, 170, 120, 220, 70, 60]),
   Escenarios: tabla_(['ID_Escenario', 'Nombre', 'Es_Base', 'Descripcion', 'Activo'], [170, 200, 80, 300, 70]),
 
   // ---- Operación ----
@@ -95,7 +98,8 @@ const SCHEMAS = {
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
-  Bancos: { Divisa: DIVISAS },
+  Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'] },
+  Ingresos_Recurrentes: { Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
   Categorias: { Tipo: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'] },
@@ -128,6 +132,7 @@ const COLUMNAS_TEXTO = {
   Cuentas: ['Fecha_Apertura', 'Fecha_Saldo_Real'],
   Servicios_Publicos: ['Codigo_Pago'],
   Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago'],
+  Ingresos_Recurrentes: ['Proximo_Cobro', 'Ultimo_Cobro'],
   Movimientos: ['Fecha'],
   Compras_TC: ['Fecha', 'Mes_Extracto'],
   Extractos: ['Mes', 'Fecha_Pago'],
@@ -168,6 +173,8 @@ const DEFAULT_CONFIG = [
   ['Cesantias_Fecha_Consignacion', '02-14', 'Nomina', 'texto', 'Fecha máxima de consignación al fondo'],
   ['Intereses_Cesantias_Fecha', '01-31', 'Nomina', 'texto', 'Fecha máxima de pago de intereses de cesantías'],
   ['Tasa_Interes_Cesantias', '0.12', 'Nomina', 'porcentaje', 'Tasa legal de intereses de cesantías'],
+  ['Cesantias_Dias_Actual', '360', 'Nomina', 'numero', 'Días del año de cesantías con el sueldo actual (360 = todo el año; menos si el sueldo cambió)'],
+  ['Cesantias_Sueldo_Anterior', '0', 'Nomina', 'moneda', 'Sueldo que tenías antes del cambio, para los días restantes del año de cesantías (0 = sin cambio)'],
   ['Credito_Metodo_Tasa', 'Excel', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica: Excel o Exacta'],
   ['Tasa_USD', '', 'Divisas', 'texto', 'Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos'],
   ['Tasa_USD_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del dólar'],
@@ -256,34 +263,44 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Bancos', columna: 'Divisa', valor: DIVISA_BASE },
   { tabla: 'Presupuesto_Plantilla', columna: 'ID_Tarjeta', valor: '' },
   { tabla: 'Presupuesto_Mes', columna: 'ID_Tarjeta', valor: '' },
-  { tabla: 'Suscripciones', columna: 'Renglon', valor: '' }
+  { tabla: 'Suscripciones', columna: 'Renglon', valor: '' },
+  { tabla: 'Bancos', columna: 'Rendimiento_EA', valor: '' },
+  { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' }
 ];
 
 function migrarColumnas_(ss) {
   const migradas = [];
-  MIGRACIONES_COLUMNAS.forEach(mg => {
-    const sheet = ss.getSheetByName(mg.tabla);
-    if (!sheet || sheet.getLastRow() === 0) return;
-    const esperado = SCHEMAS[mg.tabla].headers;
-    const sinColumna = esperado.filter(h => h !== mg.columna);
-    const actual = sheet.getRange(1, 1, 1, sinColumna.length).getValues()[0].map(h => String(h).trim());
-    const yaTiene = sheet.getRange(1, 1, 1, esperado.length).getValues()[0].map(h => String(h).trim()).join('|') === esperado.join('|');
-    if (yaTiene || actual.join('|') !== sinColumna.join('|')) return;
+  const porTabla = {};
+  MIGRACIONES_COLUMNAS.forEach(mg => { (porTabla[mg.tabla] = porTabla[mg.tabla] || []).push(mg); });
 
-    const col = esperado.indexOf(mg.columna) + 1;
-    sheet.insertColumnBefore(col);
-    sheet.getRange(1, col).setValue(mg.columna);
-    const filas = sheet.getLastRow() - 1;
-    if (filas > 0) sheet.getRange(2, col, filas, 1).setValues(Array.from({ length: filas }, () => [mg.valor]));
-    // Aspecto igual al de las demás columnas (si algo de esto falla, los datos ya quedaron bien)
-    try {
-      sheet.getRange(1, col - 1).copyTo(sheet.getRange(1, col), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-      sheet.setColumnWidth(col, SCHEMAS[mg.tabla].widths[col - 1]);
-      if (ENUMS[mg.tabla] && ENUMS[mg.tabla][mg.columna]) {
-        sheet.getRange(2, col, 1000, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ENUMS[mg.tabla][mg.columna], true).setAllowInvalid(true).build());
-      }
-    } catch (e) {}
-    migradas.push(mg.tabla + '.' + mg.columna);
+  Object.keys(porTabla).forEach(tabla => {
+    const sheet = ss.getSheetByName(tabla);
+    if (!sheet || sheet.getLastRow() === 0) return;
+    const esperado = SCHEMAS[tabla].headers;
+    const real = sheet.getRange(1, 1, 1, Math.max(esperado.length, sheet.getLastColumn())).getValues()[0].map(h => String(h).trim());
+    // Solo se migra si lo único que falta son columnas declaradas aquí y todo lo demás coincide, en orden.
+    const faltan = porTabla[tabla].filter(mg => real.indexOf(mg.columna) === -1);
+    if (!faltan.length) return;
+    const sinFaltantes = esperado.filter(h => !faltan.some(mg => mg.columna === h));
+    if (real.slice(0, sinFaltantes.length).join('|') !== sinFaltantes.join('|')) return;
+
+    // De izquierda a derecha: cada inserción respeta la posición que tiene en el esquema.
+    faltan.sort((x, y) => esperado.indexOf(x.columna) - esperado.indexOf(y.columna)).forEach(mg => {
+      const col = esperado.indexOf(mg.columna) + 1;
+      sheet.insertColumnBefore(col);
+      sheet.getRange(1, col).setValue(mg.columna);
+      const filas = sheet.getLastRow() - 1;
+      if (filas > 0) sheet.getRange(2, col, filas, 1).setValues(Array.from({ length: filas }, () => [mg.valor]));
+      // Aspecto igual al de las demás columnas (si algo de esto falla, los datos ya quedaron bien)
+      try {
+        sheet.getRange(1, col - 1).copyTo(sheet.getRange(1, col), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        sheet.setColumnWidth(col, SCHEMAS[tabla].widths[col - 1]);
+        if (ENUMS[tabla] && ENUMS[tabla][mg.columna]) {
+          sheet.getRange(2, col, 1000, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ENUMS[tabla][mg.columna], true).setAllowInvalid(true).build());
+        }
+      } catch (e) {}
+      migradas.push(tabla + '.' + mg.columna);
+    });
   });
   return migradas;
 }
@@ -324,6 +341,7 @@ function setupDatabase(spreadsheet) {
 
   const migradas = migrarColumnas_(ss);
   sembrarPorDefecto_(ss);
+  completarConfig_(ss);
   invalidateCache();
   CacheService.getScriptCache().remove('ESQUEMA_OK');
 
@@ -373,6 +391,20 @@ function prepararHoja_(sheet, nombre, config) {
 
   // Los datos los escribe la app: editar a mano muestra una advertencia, pero no se bloquea.
   try { sheet.protect().setDescription('Tabla gestionada por Moni').setWarningOnly(true); } catch (e) {}
+}
+
+/** Añade los parámetros que una base ya instalada todavía no tiene (los valores existentes no se tocan). */
+function completarConfig_(ss) {
+  const sheet = ss.getSheetByName('Config');
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const claves = {};
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().forEach(r => { claves[String(r[0]).trim()] = true; });
+  const faltan = DEFAULT_CONFIG.filter(c => !claves[c[0]]);
+  if (!faltan.length) return;
+  const ahora = ahoraIso_();
+  const filas = faltan.map(f => f.concat([ahora, ahora]));
+  sheet.getRange(sheet.getLastRow() + 1, 1, filas.length, filas[0].length).setValues(filas);
+  invalidateCache('Config');
 }
 
 /** Siembra Config, Categorías y el escenario base cuando esas tablas están vacías. */

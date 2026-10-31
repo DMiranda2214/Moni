@@ -3,7 +3,7 @@
  */
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
+  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
   const hoy = () => new Date().toISOString().slice(0, 10);
 
   function equipar(e) {
@@ -52,11 +52,11 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.cargar(...CARGA);
     assert.strictEqual(e.llamar('verificarEsquema').diferencias.some(d => d.tabla === 'Bancos'), true, 'antes de migrar hay diferencias');
     const r = e.llamar('setupDatabase');
-    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa']);
+    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa', 'Bancos.Rendimiento_EA', 'Bancos.Rendimiento_Pago']);
     assert.strictEqual(r.ok, true);
     const fila = e.hojas.Bancos.filas;
-    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Creado_En', 'Actualizado_En']);
-    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
+    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Creado_En', 'Actualizado_En']);
+    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '', '', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
     assert.strictEqual(e.llamar('setupDatabase').migradas.length, 0, 'es idempotente');
     assert.strictEqual(e.llamar('listarCatalogo', 'Bancos')[0].Divisa, 'COP');
   });

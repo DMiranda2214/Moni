@@ -13,7 +13,8 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Inicio** | Resumen, accesos rápidos, próximos pagos y últimos movimientos |
 | **Bolsillos** | Saldo de cada cuenta y bolsillo; registrar, mover dinero y cuadrar con el banco |
 | **Presupuesto** | Plantilla por escenario, mes generado, "real" calculado de tus movimientos |
-| **Nómina** | Cálculo (salud, pensión, FSP, prima, cesantías) y reparto a bolsillos, una vez al mes |
+| **Nómina** | Estimado de lo que recibes (casillas, días, prima, cesantías, salud, pensión, descuentos fijos) y reparto a bolsillos, una vez al mes |
+| **Otros ingresos** | Ingresos recurrentes (otro trabajo, arriendo, ventas…) con su cuenta de destino |
 | **Deudas** | Tarjetas de crédito (reserva, extracto, pago) y créditos de autopago con amortización francesa |
 | **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
@@ -34,7 +35,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
 | [Arquitectura](docs/ARQUITECTURA.md) | Capas, modelo de datos, convenciones |
 | [API interna](docs/API.md) | Funciones que el frontend llama |
-| [Esquema de datos](docs/ESQUEMA.md) | Las 27 tablas, columna por columna |
+| [Esquema de datos](docs/ESQUEMA.md) | Las 28 tablas, columna por columna |
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |

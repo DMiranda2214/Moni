@@ -16,7 +16,7 @@
    Catalogos.gs (CRUD configurable) · Saldos.gs
         │
         ▼
-   Repo.gs (lectura memorizada, escrituras con bloqueo, caché)  ──►  Google Sheet (27 pestañas)
+   Repo.gs (lectura memorizada, escrituras con bloqueo, caché)  ──►  Google Sheet (28 pestañas)
 ```
 
 ## Principios
@@ -33,7 +33,7 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 27 tablas, enumeraciones, columnas de texto, instalación idempotente |
+| `Setup.gs` | Esquema de las 28 tablas, enumeraciones, columnas de texto, instalación idempotente |
 | `Repo.gs` | Lectura (memorizada por petición), inserción, actualización, bloqueo, caché |
 | `Catalogos.gs` | Definición y CRUD de los catálogos; estado de configuración |
 | `Saldos.gs` | Saldos por bolsillo, cuenta y total |
@@ -56,9 +56,9 @@
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)
-27 pestañas en tres grupos:
+28 pestañas en tres grupos:
 - **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Servicios_Publicos, Suscripciones, Escenarios.
-- **Operación:** Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes, Creditos, Creditos_Cronograma, Creditos_Pagos, Regalos, Reportes, Log.
+- **Operación:** Ingresos_Recurrentes, Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes, Creditos, Creditos_Cronograma, Creditos_Pagos, Regalos, Reportes, Log.
 - **Nómina:** Subsidios, Nomina_Escenarios, Nomina_Conceptos, Nomina_Pagos, Nomina_Pagos_Detalle.
 
 Detalle columna por columna en [ESQUEMA.md](ESQUEMA.md).
@@ -72,7 +72,7 @@ Convenciones:
 
 ## Rendimiento
 - **Memoización por petición:** cada tabla se lee una vez por llamada; una escritura invalida solo su tabla.
-- **Verificación de esquema con caché** (6 h) para no leer las 27 pestañas en cada carga.
+- **Verificación de esquema con caché** (6 h) para no leer las 28 pestañas en cada carga.
 - **Caché de catálogos** con invalidación por tabla.
 - El cliente anota el tiempo de cada llamada (Diagnóstico) y el servidor devuelve `ms`.
 

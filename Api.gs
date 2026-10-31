@@ -78,6 +78,7 @@ function getBootstrap() {
       creditos: getTableData('Creditos').filter(c => c.Estado === 'Activo').map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre })),
       ppto: (function () { const p = obtenerPresupuestoMes(mesActual); return { mes: p.mes, existe: p.existe, totales: p.totales }; })(),
       proximos: proximosPagos_(),
+      porRecibir: proximosIngresos_(),
       enums: ENUMS,
       hoy: hoyIso_()
     };
@@ -107,6 +108,11 @@ function saveCatalogo(tabla, item, opciones) {
 /** Una cuenta con sus bolsillos y saldos de una sola vez (asistente de primeros pasos). */
 function saveCuentaCompleta(cuenta, bolsillos) {
   return responder_(function () { return guardarCuentaConBolsillos(cuenta, bolsillos); });
+}
+
+/** La nómina y sus subsidios de una sola vez (asistente de primeros pasos). */
+function saveNominaInicial(esc, subsidios) {
+  return responder_(function () { return guardarNominaConSubsidios(esc, subsidios); });
 }
 
 function disableCatalogo(tabla, id) {
@@ -290,14 +296,29 @@ function distribuir(mes, idOrigen, fecha, forzar) {
   });
 }
 
-function getNomina(periodo, idEscenario) {
-  return responder_(function () { return obtenerNominaMes(periodo, idEscenario); });
+function getNomina(periodo, idEscenario, opciones) {
+  return responder_(function () { return obtenerNominaMes(periodo, idEscenario, opciones); });
 }
 
-function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo) {
+function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones) {
   return responder_(function () {
-    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo);
+    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones);
     return resultadoEscritura_([r.idMov], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
+  });
+}
+
+/** Un descuento o ingreso fijo del escenario (libranza, medicina prepagada, bono…). */
+function saveConceptoNomina(d, periodo, opciones) {
+  return responder_(function () {
+    const c = guardarConceptoNomina(d);
+    return { concepto: c, nomina: obtenerNominaMes(periodo, c.ID_Nomina_Esc, opciones) };
+  });
+}
+
+function removeConceptoNomina(idConcepto, periodo, opciones) {
+  return responder_(function () {
+    const r = quitarConceptoNomina(idConcepto);
+    return obtenerNominaMes(periodo, r.ID_Nomina_Esc, opciones);
   });
 }
 
@@ -568,6 +589,7 @@ function normalizarParametro_(clave, valor) {
 function saveConfigParam(clave, valor) {
   return responder_(function () {
     const v = normalizarParametro_(clave, valor);
+    asegurarConfig_(clave); // una base ya instalada puede no tener la fila todavía
     updateRowById('Config', 'Clave', clave, { Valor: v });
     return { clave: clave, valor: v };
   });
@@ -579,7 +601,7 @@ function saveConfigParams(mapa) {
     const claves = Object.keys(mapa || {});
     const limpios = {};
     claves.forEach(k => { limpios[k] = normalizarParametro_(k, mapa[k]); });
-    claves.forEach(k => updateRowById('Config', 'Clave', k, { Valor: limpios[k] }));
+    claves.forEach(k => { asegurarConfig_(k); updateRowById('Config', 'Clave', k, { Valor: limpios[k] }); });
     return limpios;
   });
 }
@@ -660,5 +682,30 @@ function skipSuscripcion(id) {
   return responder_(function () {
     const r = saltarCobroSuscripcion(id);
     return Object.assign({ suscripciones: obtenerSuscripciones() }, r);
+  });
+}
+
+// ---- Ingresos recurrentes ----
+function getIngresosRecurrentes() { return responder_(function () { return obtenerIngresosRecurrentes(); }); }
+function getProximosIngresos() { return responder_(function () { return proximosIngresos_(); }); }
+
+function receiveIngreso(id, datos) {
+  return responder_(function () {
+    const r = recibirIngresoRecurrente(id, datos);
+    return Object.assign(resultadoEscritura_([r.idMov], null, { ingresos: obtenerIngresosRecurrentes() }), r);
+  });
+}
+
+function undoIngreso(id, anterior, idMov) {
+  return responder_(function () {
+    deshacerIngresoRecurrente(id, anterior, idMov);
+    return resultadoEscritura_(idMov ? [idMov] : [], null, { ingresos: obtenerIngresosRecurrentes() });
+  });
+}
+
+function skipIngreso(id) {
+  return responder_(function () {
+    const r = saltarIngresoRecurrente(id);
+    return Object.assign({ ingresos: obtenerIngresosRecurrentes() }, r);
   });
 }

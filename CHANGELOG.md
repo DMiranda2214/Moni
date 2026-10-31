@@ -1,5 +1,12 @@
 # Cambios
 
+## Nómina estimada, rendimientos por banco e ingresos recurrentes (31 oct)
+- **Nómina como el estimado del Excel original:** casillas para incluir o no cada línea, días editables (mes incompleto, prima, vacaciones), salud y pensión sobre ordinario + vacaciones, intereses de cesantías por tramos del año, y descuentos o ingresos fijos del escenario. Abre en el mes del próximo pago.
+- **Rendimientos por banco:** tasa (% EA) y forma de pago (cada día o cada mes). La pantalla de ahorro estima lo que rinde y lo pendiente de registrar.
+- **Otros ingresos:** módulo de ingresos recurrentes (concepto, monto, periodicidad y la cuenta a la que llegan), con "Por recibir" en Inicio.
+- **Primeros pasos:** dos pasos nuevos y opcionales, nómina e ingresos; el banco pide su rendimiento.
+- Esquema 4: tabla `Ingresos_Recurrentes` y columnas `Rendimiento_EA`, `Rendimiento_Pago` en Bancos (las bases ya instaladas las reciben con **Instalar**). Parámetros nuevos: `Cesantias_Dias_Actual`, `Cesantias_Sueldo_Anterior`.
+
 ## Presupuesto y tarjetas: el gasto cuenta el día de la compra (30 oct)
 - **Una compra con tarjeta cuenta en su renglón y su categoría el día de la compra**; pagar el extracto ya no cuenta como gasto (ni en gráficos ni en la vista anual). Sin doble conteo con el traslado a la reserva.
 - **Cada renglón recuerda su medio de pago habitual** ("Se paga con": su bolsillo o una tarjeta); Registrar lo propone.

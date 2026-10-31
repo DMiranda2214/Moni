@@ -43,6 +43,9 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 5. **Repartir la nómina en los bolsillos** (desde Nómina): mueve el dinero desde el bolsillo donde llegó hasta los bolsillos de destino del presupuesto. Los gastos y cuotas se agrupan por bolsillo; el ahorro y los fondos van renglón por renglón. Lo que ya está en el bolsillo de origen no se mueve, y si ya repartiste ese mes la app te pide confirmar antes de repetir.
 
 ## 6. Nómina
+**Más → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
+
+**Más → Nómina** (detalle anterior):
 **Más → Nómina.** Elige el escenario (tu sueldo y subsidios), mira el cálculo (devengos, salud, pensión, FSP, prima de junio/diciembre, intereses de cesantías) y **Registrar** lo que realmente te llegó, indicando el bolsillo. Se paga **una vez al mes**. Los parámetros (SMMLV, porcentajes) están en Ajustes → Parámetros de nómina; **actualiza el SMMLV cada enero**.
 
 ## 7. Deudas
@@ -55,8 +58,12 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
 
+## 7 bis. Otros ingresos
+**Más → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.
+
 ## 8. Ahorro
 **Más → Ahorro.** Por cada cuenta de ahorro: saldo, meta, rendimientos y **deuda con el ahorro**.
+- **Rendimiento estimado:** si configuraste la tasa de tu banco (Ajustes → Bancos: % EA y si paga cada día o cada mes), Moni calcula cuánto te rinde y lo que falta por registrar; **Registrar este rendimiento** lo anota (corrígelo si tu banco muestra otro valor).
 - **Rendimiento:** interés (suma), retención y GMF (restan).
 - **Sacar para gastos:** pasa dinero a un bolsillo y queda como algo por **reponer**.
 - **Reponer:** devuelve dinero al ahorro y baja la deuda.

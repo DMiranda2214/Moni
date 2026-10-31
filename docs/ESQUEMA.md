@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema (v1)
 
 Base de datos: Google Sheet **Moni 2027 - Base de datos**.
-El script de instalación (`setupDatabase`, Fase 1) crea estas 27 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`, Fase 1) crea estas 28 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -21,7 +21,7 @@ El script de instalación (`setupDatabase`, Fase 1) crea estas 27 tablas, una po
 **Config** — `Clave, Valor, Grupo, Tipo, Descripcion`
 Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad de nómina (por defecto `Mensual`), día de pago, SMMLV, aportes, método de tasa (`Excel`/`Exacta`), tema (`Claro`/`Oscuro`/`Automático`), color de acento, respaldos.
 
-**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa` (`Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
+**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago` (`Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
 
 **Cuentas** — `ID_Cuenta, ID_Banco, Nombre, Tipo, Permite_Bolsillos, Fecha_Apertura, Saldo_Real, Fecha_Saldo_Real, Meta, Activo, Orden`
 - `Tipo`: `Billetera`, `Debito`, `Ahorro`, `Otra`.
@@ -47,6 +47,9 @@ Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad 
 
 **Suscripciones** — `ID_Suscripcion, Nombre, Tipo, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Tarjeta, ID_Categoria, ID_Servicio, Renglon, URL_Pago, Ultimo_Pago, Notas, Activo, Orden`
 Pagos que se repiten. `Tipo` = `Suscripcion` o `Servicio`; `Periodicidad` = Mensual/Bimestral/Trimestral/Semestral/Anual. `Proximo_Cobro` y `Ultimo_Pago` son texto AAAA-MM-DD. Se paga con **un** medio: `ID_Bolsillo` (gasto) o `ID_Tarjeta` (compra de tarjeta). `Dia_Cobro` conserva el día original (31 → 28 → 31). `ID_Servicio` enlaza un servicio público (código y enlace de pago). Cada pago deja `Notas = "Suscripción <ID>"` en el gasto o la compra.
+
+**Ingresos_Recurrentes** — `ID_Ingreso, Nombre, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Categoria, Ultimo_Cobro, Notas, Activo, Orden`
+Ingresos que se repiten y no son la nómina. `ID_Bolsillo` es el bolsillo (cuenta) al que llega, en pesos. Cada recibo deja `Notas = "Ingreso recurrente <ID>"` en el ingreso.
 
 **Escenarios** — `ID_Escenario, Nombre, Es_Base, Descripcion, Activo`
 Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente uno tiene `Es_Base = TRUE`.

@@ -59,6 +59,56 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
   };
 }
 
+/** Primer día de un mes y fecha siguiente, en texto AAAA-MM-DD. */
+function sumarDias_(fechaIso, n) {
+  const d = new Date(Date.UTC(+fechaIso.slice(0, 4), +fechaIso.slice(5, 7) - 1, +fechaIso.slice(8, 10) + n));
+  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+}
+
+/** Tasa diaria equivalente a una tasa efectiva anual: (1 + EA)^(1/365) − 1. */
+function tasaDiaria_(ea) { return Math.pow(1 + ea, 1 / 365) - 1; }
+
+/**
+ * Cuánto rindió una cuenta de ahorro desde el último rendimiento registrado (o desde el inicio del mes) hasta ayer.
+ * Rinde cada día sobre el saldo con que empezó el día. Si el banco paga a diario, lo ganado se suma al saldo
+ * día a día (interés compuesto); si paga cada mes, se suma al saldo al cerrar el mes.
+ * Es una estimación: el banco puede redondear distinto, así que el valor se puede corregir al registrarlo.
+ */
+function estimarRendimiento_(cuenta, banco, bolsillos, movs, hoy) {
+  const ea = Number(banco && banco.Rendimiento_EA) || 0;
+  if (!(ea > 0)) return null;
+  const pago = banco.Rendimiento_Pago === 'Diario' ? 'Diario' : 'Mensual';
+  const td = tasaDiaria_(ea);
+  const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs).filter(m => m.Fecha);
+  const apertura = bolsillos.filter(b => b.ID_Cuenta === cuenta.ID_Cuenta).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
+
+  const ultimo = propios.filter(m => m.Subtipo === 'Interes' && Number(m.Valor) > 0).map(m => String(m.Fecha)).sort().pop();
+  const inicioMes = hoy.slice(0, 7) + '-01';
+  let desde = ultimo ? sumarDias_(ultimo, 1) : inicioMes;
+  const hasta = sumarDias_(hoy, -1); // el día de hoy todavía no termina
+  const resultado = { ea: ea, pago: pago, tasaDiaria: td, desde: desde, hasta: hasta, dias: 0, pendiente: 0, acumuladoMes: 0 };
+  if (desde > hasta) return resultado;
+  if (desde < sumarDias_(hoy, -400)) desde = sumarDias_(hoy, -400); // tope razonable
+  resultado.desde = desde;
+
+  const ordenados = propios.slice().sort((x, y) => (String(x.Fecha) < String(y.Fecha) ? -1 : 1));
+  let i = 0, base = apertura;
+  while (i < ordenados.length && String(ordenados[i].Fecha) < desde) base += Number(ordenados[i++].Valor) || 0;
+
+  let capitalizado = 0, enMes = 0, total = 0, dias = 0, mesActualDelBarrido = desde.slice(0, 7), acumMesCorriente = 0;
+  for (let d = desde; d <= hasta; d = sumarDias_(d, 1)) {
+    while (i < ordenados.length && String(ordenados[i].Fecha) < d) base += Number(ordenados[i++].Valor) || 0;
+    if (d.slice(0, 7) !== mesActualDelBarrido) { capitalizado += pago === 'Mensual' ? enMes : 0; enMes = 0; mesActualDelBarrido = d.slice(0, 7); }
+    const ganado = (base + capitalizado + (pago === 'Diario' ? total : 0)) * td;
+    total += ganado; enMes += ganado; dias++;
+    if (d.slice(0, 7) === hoy.slice(0, 7)) acumMesCorriente += ganado;
+  }
+  resultado.dias = dias;
+  resultado.pendiente = redondear2_(total);
+  resultado.acumuladoMes = redondear2_(acumMesCorriente);
+  return resultado;
+}
+
 /** Todas las cuentas de ahorro activas, para la pantalla de Ahorro. */
 function obtenerAhorro() {
   const divisas = mapaDivisas_().cuentas;
@@ -73,6 +123,7 @@ function obtenerAhorro() {
     const r = resumenCuentaAhorro_(c, bolsillos, movs, saldos, creditos);
     const b = buscarPorId_(bancos, 'ID_Banco', c.ID_Banco);
     r.Banco = b ? b.Nombre : '';
+    r.rendimientoEstimado = estimarRendimiento_(c, b, bolsillos, movs, hoyIso_());
     return r;
   });
   const suma = f => redondear2_(lista.reduce((a, c) => a + f(c), 0));

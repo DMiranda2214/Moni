@@ -8,7 +8,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -569,5 +569,122 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(u.ok, true);
     assert.strictEqual(u.data.presupuesto.items[0].Real, 0);
     assert.strictEqual(saldo(mercado.ID_Bolsillo), 400000);
+  });
+
+  // ============================================================ rendimientos por banco
+  prueba('banco: el rendimiento se valida (tasa entre 0 y 100 %, pago diario o mensual)', () => {
+    const e = E();
+    const b = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Digital', Rendimiento_EA: 0.095, Rendimiento_Pago: 'Diario' });
+    assert.strictEqual(b.Rendimiento_EA, 0.095);
+    assert.strictEqual(b.Rendimiento_Pago, 'Diario');
+    const m = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Mensual', Rendimiento_EA: 0.08 });
+    assert.strictEqual(m.Rendimiento_Pago, 'Mensual', 'sin elegir, se paga cada mes');
+    const sin = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Sin', Rendimiento_Pago: 'Diario' });
+    assert.strictEqual(sin.Rendimiento_Pago, '', 'sin tasa no hay forma de pago');
+    assert.throws(e.falla('guardarCatalogo', 'Bancos', { Nombre: 'X', Rendimiento_EA: 1.5 }), /tasa/);
+    assert.throws(e.falla('guardarCatalogo', 'Bancos', { Nombre: 'Y', Rendimiento_EA: 0.1, Rendimiento_Pago: 'Semanal' }), /forma de pago/);
+  });
+
+  prueba('rendimiento estimado: diario capitaliza cada día; mensual lo suma al cerrar el mes', () => {
+    const e = E();
+    const td = Math.pow(1.1, 1 / 365) - 1;
+    const prep = pago => {
+      const e2 = E();
+      const banco = e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'B', Rendimiento_EA: 0.1, Rendimiento_Pago: pago });
+      const cta = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Ahorro', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 1000000 });
+      return { e2, banco, cta };
+    };
+    const est = (x, hoyIso) => x.e2.llamar('estimarRendimiento_', x.cta, x.banco, x.e2.llamar('getTableData', 'Bolsillos'), x.e2.llamar('getTableData', 'Movimientos'), hoyIso);
+
+    // Primer día del mes: todavía no ha terminado ningún día
+    const a = prep('Mensual');
+    assert.strictEqual(est(a, '2027-03-01').dias, 0);
+    // 10 días del mes (del 1 al 10)
+    const m10 = est(a, '2027-03-11');
+    assert.strictEqual(m10.dias, 10);
+    assert.strictEqual(m10.pendiente, Math.round(1000000 * td * 10 * 100) / 100);
+    const d10 = est(prep('Diario'), '2027-03-11');
+    assert.strictEqual(d10.pendiente, Math.round(1000000 * (Math.pow(1 + td, 10) - 1) * 100) / 100, 'compuesto día a día');
+    assert.ok(d10.pendiente > m10.pendiente);
+
+    // Desde el último rendimiento registrado, y con el interés del mes anterior ya sumado al saldo
+    const x = prep('Mensual');
+    x.e2.llamar('registrarRendimiento', { ID_Cuenta: x.cta.ID_Cuenta, Tipo: 'Interes', Valor: 1000, Fecha: new Date(Date.now() - 86400000 * 0).toISOString().slice(0, 10) });
+    const tras = est(x, new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10));
+    assert.ok(tras.desde > new Date().toISOString().slice(0, 10), 'empieza el día siguiente al último rendimiento');
+
+    // API: la pantalla de ahorro trae la estimación y la tasa
+    const api = x.e2.llamar('getAhorro').data.cuentas[0];
+    assert.strictEqual(api.rendimientoEstimado.ea, 0.1);
+    assert.strictEqual(api.rendimientoEstimado.pago, 'Mensual');
+  });
+
+  // ============================================================ ingresos recurrentes
+  prueba('ingresos recurrentes: concepto, monto y cuenta; recibir registra el ingreso y avanza el cobro; se deshace', () => {
+    const { e, casa, saldo } = escenario();
+    const venc = hoy();
+    const ing = e.llamar('guardarCatalogo', 'Ingresos_Recurrentes', { Nombre: 'Diseño freelance', Valor: 800000, Periodicidad: 'Mensual', Proximo_Cobro: venc, ID_Bolsillo: casa.ID_Bolsillo });
+    assert.throws(e.falla('guardarCatalogo', 'Ingresos_Recurrentes', { Nombre: 'Sin cuenta', Valor: 1, Proximo_Cobro: venc }), /cuenta/);
+    assert.throws(e.falla('guardarCatalogo', 'Ingresos_Recurrentes', { Nombre: 'Sin fecha', Valor: 1, ID_Bolsillo: casa.ID_Bolsillo }), /cuándo/);
+    assert.throws(e.falla('guardarCatalogo', 'Ingresos_Recurrentes', { Nombre: 'diseño freelance', Valor: 1, Proximo_Cobro: venc, ID_Bolsillo: casa.ID_Bolsillo }), /Ya hay|existe|repetid/i);
+
+    const o = e.llamar('getIngresosRecurrentes').data;
+    assert.strictEqual(o.items.length, 1);
+    assert.strictEqual(o.items[0].estado, 'pronto');
+    assert.strictEqual(o.totales.mensual, 800000);
+    assert.ok(o.items[0].destino.indexOf('Casa') !== -1);
+    assert.ok(e.llamar('proximosIngresos_').some(p => p.tipo === 'Ingreso' && p.id === ing.ID_Ingreso));
+
+    const antes = saldo(casa.ID_Bolsillo);
+    const r = e.llamar('receiveIngreso', ing.ID_Ingreso, { Valor: 750000 });
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), antes + 750000, 'llega lo que de verdad se recibió');
+    assert.strictEqual(r.data.proximo, e.llamar('sumarMeses_', venc, 1, Number(venc.slice(8))));
+    const mov = e.llamar('getTableData', 'Movimientos').find(m => m.ID_Mov === r.data.idMov);
+    assert.strictEqual(mov.Tipo_Mov, 'Ingreso');
+    assert.strictEqual(mov.Notas, 'Ingreso recurrente ' + ing.ID_Ingreso);
+
+    const u = e.llamar('undoIngreso', ing.ID_Ingreso, r.data.anterior, r.data.idMov);
+    assert.strictEqual(u.ok, true);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), antes);
+    assert.strictEqual(u.data.ingresos.items[0].Proximo_Cobro, venc);
+
+    assert.strictEqual(e.llamar('skipIngreso', ing.ID_Ingreso).data.proximo, r.data.proximo);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), antes, 'saltar no registra nada');
+  });
+
+  prueba('ingresos por recibir: la nómina estimada aparece junto a los ingresos recurrentes', () => {
+    const { e } = escenario();
+    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3000000, Vigente: true });
+    e.llamar('saveConfigParam', 'Nomina_Dia_Pago', '31');
+    const lista = e.llamar('proximosIngresos_');
+    const nom = lista.find(x => x.tipo === 'Nomina');
+    assert.ok(nom || e.llamar('mesProximoPagoNomina_') > hoy().slice(0, 7), 'sale cuando el pago cae en los próximos 14 días');
+    if (nom) assert.strictEqual(nom.valor, 3000000 - 240000);
+    assert.deepStrictEqual(e.llamar('getBootstrap').data.porRecibir, lista);
+  });
+
+  prueba('primeros pasos: la nómina nace con sus subsidios (todo o nada) y los estados del asistente incluyen nómina e ingresos', () => {
+    const e = E();
+    const ok = e.llamar('saveNominaInicial', { Nombre: 'Actual', Sueldo_Base: 3000000 }, [{ Nombre: 'Auxilio', Valor: 200000, Es_Salarial: false }, { Nombre: 'Bono', Valor: 100000, Es_Salarial: true }]);
+    assert.strictEqual(ok.ok, true, ok.error && ok.error.message);
+    const esc = e.llamar('listarCatalogo', 'Nomina_Escenarios');
+    assert.strictEqual(esc.length, 1);
+    assert.strictEqual(String(esc[0].Vigente).toUpperCase(), 'TRUE');
+    const n = e.llamar('getNomina', mes(), '', {}).data.calculo;
+    assert.strictEqual(n.devengos.length, 3);
+    assert.strictEqual(n.ibc, 3100000, 'solo el bono salarial cotiza');
+
+    // Dos subsidios con el mismo nombre, o un sueldo inválido: no se crea nada.
+    const e2 = E();
+    const subsAntes = e2.llamar('listarCatalogo', 'Subsidios').length;
+    assert.strictEqual(e2.llamar('saveNominaInicial', { Nombre: 'X', Sueldo_Base: 3000000 }, [{ Nombre: 'A', Valor: 1 }, { Nombre: 'a', Valor: 2 }]).ok, false);
+    assert.strictEqual(e2.llamar('saveNominaInicial', { Nombre: 'X', Sueldo_Base: 0 }, [{ Nombre: 'A', Valor: 1 }]).ok, false);
+    assert.strictEqual(e2.llamar('listarCatalogo', 'Subsidios').length, subsAntes);
+    assert.strictEqual(e2.llamar('listarCatalogo', 'Nomina_Escenarios').length, 0);
+
+    const pasos = e.llamar('obtenerEstadoConfiguracion').pasos;
+    assert.deepStrictEqual(pasos.filter(p => ['nomina', 'ingresos'].includes(p.id)).map(p => [p.id, p.hecho, p.opcional]), [['nomina', true, true], ['ingresos', false, true]]);
+    assert.strictEqual(e.llamar('obtenerEstadoConfiguracion').completo, false, 'los pasos nuevos no son obligatorios: el resto sigue mandando');
   });
 };

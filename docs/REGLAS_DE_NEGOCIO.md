@@ -20,6 +20,13 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - **Repartir la nómina:** un traslado por destino (gastos y cuotas agrupados por bolsillo; ahorro y fondos por renglón). Cada mes se reparte una vez salvo que se fuerce.
 
 ## 3. Nómina (una vez al mes)
+El estimado replica la hoja "Estimado nómina" del Excel original: cada línea tiene una casilla (se incluye o no) y los días que aplican.
+- **Líneas:** sueldo básico (días × sueldo / 30), subsidios (salariales o no), prima (días × día base), vacaciones (días × día base), intereses de cesantías, salud, pensión, fondo de solidaridad y los **conceptos fijos** del escenario (libranza, bono…).
+- **Por defecto:** el sueldo y los subsidios van incluidos; la prima, solo en junio y diciembre (15 días); las vacaciones, apagadas (0 días); los intereses de cesantías, en enero.
+- **Día base** = (sueldo + subsidios salariales) / 30. **IBC** (lo que cotiza) = sueldo del período + subsidios salariales + vacaciones. La prima y las cesantías no cotizan.
+- **Intereses de cesantías:** por tramos del año, cada uno = (sueldo × días / 360) × días × 12 % / 360. Con un solo sueldo todo el año da sueldo × 12 %. Si el sueldo cambió, `Cesantias_Dias_Actual` y `Cesantias_Sueldo_Anterior` (Parámetros de nómina) parten el año en dos tramos.
+- **Mes que se muestra al abrir:** el del próximo pago: este mes si aún no se registró y no pasó `Nomina_Dia_Pago`; si no, el siguiente.
+- Al registrar la nómina se guarda lo estimado con las casillas que dejaste, y el neto real puede ser distinto.
 - Devengos: sueldo base y subsidios (salariales o no). Salud y pensión: 4 % del IBC cada una, con aporte redondeado a la centena superior (PILA).
 - **FSP** (Fondo de Solidaridad Pensional): 1 % del IBC cuando el IBC llega a 4 SMMLV (`FSP_Umbral_SMMLV`).
 - **Prima:** en junio y diciembre, IBC / 2. **Intereses de cesantías:** en enero, IBC × 12 % (`Tasa_Interes_Cesantias`). Se asume año completo (pendiente de confirmar para años parciales).
@@ -42,9 +49,16 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - Cifras de control: 2.400.000 a 48 quincenas con tasa 0,4067404 % → 55.140,90; 1.000.000 a 12 cuotas con 0,8333333 % → 87.915,89; 500.000 a 10 cuotas con 1 % → 52.791,04.
 
 ## 6. Ahorro
+- **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro.
+- **Estimación:** rinde cada día sobre el saldo con que empezó, a la tasa diaria (1 + EA)^(1/365) − 1. Si el banco paga a diario, lo ganado se suma al saldo día a día; si paga cada mes, se suma al cerrar el mes. Se calcula desde el último rendimiento registrado (o el inicio del mes) hasta ayer; "Registrar este rendimiento" lo anota (se puede corregir con el valor del banco). La retención y el GMF se siguen registrando a mano.
 - Subtipos de movimiento: *Interes* (+), *Retencion* (−), *GMF* (−), *Para_Gastos* (retiro), *Reposicion*.
 - **Deuda con el ahorro** = máx(0, Para_Gastos − Reposicion) + saldo de los créditos activos. El desembolso de un crédito no cuenta dos veces.
 - **Si repones todo**, el saldo sería: saldo + deuda.
+
+## 6 bis. Ingresos recurrentes
+- Otro trabajo, arriendo, ventas, servicios… Cada uno tiene concepto, monto estimado, periodicidad, próxima fecha y la **cuenta (bolsillo) a la que llega**.
+- "Ya lo recibí" registra un ingreso en ese bolsillo (con el valor real si fue otro), y el próximo cobro avanza un período conservando el día. Se puede saltar y deshacer.
+- Salen en **Por recibir** de Inicio junto con la nómina estimada del próximo pago, a 14 días o atrasados.
 
 ## 7. Servicios y suscripciones
 - Cada cobro guarda su **próximo cobro** y su **día**; al pagar avanza *N* meses según la periodicidad (1, 2, 3, 6 o 12) conservando el día (31 → 28 → 31).

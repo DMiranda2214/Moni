@@ -8,7 +8,7 @@ module.exports = function (prueba, assert, crearEntorno) {
   /** Entorno con el esquema ya instalado. */
   function E(instalar) {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     if (instalar !== false) e.llamar('setupDatabase');
@@ -24,11 +24,11 @@ module.exports = function (prueba, assert, crearEntorno) {
   }
 
   // ---------------------------------------------------------------- instalación
-  prueba('setupDatabase crea las 27 tablas con sus encabezados', () => {
+  prueba('setupDatabase crea las 28 tablas con sus encabezados', () => {
     const e = E(false);
     const r = e.llamar('setupDatabase');
-    assert.strictEqual(r.tablas, 27);
-    assert.strictEqual(r.creadas.length, 27);
+    assert.strictEqual(r.tablas, 28);
+    assert.strictEqual(r.creadas.length, 28);
     assert.strictEqual(r.ok, true);
     assert.strictEqual(e.hojas.Movimientos.filas[0][0], 'ID_Mov');
     assert.strictEqual(e.hojas.Movimientos.filas[0].slice(-2).join(), 'Creado_En,Actualizado_En');
@@ -397,7 +397,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const antes = e.llamar('getBootstrap');
     assert.strictEqual(antes.ok, true);
     assert.strictEqual(antes.data.instalado, false);
-    assert.strictEqual(antes.data.faltantes.length, 27);
+    assert.strictEqual(antes.data.faltantes.length, 28);
 
     assert.strictEqual(e.llamar('instalarBaseDatos').ok, true);
     const d = e.llamar('getBootstrap').data;

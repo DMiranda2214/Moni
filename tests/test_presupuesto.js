@@ -9,7 +9,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -424,5 +424,89 @@ module.exports = function (prueba, assert, crearEntorno) {
     });
     assert.deepStrictEqual(e.llamar('listarCatalogo', 'Bancos').map(b => b.Nombre), ['Banco real'], 'lo real se conserva');
     assert.strictEqual(e.llamar('listarCatalogo', 'Escenarios').length, 1, 'el escenario base no es demo');
+  });
+
+  // ------------------------------------------------------------- estimado de nómina (casillas, días y conceptos)
+  const calc = (e, sueldo, subs, periodo, opc, params) => {
+    e.ctx.__p = Object.assign({}, PARAMS, params || {}); e.ctx.__s = subs; e.ctx.__o = opc;
+    return plano(e.ejecutar('calcularNomina_(__p, ' + sueldo + ', __s, "' + periodo + '", __o)'));
+  };
+
+  prueba('estimado de nómina: cada línea se puede incluir o no, y se ve su valor aunque esté apagada', () => {
+    const e = E();
+    const base = calc(e, 3000000, [{ Nombre: 'Internet', Valor: 200000, Es_Salarial: false }], '2027-03');
+    assert.deepStrictEqual(base.lineas.filter(l => l.grupo === 'devengo').map(l => [l.clave, l.incluido]), [['ordinario', true], ['sub:Internet', true]]);
+    assert.strictEqual(base.totales.neto, 3000000 + 200000 - 240000);
+
+    const sin = calc(e, 3000000, [{ Nombre: 'Internet', Valor: 200000, Es_Salarial: false }], '2027-03', { incluir: { 'sub:Internet': false } });
+    assert.strictEqual(sin.totales.neto, 3000000 - 240000);
+    assert.strictEqual(sin.lineas.find(l => l.clave === 'sub:Internet').valor, 200000, 'se sigue viendo lo que valdría');
+    assert.strictEqual(sin.devengos.length, 1);
+
+    const sinSalud = calc(e, 3000000, [], '2027-03', { incluir: { salud: false } });
+    assert.strictEqual(sinSalud.totales.deducciones, 120000, 'solo pensión');
+  });
+
+  prueba('estimado de nómina: días trabajados, prima por días y vacaciones entran al IBC como en el Excel original', () => {
+    const e = E();
+    const medio = calc(e, 3000000, [], '2027-03', { dias: 15 });
+    assert.strictEqual(medio.lineas[0].valor, 1500000, '15 de 30 días');
+    assert.strictEqual(medio.ibc, 1500000);
+
+    const prima = calc(e, 3000000, [], '2027-06');
+    assert.strictEqual(prima.lineas.find(l => l.clave === 'prima').valor, 1500000, 'junio: 15 días por defecto');
+    assert.strictEqual(prima.lineas.find(l => l.clave === 'prima').incluido, true);
+    assert.strictEqual(calc(e, 3000000, [], '2027-03').lineas.find(l => l.clave === 'prima').incluido, false, 'otros meses: apagada');
+    assert.strictEqual(calc(e, 3000000, [], '2027-03', { diasPrima: 10, incluir: { prima: true } }).lineas.find(l => l.clave === 'prima').valor, 1000000);
+
+    // Vacaciones: 5 días = 500.000, cotizan (salud y pensión sobre ordinario + vacaciones).
+    const vac = calc(e, 3000000, [], '2027-03', { diasVacaciones: 5 });
+    assert.strictEqual(vac.lineas.find(l => l.clave === 'vacaciones').valor, 500000);
+    assert.strictEqual(vac.ibc, 3500000);
+    assert.deepStrictEqual(vac.deducciones.map(d => d.valor), [140000, 140000]);
+    assert.strictEqual(vac.totales.neto, 3000000 - 280000 + 500000);
+  });
+
+  prueba('estimado de nómina: los intereses de cesantías parten el año en dos tramos si el sueldo cambió', () => {
+    const e = E();
+    // Todo el año con el mismo sueldo: 12 % del sueldo (igual que antes).
+    assert.strictEqual(calc(e, 3127845, [], '2027-01').lineas.find(l => l.clave === 'intereses').valor, 375341.4);
+    // 180 días con el sueldo actual y 180 con uno anterior de 2.900.000: 3 % de cada uno.
+    const mitad = calc(e, 3127845, [], '2027-01', {}, { cesDiasActual: 180, cesSueldoAnterior: 2900000 });
+    assert.strictEqual(mitad.lineas.find(l => l.clave === 'intereses').valor, 180835.35);
+    assert.strictEqual(mitad.totales.extras, 180835.35, 'enero: viene incluido');
+    assert.strictEqual(calc(e, 3127845, [], '2027-04', {}, { cesDiasActual: 180, cesSueldoAnterior: 2900000 }).totales.extras, 0);
+  });
+
+  prueba('estimado de nómina: descuentos e ingresos fijos del escenario (libranza, bono) y el mes del próximo pago', () => {
+    const e = E();
+    const esc = e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3000000, Vigente: true });
+    const lib = e.llamar('saveConceptoNomina', { ID_Nomina_Esc: esc.ID_Nomina_Esc, Tipo: 'Deduccion', Concepto: 'Libranza', Valor: 150000 }, hoy().slice(0, 7), {});
+    assert.strictEqual(lib.ok, true, lib.error && lib.error.message);
+    const bono = e.llamar('saveConceptoNomina', { ID_Nomina_Esc: esc.ID_Nomina_Esc, Tipo: 'Devengo', Concepto: 'Bono', Valor: 100000, Es_Salarial: false }, hoy().slice(0, 7), {});
+    assert.strictEqual(bono.ok, true);
+    assert.strictEqual(e.llamar('saveConceptoNomina', { ID_Nomina_Esc: esc.ID_Nomina_Esc, Tipo: 'Deduccion', Concepto: 'libranza', Valor: 1 }, hoy().slice(0, 7), {}).ok, false, 'no repetidos');
+
+    const m = '2027-03';
+    const n = e.llamar('getNomina', m, '', {}).data;
+    assert.strictEqual(n.conceptos.length, 2);
+    assert.strictEqual(n.calculo.totales.neto, 3000000 + 100000 - 240000 - 150000);
+    const apagado = e.llamar('getNomina', m, '', { incluir: { ['otro:' + lib.data.concepto.ID_Concepto]: false } }).data;
+    assert.strictEqual(apagado.calculo.totales.neto, 3000000 + 100000 - 240000);
+
+    // El pago registrado congela lo que se estimó (con las casillas del usuario).
+    const ban = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'B' });
+    const cta = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: ban.ID_Banco, Nombre: 'P', Tipo: 'Billetera' });
+    const bol = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cta.ID_Cuenta, Nombre: 'Nómina' });
+    const r = e.llamar('registrarNomina', m, '', undefined, diaHoy(), bol.ID_Bolsillo, { incluir: { ['otro:' + lib.data.concepto.ID_Concepto]: false } });
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(e.llamar('getTableData', 'Nomina_Pagos')[0].Neto_Estimado, 3000000 + 100000 - 240000);
+
+    e.llamar('removeConceptoNomina', bono.data.concepto.ID_Concepto, m, {});
+    assert.strictEqual(e.llamar('getNomina', m, '', {}).data.conceptos.length, 1);
+
+    // Sin mes, se propone el del próximo pago (este mes si aún no se registra y no pasó el día de pago).
+    const prox = e.llamar('mesProximoPagoNomina_');
+    assert.ok(/^\d{4}-\d{2}$/.test(prox));
   });
 };

@@ -231,7 +231,7 @@ async function cargar() {
 
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.graf.data = null; App.proximosViejos = false;
+  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = false;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
@@ -329,7 +329,7 @@ function aplicarEscritura(res) {
   if (res.ultimos) App.boot.ultimos = res.ultimos;
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
-  App.proximosViejos = true; App.pag.data = null;
+  App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
   App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
@@ -398,6 +398,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
+  if (partes[0] === 'ingresos') return 'Otros ingresos';
   if (partes[0] === 'ahorro') return partes.length === 1 ? 'Ahorro' : (App.ahoC.data && App.ahoC.id === partes[1] ? App.ahoC.data.cuenta.Nombre : 'Ahorro');
   if (partes[0] === 'tarjeta') return App.tar.data && App.tar.id === partes[1] ? App.tar.data.tarjeta.Nombre : 'Tarjeta';
   if (partes[0] === 'credito') return App.cre.data && App.cre.id === partes[1] ? App.cre.data.credito.Nombre : 'Crédito';
@@ -468,6 +469,7 @@ function pantalla(ruta) {
     case 'anual': return vAnual();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
+    case 'ingresos': return vIngresos();
     case 'ahorro': return partes.length === 1 ? vAhorro() : vCuentaAhorro(partes[1]);
     case 'bolsillo': return vBolsillo(partes[1]);
     case 'movimientos': return vMovimientos();
@@ -554,7 +556,7 @@ function textoPlazo(dias) {
 
 async function refrescarProximos() {
   App.proximosCargando = true;
-  try { App.boot.proximos = await api('getProximos'); App.proximosViejos = false; }
+  try { App.boot.proximos = await api('getProximos'); App.boot.porRecibir = await api('getProximosIngresos'); App.proximosViejos = false; }
   catch (e) { /* queda la lista anterior; no es crítico */ }
   App.proximosCargando = false;
   if (rutaActual() === 'inicio') render();
@@ -663,6 +665,15 @@ function vInicio() {
     })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
   }
 
+  const porRecibir = App.boot.porRecibir || [];
+  if (porRecibir.length) {
+    html += seccion('Por recibir', porRecibir.map(p => fila({
+      icono: 'usuario', titulo: esc(p.titulo), sub: esc(textoPlazo(p.dias).replace('Vence', 'Llega')) + ' · ' + esc(p.detalle),
+      final: '<strong class="m-num m-positivo">' + dinero(p.valor) + '</strong>', chevron: true,
+      attrs: p.ingreso ? 'data-acc="ingreso" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="nomina"'
+    })).join('') + fila({ titulo: 'Ver otros ingresos', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos"' }));
+  }
+
   const ultimos = App.boot.ultimos || [];
   if (ultimos.length) {
     html += '<section class="m-seccion" aria-label="Últimos movimientos"><h2 class="m-seccion-titulo">Últimos movimientos</h2><div class="m-group">' +
@@ -723,7 +734,8 @@ function vMas() {
     titulo: 'Más',
     html: seccion('',
       irA('movimientos', { icono: 'presupuesto', titulo: 'Movimientos', sub: 'Todo lo que has registrado, por mes' }) +
-      irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Cuánto te llega cada mes y cómo se reparte' }) +
+      irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte' }) +
+      irA('ingresos', { icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…' }) +
       irA('ahorro', { icono: 'bolsillos', titulo: 'Ahorro', sub: 'Saldos, rendimientos y lo que le debes' }) +
       irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
       irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
@@ -877,7 +889,11 @@ const CAT = {
     campos: [
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Divisa', label: 'Moneda', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
-        ayuda: 'La moneda de todas las cuentas de este banco. Para ahorrar en dólares, crea un banco en dólares. No se puede cambiar cuando ya tiene cuentas.' }
+        ayuda: 'La moneda de todas las cuentas de este banco. Para ahorrar en dólares, crea un banco en dólares. No se puede cambiar cuando ya tiene cuentas.' },
+      { k: 'Rendimiento_EA', label: 'Rendimiento de las cuentas de ahorro (% EA)', tipo: 'porcentaje',
+        ayuda: 'Opcional. La tasa efectiva anual que te da este banco en sus cuentas de ahorro, por ejemplo 9,5.' },
+      { k: 'Rendimiento_Pago', label: 'El banco paga el rendimiento', tipo: 'select', defecto: 'Mensual', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
+        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] }
     ]
   },
   Cuentas: {
@@ -986,6 +1002,21 @@ const CAT = {
     fila: i => ({ titulo: esc(i.Nombre), sub: (n => n + (n === 1 ? ' servicio' : ' servicios'))(activos('Servicios_Publicos').filter(s => s.ID_Inmueble === i.ID_Inmueble).length) }),
     campos: [{ k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }]
   },
+  Ingresos_Recurrentes: {
+    plural: 'Ingresos recurrentes', singular: 'ingreso', icono: 'usuario', id: 'ID_Ingreso',
+    vacio: 'Anota lo que recibes además de tu nómina: otro trabajo, un arriendo, ventas, servicios…',
+    requiere: () => activos('Bolsillos').length ? '' : 'Primero crea una cuenta con un bolsillo.',
+    fila: i => ({ titulo: esc(i.Nombre), sub: esc(etiqueta('PeriodoCobro', i.Periodicidad)) + ' · próximo ' + esc(i.Proximo_Cobro), final: '<span class="m-num">' + dinero(i.Valor) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Otro trabajo', 'Servicios', 'Venta de productos', 'Arriendo', 'Honorarios'] },
+      { k: 'Valor', label: 'Cuánto recibes', tipo: 'dinero', requerido: true },
+      { k: 'Periodicidad', label: 'Cada cuánto', tipo: 'select', defecto: 'Mensual', opciones: () => Object.keys(ETIQUETAS.PeriodoCobro).map(k => [k, ETIQUETAS.PeriodoCobro[k]]) },
+      { k: 'Proximo_Cobro', label: 'Próxima vez', tipo: 'fecha', requerido: true },
+      { k: 'ID_Bolsillo', label: 'Llega a', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) },
+      { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Ingreso').map(c => [c.ID_Categoria, c.Nombre])) },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
   Suscripciones: {
     plural: 'Servicios y suscripciones', singular: 'cobro', icono: 'tarjetas', id: 'ID_Suscripcion',
     vacio: 'Agrega lo que pagas cada cierto tiempo: streaming, música, internet, luz, agua…',
@@ -1084,6 +1115,8 @@ const CAT = {
 
 const INFO_CAMPOS = {
   Bancos: {
+    Rendimiento_EA: 'La tasa efectiva anual que te paga este banco en sus cuentas de ahorro. Moni la usa para estimar cuánto te rinde. Déjala vacía si no rinde.',
+    Rendimiento_Pago: 'Cada día: el banco suma lo ganado a tu saldo a diario (interés compuesto). Cada mes: lo suma al cerrar el mes.',
     Nombre: 'El banco o la billetera donde tienes dinero, por ejemplo Nequi, Nu o tu banco de siempre.',
     Divisa: 'La moneda en la que está el dinero de este banco. Si ahorras en dólares, crea otro banco en dólares. No se puede cambiar cuando ya tiene cuentas.'
   },
@@ -1143,6 +1176,15 @@ const INFO_CAMPOS = {
     Codigo_Pago: 'El número de referencia con el que pagas (matrícula, contrato o referencia de pago).',
     URL_Pago: 'La página donde se paga. Debe empezar por https://',
     Notas: 'Lo que quieras recordar de este servicio.'
+  },
+  Ingresos_Recurrentes: {
+    Nombre: 'De dónde viene: otro trabajo, un arriendo, la venta de productos, servicios que prestas…',
+    Valor: 'Cuánto esperas recibir cada vez. Es un estimado: al recibirlo puedes escribir el valor real.',
+    Periodicidad: 'Cada cuánto lo recibes: cada mes, cada 2, 3 o 6 meses, o cada año.',
+    Proximo_Cobro: 'La fecha en que esperas recibirlo. El día se repite cada período y Moni te avisa antes.',
+    ID_Bolsillo: 'La cuenta (y el bolsillo) a la que llega el dinero. Al recibirlo se suma ahí.',
+    ID_Categoria: 'Para verlo en los gráficos por categoría.',
+    Notas: 'Lo que quieras recordar de este ingreso.'
   },
   Presupuesto_Plantilla: {
     Concepto: 'Lo que planeas gastar o apartar: Arriendo, Mercado, Transporte, Ahorro…',
@@ -1297,6 +1339,11 @@ function htmlCampo(c, valor, ctx) {
       ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc +
         ' value="' + (valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : esc(new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Number(valor)))) + '" data-tipo="dinero"><p class="m-ayuda" data-eco="' + id + '" aria-live="polite"></p>';
       break;
+    case 'porcentaje': {
+      const n = valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(Number(valor) * 100);
+      ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc + ' placeholder="Por ejemplo, 9,5" value="' + esc(n) + '">';
+      break;
+    }
     case 'entero':
       ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="number" inputmode="numeric" min="' + (c.min || 0) + '" max="' + (c.max || '') + '" step="1"' + req + desc + ' value="' + esc(valor) + '">';
       break;
@@ -1330,6 +1377,7 @@ function leerFormulario(raiz, campos) {
     if (!el) return;
     if (c.tipo === 'interruptor') v[c.k] = el.checked;
     else if (c.tipo === 'dinero') v[c.k] = leerDinero(el.value);
+    else if (c.tipo === 'porcentaje') { const n = leerDinero(el.value); v[c.k] = n === '' ? '' : (isNaN(n) ? NaN : n / 100); }
     else if (c.tipo === 'entero') v[c.k] = el.value === '' ? '' : Number(el.value);
     else v[c.k] = el.value.trim();
   });
@@ -1423,7 +1471,7 @@ async function abrirFormulario(tabla, id, defaults) {
       const v = leerFormulario(raiz, campos);
       campos.forEach(c => {
         if (c.visible && !c.visible(v, ctx)) delete v[c.k];
-        if (c.tipo === 'dinero' && v[c.k] !== undefined && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
+        if ((c.tipo === 'dinero' || c.tipo === 'porcentaje') && v[c.k] !== undefined && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
       });
       const falta = campos.find(c => c.requerido && (!c.visible || c.visible(v, ctx)) && (v[c.k] === '' || v[c.k] === undefined));
       if (falta) throw new Error(falta.label + ' es obligatorio.');
@@ -1444,7 +1492,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -1636,6 +1684,7 @@ function interruptorAnulados(vista, marcado) {
 function cambiarMes(vista, delta) {
   const st = vista === 'graf' ? App.graf : vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
   st.mes = mesMas(st.mes, delta); st.data = null; st.error = null;
+  if (vista === 'nom') st.opciones = null; // cada mes parte de sus valores por defecto
   render();
 }
 
@@ -2014,7 +2063,7 @@ async function abrirCuadre(idCuenta) {
 // ---------------------------------------------------------------------------
 
 App.ppto = { mes: null, data: null, cargando: false, error: null };
-App.nom = { mes: null, idEsc: '', data: null, cargando: false, error: null };
+App.nom = { mes: null, idEsc: '', data: null, opciones: null, cargando: false, error: null };
 App.plantillaEsc = null;
 
 /** Aplica un presupuesto recibido del servidor: la pantalla, el resumen de Inicio y los renglones de Registrar. */
@@ -2286,12 +2335,18 @@ function vPlantilla() {
 
 function vNomina() {
   const n = App.nom;
-  if (!n.mes) n.mes = App.boot.hoy.slice(0, 7);
-  let html = bannerDemo() + navegadorMes('nom', n.mes, mesMas(App.boot.hoy.slice(0, 7), 1));
+  const mesMostrado = n.mes || (n.data && n.data.periodo) || App.boot.hoy.slice(0, 7);
+  let html = bannerDemo() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
   if (n.error) html += bloqueError(n.error, 'recargar-nom');
   else if (!n.data) html += esqueleto(5);
   else html += htmlNomina(n.data);
   return { titulo: 'Nómina', html: html, despues: () => { if (!n.data && !n.cargando && !n.error) cargarNomina(); } };
+}
+
+/** Lo que el usuario ajustó en el estimado (casillas y días), listo para mandarlo al servidor. */
+function opcionesNomina() {
+  const o = App.nom.opciones || {};
+  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {} };
 }
 
 async function cargarNomina() {
@@ -2299,12 +2354,22 @@ async function cargarNomina() {
   const mes = n.mes, idEsc = n.idEsc;
   n.cargando = true; n.error = null;
   try {
-    const data = await api('getNomina', mes, idEsc);
+    const data = await api('getNomina', mes || '', idEsc || '', opcionesNomina());
     if (n.mes !== mes || n.idEsc !== idEsc) { n.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
     n.data = data;
+    if (!n.mes) n.mes = data.periodo; // el servidor elige el mes del próximo pago
   } catch (e) { n.error = e.message; }
   n.cargando = false;
   if (rutaActual() === 'nomina') render();
+}
+
+/** Cambia una casilla o un número del estimado y lo vuelve a calcular sin perder la pantalla. */
+async function recalcularNomina(cambio) {
+  const n = App.nom;
+  n.opciones = n.opciones || { incluir: {} };
+  cambio(n.opciones);
+  try { n.data = await api('getNomina', n.mes, n.idEsc || '', opcionesNomina()); render(); }
+  catch (e) { aviso(e.message, true); }
 }
 
 function seccionNomina(titulo, lineas, clase) {
@@ -2313,23 +2378,45 @@ function seccionNomina(titulo, lineas, clase) {
     lineas.map(l => fila({ titulo: esc(l.concepto), final: '<span class="m-num ' + (clase || '') + '">' + (clase === 'm-negativo' ? '−' : '') + dinero(l.valor) + '</span>' })).join('') + '</div></section>';
 }
 
+/** Una línea del estimado: casilla para incluirla o no, su valor y, si aplica, los días. */
+function filaLineaNomina(l, bloqueado) {
+  const dias = l.dias !== undefined && ['ordinario', 'prima', 'vacaciones'].indexOf(l.clave) !== -1
+    ? '<span class="m-row-sub" style="display:flex;align-items:center;gap:var(--m-space-2)">Días <input class="m-input m-dias" type="number" inputmode="numeric" min="0" max="' + (l.clave === 'ordinario' ? 30 : 360) + '" value="' + esc(l.dias) + '" data-acc-cambio="nom-dias" data-que="' + l.clave + '" aria-label="Días de ' + esc(l.concepto) + '"' + (bloqueado ? ' disabled' : '') + '></span>' : '';
+  const quitar = l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '';
+  return '<div class="m-row m-renglon' + (l.incluido ? '' : ' m-hecho') + '">' +
+    '<label class="m-check"><input type="checkbox" data-acc-cambio="nom-incl" data-clave="' + esc(l.clave) + '"' + (l.incluido ? ' checked' : '') + (bloqueado ? ' disabled' : '') + ' aria-label="Incluir ' + esc(l.concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
+    '<div class="m-row-main" style="cursor:default"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(l.concepto) + '</span>' + dias + '</span>' +
+    '<span class="m-row-final"><span class="m-num ' + (l.grupo === 'deduccion' ? 'm-negativo' : '') + '">' + (l.grupo === 'deduccion' ? '−' : '') + dinero(l.valor) + '</span>' + quitar + '</span></div></div>';
+}
+
 function htmlNomina(d) {
   if (!d.calculo) {
     return vacio('usuario', 'Aún no hay escenarios de nómina', d.error || 'Crea uno con tu sueldo base para calcular cuánto te llega cada mes.',
       '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Nomina_Escenarios">Crear un escenario</button>');
   }
   const c = d.calculo;
+  const bloqueado = !!d.pago; // con la nómina ya registrada, el estimado queda como se calculó
   let h = '';
   if (d.comparacion.length > 1) {
     h += '<div class="m-campo"><label class="m-label" for="nom-esc">Escenario</label><select class="m-input" id="nom-esc">' +
       d.comparacion.map(e => '<option value="' + esc(e.ID_Nomina_Esc) + '"' + (e.ID_Nomina_Esc === c.escenario.ID_Nomina_Esc ? ' selected' : '') + '>' + esc(e.Nombre) + (e.Vigente ? ' (vigente)' : '') + ' — ' + dinero(e.neto) + '</option>').join('') + '</select></div>';
   }
 
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Neto estimado · ' + esc(c.escenario.Nombre) + '</div>' +
+  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado) · ' + esc(c.escenario.Nombre) + '</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(c.totales.neto) + '</div>' +
-    '<p class="m-ayuda">Devengado ' + dinero(c.totales.devengado) + ' − deducciones ' + dinero(c.totales.deducciones) + (c.totales.extras ? ' + extras ' + dinero(c.totales.extras) : '') + '</p></div><div style="height:var(--m-space-4)"></div>';
+    '<p class="m-ayuda">Devengado ' + dinero(c.totales.devengado) + ' − descuentos ' + dinero(c.totales.deducciones) + (c.totales.extras ? ' + prestaciones ' + dinero(c.totales.extras) : '') + '</p></div><div style="height:var(--m-space-4)"></div>';
 
-  h += seccionNomina('Devengado', c.devengos) + seccionNomina('Deducciones', c.deducciones, 'm-negativo') + seccionNomina('Este mes además', c.extras, 'm-positivo');
+  h += seccion('Tu sueldo',
+    fila({ titulo: 'Sueldo base', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>' }) +
+    fila({ titulo: 'Valor de un día' + '', sub: 'Sueldo y subsidios salariales entre ' + c.diasBase + ' días', final: '<span class="m-num">' + dinero(c.diaBase) + '</span>' }),
+    'Marca o desmarca cada línea para ver cómo cambia lo que recibes. Los días sirven para un mes incompleto, la prima (15 = medio mes) o las vacaciones.');
+  const L = g => c.lineas.filter(l => l.grupo === g);
+  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Lo que recibes</h2><div class="m-group">' + L('devengo').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div></section>';
+  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Prestaciones</h2><div class="m-group">' + L('extra').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
+    '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
+  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
+    '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
+  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
 
   if (d.pago) {
     const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
@@ -2345,6 +2432,43 @@ function htmlNomina(d) {
     h += '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina recibida</button></div>';
   }
   return h;
+}
+
+/** Agregar o editar un descuento (libranza, medicina prepagada…) o un ingreso fijo (bono) del escenario. */
+async function abrirConceptoNomina(idConcepto) {
+  const d = App.nom.data;
+  if (!d || !d.calculo) return;
+  const actual = idConcepto ? d.conceptos.find(x => x.ID === idConcepto) : null;
+  const campos = [
+    { k: 'Tipo', label: 'Es un…', tipo: 'select', opciones: () => [['Deduccion', 'Descuento (resta de lo que recibes)'], ['Devengo', 'Ingreso fijo (suma a lo que recibes)']],
+      info: 'Un descuento es algo que te quitan cada mes (libranza, medicina prepagada). Un ingreso fijo es algo extra que te pagan con la nómina (un bono).' },
+    { k: 'Concepto', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Libranza', 'Medicina prepagada', 'Fondo de empleados', 'Bono'] },
+    { k: 'Valor', label: 'Valor cada mes', tipo: 'dinero', requerido: true, info: 'Lo que se descuenta o se suma cada vez.' },
+    { k: 'Es_Salarial', label: 'Hace parte del salario', tipo: 'interruptor', visible: v => v.Tipo === 'Devengo', info: 'Si lo es, cuenta para salud, pensión y prima. Un bono ocasional o un auxilio normalmente no lo es.' }
+  ];
+  const v0 = actual ? { Tipo: actual.Tipo, Concepto: actual.Concepto, Valor: actual.Valor, Es_Salarial: actual.Es_Salarial } : { Tipo: 'Deduccion' };
+  await abrirHoja({
+    titulo: actual ? 'Editar concepto' : 'Nuevo concepto',
+    cuerpo: '<form novalidate data-form="concepto-nomina">' + campos.map(c => htmlCampo(c, v0[c.k] === undefined ? '' : v0[c.k], {})).join('') +
+      (actual ? '<button type="button" class="m-accion-peligro" data-hoja-acc="quitar">Quitar este concepto</button>' : '') +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {}); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {})); },
+    extra: {
+      quitar: async () => {
+        App.nom.data = await api('removeConceptoNomina', idConcepto, App.nom.mes, opcionesNomina());
+        render(); aviso('Concepto quitado');
+      }
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el nombre.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el valor.');
+      const envio = { Tipo: v.Tipo, Concepto: v.Concepto, Valor: v.Valor, Es_Salarial: v.Tipo === 'Devengo' && v.Es_Salarial };
+      if (actual) envio.ID_Concepto = idConcepto; else envio.ID_Nomina_Esc = d.calculo.escenario.ID_Nomina_Esc;
+      const r = await api('saveConceptoNomina', envio, App.nom.mes, opcionesNomina());
+      App.nom.data = r.nomina; render(); aviso(actual ? 'Concepto actualizado' : 'Concepto agregado');
+    }
+  });
 }
 
 async function abrirRegistrarNomina() {
@@ -2365,7 +2489,7 @@ async function abrirRegistrarNomina() {
       const v = leerFormulario(raiz, campos);
       if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el neto que recibiste.');
       if (!v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
-      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, v.Bolsillo);
+      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, v.Bolsillo, opcionesNomina());
       recordarBolsillo(v.Bolsillo);
       aplicarEscritura(res); App.nom.data = res.nomina; render();
       aviso('Nómina registrada', { deshacer: () => anularNominaYAvisar() });
@@ -2389,20 +2513,22 @@ const PARAMETROS_NOMINA = [
   { k: 'Aporte_Salud', label: 'Aporte a salud', tipo: 'porcentaje' },
   { k: 'Aporte_Pension', label: 'Aporte a pensión', tipo: 'porcentaje' },
   { k: 'Tasa_Interes_Cesantias', label: 'Intereses de cesantías (anual)', tipo: 'porcentaje' },
-  { k: 'FSP_Umbral_SMMLV', label: 'Fondo de Solidaridad desde (SMMLV)', tipo: 'entero', min: 1, max: 100 }
+  { k: 'FSP_Umbral_SMMLV', label: 'Fondo de Solidaridad desde (SMMLV)', tipo: 'entero', min: 1, max: 100 },
+  { k: 'Cesantias_Dias_Actual', label: 'Días del año de cesantías con tu sueldo actual', tipo: 'entero', min: 0, max: 360, defecto: '360' },
+  { k: 'Cesantias_Sueldo_Anterior', label: 'Sueldo anterior (solo si cambió este año)', tipo: 'dinero', defecto: '0' }
 ];
 
 function vParametros() {
   const campo = c => {
     if (c.tipo === 'porcentaje') {
-      const n = Number(cfg(c.k).replace(',', '.'));
+      const n = Number((cfg(c.k) || c.defecto || '').replace(',', '.'));
       return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + ' (%)</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" data-pct="1" type="text" inputmode="decimal" value="' + (isFinite(n) ? String(Math.round(n * 10000) / 100).replace('.', ',') : '') + '"></div>';
     }
     if (c.tipo === 'dinero') {
-      const n = Number(cfg(c.k));
+      const n = Number((cfg(c.k) || c.defecto || ''));
       return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + '</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" type="text" inputmode="decimal" value="' + (isFinite(n) ? new Intl.NumberFormat('es-CO').format(n) : '') + '"><p class="m-ayuda">' + esc(c.ayuda || '') + '</p></div>';
     }
-    return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + '</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" type="number" inputmode="numeric" min="' + c.min + '" max="' + c.max + '" value="' + esc(cfg(c.k)) + '"></div>';
+    return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + '</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" type="number" inputmode="numeric" min="' + c.min + '" max="' + c.max + '" value="' + esc((cfg(c.k) || c.defecto || '')) + '"></div>';
   };
   return {
     titulo: 'Parámetros de nómina',
@@ -2948,7 +3074,7 @@ function vAhorro() {
       '<p class="m-ayuda">Rendimiento neto acumulado: ' + dinero(t.rendimientoNeto) + '</p></div><div style="height:var(--m-space-5)"></div>' + htmlGraficosAhorro(a.data);
     html += '<div class="m-group">' + a.data.cuentas.map(c => fila({
       icono: 'bolsillos', titulo: esc(c.Nombre),
-      sub: esc(c.Banco) + (c.avanceMeta !== null ? ' · ' + Math.round(c.avanceMeta * 100) + ' % de la meta' : '') + (c.deuda.total > 0 ? ' · debes ' + dinero(c.deuda.total) : ''),
+      sub: esc(c.Banco) + (c.rendimientoEstimado ? ' · rinde ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(c.rendimientoEstimado.ea * 100) + ' % EA' : '') + (c.avanceMeta !== null ? ' · ' + Math.round(c.avanceMeta * 100) + ' % de la meta' : '') + (c.deuda.total > 0 ? ' · debes ' + dinero(c.deuda.total) : ''),
       final: '<strong class="m-num">' + dinero(c.Saldo) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="ahorro/' + esc(c.ID_Cuenta) + '"'
     })).join('') + '</div>';
   }
@@ -2968,6 +3094,24 @@ function vCuentaAhorro(id) {
   };
 }
 
+/** Lo que rinde la cuenta según la tasa del banco: acumulado del mes y lo pendiente de registrar. */
+function htmlRendimientoEstimado(a) {
+  const e = a.rendimientoEstimado;
+  if (!e) {
+    return seccion('Rendimiento estimado', fila({ icono: 'pulso', titulo: 'Sin tasa de rendimiento', sub: 'Agrégala en el banco para estimar cuánto te rinde', chevron: true, attrs: 'data-acc="ir" data-ruta="ajustes/Bancos"' }));
+  }
+  const pct = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(e.ea * 100);
+  const porDia = a.Saldo * e.tasaDiaria;
+  return seccion('Rendimiento estimado',
+    '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
+      '<div><dt>Tasa</dt><dd>' + pct + ' % EA · se paga ' + (e.pago === 'Diario' ? 'cada día' : 'cada mes') + '</dd></div>' +
+      '<div><dt>Rinde por día (aprox.)</dt><dd class="m-num">' + dinero(porDia) + '</dd></div>' +
+      '<div><dt>Acumulado este mes</dt><dd class="m-num m-positivo">' + dinero(e.acumuladoMes) + '</dd></div>' +
+      '<div><dt><strong>Por registrar</strong></dt><dd class="m-num"><strong>' + dinero(e.pendiente) + '</strong></dd></div></dl></div>' +
+    (e.pendiente > 0 ? '<div class="m-row"><button class="m-btn m-btn-secondary" style="width:100%" data-acc="rend-estimado">Registrar este rendimiento</button></div>' : ''),
+    e.dias > 0 ? 'Calculado desde el ' + esc(e.desde) + ' hasta el ' + esc(e.hasta) + ' (' + e.dias + (e.dias === 1 ? ' día' : ' días') + '), sobre tu saldo de cada día. Es una estimación: tu banco puede redondear distinto.' : 'Todavía no ha terminado ningún día desde el último rendimiento.');
+}
+
 function htmlCuentaAhorro(d) {
   const a = d.cuenta, r = a.rendimiento, de = a.deuda;
   let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(a.Banco) + ' · saldo</div><div class="m-resumen-cifra m-num">' + dinero(a.Saldo) + '</div>' +
@@ -2975,7 +3119,7 @@ function htmlCuentaAhorro(d) {
     '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="aportar-ahorro">Aportar</button><button class="m-btn m-btn-secondary" data-acc="rendimiento">Registrar rendimiento</button></div>' +
     '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="retirar-ahorro">Sacar para gastos</button>' + (de.manual > 0 ? '<button class="m-btn m-btn-secondary" data-acc="reponer-ahorro">Reponer</button>' : '') + '</div></div>';
 
-  h += '<div style="height:var(--m-space-5)"></div>' + tarjetaViz('ahoc-saldo', 'Saldo al cierre de cada mes', lineaSaldo(a.evolucion, 'COP', 170), tablaSaldo(a.evolucion, 'COP')) + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
+  h += '<div style="height:var(--m-space-5)"></div>' + htmlRendimientoEstimado(a) + tarjetaViz('ahoc-saldo', 'Saldo al cierre de cada mes', lineaSaldo(a.evolucion, 'COP', 170), tablaSaldo(a.evolucion, 'COP')) + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Interés ganado</dt><dd class="m-num m-positivo">' + dinero(r.interes) + '</dd></div><div><dt>Retención en la fuente</dt><dd class="m-num">−' + dinero(r.retencion) + '</dd></div>' +
     '<div><dt>GMF (4x1000)</dt><dd class="m-num">−' + dinero(r.gmf) + '</dd></div><div><dt><strong>Neto</strong></dt><dd class="m-num"><strong>' + dinero(r.neto) + '</strong></dd></div></dl></div>');
 
@@ -2995,12 +3139,12 @@ function aplicarAhorro(res) {
   if (res.cuentaAhorro && App.ahoC.id === res.cuentaAhorro.cuenta.ID_Cuenta && res.cuentaAhorro.mes === App.ahoC.mes) App.ahoC.data = res.cuentaAhorro;
 }
 
-async function abrirRendimiento() {
+async function abrirRendimiento(pre) {
   const d = App.ahoC.data;
   if (!d) return;
   const cuerpo = '<form novalidate data-form="rendimiento"><div class="m-campo"><div class="m-label" id="lbl-rend">Qué quieres registrar</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-rend">' +
     [['Interes', 'Interés'], ['Retencion', 'Retención'], ['GMF', 'GMF']].map((x, i) => '<label><input type="radio" name="rend" value="' + x[0] + '"' + (i === 0 ? ' checked' : '') + '><span>' + x[1] + '</span></label>').join('') + '</div></div>' +
-    htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, ayuda: 'El interés suma al ahorro; la retención y el GMF lo descuentan.' }, '', {}) +
+    htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, ayuda: pre ? 'Es una estimación con la tasa de tu banco. Si tu banco te muestra otro valor, escribe el de él.' : 'El interés suma al ahorro; la retención y el GMF lo descuentan.' }, pre ? pre.valor : '', {}) +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
   await abrirHoja({
     titulo: 'Rendimiento', cuerpo: cuerpo, alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
@@ -3274,6 +3418,106 @@ function vGuia() {
         paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.')) +
       seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' }))
   };
+}
+
+// ---------- Ingresos recurrentes ----------
+
+App.ing = { data: null, cargando: false, error: null };
+
+const textoIngreso = i => i.estado === 'atrasado' ? 'Debió llegar hace ' + (-i.dias) + (i.dias === -1 ? ' día' : ' días') : textoPlazo(i.dias).replace('Vence', 'Llega');
+
+function filaIngreso(i) {
+  return fila({
+    icono: 'usuario', titulo: esc(i.Nombre),
+    sub: esc(textoIngreso(i)) + (i.destino ? ' · ' + esc(i.destino) : ''),
+    final: '<span class="m-num m-positivo">' + dinero(i.Valor) + '</span><span class="m-row-sub" style="display:block">' + esc(etiqueta('PeriodoCobro', i.Periodicidad).toLowerCase()) + '</span>',
+    chevron: true, attrs: 'data-acc="ingreso" data-id="' + esc(i.ID_Ingreso) + '"'
+  });
+}
+
+function vIngresos() {
+  const g = App.ing;
+  let html = bannerDemo();
+  if (g.error) html += bloqueError(g.error, 'recargar-ing');
+  else if (!g.data) html += esqueleto(4);
+  else {
+    const d = g.data, t = d.totales;
+    if (!d.items.length) {
+      html += vacio('usuario', 'Aún no tienes otros ingresos', 'Anota lo que recibes además de tu nómina (otro trabajo, un arriendo, ventas, servicios): su monto, cada cuánto llega y a qué cuenta.',
+        '<button class="m-btn m-btn-primary" data-acc="nuevo" data-tabla="Ingresos_Recurrentes">Agregar el primero</button>');
+    } else {
+      html += '<div class="m-group m-resumen"><div class="m-resumen-etiqueta">Recibes al mes (aprox.)</div><div class="m-resumen-cifra m-num m-positivo">' + dinero(t.mensual) + '</div>' +
+        '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Al año</div><strong class="m-num">' + dinero(t.anual) + '</strong></div>' +
+        '<div><div class="m-resumen-etiqueta">Fuentes</div><strong class="m-num">' + t.cantidad + '</strong></div></div></div>';
+      const pronto = d.items.filter(x => x.estado !== 'ok'), resto = d.items.filter(x => x.estado === 'ok');
+      if (pronto.length) html += '<div style="height:var(--m-space-4)"></div>' + seccion('Por recibir', pronto.map(filaIngreso).join(''), 'Atrasados o en los próximos 7 días.');
+      if (resto.length) html += (pronto.length ? '' : '<div style="height:var(--m-space-4)"></div>') + seccion('Más adelante', resto.map(filaIngreso).join(''));
+    }
+    html += seccion('Tu nómina', irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que recibes cada mes', }));
+  }
+  return {
+    titulo: 'Otros ingresos', html: html,
+    acciones: '<button class="m-btn-texto" data-acc="nuevo" data-tabla="Ingresos_Recurrentes" aria-label="Agregar un ingreso">' + ico('plus') + '</button>',
+    despues: () => { if (!g.data && !g.cargando && !g.error) cargarEn(g, 'ingresos', 'getIngresosRecurrentes', []); }
+  };
+}
+
+function buscarIngreso(id) {
+  const d = App.ing.data && App.ing.data.items.find(x => x.ID_Ingreso === id);
+  if (d) return d;
+  const p = (App.boot.porRecibir || []).find(x => x.ingreso && x.ingreso.ID_Ingreso === id);
+  return p ? p.ingreso : null;
+}
+
+async function abrirDetalleIngreso(id) {
+  const i = buscarIngreso(id);
+  if (!i) return;
+  const cuerpo = '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">' + esc(textoIngreso(i)) + ' · ' + esc(etiqueta('PeriodoCobro', i.Periodicidad).toLowerCase()) + '</div>' +
+    '<div class="m-resumen-cifra m-num m-positivo">' + dinero(i.Valor) + '</div>' +
+    '<p class="m-ayuda">Llega a ' + esc(i.destino || 'una cuenta') + (i.Ultimo_Cobro ? ' · última vez ' + esc(i.Ultimo_Cobro) : '') + '</p></div>' +
+    '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)">' +
+    '<button type="button" class="m-btn m-btn-primary" data-hoja-acc="recibir">Ya lo recibí</button>' +
+    '<button type="button" class="m-btn m-btn-secondary" data-hoja-acc="saltar">Saltar este</button>' +
+    '<button type="button" class="m-btn-texto" data-hoja-acc="editar">Editar</button></div>';
+  await abrirHoja({
+    titulo: i.Nombre, cuerpo: cuerpo, sinGuardar: true, izq: 'Cerrar',
+    extra: {
+      recibir: async () => { setTimeout(() => abrirRecibirIngreso(i), 0); return true; },
+      saltar: async () => {
+        const r = await api('skipIngreso', i.ID_Ingreso);
+        App.ing.data = r.ingresos; App.proximosViejos = true; render();
+        aviso('Pasó al siguiente (' + r.proximo + ')', { deshacer: async () => {
+          try { const u = await api('undoIngreso', i.ID_Ingreso, r.anterior, ''); App.ing.data = u.ingresos; App.proximosViejos = true; render(); aviso('Deshecho'); }
+          catch (e) { aviso(e.message, true); }
+        } });
+        return true;
+      },
+      editar: async () => { setTimeout(() => abrirFormulario('Ingresos_Recurrentes', i.ID_Ingreso), 0); return true; }
+    }
+  });
+}
+
+async function abrirRecibirIngreso(i) {
+  const grupos = opcionesDestino(false);
+  await abrirHoja({
+    titulo: 'Recibí ' + i.Nombre,
+    cuerpo: '<form novalidate data-form="recibir-ingreso">' + htmlCampo({ k: 'Valor', label: 'Cuánto recibiste', tipo: 'dinero', requerido: true, info: 'Por defecto, el monto esperado. Escribe el valor real si fue otro.' }, i.Valor, {}) +
+      '<div class="m-campo"><label class="m-label" for="f-Bolsillo">Llegó a</label><select class="m-input" id="f-Bolsillo">' +
+      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === i.ID_Bolsillo ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
+    alGuardar: async raiz => {
+      const v = leerDinero($('#f-Valor', raiz).value);
+      if (v === '' || isNaN(v)) throw new Error('Escribe cuánto recibiste.');
+      const res = await api('receiveIngreso', i.ID_Ingreso, { Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: $('#f-Bolsillo', raiz).value });
+      aplicarEscritura(res); App.ing.data = res.ingresos; render();
+      aviso('Ingreso registrado · próximo ' + res.proximo, { deshacer: async () => {
+        try { const u = await api('undoIngreso', i.ID_Ingreso, res.anterior, res.idMov); aplicarEscritura(u); App.ing.data = u.ingresos; render(); aviso('Ingreso deshecho'); }
+        catch (e) { aviso(e.message, true); }
+      } });
+    }
+  });
 }
 
 // ---------- Servicios y suscripciones ----------
@@ -4036,21 +4280,26 @@ const PASOS_ASIST = [
   { id: 'bancos', corto: 'Bancos', tabla: 'Bancos', uno: 'un banco', otro: 'Guardar y agregar otro' },
   { id: 'cuentas', corto: 'Cuentas', tabla: 'Cuentas', uno: 'una cuenta', otro: 'Guardar y agregar otra' },
   { id: 'bolsillos', corto: 'Bolsillos', tabla: 'Bolsillos', uno: 'un bolsillo', otro: 'Guardar y agregar otro' },
-  { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' }
+  { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' },
+  { id: 'nomina', corto: 'Nómina' },
+  { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
 
 /** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
 const CAMPOS_ASIST = {
-  Bancos: ['Nombre', 'Divisa'],
+  Bancos: ['Nombre', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'],
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
-  Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura']
+  Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
+  Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
   bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
+  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos.' },
+  ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas. Puedes agregar todas las que tengas.' }
 };
 
@@ -4059,7 +4308,7 @@ function asistenteOmitido() { try { return localStorage.getItem(CLAVE_ASIST_OMIT
 function recordarAsistenteOmitido(v) { try { if (v) localStorage.setItem(CLAVE_ASIST_OMITIDO, '1'); else localStorage.removeItem(CLAVE_ASIST_OMITIDO); } catch (e) {} }
 
 /** activo: el asistente ya arrancó en esta sesión (sigue visible aunque se complete lo obligatorio, hasta el cierre). */
-App.asist = { activo: false, paso: null, omitido: asistenteOmitido(), ultimo: {}, nBols: 0 };
+App.asist = { activo: false, paso: null, omitido: asistenteOmitido(), ultimo: {}, nBols: 0, nSubs: 0 };
 
 function asistenteVisible() {
   const e = App.boot && App.boot.estado;
@@ -4079,6 +4328,7 @@ function pasoInicialAsist() {
 
 function aplicaPasoAsist(id) {
   if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
+  if (id === 'ingresos') return activos('Bolsillos').length > 0; // el ingreso llega a un bolsillo
   return true;
 }
 
@@ -4100,6 +4350,7 @@ const camposAsist = tabla => CAT[tabla].campos.filter(c => CAMPOS_ASIST[tabla].i
 const listaAsist = tabla => activos(tabla).filter(f => !esVerdad(f.Es_Interno));
 
 function valorInicialAsist(c) {
+  if (c.k === 'Proximo_Cobro') return App.boot.hoy;
   const preseleccion = (lista, idCol, recordado) => lista.some(f => f[idCol] === recordado) ? recordado : (lista.length === 1 ? lista[0][idCol] : '');
   if (c.k === 'ID_Banco') return preseleccion(activos('Bancos'), 'ID_Banco', App.asist.ultimo.ID_Banco);
   if (c.k === 'ID_Cuenta') return preseleccion(activos('Cuentas').filter(x => esVerdad(x.Permite_Bolsillos)), 'ID_Cuenta', App.asist.ultimo.ID_Cuenta);
@@ -4171,12 +4422,25 @@ function vPasoAsistente(id) {
       '<fieldset class="m-campo" style="border:0;padding:0;margin:0"><legend class="m-label">Elige tu color</legend>' + htmlMuestrasAcento() +
       '<p class="m-ayuda">Puedes cambiarlo cuando quieras en Ajustes → Apariencia.</p></fieldset>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  } else if (id === 'nomina') {
+    const yaHay = activos('Nomina_Escenarios').length > 0;
+    cuerpo = yaHay
+      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina. Puedes ajustarla cuando quieras en Más → Nómina.</p></div>'
+      : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
+        '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
+        '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
+        '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-nom-nombre">Nombre</label>' + htmlInfo('Una situación de ingresos: “Actual”, “Con aumento”… Puedes crear otros después para comparar.') + '</div>' +
+        '<input class="m-input" id="asist-nom-nombre" maxlength="60" value="Actual" autocomplete="off"></div>' +
+        htmlSubsidiosAsist() + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+    hechos = htmlHechosAsist('Nomina_Escenarios');
+    if (!yaHay) continuar = 'Omitir por ahora';
   } else if (campos) {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
       campos.map(c => htmlCampo(c, valorInicialAsist(c), {})).join('') +
       (id === 'cuentas' ? htmlBolsillosAsist() : '') +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist(p.tabla);
+    if (p.opcional && !listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
   } else {
     // Tarjetas: se abre el mismo formulario de Ajustes. La reserva puede ir en cualquier cuenta en pesos:
     // si esa cuenta era de un solo saldo, pasa a usar bolsillos sin perder nada.
@@ -4203,6 +4467,7 @@ function vPasoAsistente(id) {
       hechos + '</div>',
     despues: () => {
       const f = $('#asist-form');
+      if (f && id === 'nomina') { activarEcoDinero(f); return; }
       if (!f || !campos) return;
       activarEcoDinero(f);
       actualizarVisibilidad(f, campos, {});
@@ -4220,6 +4485,42 @@ function vPasoAsistente(id) {
       }
     }
   };
+}
+
+/** Subsidios o ingresos fijos que se suman al sueldo (auxilio, bono): nombre, valor y si son parte del salario. */
+function htmlFilaSubsidioAsist() {
+  const n = ++App.asist.nSubs;
+  return '<div class="m-fila-bols" data-fila-sub>' +
+    '<div class="m-campo"><label class="m-label" for="as-n-' + n + '">Nombre</label><input class="m-input" id="as-n-' + n + '" data-as="nombre" maxlength="60" autocomplete="off" placeholder="Auxilio, bono…"></div>' +
+    '<div class="m-campo"><label class="m-label" for="as-v-' + n + '">Valor cada mes</label><input class="m-input m-num" id="as-v-' + n + '" data-as="valor" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="as-v-' + n + '" aria-live="polite"></p></div>' +
+    '<div class="m-interruptor-fila" style="grid-column:1 / -1"><span class="m-label-fila"><label for="as-s-' + n + '">Hace parte del salario</label>' + htmlInfo('Si lo es, cuenta para salud, pensión y prima. Un auxilio de internet o un bono ocasional normalmente no lo es.') + '</span>' +
+    '<span class="m-interruptor"><input type="checkbox" role="switch" id="as-s-' + n + '" data-as="salarial"><i></i></span></div>' +
+    '<button type="button" class="m-btn-texto" data-acc="asist-sub-quitar">Quitar</button></div>';
+}
+
+function htmlSubsidiosAsist() {
+  App.asist.nSubs = 0;
+  return '<div class="m-bols-asist"><div class="m-label-fila"><h2 class="m-seccion-titulo" style="padding:0">Otros ingresos fijos de tu nómina (opcional)</h2>' +
+    htmlInfo('Lo que te pagan cada mes además del sueldo, por ejemplo un auxilio de conectividad o un bono. Se suman a lo que recibes.') + '</div>' +
+    '<div id="asist-subs-filas"></div>' +
+    '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-sub-mas">' + ico('plus', 'm-icon-sm') + 'Agregar un ingreso fijo</button></div>';
+}
+
+/** Guarda la nómina del asistente: sueldo y subsidios juntos (todo o nada). Sin sueldo, se omite. */
+async function guardarNominaAsist(f) {
+  if (!f) return; // ya estaba configurada
+  const sueldo = leerDinero($('#asist-sueldo', f).value);
+  const subs = [];
+  $$('[data-fila-sub]', f).forEach(fila => {
+    const nombre = $('[data-as="nombre"]', fila).value.trim(), v = leerDinero($('[data-as="valor"]', fila).value);
+    if (!nombre && (v === '' || v === 0)) return;
+    if (!nombre) throw new Error('Escribe el nombre del ingreso fijo de ' + dinero(v) + '.');
+    if (v === '' || isNaN(v) || v <= 0) throw new Error('Escribe el valor de “' + nombre + '”.');
+    subs.push({ Nombre: nombre, Valor: v, Es_Salarial: $('[data-as="salarial"]', fila).checked });
+  });
+  if (sueldo === '' ) { if (subs.length) throw new Error('Escribe tu sueldo base para guardar la nómina.'); return; }
+  if (isNaN(sueldo) || sueldo <= 0) throw new Error('El sueldo debe ser un número mayor que cero.');
+  await api('saveNominaInicial', { Nombre: $('#asist-nom-nombre', f).value.trim() || 'Actual', Sueldo_Base: sueldo }, subs);
 }
 
 /** Filas de bolsillos dentro del paso de cuentas: nombre y cuánto hay hoy en cada uno. */
@@ -4280,7 +4581,8 @@ function vFinAsistente() {
       '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + (nombre ? '¡Todo listo, ' + esc(nombre) + '!' : '¡Todo listo!') + '</h1>' +
       '<p class="m-subtitulo">Ya tienes lo básico para empezar. Esto es lo que dejaste configurado:</p>' +
       '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
-        dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) + '</div>' +
+        dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) +
+        dato('Nómina', activos('Nomina_Escenarios').length ? 'Lista' : '—') + dato('Otros ingresos', listaAsist('Ingresos_Recurrentes').length) + '</div>' +
       '<p class="m-ayuda" style="text-align:left">Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.</p>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
@@ -4298,7 +4600,7 @@ async function guardarCatalogoAsist(paso, f, otro) {
   const v = leerFormulario(f, campos);
   if (!v.Nombre) {
     if (otro) throw new Error('Escribe el nombre para agregar ' + p.uno + ' más.');
-    if (!listaAsist(p.tabla).length) throw new Error('Agrega al menos ' + p.uno + ' para continuar.');
+    if (!p.opcional && !listaAsist(p.tabla).length) throw new Error('Agrega al menos ' + p.uno + ' para continuar.');
     return false;
   }
   campos.forEach(c => {
@@ -4333,6 +4635,8 @@ async function enviarPasoAsist(f, otro) {
       const nombre = $('#asist-nombre', f).value.trim();
       if (!nombre) throw new Error('Escribe tu nombre para continuar.');
       if (nombre !== cfg('Nombre_Usuario')) await api('saveConfigParam', 'Nombre_Usuario', nombre);
+    } else if (paso === 'nomina') {
+      await guardarNominaAsist(f);
     } else {
       await guardarCatalogoAsist(paso, f, otro);
     }
@@ -4379,7 +4683,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec, App.ing].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -4458,6 +4762,12 @@ const ACCIONES = {
   'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
   'asist-otro': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, true); },
   'asist-tarjeta': () => abrirFormulario('Tarjetas'),
+  'asist-sub-mas': () => {
+    const caja = $('#asist-subs-filas'); if (!caja) return;
+    caja.insertAdjacentHTML('beforeend', htmlFilaSubsidioAsist());
+    const fila = caja.lastElementChild; activarEcoDinero(fila); $('[data-as="nombre"]', fila).focus();
+  },
+  'asist-sub-quitar': el => { const fila = el.closest('[data-fila-sub]'); if (fila) fila.remove(); },
   'asist-bols-mas': () => {
     const caja = $('#asist-bols-filas'); if (!caja) return;
     caja.insertAdjacentHTML('beforeend', htmlFilaBolsilloAsist());
@@ -4470,6 +4780,8 @@ const ACCIONES = {
     if (f) sincronizarBolsillosAsist(f);
   },
   'borrar-todo': () => abrirBorrar(),
+  'recargar-ing': () => { App.ing.error = null; App.ing.data = null; render(); },
+  ingreso: el => abrirDetalleIngreso(el.dataset.id),
   'recargar-pag': () => { App.pag.error = null; App.pag.data = null; render(); },
   susc: el => abrirDetalleCobro(el.dataset.id),
   codigo: el => abrirCodigoServicio(el.dataset.id),
@@ -4494,6 +4806,7 @@ const ACCIONES = {
   'recargar-reg': () => { App.reg.error = null; App.reg.data = null; render(); },
   'recargar-anual': () => { App.anual.error = null; App.anual.data = null; render(); },
   'recargar-resp': () => { App.resp.error = null; App.resp.data = null; render(); },
+  'rend-estimado': () => { const e = App.ahoC.data && App.ahoC.data.cuenta.rendimientoEstimado; if (e) abrirRendimiento({ valor: e.pendiente }); },
   'aportar-ahorro': () => { const d = App.ahoC.data; if (d) abrirRegistrar({ tipo: 'Mover', destino: d.ID_Bolsillo, concepto: 'Aporte a ' + d.cuenta.Nombre }); },
   rendimiento: () => abrirRendimiento(),
   'retirar-ahorro': () => abrirMovimientoAhorro('retirar'),
@@ -4548,6 +4861,8 @@ const ACCIONES = {
   distribuir: () => abrirDistribucion(App.ppto.mes),
   'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
   'registrar-nomina': () => abrirRegistrarNomina(),
+  'nom-concepto-nuevo': () => abrirConceptoNomina(null),
+  'nom-concepto-editar': el => abrirConceptoNomina(el.dataset.id),
   'anular-nomina': async () => {
     const ok = await confirmar({ titulo: 'Anular nómina', accion: 'Anular', mensaje: 'Se anula el ingreso de la nómina de este mes. Si ya la repartiste, esos traslados no se deshacen solos.' });
     if (ok) anularNominaYAvisar();
@@ -4620,6 +4935,16 @@ document.addEventListener('change', async ev => {
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
+  if (t.dataset.accCambio === 'nom-incl') {
+    recalcularNomina(o => { o.incluir = o.incluir || {}; o.incluir[t.dataset.clave] = t.checked; });
+    return;
+  }
+  if (t.dataset.accCambio === 'nom-dias') {
+    const campo = { ordinario: 'dias', prima: 'diasPrima', vacaciones: 'diasVacaciones' }[t.dataset.que];
+    const n = t.value === '' ? '' : Math.max(0, Number(t.value) || 0);
+    recalcularNomina(o => { o[campo] = n; if (n !== '' && t.dataset.que !== 'ordinario') { o.incluir = o.incluir || {}; o.incluir[t.dataset.que] = n > 0; } });
+    return;
+  }
   if (t.dataset.accCambio === 'tasa-auto') {
     try {
       const r = await api('saveTasaAuto', t.checked);
@@ -4640,7 +4965,7 @@ document.addEventListener('change', async ev => {
     return;
   }
   if (t.id === 'tar-mes') { App.tar.mes = t.value; App.tar.data = null; render(); return; }
-  if (t.id === 'nom-esc') { App.nom.idEsc = t.value; App.nom.data = null; render(); return; }
+  if (t.id === 'nom-esc') { App.nom.idEsc = t.value; App.nom.opciones = null; App.nom.data = null; render(); return; }
   if (t.dataset.accCambio === 'anulados') {
     const st = t.dataset.vista === 'det' ? App.det : App.mov;
     st.anulados = t.checked; st.data = null;

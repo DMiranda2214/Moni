@@ -47,7 +47,7 @@ function sembrarDatosDemo() {
 
   const bancos = [
     { ID_Banco: 'demo-ban-1', Nombre: 'Billetera Aurora (demo)', Color: '#6C5CE7', Icono: '', Activo: true, Orden: 1 },
-    { ID_Banco: 'demo-ban-2', Nombre: 'Banco Cumbre (demo)', Color: '#0B63CE', Icono: '', Activo: true, Orden: 2 },
+    { ID_Banco: 'demo-ban-2', Nombre: 'Banco Cumbre (demo)', Color: '#0B63CE', Icono: '', Activo: true, Orden: 2, Rendimiento_EA: 0.095, Rendimiento_Pago: 'Mensual' },
     { ID_Banco: 'demo-ban-3', Nombre: 'Banco Brisa (demo)', Color: '#17744A', Icono: '', Activo: true, Orden: 3 }
   ];
 
@@ -164,6 +164,12 @@ function sembrarDatosDemo() {
     susc(3, 'Almacenamiento en la nube (demo)', 'Suscripcion', 120000, 'Anual', 80, { ID_Tarjeta: 'demo-tar-1' }),
     susc(4, 'Energía (demo)', 'Servicio', 95000, 'Mensual', 5, { ID_Bolsillo: 'demo-bol-servicios', ID_Servicio: 'demo-srv-1' })
   ]);
+
+  // Un ingreso recurrente (otro trabajo)
+  insertRows('Ingresos_Recurrentes', [{
+    ID_Ingreso: 'demo-ing-1', Nombre: 'Trabajo aparte (demo)', Valor: 600000, Periodicidad: 'Mensual', Proximo_Cobro: enDias(6), Dia_Cobro: Number(enDias(6).slice(8, 10)),
+    ID_Bolsillo: 'demo-bol-personal', ID_Categoria: '', Ultimo_Cobro: '', Notas: 'Dato ficticio', Activo: true, Orden: 1
+  }]);
 
   // Regalos del año activo y un retiro del ahorro para gastos
   const anioDemo = Number(cfgValor_('Anio_Activo')) || new Date().getFullYear();
