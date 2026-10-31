@@ -104,6 +104,11 @@ function saveCatalogo(tabla, item, opciones) {
   });
 }
 
+/** Una cuenta con sus bolsillos y saldos de una sola vez (asistente de primeros pasos). */
+function saveCuentaCompleta(cuenta, bolsillos) {
+  return responder_(function () { return guardarCuentaConBolsillos(cuenta, bolsillos); });
+}
+
 function disableCatalogo(tabla, id) {
   return responder_(function () { return desactivarCatalogo(exigirCatalogo_(tabla), id); });
 }

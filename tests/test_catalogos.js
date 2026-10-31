@@ -211,12 +211,12 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.throws(e.falla('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Otra', Dia_Corte: 5, Dia_Pago: 20, ID_Bolsillo_Reserva: operativo.ID_Bolsillo }), /rol "Reserva de tarjeta"/);
   });
 
-  prueba('tarjetas: la reserva en una cuenta sin bolsillos se rechaza con un mensaje claro', () => {
+  prueba('tarjetas: la reserva en una cuenta de un solo saldo la pasa a usar bolsillos', () => {
     const e = E();
     const { banco, cuenta } = conBancoYCuenta(e, { Tipo: 'Debito', Nombre: 'Débito' });
-    assert.throws(e.falla('guardarCatalogo', 'Tarjetas',
-      { ID_Banco: banco.ID_Banco, Nombre: 'T', Dia_Corte: 5, Dia_Pago: 20 },
-      { crearReserva: { ID_Cuenta: cuenta.ID_Cuenta } }), /no permite bolsillos/);
+    const t = e.llamar('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'T', Dia_Corte: 5, Dia_Pago: 20 }, { crearReserva: { ID_Cuenta: cuenta.ID_Cuenta } });
+    assert.ok(t.ID_Bolsillo_Reserva);
+    assert.strictEqual(String(e.llamar('listarCatalogo', 'Cuentas')[0].Permite_Bolsillos).toUpperCase(), 'TRUE');
   });
 
   prueba('un bolsillo que usa una tarjeta no se desactiva', () => {

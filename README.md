@@ -38,6 +38,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |
+| [Presupuesto y tarjetas](docs/ANALISIS_PRESUPUESTO_TARJETAS.md) | Análisis de cómo cuentan las compras con tarjeta y propuesta de cambios |
 | [Plan del proyecto](PLAN.md) | Decisiones, fases y estado |
 | [Cambios](CHANGELOG.md) | Historia por fases |
 

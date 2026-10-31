@@ -1,5 +1,11 @@
 # Cambios
 
+## Primeros pasos más simples (30 oct)
+- **Cuentas con sus bolsillos y saldos en un solo paso:** al crear una cuenta que usa bolsillos se anotan ahí mismo, con lo que hay hoy en cada uno (`saveCuentaCompleta`, todo o nada).
+- **Tarjetas sin callejón:** la reserva puede ir en cualquier cuenta en pesos; si esa cuenta era de un solo saldo, pasa a usar bolsillos sin perder su dinero. El asistente siempre ofrece agregar tarjetas.
+- **Ayudas en los campos:** un botón "i" en cada casilla de configuración y de registro explica para qué sirve (al pasar el cursor, con el teclado o al tocar).
+- **Análisis** de presupuesto frente a tarjetas: [docs/ANALISIS_PRESUPUESTO_TARJETAS.md](docs/ANALISIS_PRESUPUESTO_TARJETAS.md).
+
 Historia por fases. Las fechas son de 2026.
 
 ## Gráficos en cada módulo

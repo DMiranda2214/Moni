@@ -318,6 +318,9 @@ const CATALOGOS = {
       const o = opciones || {};
       if (!o.crearReserva) return item;
       const nombreTarjeta = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
+      // Si la cuenta elegida se maneja como un solo saldo, pasa a usar bolsillos: la reserva necesita uno propio.
+      const cuentaReserva = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', o.crearReserva.ID_Cuenta, 'La cuenta de la reserva');
+      if (!esVerdadero(cuentaReserva.Permite_Bolsillos)) guardarCatalogo('Cuentas', { ID_Cuenta: cuentaReserva.ID_Cuenta, Permite_Bolsillos: true });
       const reserva = guardarCatalogo('Bolsillos', {
         ID_Cuenta: o.crearReserva.ID_Cuenta,
         Nombre: o.crearReserva.Nombre || ('Reserva ' + nombreTarjeta),
@@ -682,6 +685,33 @@ function reactivarCatalogo(tabla, id) {
   updateRow(tabla, reg._rowIndex, { Activo: true });
   invalidateCache(tabla);
   return Object.assign({}, reg, { Activo: true });
+}
+
+/**
+ * Crea una cuenta junto con sus bolsillos y el dinero que hay hoy en cada uno (el caso normal de quien ya
+ * tiene su dinero repartido). Se valida todo antes de escribir: si algo no es válido, no se crea nada.
+ * @param {Object} cuenta Los campos de la cuenta (ID_Banco, Nombre, Tipo, Permite_Bolsillos, Saldo_Apertura…).
+ * @param {Array} bolsillos [{ Nombre, Saldo_Apertura, Rol? }]. Solo si la cuenta usa bolsillos.
+ */
+function guardarCuentaConBolsillos(cuenta, bolsillos) {
+  if (!cuenta || typeof cuenta !== 'object') throw new Error('Faltan los datos de la cuenta.');
+  const lista = Array.isArray(bolsillos) ? bolsillos : [];
+  const permite = cuenta.Permite_Bolsillos !== undefined ? esVerdadero(cuenta.Permite_Bolsillos) : texto_(cuenta.Tipo) !== 'Debito';
+  if (!permite && lista.length) throw new Error('Esta cuenta se maneja como un solo saldo. Activa "Usar bolsillos" o quita los bolsillos.');
+
+  const roles = ENUMS.Bolsillos.Rol.filter(r => r !== 'General');
+  const vistos = {};
+  lista.forEach((b, i) => {
+    const nombre = textoRequerido_(b && b.Nombre, 'El nombre del bolsillo ' + (i + 1));
+    if (vistos[nombre.toLowerCase()]) throw new Error('Hay dos bolsillos llamados "' + nombre + '".');
+    vistos[nombre.toLowerCase()] = true;
+    numero_(b.Saldo_Apertura, 'El saldo de "' + nombre + '"', { defecto: 0, min: -VALOR_MAXIMO, max: VALOR_MAXIMO });
+    opcion_(b.Rol, roles, 'El rol de "' + nombre + '"', 'Operativo');
+  });
+
+  const creada = guardarCatalogo('Cuentas', cuenta);
+  const creados = lista.map(b => guardarCatalogo('Bolsillos', Object.assign({}, b, { ID_Cuenta: creada.ID_Cuenta })));
+  return { cuenta: creada, bolsillos: creados };
 }
 
 // ---------------------------------------------------------------------------

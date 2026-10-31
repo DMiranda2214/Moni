@@ -391,3 +391,22 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-lista-simple li { margin-bottom: var(--m-space-1); }
 .m-subtitulo-cuerpo { margin: var(--m-space-2) 0 var(--m-space-3); color: var(--m-label); font-size: var(--m-text-subheadline); }
 </style>
+
+<style>
+/* ---------- Ayudas en los campos ---------- */
+.m-label-fila { display: flex; align-items: center; gap: var(--m-space-2); }
+.m-label-fila .m-label, .m-label-fila label { margin-bottom: 0; }
+.m-interruptor-fila .m-label-fila { flex: 1; min-width: 0; }
+.m-info-caja { position: relative; display: inline-flex; flex: none; }
+.m-info { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--m-label-2); border-radius: 50%; background: transparent; color: var(--m-label-2); font: italic 700 13px/1 Georgia, 'Times New Roman', serif; cursor: help; }
+.m-info::after { content: ''; position: absolute; inset: -11px; } /* área de toque de 44 px */
+.m-info:hover, .m-info:focus-visible, .m-info-caja.abierto .m-info { color: var(--m-tint); border-color: var(--m-tint); }
+.m-info-txt { display: none; position: absolute; z-index: 60; top: calc(100% + 8px); left: -8px; width: max-content; max-width: min(280px, 78vw); padding: var(--m-space-3); border-radius: var(--m-radius-md); background: var(--m-label); color: var(--m-bg); font-size: var(--m-text-footnote); font-weight: 400; line-height: 1.4; text-align: left; text-transform: none; letter-spacing: 0; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.m-info-caja:hover .m-info-txt, .m-info:focus-visible + .m-info-txt, .m-info-caja.abierto .m-info-txt { display: block; }
+/* ---------- Asistente: bolsillos dentro de la cuenta ---------- */
+.m-bols-asist { margin: var(--m-space-4) 0; padding-top: var(--m-space-3); border-top: 0.5px solid var(--m-separator); }
+.m-fila-bols { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--m-space-3); align-items: start; margin-bottom: var(--m-space-3); }
+.m-fila-bols .m-campo { margin-bottom: 0; }
+.m-fila-bols > .m-btn-texto { align-self: center; margin-top: var(--m-space-5); }
+@media (max-width: 520px) { .m-fila-bols { grid-template-columns: 1fr 1fr; } .m-fila-bols > .m-btn-texto { grid-column: 1 / -1; justify-self: end; margin-top: 0; } }
+</style>

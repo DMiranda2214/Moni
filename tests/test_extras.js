@@ -418,4 +418,44 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(p.data.suscripciones.items.find(x => x.ID_Suscripcion === srv.ID_Suscripcion).Valor, 101500, 'el estimado pasa a ser el último pago');
     assert.strictEqual(e.llamar('limpiarDatosDemo').eliminadas.Suscripciones, 4);
   });
+
+  // ============================================================ primeros pasos
+  prueba('primeros pasos: una cuenta nace con sus bolsillos y saldos; todo o nada', () => {
+    const e = E();
+    const banco = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco' });
+    const r = e.llamar('saveCuentaCompleta', { ID_Banco: banco.ID_Banco, Nombre: 'Principal', Tipo: 'Billetera' },
+      [{ Nombre: 'Casa', Saldo_Apertura: 1200000 }, { Nombre: 'Mercado', Saldo_Apertura: 300000 }, { Nombre: 'Viaje', Saldo_Apertura: 0, Rol: 'Fondo' }]);
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(r.data.bolsillos.length, 3);
+    const saldos = e.llamar('mapaSaldosBolsillos_');
+    assert.strictEqual(saldos[r.data.bolsillos[0].ID_Bolsillo], 1200000);
+    assert.strictEqual(e.llamar('obtenerSaldos').total, 1500000);
+
+    // Un dato inválido no deja la cuenta a medias.
+    const antes = e.llamar('listarCatalogo', 'Cuentas').length;
+    for (const malos of [[{ Nombre: 'A' }, { Nombre: 'a' }], [{ Nombre: '' }], [{ Nombre: 'B', Saldo_Apertura: 'x' }]]) {
+      assert.strictEqual(e.llamar('saveCuentaCompleta', { ID_Banco: banco.ID_Banco, Nombre: 'Otra', Tipo: 'Billetera' }, malos).ok, false);
+    }
+    assert.strictEqual(e.llamar('listarCatalogo', 'Cuentas').length, antes);
+
+    // Una cuenta de un solo saldo no admite bolsillos, pero sí su saldo inicial.
+    assert.strictEqual(e.llamar('saveCuentaCompleta', { ID_Banco: banco.ID_Banco, Nombre: 'Débito', Tipo: 'Debito' }, [{ Nombre: 'X' }]).ok, false);
+    const solo = e.llamar('saveCuentaCompleta', { ID_Banco: banco.ID_Banco, Nombre: 'Débito', Tipo: 'Debito', Saldo_Apertura: 85000 }, []);
+    assert.strictEqual(solo.ok, true);
+    assert.strictEqual(e.llamar('obtenerSaldos').total, 1585000);
+  });
+
+  prueba('primeros pasos: una tarjeta se registra aunque ninguna cuenta use bolsillos (la reserva activa los bolsillos)', () => {
+    const e = E();
+    const banco = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco' });
+    const deb = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Débito', Tipo: 'Debito', Saldo_Apertura: 500000 });
+    assert.strictEqual(String(deb.Permite_Bolsillos).toUpperCase(), 'FALSE');
+    const t = e.llamar('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Visa', Cupo: 2000000, Dia_Corte: 15, Dia_Pago: 28 }, { crearReserva: { ID_Cuenta: deb.ID_Cuenta } });
+    assert.ok(t.ID_Bolsillo_Reserva);
+    const cta = e.llamar('listarCatalogo', 'Cuentas').find(c => c.ID_Cuenta === deb.ID_Cuenta);
+    assert.strictEqual(String(cta.Permite_Bolsillos).toUpperCase(), 'TRUE');
+    assert.strictEqual(e.llamar('obtenerSaldos').total, 500000, 'el dinero que ya había no se pierde');
+    const bols = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.ID_Cuenta === deb.ID_Cuenta);
+    assert.strictEqual(bols.length, 2, 'el saldo de la cuenta (ahora un bolsillo) y la reserva');
+  });
 };

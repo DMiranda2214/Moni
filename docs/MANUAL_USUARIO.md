@@ -5,7 +5,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 ## 1. Primer uso
 1. Abre el enlace de la app (guárdalo como favorito o *Agregar a pantalla de inicio*).
 2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
-3. ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
+4. ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
 
 ## 2. Inicio
 - **Accesos rápidos:** Gasto, Ingreso, Mover dinero, Pagar servicios, Tarjetas, Presupuesto.
