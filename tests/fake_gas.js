@@ -126,8 +126,34 @@ function crearEntorno(hojasIniciales, opciones) {
     newTrigger: fn => { const t = { getHandlerFunction: () => fn }; const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, create: () => { drive.disparadores.push(t); return t; } }; return b; }
   };
 
+  // Google Calendar en memoria: calendarios con eventos, etiquetas y avisos
+  const calendario = { calendarios: [] };
+  const envolverEvento = ev => ({
+    getTitle: () => ev.titulo, setTitle: t => { ev.titulo = t; },
+    getDescription: () => ev.descripcion, setDescription: d => { ev.descripcion = d; },
+    getStartTime: () => ev.inicio, setTime: (a, b) => { ev.inicio = a; ev.fin = b; },
+    getTag: k => (k in ev.tags ? ev.tags[k] : null), setTag: (k, v) => { ev.tags[k] = v; },
+    removeAllReminders: () => { ev.avisos = []; }, addPopupReminder: m => { ev.avisos.push(m); },
+    deleteEvent: () => { ev.borrado = true; }
+  });
+  const envolverCalendario = c => ({
+    getId: () => c.id, getName: () => c.nombre,
+    getEvents: (a, b) => c.eventos.filter(e => !e.borrado && e.inicio < b && e.fin > a).map(envolverEvento),
+    createEvent: (titulo, inicio, fin, o) => {
+      const ev = { titulo, inicio, fin, descripcion: (o && o.description) || '', tags: {}, avisos: [], borrado: false };
+      c.eventos.push(ev);
+      return envolverEvento(ev);
+    },
+    deleteCalendar: () => { c.borrado = true; }
+  });
+  const CalendarApp = {
+    createCalendar: nombre => { const c = { id: 'cal-' + (calendario.calendarios.length + 1), nombre, eventos: [], borrado: false }; calendario.calendarios.push(c); return envolverCalendario(c); },
+    getCalendarById: id => { const c = calendario.calendarios.find(x => x.id === id && !x.borrado); return c ? envolverCalendario(c) : null; }
+  };
+
   const ctx = {
     console,
+    CalendarApp,
     Date,
     Math,
     Logger: { log() {} },
@@ -171,7 +197,7 @@ function crearEntorno(hojasIniciales, opciones) {
     return vm.runInContext(js, ctx);
   };
 
-  return { ctx, hojas, registro, propiedades, cargar, ejecutar, drive };
+  return { ctx, hojas, registro, propiedades, cargar, ejecutar, drive, calendario };
 }
 
 module.exports = { crearEntorno };

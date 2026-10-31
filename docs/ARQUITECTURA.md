@@ -45,7 +45,7 @@
 | `Ahorro.gs` | Rendimientos, retiros, reposiciones, deuda con el ahorro |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
-| `Recordatorios.gs` | Próximos pagos para Inicio |
+| `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |
 | `Arranque.gs` | Aperturas, archivo de pruebas, inicio de operación |
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |

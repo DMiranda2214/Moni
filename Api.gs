@@ -529,7 +529,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0) throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 
@@ -583,6 +583,12 @@ function runDiagnostics() {
 
 /** Datos de los gráficos: gastos por categoría, entró/salió por mes y saldo al cierre de cada mes. */
 function getGraficos(opciones) { return responder_(function () { return obtenerGraficos(opciones); }); }
+
+// ---- Recordatorios en Google Calendar ----
+function getRecordatorios() { return responder_(function () { return estadoRecordatorios_(); }); }
+function saveRecordatorios(ajustes) { return responder_(function () { return configurarRecordatorios(ajustes); }); }
+function syncRecordatorios() { return responder_(function () { return sincronizarRecordatoriosYa(); }); }
+function removeRecordatorios() { return responder_(function () { return quitarRecordatorios(); }); }
 
 // ---- Registro de errores ----
 function getLogs(opciones) { return responder_(function () { return obtenerLogs(opciones); }); }

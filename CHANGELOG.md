@@ -2,6 +2,13 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Recordatorios en Google Calendar
+- **Nuevo** Ajustes → Recordatorios: calendario "Moni" con un evento por pago de los próximos 45 días (tarjetas, cuotas, suscripciones y servicios, prima y cesantías), con aviso el mismo día y N días antes, a la hora elegida.
+- Sincronización idempotente (crea, corrige y borra por clave; no toca eventos ajenos), disparador diario, sincronización en segundo plano tras registrar cambios y botones Sincronizar ahora / Quitar.
+- **Permiso** nuevo `calendar` en `appsscript.json` (hay que crear una versión nueva de la implementación y aceptarlo al abrir).
+- El borrado total de datos también quita el calendario y el disparador.
+- **Pruebas** `tests/test_recordatorios.js` con un Calendar simulado.
+
 ## Gráficos
 - **Nuevo** Más → Gráficos: gastos por categoría del mes, entró y salió por mes, saldo al cierre de cada mes y cifras del mes con su cambio. Filtros de mes, rango (3/6/12 meses) y moneda en una sola fila.
 - SVG sin librerías: marcas finas, hover/foco/teclado con tooltip, tabla con los mismos datos, claro y oscuro. Paleta de dos series validada contra las superficies de la app.

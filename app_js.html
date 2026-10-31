@@ -233,6 +233,7 @@ async function refrescar() {
   App.boot = await api('getBootstrap');
   App.pag.data = null; App.graf.data = null; App.proximosViejos = false;
   aplicarApariencia();
+  pedirSyncRecordatorios();
 }
 
 const cat = tabla => (App.boot && App.boot.catalogos && App.boot.catalogos[tabla]) || [];
@@ -322,6 +323,7 @@ function fusionarItems(lista, items, verAnulados, enRango) {
 
 /** Aplica el resultado de una escritura: saldos, últimos movimientos y la lista que se está viendo. */
 function aplicarEscritura(res) {
+  pedirSyncRecordatorios();
   aplicarSaldos(res.saldos);
   if (res.ultimos) App.boot.ultimos = res.ultimos;
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
@@ -400,7 +402,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -479,6 +481,7 @@ function pantalla(ruta) {
       if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'registro') return vRegistro();
       if (partes[1] === 'divisas') return vDivisas();
+      if (partes[1] === 'recordatorios') return vRecordatorios();
       if (partes[1] === 'parametros') return vParametros();
       if (partes[1] === 'diagnostico') return vDiagnostico();
       if (CAT[partes[1]]) return vCatalogo(partes[1]);
@@ -739,6 +742,7 @@ function vAjustes() {
       seccion('Organización',
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
+        irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
         irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
@@ -3184,6 +3188,58 @@ async function abrirCodigoServicio(id) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Recordatorios en Google Calendar (Ajustes → Recordatorios)
+// ---------------------------------------------------------------------------
+
+App.rec = { data: null, error: null };
+
+/** Si los recordatorios están activos, el calendario se pone al día unos segundos después de cada cambio (sin esperar al aviso diario). */
+let _temporizadorSync = null;
+function pedirSyncRecordatorios() {
+  if (!App.boot || !esVerdad(cfg('Recordatorios_Activos'))) return;
+  clearTimeout(_temporizadorSync);
+  _temporizadorSync = setTimeout(() => { api('syncRecordatorios').then(r => { App.rec.data = r; }).catch(() => {}); }, 5000);
+}
+
+const CAMPOS_REC = [
+  { k: 'activos', label: 'Recordarme mis pagos en Google Calendar', tipo: 'interruptor' },
+  { k: 'diasAntes', label: 'Avisar con anticipación', tipo: 'select', opciones: () => [[0, 'Solo el mismo día']].concat([1, 2, 3, 4, 5, 6, 7].map(n => [n, n === 1 ? '1 día antes' : n + ' días antes'])),
+    ayuda: 'Además del aviso del mismo día.' },
+  { k: 'hora', label: 'Hora de los avisos', tipo: 'select', opciones: () => Array.from({ length: 17 }, (_, i) => [i + 5, (i + 5) + ':00']) },
+  { k: 'nomina', label: 'Incluir las fechas de prima y cesantías', tipo: 'interruptor', ayuda: 'Las fechas límite salen de Ajustes → Parámetros de nómina.' }
+];
+
+function vRecordatorios() {
+  const valores = { activos: esVerdad(cfg('Recordatorios_Activos')), diasAntes: cfg('Recordatorios_Dias_Antes') || 2, hora: cfg('Recordatorios_Hora') || 9, nomina: cfg('Recordatorios_Nomina') === '' ? true : esVerdad(cfg('Recordatorios_Nomina')) };
+  return {
+    titulo: 'Recordatorios',
+    html:
+      '<p class="m-subtitulo-cuerpo" style="padding:0 var(--m-space-1)">Moni crea un calendario llamado <strong>Moni</strong> en tu Google Calendar con un evento por cada pago de los próximos 45 días: tarjetas, cuotas de crédito, suscripciones y servicios. Se actualiza solo cada día y unos segundos después de que registras algo.</p>' +
+      '<form class="m-group" style="padding:var(--m-space-4)" data-form="recordatorios" novalidate>' + CAMPOS_REC.map(c => htmlCampo(c, valores[c.k], {})).join('') +
+      '<div class="m-error-form" id="rec-error" role="alert" hidden></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>' +
+      '<div id="rec-estado" style="margin-top:var(--m-space-4)"></div>' +
+      '<p class="m-ayuda" style="margin-top:var(--m-space-4);padding:0 var(--m-space-1)">Los eventos llevan el valor de cada pago: cuida con quién compartes ese calendario.</p>',
+    despues: cargarRecordatorios
+  };
+}
+
+function htmlEstadoRecordatorios(d) {
+  if (!d.tieneCalendario) return '';
+  return '<div class="m-group" style="padding:var(--m-space-4)"><p><strong>Calendario “Moni”</strong></p>' +
+    '<p class="m-ayuda">' + (d.ultima ? 'Última sincronización: ' + esc(fechaLog(d.ultima)) + '. ' + esc(d.resumen) : 'Aún no se ha sincronizado.') + '</p>' +
+    '<div class="m-acciones-fila">' + (d.activos ? '<button class="m-btn m-btn-secondary" data-acc="rec-sync">Sincronizar ahora</button>' : '') +
+    '<button class="m-btn m-btn-secondary" style="color:var(--m-danger)" data-acc="rec-quitar">Quitar de mi calendario</button></div></div>';
+}
+
+async function cargarRecordatorios() {
+  const caja = $('#rec-estado');
+  if (!caja) return;
+  try { App.rec.data = await api('getRecordatorios'); caja.innerHTML = htmlEstadoRecordatorios(App.rec.data); }
+  catch (e) { caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>'; }
+}
+
+// ---------------------------------------------------------------------------
 // Gráficos (Más → Gráficos): SVG sin librerías. Una sola moneda a la vez; los traslados no cuentan.
 // Marcas finas, cuadrícula recesiva, hover y foco con tooltip, y una tabla con los mismos datos.
 // ---------------------------------------------------------------------------
@@ -3844,7 +3900,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -3888,6 +3944,16 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  'rec-sync': async el => {
+    el.disabled = true; el.textContent = 'Sincronizando…';
+    try { const r = await api('syncRecordatorios'); App.rec.data = r; $('#rec-estado').innerHTML = htmlEstadoRecordatorios(r); aviso('Calendario al día: ' + r.sincronizado.total + ' pagos'); }
+    catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Sincronizar ahora'; }
+  },
+  'rec-quitar': async () => {
+    const ok = await confirmar({ titulo: 'Quitar de mi calendario', accion: 'Quitar', mensaje: 'Se borra el calendario “Moni” con todos sus eventos y se apagan los recordatorios. Tus datos en Moni no cambian.' });
+    if (!ok) return;
+    try { await api('removeRecordatorios'); await refrescar(); render(); aviso('Recordatorios quitados'); } catch (e) { aviso(e.message, true); }
+  },
   'recargar-graf': () => { App.graf.error = null; App.graf.data = null; render(); },
   convertir: () => abrirConversion(),
   'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
@@ -4092,6 +4158,19 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('submit', async ev => {
   const f = ev.target;
+  if (f.dataset.form === 'recordatorios') {
+    ev.preventDefault();
+    const caja = $('#rec-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true; boton.textContent = 'Guardando…';
+    try {
+      const v = leerFormulario(f, CAMPOS_REC);
+      const r = await api('saveRecordatorios', { activos: v.activos, diasAntes: Number(v.diasAntes), hora: Number(v.hora), nomina: v.nomina });
+      App.rec.data = r;
+      await refrescar(); render();
+      aviso(r.activos ? 'Recordatorios activos: ' + r.sincronizado.total + (r.sincronizado.total === 1 ? ' pago' : ' pagos') + ' en tu calendario' : 'Recordatorios desactivados');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; boton.disabled = false; boton.textContent = 'Guardar'; }
+    return;
+  }
   if (f.dataset.form === 'tasas') {
     ev.preventDefault();
     const caja = $('#tasas-error', f), boton = $('button[type=submit]', f);

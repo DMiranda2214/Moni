@@ -93,7 +93,15 @@ Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores ex
 - **Presupuesto y nómina:** plantilla, escenarios, nómina, subsidios y parámetros.
 - **Organización:** categorías, personas, inmuebles, servicios públicos.
 - **Mantenimiento:** arranque, datos de demostración, respaldos, diagnóstico.
+- **Recordatorios:** avisos de tus pagos en Google Calendar (ver abajo).
 - **Privacidad → Borrar todos mis datos:** deja Moni como recién instalada (ver abajo).
+
+### Recordatorios en Google Calendar
+**Ajustes → Recordatorios.** Al activarlos, Moni crea un calendario llamado **Moni** y pone un evento por cada pago de los próximos 45 días: extractos de tarjeta, cuotas de crédito, suscripciones y servicios, y (si lo dejas marcado) las fechas límite de prima y cesantías.
+- Eliges la **hora** y con cuántos **días de anticipación** quieres el aviso (además del aviso del mismo día).
+- Se actualiza **solo cada día** y unos segundos después de que registras o pagas algo; cuando pagas, el evento se va y aparece el del siguiente cobro. **Sincronizar ahora** lo hace al instante.
+- Lo que tú agregues a mano en ese calendario no se toca. **Quitar de mi calendario** borra el calendario Moni completo.
+- La primera vez Google te pedirá permiso para usar Calendar.
 
 ### Borrar todos mis datos
 Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar todos mis datos**. La pantalla explica qué se borra y qué no; al pulsar el botón se abre una ventana que exige escribir **BORRAR** para habilitar el borrado.

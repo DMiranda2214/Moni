@@ -29,6 +29,10 @@ function borrarTodosLosDatos(confirmacion, opciones) {
   const o = opciones || {};
   const eliminadas = {};
 
+  // El calendario de Moni es dato de la persona: se quita antes de vaciar Config, donde está su ID.
+  let avisoCalendario = '';
+  try { if (cfgValor_('Calendario_ID')) quitarRecordatorios(); } catch (e) { avisoCalendario = 'No se pudo quitar el calendario: ' + e.message; }
+
   const lock = tomarBloqueo(30000);
   try {
     const ss = getSpreadsheet();
@@ -48,12 +52,13 @@ function borrarTodosLosDatos(confirmacion, opciones) {
 
   // Sin datos no hay nada que copiar: las copias automáticas se vuelven a activar al iniciar la operación.
   configurarRespaldoAutomatico(false);
+  disparadoresRecordatorios_().forEach(t => ScriptApp.deleteTrigger(t));
   const props = PropertiesService.getScriptProperties();
   props.deleteProperty('ULTIMO_RESPALDO');
   props.deleteProperty('ULTIMO_RESPALDO_MS');
 
   const respaldosEliminados = o.respaldos ? borrarRespaldos_() : 0;
   // El registro también se vació: esta entrada deja constancia de que fue a propósito.
-  registrarLog('Info', 'borrarTodosLosDatos', 'Se borró toda la información', respaldosEliminados ? respaldosEliminados + ' respaldo(s) a la papelera' : '');
+  registrarLog('Info', 'borrarTodosLosDatos', 'Se borró toda la información', [respaldosEliminados ? respaldosEliminados + ' respaldo(s) a la papelera' : '', avisoCalendario].filter(Boolean).join(' · '));
   return { ok: true, eliminadas: eliminadas, respaldosEliminados: respaldosEliminados };
 }

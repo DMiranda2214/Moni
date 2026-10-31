@@ -172,7 +172,14 @@ const DEFAULT_CONFIG = [
   ['Tasa_USD', '', 'Divisas', 'texto', 'Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos'],
   ['Tasa_USD_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del dólar'],
   ['Tasa_EUR', '', 'Divisas', 'texto', 'Pesos que vale 1 euro'],
-  ['Tasa_EUR_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del euro']
+  ['Tasa_EUR_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del euro'],
+  ['Recordatorios_Activos', 'FALSE', 'Recordatorios', 'booleano', 'TRUE si los pagos se anotan en Google Calendar'],
+  ['Recordatorios_Dias_Antes', '2', 'Recordatorios', 'numero', 'Días de anticipación del aviso (además del aviso del mismo día)'],
+  ['Recordatorios_Hora', '9', 'Recordatorios', 'numero', 'Hora del día en que suenan los avisos'],
+  ['Recordatorios_Nomina', 'TRUE', 'Recordatorios', 'booleano', 'Incluir las fechas de prima y cesantías'],
+  ['Calendario_ID', '', 'Recordatorios', 'texto', 'Calendario de Google que crea la app'],
+  ['Recordatorios_Ultima', '', 'Recordatorios', 'texto', 'Fecha y hora de la última sincronización'],
+  ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización']
 ];
 
 /** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden]. */

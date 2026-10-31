@@ -15,6 +15,11 @@ Desde ahí, si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: d
 - Las copias se guardan en tu Drive, carpeta **"Moni Respaldos"**, con el nombre `Moni_Respaldo_AAAAMMDD_HHMMSS`. Las más viejas van a la papelera.
 - **Recuperar:** abre la copia que quieras, y o bien (a) úsala como Sheet nuevo (copia el ID con `vincularHojaMoni('<ID>')`), o (b) copia las pestañas necesarias al Sheet actual.
 
+## Recordatorios en Google Calendar
+`Recordatorios.gs`. Activarlos (Ajustes → Recordatorios) crea el calendario "Moni", sincroniza y deja un disparador diario a las 5:00 (`sincronizarRecordatoriosAuto`). La sincronización es idempotente: cada evento lleva la etiqueta `moni_clave` (`tipo|id|fecha`) y solo se tocan los que la tienen. Si el disparador falla, queda en el **Registro de errores**. Desactivar quita el disparador pero conserva los eventos; **Quitar** borra el calendario; **Borrar todos mis datos** también lo hace.
+- Requiere el permiso `calendar` en `appsscript.json`: tras desplegar, Google lo pide al abrir la app (hay que **crear una versión nueva** de la implementación).
+- El horizonte (45 días) y la hora de los avisos son de Bogotá (UTC-5, sin horario de verano).
+
 ## Registro de errores
 **Ajustes → Registro de errores** muestra lo que falló en producción (tabla `Log`, últimas 500 entradas). Niveles: **Error** (fallo inesperado o del navegador), **Aviso** (una regla de negocio rechazó algo) e **Info** (hechos como el borrado total o el inicio de operación). Cada entrada lleva la función, el mensaje, la traza y la versión de Moni. También quedan anotados los fallos del respaldo automático. **Copiar el registro** deja un texto listo para pegar en un reporte.
 
