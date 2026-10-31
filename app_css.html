@@ -303,9 +303,9 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 
 /* ---------- Gráficos ---------- */
 /* Dos series categóricas (azul y naranja, validadas en claro y oscuro contra la superficie de las tarjetas). */
-:root { --viz-1: #2a78d6; --viz-2: #eb6834; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --viz-1: #3987e5; --viz-2: #d95926; } }
-:root[data-theme="dark"] { --viz-1: #3987e5; --viz-2: #d95926; }
+:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; } }
+:root[data-theme="dark"] { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; }
 
 .m-filtros-viz { display: grid; gap: var(--m-space-3); margin-bottom: var(--m-space-4); }
 .m-filtros-viz .m-mes-nav { margin-bottom: 0; }
@@ -324,17 +324,23 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .viz-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .viz-sw.viz-s1, .viz-clave-linea.viz-s1 { background: var(--viz-1); }
 .viz-sw.viz-s2, .viz-clave-linea.viz-s2 { background: var(--viz-2); }
-.viz-linea-clave { background: var(--m-tint); }
+.viz-sw.viz-s3, .viz-clave-linea.viz-s3 { background: var(--viz-3); }
+.viz-sw.viz-acento, .viz-clave-linea.viz-acento { background: var(--m-tint); }
 .m-viz-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .viz-grid { stroke: var(--m-separator); stroke-width: 1; }
 .viz-base { stroke: var(--m-label-3); }
 .viz-eje { fill: var(--m-label-2); font-size: 10.5px; }
 .viz-anio { font-weight: 600; }
-path.viz-s1 { fill: var(--viz-1); }
-path.viz-s2 { fill: var(--viz-2); }
-.viz-linea { fill: none; stroke: var(--m-tint); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.viz-area { fill: var(--m-tint); fill-opacity: 0.1; stroke: none; }
-.viz-fin, .viz-punto { fill: var(--m-tint); stroke: var(--m-bg-grouped); stroke-width: 2; }
+.viz-barra.viz-s1 { fill: var(--viz-1); }
+.viz-barra.viz-s2 { fill: var(--viz-2); }
+.viz-barra.viz-s3 { fill: var(--viz-3); }
+.viz-trazo { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.viz-trazo.viz-s1 { stroke: var(--viz-1); } .viz-trazo.viz-s2 { stroke: var(--viz-2); } .viz-trazo.viz-s3 { stroke: var(--viz-3); } .viz-trazo.viz-acento { stroke: var(--m-tint); }
+.viz-area { fill-opacity: 0.1; stroke: none; }
+.viz-area.viz-acento { fill: var(--m-tint); } .viz-area.viz-s1 { fill: var(--viz-1); } .viz-area.viz-s2 { fill: var(--viz-2); } .viz-area.viz-s3 { fill: var(--viz-3); }
+.viz-fin, .viz-punto { stroke: var(--m-bg-grouped); stroke-width: 2; }
+.viz-fin.viz-acento, .viz-punto.viz-acento { fill: var(--m-tint); } .viz-fin.viz-s1, .viz-punto.viz-s1 { fill: var(--viz-1); }
+.viz-punto.viz-s2 { fill: var(--viz-2); } .viz-punto.viz-s3 { fill: var(--viz-3); }
 .viz-mira { stroke: var(--m-label-3); stroke-width: 1; }
 .viz-mira[hidden], .viz-punto[hidden] { display: none; } /* el atributo hidden no oculta elementos SVG por sí solo */
 .viz-valor { fill: var(--m-label); font-size: 11px; font-weight: 700; }
@@ -350,6 +356,12 @@ path.viz-s2 { fill: var(--viz-2); }
 .m-barra-pista { grid-column: 1 / -1; height: 12px; border-left: 1px solid var(--m-label-3); }
 .m-barra-pista i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--m-tint); }
 .m-barra:hover .m-barra-pista i { opacity: 0.8; }
+
+.m-medidores { display: grid; gap: var(--m-space-4); }
+.m-medidor-cab { display: flex; justify-content: space-between; align-items: baseline; gap: var(--m-space-3); margin-bottom: var(--m-space-1); font-size: var(--m-text-subheadline); }
+.m-medidor-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-medidor-texto { flex: none; color: var(--m-label-2); font-size: var(--m-text-footnote); }
+.m-progreso-excede > span { background: var(--m-danger); }
 
 .m-viz-tabla { margin-top: var(--m-space-3); }
 .m-viz-tabla summary { min-height: var(--m-hit); display: flex; align-items: center; color: var(--m-tint); font-size: var(--m-text-footnote); font-weight: 600; cursor: pointer; }

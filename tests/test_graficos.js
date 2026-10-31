@@ -99,4 +99,35 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(r.ok, true);
     assert.strictEqual(r.data.serie.length, 3);
   });
+
+  prueba('gráficos: la evolución del saldo de un bolsillo parte de su apertura y acumula mes a mes', () => {
+    const { e, casa, mov } = E();
+    mov(casa, 500000, 'Ingreso', 8);   // antes del rango
+    mov(casa, 200000, 'Gasto', 1);
+    mov(casa, 50000, 'Gasto', 0);
+    const d = e.llamar('obtenerDetalleBolsillo', casa.ID_Bolsillo);
+    assert.strictEqual(d.evolucion.length, 6);
+    assert.deepStrictEqual(d.evolucion.map(x => x.saldo), [1500000, 1500000, 1500000, 1500000, 1300000, 1250000]);
+    assert.strictEqual(d.evolucion[5].saldo, d.bolsillo.Saldo, 'el último punto es el saldo actual');
+    const anterior = e.llamar('obtenerDetalleBolsillo', casa.ID_Bolsillo, mesDe(1));
+    assert.strictEqual(anterior.evolucion[5].mes, mesDe(1));
+    assert.strictEqual(anterior.evolucion[5].saldo, 1300000);
+  });
+
+  prueba('gráficos: cada cuenta de ahorro trae su evolución de 12 meses', () => {
+    const e = crearEntorno({});
+    e.cargar(...CARGA);
+    e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
+    e.llamar('setupDatabase');
+    const bco = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Nu' });
+    const cta = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: bco.ID_Banco, Nombre: 'Ahorros', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 1000000, Meta: 4000000 });
+    const bol = e.llamar('listarCatalogo', 'Bolsillos').find(b => b.ID_Cuenta === cta.ID_Cuenta);
+    e.llamar('registrarMovimiento', { ID_Bolsillo: bol.ID_Bolsillo, Valor: 20000, Tipo_Mov: 'Ingreso', Subtipo: 'Interes', Concepto: 'Rendimientos', Fecha: fechaDe(2) });
+    const a = e.llamar('obtenerAhorro').cuentas[0];
+    assert.strictEqual(a.evolucion.length, 12);
+    assert.strictEqual(a.evolucion[11].saldo, 1020000);
+    assert.strictEqual(a.evolucion[8].saldo, 1000000);
+    assert.strictEqual(a.evolucion[9].saldo, 1020000);
+    assert.deepStrictEqual(e.llamar('obtenerCuentaAhorro', cta.ID_Cuenta).cuenta.evolucion, a.evolucion);
+  });
 };

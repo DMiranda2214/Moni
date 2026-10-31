@@ -51,7 +51,8 @@
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
 | `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
-| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió y saldo por mes |
+| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta |
+| `TasasGoogle.gs` | Tasa de referencia desde Google Finance (hoja auxiliar `Tasas_Google`) |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)

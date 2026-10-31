@@ -232,6 +232,7 @@ async function cargar() {
 async function refrescar() {
   App.boot = await api('getBootstrap');
   App.pag.data = null; App.graf.data = null; App.proximosViejos = false;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
 }
@@ -330,6 +331,7 @@ function aplicarEscritura(res) {
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null;
   App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
   const d = App.det;
@@ -406,6 +408,8 @@ function tituloRuta(ruta) {
 }
 
 function render(enfocar) {
+  VIZ.items = {}; // los gráficos de esta pantalla se registran al armar su HTML
+  ocultarTip();
   const ruta = rutaActual();
   const raiz = App.pila[0];
 
@@ -440,6 +444,7 @@ function render(enfocar) {
   if (fab) fab.hidden = !!vista.asistente || !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
 
   if (vista.despues) vista.despues();
+  activarViz();
   if (enfocar) {
     window.scrollTo(0, 0);
     const h = $('#titulo-pantalla');
@@ -616,6 +621,8 @@ function vInicio() {
       attrs: 'data-acc="ir" data-ruta="bolsillos"'
     })).join(''));
 
+    html += htmlInicioGraficos();
+
     // Los saldos en otras monedas no se suman al total en pesos: cada una va aparte.
     if ((s.divisas || []).length) {
       html += seccion('Otras monedas', s.divisas.map(x => fila({
@@ -667,7 +674,11 @@ function vInicio() {
   return {
     titulo: nombre ? 'Hola, ' + nombre : 'Inicio', html: html, ancha: true,
     // Tras un pago o una compra, la lista de próximos pagos se vuelve a pedir (liviana) en segundo plano.
-    despues: () => { if (App.proximosViejos && !App.proximosCargando) refrescarProximos(); }
+    despues: () => {
+      if (App.proximosViejos && !App.proximosCargando) refrescarProximos();
+      const g = App.inicioGraf;
+      if (hayBolsillos() && !g.cargando && ((!g.data && !g.intentado) || g.viejo)) cargarInicioGraf();
+    }
   };
 }
 
@@ -1504,6 +1515,7 @@ function vBolsillo(id) {
   if (d.error) html += bloqueError(d.error, 'recargar-det');
   else if (!d.data) html += esqueleto(4);
   else {
+    if (d.data.evolucion) html += tarjetaViz('bol-saldo', 'Saldo al cierre de cada mes', lineaSaldo(d.data.evolucion, c.Divisa, 150), tablaSaldo(d.data.evolucion, c.Divisa));
     html += resumenMes(d.data.totales);
     html += d.data.movimientos.length ? htmlListaMov(d.data.movimientos, true)
       : vacio('presupuesto', 'Sin movimientos en este mes', 'Cuando registres un gasto, un ingreso o un traslado de este bolsillo, aparecerá aquí.');
@@ -1889,7 +1901,7 @@ function htmlPresupuesto(d) {
     '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div>' +
     '<p class="m-ayuda">Gastado ' + dinero(t.real) + ' de ' + dinero(t.plan) + ' planeado · ' + t.pagados + ' de ' + t.renglones + ' pagados' + (d.escenario ? ' · ' + esc(d.escenario.Nombre) : '') + '</p></div>';
 
-  h += '<div style="height:var(--m-space-4)"></div><div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
+  h += '<div style="height:var(--m-space-5)"></div>' + htmlPlanVsReal(d) + '<div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
   h += '<div class="m-acciones-fila" style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-primary" data-acc="distribuir">Repartir la nómina en los bolsillos</button></div>';
   return h;
 }
@@ -2265,7 +2277,7 @@ function htmlDeudas(d) {
         '<button class="m-btn m-btn-secondary" data-acc="nuevo-credito">Crear un crédito</button>') + '</div></section>';
   }
   if (pagados.length) h += seccion('Pagados', pagados.map(filaCredito).join(''));
-  return h;
+  return h + htmlMedidoresDeudas(d);
 }
 
 function filaCredito(c) {
@@ -2493,7 +2505,7 @@ function htmlCredito(d) {
     '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(c.avance * 100) + '" aria-label="Avance del pago"><span style="width:' + Math.round(c.avance * 100) + '%"></span></div>' +
     '<p class="m-ayuda">' + c.cuotasPagadas + ' de ' + c.cuotasTotal + ' cuotas pagadas · ' + Math.round(c.avance * 100) + ' % del capital</p>' +
     (activo && c.proxima ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Próxima cuota (' + c.proxima.Num + ')</div><strong class="m-num">' + dinero(c.proxima.Cuota) + '</strong></div><div><div class="m-resumen-etiqueta">Fecha prevista</div><strong>' + esc(fechaCorta(c.proxima.Fecha)) + '</strong></div></div>' : '') +
-    (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-4)"></div>';
+    (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-5)"></div>' + htmlSaldoCredito(d);
 
   h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>' +
@@ -2702,7 +2714,7 @@ function vAhorro() {
     html += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Total ahorrado</div><div class="m-resumen-cifra m-num">' + dinero(t.saldo) + '</div>' +
       '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Le debes al ahorro</div><strong class="m-num">' + dinero(t.deuda) + '</strong></div>' +
       '<div><div class="m-resumen-etiqueta">Tendrías si repones</div><strong class="m-num">' + dinero(t.saldoSiRepones) + '</strong></div></div>' +
-      '<p class="m-ayuda">Rendimiento neto acumulado: ' + dinero(t.rendimientoNeto) + '</p></div><div style="height:var(--m-space-4)"></div>';
+      '<p class="m-ayuda">Rendimiento neto acumulado: ' + dinero(t.rendimientoNeto) + '</p></div><div style="height:var(--m-space-5)"></div>' + htmlGraficosAhorro(a.data);
     html += '<div class="m-group">' + a.data.cuentas.map(c => fila({
       icono: 'bolsillos', titulo: esc(c.Nombre),
       sub: esc(c.Banco) + (c.avanceMeta !== null ? ' · ' + Math.round(c.avanceMeta * 100) + ' % de la meta' : '') + (c.deuda.total > 0 ? ' · debes ' + dinero(c.deuda.total) : ''),
@@ -2732,7 +2744,7 @@ function htmlCuentaAhorro(d) {
     '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="aportar-ahorro">Aportar</button><button class="m-btn m-btn-secondary" data-acc="rendimiento">Registrar rendimiento</button></div>' +
     '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="retirar-ahorro">Sacar para gastos</button>' + (de.manual > 0 ? '<button class="m-btn m-btn-secondary" data-acc="reponer-ahorro">Reponer</button>' : '') + '</div></div>';
 
-  h += '<div style="height:var(--m-space-4)"></div>' + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
+  h += '<div style="height:var(--m-space-5)"></div>' + tarjetaViz('ahoc-saldo', 'Saldo al cierre de cada mes', lineaSaldo(a.evolucion, 'COP', 170), tablaSaldo(a.evolucion, 'COP')) + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Interés ganado</dt><dd class="m-num m-positivo">' + dinero(r.interes) + '</dd></div><div><dt>Retención en la fuente</dt><dd class="m-num">−' + dinero(r.retencion) + '</dd></div>' +
     '<div><dt>GMF (4x1000)</dt><dd class="m-num">−' + dinero(r.gmf) + '</dd></div><div><dt><strong>Neto</strong></dt><dd class="m-num"><strong>' + dinero(r.neto) + '</strong></dd></div></dl></div>');
 
@@ -2907,7 +2919,7 @@ function htmlAnual(d) {
   h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Restante del año</div><div class="m-resumen-cifra m-num ' + claseSaldo(t.restante) + '">' + dinero(t.restante) + '</div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingreso) + '</strong></div><div><div class="m-resumen-etiqueta">Planeado</div><strong class="m-num">' + dinero(t.plan) + '</strong></div><div><div class="m-resumen-etiqueta">Real</div><strong class="m-num">' + dinero(t.real) + '</strong></div></div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ahorrado</div><strong class="m-num">' + dinero(t.ahorro) + '</strong></div><div><div class="m-resumen-etiqueta">Tarjetas</div><strong class="m-num">' + dinero(t.tc) + '</strong></div></div>' +
-    '<p class="m-ayuda">Restante = entró − planeado − tarjetas, como en el Excel.</p></div><div style="height:var(--m-space-4)"></div>';
+    '<p class="m-ayuda">Restante = entró − planeado − tarjetas, como en el Excel.</p></div><div style="height:var(--m-space-5)"></div>' + htmlGraficoAnual(d);
   h += '<div class="m-group">' + d.meses.map(m => {
     const vacio_ = !m.conPresupuesto && !m.ingreso && !m.tc;
     return '<button class="m-row' + (vacio_ ? ' m-hecho' : '') + '" data-acc="mes-anual" data-mes="' + esc(m.mes) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(m.nombre) + '</span>' +
@@ -3240,15 +3252,21 @@ async function cargarRecordatorios() {
 }
 
 // ---------------------------------------------------------------------------
-// Gráficos (Más → Gráficos): SVG sin librerías. Una sola moneda a la vez; los traslados no cuentan.
-// Marcas finas, cuadrícula recesiva, hover y foco con tooltip, y una tabla con los mismos datos.
+// Gráficos (SVG sin librerías): componentes reutilizables y la pantalla Más → Gráficos.
+// Los usan Inicio, Presupuesto, Deudas, Ahorro, la Vista anual y el detalle de un bolsillo.
+// Cada gráfico se registra en VIZ con su id al armar el HTML; render() llama a activarViz() para conectar
+// hover, foco y teclado. Marcas finas, cuadrícula recesiva y una tabla con los mismos datos.
+// Una sola moneda por gráfico: los pesos y los dólares no se suman.
 // ---------------------------------------------------------------------------
 
 App.graf = { mes: null, meses: 6, divisa: 'COP', data: null, cargando: false, error: null };
+App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
+const VIZ = { items: {}, n: 0 };
 
 const compactoPlano = n => new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0);
 const compactoMoneda = (n, d) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: d || 'COP', notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0).replace(/ /g, ' ');
 const mesCorto = mes => { const p = mes.split('-').map(Number); return new Date(p[0], p[1] - 1, 1).toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''); };
+const porcentajeDe = (v, total) => total > 0 ? (v / total * 100 < 1 ? '<1 %' : Math.round(v / total * 100) + ' %') : '';
 
 /** Etiqueta de eje compacta (mil, M) con los decimales justos para que dos marcas vecinas no se vean iguales. */
 function etiquetaEje(v, escala) {
@@ -3276,6 +3294,205 @@ function trazoBarra(x, y, w, h, r) {
   return 'M' + x + ',' + (y + h) + 'V' + (y + rr) + 'Q' + x + ',' + y + ' ' + (x + rr) + ',' + y + 'H' + (x + w - rr) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + rr) + 'V' + (y + h) + 'Z';
 }
 
+/** Puntos de un eje de meses: etiqueta corta, año (en el primero y en enero) y título para el tooltip. */
+const puntosMeses = lista => lista.map((mes, i) => ({ x: mesCorto(mes), anio: (i === 0 || mes.slice(5) === '01') ? mes.slice(2, 4) : '', titulo: mesTexto(mes), previo: 'vs ' + mesCorto(lista[Math.max(0, i - 1)]) }));
+
+const tablaViz = (cab, filas) => '<div style="overflow-x:auto"><table class="m-tabla"><thead><tr>' + cab.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+  filas.map(f => '<tr>' + f.map(c => '<td class="m-num">' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+
+/** Tarjeta de un gráfico con su título y, si hay, la tabla alternativa. */
+function tarjetaViz(id, titulo, cuerpo, tabla) {
+  return '<section class="m-seccion m-viz" aria-labelledby="' + id + '"><h2 class="m-seccion-titulo" id="' + id + '">' + esc(titulo) + '</h2>' +
+    '<div class="m-group m-viz-tarjeta">' + cuerpo + (tabla ? '<details class="m-viz-tabla"><summary>Ver como tabla</summary>' + tabla + '</details>' : '') + '</div></section>';
+}
+
+const VIZ_W = 340, VIZ_M = { l: 48, r: 10, t: 10, b: 34 };
+
+/** Ejes y cuadrícula comunes: líneas finas y continuas, solo la base un poco más marcada. */
+function ejesViz(escala, alto, puntos, xDe, cadaN) {
+  const h = alto - VIZ_M.t - VIZ_M.b, y = v => VIZ_M.t + h - (v - escala.min) / (escala.max - escala.min) * h;
+  let s = '';
+  escala.ticks.forEach(t => {
+    s += '<line class="viz-grid' + (t === 0 ? ' viz-base' : '') + '" x1="' + VIZ_M.l + '" x2="' + (VIZ_W - VIZ_M.r) + '" y1="' + y(t) + '" y2="' + y(t) + '"/>' +
+      '<text class="viz-eje" x="' + (VIZ_M.l - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + esc(etiquetaEje(t, escala)) + '</text>';
+  });
+  puntos.forEach((q, i) => {
+    if (cadaN > 1 && i % cadaN !== 0) return;
+    s += '<text class="viz-eje" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 14) + '" text-anchor="middle">' + esc(q.x) + '</text>' +
+      (q.anio ? '<text class="viz-eje viz-anio" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 26) + '" text-anchor="middle">' + esc(q.anio) + '</text>' : '');
+  });
+  return { y: y, svg: s };
+}
+
+const clavesViz = series => '<div class="m-viz-claves">' + series.map(s => '<span class="m-viz-clave"><i class="viz-sw ' + s.clave + '"></i>' + esc(s.nombre) + '</span>').join('') + '</div>';
+
+/**
+ * Líneas sobre un eje de puntos. series: [{ nombre, clave: 'viz-s1'|'viz-s2'|'viz-s3'|'viz-acento', valores }] (null = sin dato).
+ * Una sola serie en el color de acento lleva el valor final y el cambio frente al punto anterior en el tooltip.
+ */
+function vizLinea(o) {
+  const id = 'viz' + (++VIZ.n), p = o.puntos, n = p.length, alto = o.alto || 190, solo = o.series.length === 1;
+  const todos = [].concat.apply([], o.series.map(s => s.valores)).filter(v => v !== null && v !== undefined);
+  if (!todos.length) todos.push(0);
+  const escala = ticksNice(Math.min.apply(null, todos), Math.max.apply(null, todos), 4);
+  const paso = n > 1 ? (VIZ_W - VIZ_M.l - VIZ_M.r - 8) / (n - 1) : 0, xc = i => VIZ_M.l + 4 + paso * i;
+  const ejes = ejesViz(escala, alto, p, xc, Math.ceil(n / 8));
+  const ys = o.series.map(s => s.valores.map(v => v === null || v === undefined ? null : ejes.y(v)));
+  const base = ejes.y(escala.min);
+
+  let trazos = '', fin = '';
+  o.series.forEach((s, k) => {
+    let seg = [];
+    const cerrar = () => {
+      if (!seg.length) return;
+      const linea = seg.map((q, j) => (j ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('');
+      if (solo && seg.length > 1) trazos += '<path class="viz-area ' + s.clave + '" d="' + linea + 'L' + seg[seg.length - 1][0] + ',' + base + 'L' + seg[0][0] + ',' + base + 'Z"/>';
+      trazos += '<path class="viz-trazo ' + s.clave + '" d="' + (seg.length === 1 ? linea + 'h0.01' : linea) + '"/>';
+      seg = [];
+    };
+    ys[k].forEach((y, i) => { if (y === null) cerrar(); else seg.push([xc(i), y]); });
+    cerrar();
+  });
+  if (solo) {
+    let u = n - 1; while (u >= 0 && ys[0][u] === null) u--;
+    if (u >= 0) fin = '<circle class="viz-fin ' + o.series[0].clave + '" cx="' + xc(u) + '" cy="' + ys[0][u] + '" r="4"/><text class="viz-valor" x="' + xc(u) + '" y="' + (ys[0][u] - 10) + '" text-anchor="end">' + esc(compactoMoneda(o.series[0].valores[u], o.divisa)) + '</text>';
+  }
+  const ancho = Math.max(paso, 24);
+  const zonas = p.map((q, i) => '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (xc(i) - ancho / 2) + '" y="' + VIZ_M.t + '" width="' + ancho + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
+    esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + (s.valores[i] === null || s.valores[i] === undefined ? 'sin dato' : dinero(s.valores[i], o.divisa))).join(', ')) + '"/>').join('');
+  const puntosHover = o.series.map((s, k) => '<circle class="viz-punto ' + s.clave + '" data-s="' + k + '" r="4.5" hidden/>').join('');
+
+  VIZ.items[id] = { tipo: 'linea', puntos: p, series: o.series, ys: ys, xc: xc, fm: v => dinero(v, o.divisa), delta: solo && o.delta, extraTip: o.extraTip };
+  return (solo ? '' : clavesViz(o.series)) + '<svg class="m-viz-svg" data-viz-id="' + id + '" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="' + esc(o.etiqueta || '') + '">' + ejes.svg + trazos +
+    '<line class="viz-mira" x1="0" x2="0" y1="' + VIZ_M.t + '" y2="' + (alto - VIZ_M.b) + '" hidden/>' + puntosHover + fin + zonas + '</svg>';
+}
+
+/** Columnas agrupadas (2 o 3 series), de 24 px como máximo, con 2 px de aire entre barras vecinas. */
+function vizColumnas(o) {
+  const id = 'viz' + (++VIZ.n), p = o.puntos, n = p.length, alto = o.alto || 210, ns = o.series.length;
+  const escala = ticksNice(0, Math.max.apply(null, [1].concat([].concat.apply([], o.series.map(s => s.valores)))), 4);
+  const banda = (VIZ_W - VIZ_M.l - VIZ_M.r) / n, xc = i => VIZ_M.l + banda * (i + 0.5);
+  const ejes = ejesViz(escala, alto, p, xc, 1);
+  const ancho = Math.max(4, Math.min(24, (banda - 8) / ns - 2)), base = ejes.y(0);
+  let marcas = '', zonas = '';
+  p.forEach((q, i) => {
+    o.series.forEach((s, k) => { marcas += '<path class="viz-barra ' + s.clave + '" d="' + trazoBarra(xc(i) - (ns * (ancho + 2) - 2) / 2 + k * (ancho + 2), ejes.y(s.valores[i]), ancho, base - ejes.y(s.valores[i]), 4) + '"/>'; });
+    zonas += '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (VIZ_M.l + banda * i) + '" y="' + VIZ_M.t + '" width="' + banda + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
+      esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + dinero(s.valores[i], o.divisa)).join(', ')) + '"/>';
+  });
+  VIZ.items[id] = { tipo: 'columnas', puntos: p, series: o.series, fm: v => dinero(v, o.divisa), extraTip: o.extraTip };
+  return clavesViz(o.series) + '<svg class="m-viz-svg" data-viz-id="' + id + '" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="' + esc(o.etiqueta || '') + '">' + ejes.svg + marcas + zonas + '</svg>';
+}
+
+/** Barras horizontales ordenadas, de un solo color (es una sola serie: el color no codifica nada más). items: [{ nombre, valor, detalle }]. */
+function vizBarrasH(o) {
+  if (!o.items.length) return '<p class="m-ayuda">' + esc(o.vacio || 'Sin datos.') + '</p>';
+  const id = 'viz' + (++VIZ.n), max = Math.max.apply(null, o.items.map(c => c.valor)) || 1;
+  VIZ.items[id] = { tipo: 'barras', items: o.items, divisa: o.divisa };
+  return '<div class="m-barras" role="list">' + o.items.map((c, i) =>
+    '<div class="m-barra" role="listitem" tabindex="0" data-viz-id="' + id + '" data-i="' + i + '" aria-label="' + esc(c.nombre + ': ' + dinero(c.valor, o.divisa) + (c.detalle ? ', ' + c.detalle : '')) + '">' +
+    '<span class="m-barra-nombre">' + esc(c.nombre) + '</span><span class="m-barra-valor m-num">' + esc(dinero(c.valor, o.divisa)) + '</span>' +
+    '<span class="m-barra-pista"><i style="width:' + Math.max(1, c.valor / max * 100).toFixed(1) + '%"></i></span></div>').join('') + '</div>';
+}
+
+/**
+ * Medidores de avance: cuánto se lleva de un tope (lo gastado frente a lo planeado, el cupo usado, lo pagado de un crédito).
+ * Pasar del tope lo marca con la palabra "excedido" y un relleno de alerta (el color nunca va solo).
+ * items: [{ nombre, valor, tope, texto }]
+ */
+function vizMedidores(items) {
+  if (!items.length) return '<p class="m-ayuda">Sin datos.</p>';
+  return '<div class="m-medidores">' + items.map(m => {
+    const pct = m.tope > 0 ? m.valor / m.tope * 100 : 0, excede = pct > 100.0001;
+    return '<div class="m-medidor"><div class="m-medidor-cab"><span class="m-medidor-nombre">' + esc(m.nombre) + '</span><span class="m-num m-medidor-texto">' + esc(m.texto) + (excede ? ' · excedido' : '') + '</span></div>' +
+      '<div class="m-progreso' + (excede ? ' m-progreso-excede' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, Math.round(pct)) + '" aria-label="' + esc(m.nombre) + '"><span style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%"></span></div></div>';
+  }).join('') + '</div>';
+}
+
+/** Línea del saldo al cierre de cada mes: [{ mes, saldo }]. */
+function lineaSaldo(serie, divisa, alto) {
+  return vizLinea({ puntos: puntosMeses(serie.map(s => s.mes)), series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: serie.map(s => s.saldo) }], divisa: divisa, delta: true, alto: alto || 170, etiqueta: 'Saldo al cierre de cada mes' });
+}
+const tablaSaldo = (serie, divisa) => tablaViz(['Mes', 'Saldo'], serie.map(s => [mesTexto(s.mes), dinero(s.saldo, divisa)]));
+
+// ---- Tooltip: uno solo, con textContent (los nombres vienen de datos del usuario) ----
+let _tip = null;
+function mostrarTip(titulo, filas, rect) {
+  if (!_tip) { _tip = document.createElement('div'); _tip.className = 'm-viz-tip'; _tip.setAttribute('role', 'presentation'); document.body.appendChild(_tip); }
+  _tip.textContent = '';
+  const t = document.createElement('div'); t.className = 'm-viz-tip-titulo'; t.textContent = titulo; _tip.appendChild(t);
+  filas.forEach(f => {
+    const r = document.createElement('div'); r.className = 'm-viz-tip-fila';
+    if (f.clave) { const k = document.createElement('i'); k.className = 'viz-clave-linea ' + f.clave; r.appendChild(k); }
+    const v = document.createElement('strong'); v.className = 'm-num'; v.textContent = f.valor; r.appendChild(v);
+    if (f.etiqueta) { const e = document.createElement('span'); e.textContent = f.etiqueta; r.appendChild(e); }
+    _tip.appendChild(r);
+  });
+  _tip.hidden = false;
+  const w = _tip.offsetWidth, h = _tip.offsetHeight;
+  let x = rect.left + rect.width / 2 - w / 2, y = rect.top - h - 8;
+  if (y < 4) y = rect.bottom + 8;
+  _tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + 'px';
+  _tip.style.top = y + 'px';
+}
+function ocultarTip() { if (_tip) _tip.hidden = true; }
+
+/** Conecta hover, foco y flechas de todos los gráficos de la pantalla. */
+function activarViz() {
+  $$('.m-barra[data-viz-id]').forEach(el => {
+    const it = VIZ.items[el.dataset.vizId];
+    if (!it) return;
+    const c = it.items[Number(el.dataset.i)];
+    const mostrar = () => mostrarTip(c.nombre, [{ valor: dinero(c.valor, it.divisa), etiqueta: c.detalle || '' }], el.getBoundingClientRect());
+    el.addEventListener('pointerenter', mostrar); el.addEventListener('focus', mostrar);
+    el.addEventListener('pointerleave', ocultarTip); el.addEventListener('blur', ocultarTip);
+  });
+
+  $$('svg[data-viz-id]').forEach(svg => {
+    const it = VIZ.items[svg.dataset.vizId];
+    if (!it) return;
+    const mira = $('.viz-mira', svg), puntos = $$('.viz-punto', svg);
+    const ocultar = () => {
+      ocultarTip();
+      $$('.viz-zona', svg).forEach(z => z.classList.remove('viz-activa'));
+      if (mira) mira.setAttribute('hidden', '');
+      puntos.forEach(q => q.setAttribute('hidden', ''));
+    };
+    const mostrar = zona => {
+      const i = Number(zona.dataset.i);
+      $$('.viz-zona', svg).forEach(z => z.classList.toggle('viz-activa', z === zona));
+      const filas = it.series.map(s => ({ clave: s.clave, valor: s.valores[i] === null || s.valores[i] === undefined ? '—' : it.fm(s.valores[i]), etiqueta: s.nombre }));
+      if (it.delta) {
+        const v = it.series[0].valores, antes = i > 0 ? v[i - 1] : null;
+        if (antes !== null && antes !== undefined && v[i] !== null && v[i] !== undefined) filas.push({ valor: (v[i] - antes >= 0 ? '+' : '−') + it.fm(Math.abs(v[i] - antes)), etiqueta: it.puntos[i].previo });
+      }
+      if (it.extraTip) it.extraTip(i).forEach(f => filas.push(f));
+      let ancla = zona;
+      if (it.tipo === 'linea') {
+        if (mira) { mira.setAttribute('x1', it.xc(i)); mira.setAttribute('x2', it.xc(i)); mira.removeAttribute('hidden'); }
+        puntos.forEach(q => {
+          const y = it.ys[Number(q.dataset.s)][i];
+          if (y === null) { q.setAttribute('hidden', ''); return; }
+          q.setAttribute('cx', it.xc(i)); q.setAttribute('cy', y); q.removeAttribute('hidden');
+          if (ancla === zona) ancla = q;
+        });
+      }
+      mostrarTip(it.puntos[i].titulo, filas, ancla.getBoundingClientRect());
+    };
+    $$('.viz-zona', svg).forEach(z => {
+      z.addEventListener('pointerenter', () => mostrar(z)); z.addEventListener('focus', () => mostrar(z));
+      z.addEventListener('pointerleave', ocultar); z.addEventListener('blur', ocultar);
+      z.addEventListener('keydown', ev => {
+        const zs = $$('.viz-zona', svg), i = zs.indexOf(z);
+        const sig = ev.key === 'ArrowRight' ? zs[i + 1] : ev.key === 'ArrowLeft' ? zs[i - 1] : null;
+        if (sig) { ev.preventDefault(); sig.focus(); }
+      });
+    });
+  });
+}
+
+// ---- Pantalla Más → Gráficos ----
+
 function vGraficos() {
   const g = App.graf;
   if (!g.mes) g.mes = App.boot.hoy.slice(0, 7);
@@ -3299,40 +3516,14 @@ function vGraficos() {
         const clave = () => g.mes + '|' + g.meses + '|' + g.divisa, k = clave();
         cargarEn(g, 'graficos', 'getGraficos', [{ mes: g.mes, meses: g.meses, divisa: g.divisa }], () => k === clave());
       }
-      activarGraficos();
     }
   };
 }
 
-function htmlGraficos(d) {
-  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
-  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null;
-
-  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
-  const tile = (etiqueta, valor, previo, subeEsBueno) => {
-    let delta = '';
-    if (previo !== null && previo !== undefined && previo !== 0) {
-      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
-      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
-    }
-    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(dinero(valor, dv)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
-  };
-  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
-
-  const tarjeta = (id, titulo, cuerpo, tabla) => '<section class="m-seccion m-viz" aria-labelledby="' + id + '"><h2 class="m-seccion-titulo" id="' + id + '">' + esc(titulo) + '</h2>' +
-    '<div class="m-group m-viz-tarjeta">' + cuerpo + '<details class="m-viz-tabla"><summary>Ver como tabla</summary>' + tabla + '</details></div></section>';
-  const fm = n => dinero(n, dv);
-  const tabla = (cab, filas) => '<div style="overflow-x:auto"><table class="m-tabla"><thead><tr>' + cab.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
-    filas.map(f => '<tr>' + f.map(c => '<td class="m-num">' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
-
-  const cats = categoriasVisibles(d);
-  return kpis +
-    tarjeta('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), htmlCategorias(d, cats), d.categorias.length ? tabla(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '<p class="m-ayuda">Sin gastos este mes.</p>') +
-    tarjeta('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses', svgFlujo(d), tabla(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
-    tarjeta('gv-saldo', 'Saldo al cierre de cada mes', svgSaldo(d), tabla(['Mes', 'Saldo'], s.map(m => [mesTexto(m.mes), fm(m.saldo)])));
+/** Barras de las categorías con mayor gasto (y "Otras"), con su porcentaje. */
+function itemsCategorias(d, cats) {
+  return cats.map(c => ({ nombre: c.Nombre, valor: c.Valor, detalle: porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió' }));
 }
-
-const porcentajeDe = (v, total) => total > 0 ? (v / total * 100 < 1 ? '<1 %' : Math.round(v / total * 100) + ' %') : '';
 
 /** Las 7 mayores categorías y, si hay más, "Otras". */
 function categoriasVisibles(d) {
@@ -3342,136 +3533,99 @@ function categoriasVisibles(d) {
   return d.categorias.slice(0, TOP).concat([{ Nombre: 'Otras', Valor: Math.round(resto * 100) / 100 }]);
 }
 
-/** Barras horizontales ordenadas, de un solo color: es una sola serie, así que el color no codifica nada más. */
-function htmlCategorias(d, cats) {
-  if (!cats.length) return '<p class="m-ayuda">Sin gastos este mes.</p>';
-  const max = Math.max.apply(null, cats.map(c => c.Valor)) || 1;
-  return '<div class="m-barras" role="list">' + cats.map((c, i) =>
-    '<div class="m-barra" role="listitem" tabindex="0" data-i="' + i + '" aria-label="' + esc(c.Nombre + ': ' + dinero(c.Valor, d.divisa) + ', ' + porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió') + '">' +
-    '<span class="m-barra-nombre">' + esc(c.Nombre) + '</span><span class="m-barra-valor m-num">' + esc(dinero(c.Valor, d.divisa)) + '</span>' +
-    '<span class="m-barra-pista"><i style="width:' + Math.max(1, c.Valor / max * 100).toFixed(1) + '%"></i></span></div>').join('') + '</div>';
-}
+function htmlGraficos(d) {
+  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
+  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null, fm = n => dinero(n, dv);
 
-const VIZ_W = 340, VIZ_M = { l: 48, r: 10, t: 10, b: 34 };
-
-/** Ejes y cuadrícula comunes: líneas finas y continuas, solo la base un poco más marcada. */
-function ejesViz(escala, alto, meses, xDe) {
-  const h = alto - VIZ_M.t - VIZ_M.b, y = v => VIZ_M.t + h - (v - escala.min) / (escala.max - escala.min) * h;
-  let s = '';
-  escala.ticks.forEach(t => {
-    s += '<line class="viz-grid' + (t === 0 ? ' viz-base' : '') + '" x1="' + VIZ_M.l + '" x2="' + (VIZ_W - VIZ_M.r) + '" y1="' + y(t) + '" y2="' + y(t) + '"/>' +
-      '<text class="viz-eje" x="' + (VIZ_M.l - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + esc(etiquetaEje(t, escala)) + '</text>';
-  });
-  meses.forEach((m, i) => {
-    const mm = m.mes.slice(5), mostrarAnio = i === 0 || mm === '01';
-    s += '<text class="viz-eje" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 14) + '" text-anchor="middle">' + esc(mesCorto(m.mes)) + '</text>' +
-      (mostrarAnio ? '<text class="viz-eje viz-anio" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 26) + '" text-anchor="middle">' + esc(m.mes.slice(2, 4)) + '</text>' : '');
-  });
-  return { y: y, svg: s };
-}
-
-function svgFlujo(d) {
-  const s = d.serie, n = s.length, alto = 210;
-  const escala = ticksNice(0, Math.max.apply(null, s.map(m => Math.max(m.ingresos, m.gastos))), 4);
-  const banda = (VIZ_W - VIZ_M.l - VIZ_M.r) / n, xc = i => VIZ_M.l + banda * (i + 0.5);
-  const ejes = ejesViz(escala, alto, s, xc);
-  const ancho = Math.max(4, Math.min(24, (banda - 8) / 2 - 1)), base = ejes.y(0);
-  let marcas = '', zonas = '';
-  s.forEach((m, i) => {
-    // Dos barras pegadas, separadas por 2 px de aire; crecen desde la base
-    [[m.ingresos, 'viz-s1', xc(i) - ancho - 1], [m.gastos, 'viz-s2', xc(i) + 1]].forEach(b => {
-      marcas += '<path class="' + b[1] + '" d="' + trazoBarra(b[2], ejes.y(b[0]), ancho, base - ejes.y(b[0]), 4) + '"/>';
-    });
-    zonas += '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (VIZ_M.l + banda * i) + '" y="' + VIZ_M.t + '" width="' + banda + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
-      esc(mesTexto(m.mes) + ': entró ' + dinero(m.ingresos, d.divisa) + ', salió ' + dinero(m.gastos, d.divisa)) + '"/>';
-  });
-  return '<div class="m-viz-claves"><span class="m-viz-clave"><i class="viz-sw viz-s1"></i>Entró</span><span class="m-viz-clave"><i class="viz-sw viz-s2"></i>Salió</span></div>' +
-    '<svg class="m-viz-svg" data-viz="flujo" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="Entró y salió por mes">' + ejes.svg + marcas + zonas + '</svg>';
-}
-
-function svgSaldo(d) {
-  const s = d.serie, n = s.length, alto = 190, vals = s.map(m => m.saldo);
-  const escala = ticksNice(Math.min.apply(null, vals), Math.max.apply(null, vals), 4);
-  const paso = n > 1 ? (VIZ_W - VIZ_M.l - VIZ_M.r - 8) / (n - 1) : 0, xc = i => VIZ_M.l + 4 + paso * i;
-  const ejes = ejesViz(escala, alto, s, xc), pts = s.map((m, i) => [xc(i), ejes.y(m.saldo)]);
-  const linea = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
-  const area = linea + 'L' + pts[n - 1][0] + ',' + ejes.y(escala.min) + 'L' + pts[0][0] + ',' + ejes.y(escala.min) + 'Z';
-  const fin = pts[n - 1];
-  const zonas = s.map((m, i) => '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (xc(i) - Math.max(paso, 24) / 2) + '" y="' + VIZ_M.t + '" width="' + Math.max(paso, 24) + '" height="' + (alto - VIZ_M.t - VIZ_M.b) +
-    '" aria-label="' + esc(mesTexto(m.mes) + ': saldo ' + dinero(m.saldo, d.divisa)) + '"/>').join('');
-  return '<svg class="m-viz-svg" data-viz="saldo" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="Saldo al cierre de cada mes">' + ejes.svg +
-    '<path class="viz-area" d="' + area + '"/><path class="viz-linea" d="' + linea + '"/>' +
-    '<line class="viz-mira" x1="0" x2="0" y1="' + VIZ_M.t + '" y2="' + (alto - VIZ_M.b) + '" hidden/><circle class="viz-punto" r="4.5" hidden/>' +
-    '<circle class="viz-fin" cx="' + fin[0] + '" cy="' + fin[1] + '" r="4"/>' +
-    '<text class="viz-valor" x="' + fin[0] + '" y="' + (fin[1] - 10) + '" text-anchor="end">' + esc(compactoMoneda(s[n - 1].saldo, d.divisa)) + '</text>' + zonas + '</svg>';
-}
-
-// ---- Tooltip: uno solo, con textContent (los nombres vienen de datos del usuario) ----
-let _tip = null;
-function mostrarTip(titulo, filas, rect) {
-  if (!_tip) { _tip = document.createElement('div'); _tip.className = 'm-viz-tip'; _tip.setAttribute('role', 'presentation'); document.body.appendChild(_tip); }
-  _tip.textContent = '';
-  const t = document.createElement('div'); t.className = 'm-viz-tip-titulo'; t.textContent = titulo; _tip.appendChild(t);
-  filas.forEach(f => {
-    const r = document.createElement('div'); r.className = 'm-viz-tip-fila';
-    if (f.clave) { const k = document.createElement('i'); k.className = 'viz-clave-linea ' + f.clave; r.appendChild(k); }
-    const v = document.createElement('strong'); v.className = 'm-num'; v.textContent = f.valor; r.appendChild(v);
-    const e = document.createElement('span'); e.textContent = f.etiqueta; r.appendChild(e);
-    _tip.appendChild(r);
-  });
-  _tip.hidden = false;
-  const w = _tip.offsetWidth, h = _tip.offsetHeight;
-  let x = rect.left + rect.width / 2 - w / 2, y = rect.top - h - 8;
-  if (y < 4) y = rect.bottom + 8;
-  _tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + 'px';
-  _tip.style.top = y + 'px';
-}
-function ocultarTip() { if (_tip) _tip.hidden = true; }
-
-/** Hover, foco y teclado: cada barra de categoría y cada mes de los otros dos gráficos. */
-function activarGraficos() {
-  const d = App.graf.data;
-  if (!d) return;
-  const fm = n => dinero(n, d.divisa);
-
-  $$('.m-barra').forEach(el => {
-    const cats = categoriasVisibles(d), c = cats[Number(el.dataset.i)];
-    const mostrar = () => mostrarTip(c.Nombre, [{ valor: fm(c.Valor), etiqueta: porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió' }], el.getBoundingClientRect());
-    el.addEventListener('pointerenter', mostrar); el.addEventListener('focus', mostrar);
-    el.addEventListener('pointerleave', ocultarTip); el.addEventListener('blur', ocultarTip);
-  });
-
-  $$('svg[data-viz]').forEach(svg => {
-    const tipo = svg.dataset.viz, mira = $('.viz-mira', svg), punto = $('.viz-punto', svg);
-    const mostrar = zona => {
-      const i = Number(zona.dataset.i), m = d.serie[i], ant = i > 0 ? d.serie[i - 1] : null;
-      $$('.viz-zona', svg).forEach(z => z.classList.toggle('viz-activa', z === zona));
-      if (tipo === 'flujo') {
-        mostrarTip(mesTexto(m.mes), [{ clave: 'viz-s1', valor: fm(m.ingresos), etiqueta: 'Entró' }, { clave: 'viz-s2', valor: fm(m.gastos), etiqueta: 'Salió' }, { valor: fm(m.neto), etiqueta: 'Diferencia' }], zona.getBoundingClientRect());
-      } else {
-        const cx = Number(zona.getAttribute('x')) + Number(zona.getAttribute('width')) / 2;
-        if (mira) { mira.setAttribute('x1', cx); mira.setAttribute('x2', cx); mira.removeAttribute('hidden'); }
-        if (punto) { punto.setAttribute('cx', cx); punto.setAttribute('cy', svg.dataset['y' + i]); punto.removeAttribute('hidden'); }
-        const filas = [{ clave: 'viz-linea-clave', valor: fm(m.saldo), etiqueta: 'Saldo' }];
-        if (ant) filas.push({ valor: (m.saldo - ant.saldo >= 0 ? '+' : '−') + fm(Math.abs(m.saldo - ant.saldo)), etiqueta: 'vs ' + mesCorto(ant.mes) });
-        mostrarTip(mesTexto(m.mes), filas, (punto && !punto.hasAttribute('hidden') ? punto : zona).getBoundingClientRect());
-      }
-    };
-    const ocultar = () => { ocultarTip(); $$('.viz-zona', svg).forEach(z => z.classList.remove('viz-activa')); if (mira) mira.setAttribute('hidden', ''); if (punto) punto.setAttribute('hidden', ''); };
-    if (tipo === 'saldo') { // la altura de cada punto, para colocar el marcador
-      const vals = d.serie.map(m => m.saldo), alto = 190, esc_ = ticksNice(Math.min.apply(null, vals), Math.max.apply(null, vals), 4), h = alto - VIZ_M.t - VIZ_M.b;
-      d.serie.forEach((m, i) => { svg.dataset['y' + i] = VIZ_M.t + h - (m.saldo - esc_.min) / (esc_.max - esc_.min) * h; });
+  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
+  const tile = (etiqueta, valor, previo, subeEsBueno) => {
+    let delta = '';
+    if (previo !== null && previo !== undefined && previo !== 0) {
+      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
+      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
     }
-    $$('.viz-zona', svg).forEach(z => {
-      z.addEventListener('pointerenter', () => mostrar(z)); z.addEventListener('focus', () => mostrar(z));
-      z.addEventListener('pointerleave', ocultar); z.addEventListener('blur', ocultar);
-      z.addEventListener('keydown', ev => {
-        const zs = $$('.viz-zona', svg), i = zs.indexOf(z);
-        const sig = ev.key === 'ArrowRight' ? zs[i + 1] : ev.key === 'ArrowLeft' ? zs[i - 1] : null;
-        if (sig) { ev.preventDefault(); sig.focus(); }
-      });
-    });
-  });
+    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(fm(valor)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
+  };
+  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
+
+  const puntos = puntosMeses(s.map(m => m.mes)), cats = categoriasVisibles(d);
+  return kpis +
+    tarjetaViz('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), vizBarrasH({ items: itemsCategorias(d, cats), divisa: dv, vacio: 'Sin gastos este mes.' }),
+      d.categorias.length ? tablaViz(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '') +
+    tarjetaViz('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses',
+      vizColumnas({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: s.map(m => m.ingresos) }, { nombre: 'Salió', clave: 'viz-s2', valores: s.map(m => m.gastos) }], divisa: dv, etiqueta: 'Entró y salió por mes',
+        extraTip: i => [{ valor: fm(s[i].neto), etiqueta: 'Diferencia' }] }),
+      tablaViz(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
+    tarjetaViz('gv-saldo', 'Saldo al cierre de cada mes', lineaSaldo(s, dv, 190), tablaSaldo(s, dv));
+}
+
+// ---- Gráficos dentro de los módulos ----
+
+/** Inicio: saldo de los últimos 6 meses y en qué se fue el dinero este mes (se pide aparte, sin frenar la pantalla). */
+function htmlInicioGraficos() {
+  const g = App.inicioGraf.data;
+  if (!g || !g.hayDatos) return '';
+  const cats = categoriasVisibles(g).slice(0, 3);
+  return tarjetaViz('ini-saldo', 'Tu saldo en los últimos ' + g.serie.length + ' meses', lineaSaldo(g.serie, 'COP', 150), tablaSaldo(g.serie, 'COP')) +
+    (cats.length ? tarjetaViz('ini-cat', 'En qué gastaste · ' + mesTexto(g.mes), vizBarrasH({ items: itemsCategorias(g, cats), divisa: 'COP' }),
+      tablaViz(['Categoría', 'Valor', '%'], g.categorias.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, g.totalGastos)]))) : '') +
+    '<section class="m-seccion"><div class="m-group">' + fila({ icono: 'pulso', titulo: 'Ver todos los gráficos', chevron: true, attrs: 'data-acc="ir" data-ruta="graficos"' }) + '</div></section>';
+}
+
+async function cargarInicioGraf() {
+  const st = App.inicioGraf;
+  st.cargando = true;
+  try { st.data = await api('getGraficos', { meses: 6, divisa: 'COP' }); } catch (e) { /* es un adorno: si falla, Inicio sigue igual */ }
+  st.cargando = false; st.viejo = false; st.intentado = true;
+  if (rutaActual() === 'inicio') render();
+}
+
+/** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
+function htmlPlanVsReal(d) {
+  const items = d.items.filter(i => Number(i.Plan) > 0).map(i => ({ nombre: i.Concepto, valor: Number(i.Real) || 0, tope: Number(i.Plan), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Plan)) }))
+    .sort((a, b) => b.valor / b.tope - a.valor / a.tope).slice(0, 8);
+  return items.length ? '<section class="m-seccion"><h2 class="m-seccion-titulo">Plan frente a real</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>' : '';
+}
+
+/** Deudas: cupo usado de cada tarjeta y avance de pago de cada crédito activo. */
+function htmlMedidoresDeudas(d) {
+  let h = '';
+  const tarjetas = d.tarjetas.filter(t => t.Cupo > 0).map(t => { const usado = Math.round((t.Cupo - t.cupoDisponible) * 100) / 100; return { nombre: t.Nombre, valor: usado, tope: t.Cupo, texto: dinero(usado) + ' de ' + dinero(t.Cupo) }; });
+  if (tarjetas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Cupo usado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(tarjetas) + '</div></section>';
+  const creditos = d.creditos.filter(c => c.Estado === 'Activo' && c.Monto > 0).map(c => { const pagado = Math.round((c.Monto - c.saldo) * 100) / 100; return { nombre: c.Nombre, valor: pagado, tope: c.Monto, texto: dinero(pagado) + ' de ' + dinero(c.Monto) }; });
+  if (creditos.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance de los créditos</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(creditos) + '</div></section>';
+  return h;
+}
+
+/** Detalle de un crédito: cómo baja el saldo cuota a cuota. */
+function htmlSaldoCredito(d) {
+  const c = d.credito, cuotas = d.cronograma;
+  if (!cuotas.length) return '';
+  const puntos = [{ x: '0', anio: '', titulo: 'Al inicio', previo: '' }].concat(cuotas.map((f, i) => ({ x: String(f.Num), anio: '', titulo: 'Cuota ' + f.Num + ' · ' + fechaCorta(f.Fecha) + (f.Estado === 'Pagada' ? ' (pagada)' : ''), previo: 'vs cuota anterior' })));
+  const valores = [c.Monto].concat(cuotas.map(f => f.Saldo_Final));
+  return tarjetaViz('cre-saldo', 'Cómo baja el saldo, cuota a cuota',
+    vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: valores }], divisa: 'COP', delta: true, alto: 170, etiqueta: 'Saldo del crédito por cuota' }));
+}
+
+/** Ahorro: evolución del ahorro total (suma de las cuentas) y avance hacia cada meta. */
+function htmlGraficosAhorro(d) {
+  if (!d.cuentas.length) return '';
+  const meses = d.cuentas[0].evolucion.map((p, i) => ({ mes: p.mes, saldo: Math.round(d.cuentas.reduce((a, c) => a + c.evolucion[i].saldo, 0) * 100) / 100 }));
+  let h = tarjetaViz('aho-total', 'Ahorro total · últimos 12 meses', lineaSaldo(meses, 'COP', 170), tablaSaldo(meses, 'COP'));
+  const metas = d.cuentas.filter(c => c.Meta > 0).map(c => ({ nombre: c.Nombre, valor: c.Saldo, tope: c.Meta, texto: dinero(c.Saldo) + ' de ' + dinero(c.Meta) }));
+  if (metas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance hacia la meta</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(metas) + '</div></section>';
+  return h;
+}
+
+/** Vista anual: lo que entró, lo planeado y lo real, mes a mes (los meses sin datos quedan en blanco). */
+function htmlGraficoAnual(d) {
+  const dato = m => m.conPresupuesto || m.ingreso || m.tc;
+  if (!d.meses.some(dato)) return '';
+  const v = k => d.meses.map(m => dato(m) ? m[k] : null);
+  const puntos = d.meses.map((m, i) => ({ x: m.nombre.slice(0, 3).toLowerCase(), anio: i === 0 ? String(d.anio).slice(2) : '', titulo: m.nombre + ' de ' + d.anio, previo: '' }));
+  return tarjetaViz('anual-lineas', 'Entró, planeado y real · ' + d.anio,
+    vizLinea({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: v('ingreso') }, { nombre: 'Planeado', clave: 'viz-s2', valores: v('plan') }, { nombre: 'Real', clave: 'viz-s3', valores: v('real') }], divisa: 'COP', alto: 210, etiqueta: 'Entró, planeado y real por mes' }),
+    tablaViz(['Mes', 'Entró', 'Planeado', 'Real'], d.meses.filter(dato).map(m => [m.nombre, dinero(m.ingreso), dinero(m.plan), dinero(m.real)])));
 }
 
 // ---------------------------------------------------------------------------
@@ -3943,6 +4097,7 @@ function olvidarDatosLocales() {
     if ('anulados' in s) s.anulados = false;
   });
   App.plantillaEsc = null; App.inactivos = {}; App.proximosViejos = false;
+  App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
   App.asist = { activo: false, paso: null, omitido: false, ultimo: {} };
   recordarAsistenteOmitido(false);
   try { localStorage.removeItem('moni.ultimoBolsillo'); } catch (e) {}

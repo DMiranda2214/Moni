@@ -22,6 +22,13 @@ function movimientosDeCuenta_(idCuenta, bolsillos, movs) {
   return movs.filter(m => ids[m.ID_Bolsillo]);
 }
 
+/** { ID_Bolsillo: true } de los bolsillos de una cuenta. */
+function idsDeCuenta_(idCuenta, bolsillos) {
+  const ids = {};
+  bolsillos.filter(b => b.ID_Cuenta === idCuenta).forEach(b => { ids[b.ID_Bolsillo] = true; });
+  return ids;
+}
+
 /** Resumen de una cuenta de ahorro a partir de sus movimientos y los créditos activos. */
 function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
   const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs);
@@ -47,7 +54,8 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
     rendimiento: { interes: redondear2_(interes), retencion: redondear2_(retencion), gmf: redondear2_(gmf), neto: redondear2_(interes - retencion - gmf) },
     deuda: { paraGastos: redondear2_(paraGastos), reposicion: redondear2_(reposicion), manual: deudaManual, creditos: deudaCreditos, total: redondear2_(deudaManual + deudaCreditos) },
     saldoSiRepones: redondear2_(saldo + deudaManual + deudaCreditos),
-    creditos: deCreditos.map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre, saldo: c.saldo }))
+    creditos: deCreditos.map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre, saldo: c.saldo })),
+    evolucion: saldosMensuales_(idsDeCuenta_(cuenta.ID_Cuenta, bolsillos), hoyIso_().slice(0, 7), 12, movs)
   };
 }
 

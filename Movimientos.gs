@@ -356,7 +356,8 @@ function obtenerDetalleBolsillo(idBolsillo, mes, incluirAnulados) {
     mes: mes || hoyIso_().slice(0, 7),
     movimientos: lista.items,
     totales: lista.totales,
-    hayMas: lista.hayMas
+    hayMas: lista.hayMas,
+    evolucion: saldosMensuales_({ [idBolsillo]: true }, mes || hoyIso_().slice(0, 7), 6)
   };
 }
 

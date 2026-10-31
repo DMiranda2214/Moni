@@ -80,3 +80,22 @@ function obtenerGraficos(o) {
     serie: meses, categorias: cats, totalGastos: redondear2_(cats.reduce((a, c) => a + c.Valor, 0))
   };
 }
+
+/**
+ * Saldo al cierre de cada uno de los últimos `n` meses (hasta `mesFin`) de un conjunto de bolsillos.
+ * @param {Object} ids { ID_Bolsillo: true }
+ * @param {Array} [movs] movimientos no anulados ya leídos (para no volver a leerlos)
+ * @returns {Array} [{ mes: 'AAAA-MM', saldo }]
+ */
+function saldosMensuales_(ids, mesFin, n, movs) {
+  const lista = mesesHasta_(mesFin, n);
+  let saldo = getTableData('Bolsillos').filter(b => ids[b.ID_Bolsillo]).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
+  const porMes = {};
+  (movs || getTableData('Movimientos', { excludeAnulados: true })).forEach(m => {
+    if (!ids[m.ID_Bolsillo] || !m.Fecha) return;
+    const mm = String(m.Fecha).slice(0, 7), v = Number(m.Valor) || 0;
+    if (mm < lista[0]) saldo += v; // lo anterior al rango forma el saldo de partida
+    else if (lista.indexOf(mm) !== -1) porMes[mm] = (porMes[mm] || 0) + v;
+  });
+  return lista.map(k => { saldo += porMes[k] || 0; return { mes: k, saldo: redondear2_(saldo) }; });
+}

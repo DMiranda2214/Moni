@@ -85,6 +85,14 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 
 Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto. Los traslados no cuentan como entrada ni salida; cada moneda se ve por separado.
 
+También hay gráficos dentro de cada módulo:
+- **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes (con un acceso a todos los gráficos).
+- **Presupuesto:** *Plan frente a real* de los renglones más avanzados; los que se pasan dicen "excedido".
+- **Deudas:** *Cupo usado* de cada tarjeta y *Avance de los créditos*; dentro de un crédito, cómo baja el saldo cuota a cuota.
+- **Ahorro:** evolución del ahorro total y de cada cuenta, y avance hacia las metas.
+- **Vista anual:** entró, planeado y real mes a mes.
+- **Un bolsillo:** su saldo al cierre de cada mes.
+
 ## 12. Movimientos
 **Más → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
 

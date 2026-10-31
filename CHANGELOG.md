@@ -2,6 +2,12 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Gráficos en cada módulo
+- **Nuevo** componentes de gráfico reutilizables (líneas de una o varias series, columnas agrupadas, barras ordenadas y medidores) con tooltip por hover, foco y flechas, y tabla alternativa. Se registran por pantalla y se conectan en `render()`.
+- **Inicio:** saldo de 6 meses y gastos del mes (se piden aparte y se refrescan tras registrar algo). **Presupuesto:** plan frente a real. **Deudas:** cupo usado y avance de créditos; en un crédito, saldo cuota a cuota. **Ahorro:** evolución total y por cuenta, avance de metas. **Vista anual:** entró/planeado/real. **Bolsillo:** saldo al cierre de cada mes.
+- Servidor: `saldosMensuales_` y `evolucion` en el detalle de bolsillo y en cada cuenta de ahorro. Tercera serie de la paleta (verde) validada; el aqua en claro queda bajo 3:1 y se compensa con leyenda y tabla.
+- **Pruebas** de evolución en `tests/test_graficos.js`.
+
 ## Tasa de referencia con Google Finance
 - **Nuevo** Ajustes → Divisas: botón *Actualizar ahora* e interruptor *Traerla sola de Google Finance cada día* (hoja auxiliar `Tasas_Google` con `GOOGLEFINANCE`; `TasasGoogle.gs`). La tasa muestra su fecha y fuente (Manual o Google Finance).
 - Solo informativa: no interviene en saldos ni conversiones.
