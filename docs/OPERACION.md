@@ -15,6 +15,12 @@ Desde ahí, si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: d
 - Las copias se guardan en tu Drive, carpeta **"Moni Respaldos"**, con el nombre `Moni_Respaldo_AAAAMMDD_HHMMSS`. Las más viejas van a la papelera.
 - **Recuperar:** abre la copia que quieras, y o bien (a) úsala como Sheet nuevo (copia el ID con `vincularHojaMoni('<ID>')`), o (b) copia las pestañas necesarias al Sheet actual.
 
+## Borrar todos los datos
+**Ajustes → Privacidad → Borrar todos mis datos** (función `resetAllData`, en `Reinicio.gs`). Vacía las 27 tablas conservando sus encabezados, listas desplegables y formato, vuelve a sembrar los parámetros, las categorías y el escenario base, y apaga las copias automáticas. Exige escribir `BORRAR` (la pantalla y el servidor lo validan).
+- **No toca:** `SPREADSHEET_ID` ni `USUARIOS_PERMITIDOS` (la app sigue funcionando), los PDF de Drive ni las copias de "Moni Respaldos", salvo que se marque la opción de mandarlas a la papelera (recuperables unos 30 días desde la papelera de Drive).
+- Es irreversible: antes, **Crear un respaldo ahora** si hay duda.
+- Para no perder la configuración de accesos, no borres las propiedades del script.
+
 ## Rutina sugerida
 | Cuándo | Qué |
 |---|---|

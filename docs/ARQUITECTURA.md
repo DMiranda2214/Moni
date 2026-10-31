@@ -50,6 +50,7 @@
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
+| `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)
 27 pestañas en tres grupos:

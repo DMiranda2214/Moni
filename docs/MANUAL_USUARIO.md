@@ -4,7 +4,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 
 ## 1. Primer uso
 1. Abre el enlace de la app (guárdalo como favorito o *Agregar a pantalla de inicio*).
-2. En **Inicio** aparece **Primeros pasos**: tu nombre, tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas.
+2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
 3. ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
 
 ## 2. Inicio
@@ -77,6 +77,14 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 - **Presupuesto y nómina:** plantilla, escenarios, nómina, subsidios y parámetros.
 - **Organización:** categorías, personas, inmuebles, servicios públicos.
 - **Mantenimiento:** arranque, datos de demostración, respaldos, diagnóstico.
+- **Privacidad → Borrar todos mis datos:** deja Moni como recién instalada (ver abajo).
+
+### Borrar todos mis datos
+Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar todos mis datos**. La pantalla explica qué se borra y qué no; al pulsar el botón se abre una ventana que exige escribir **BORRAR** para habilitar el borrado.
+- **Se borra:** bancos, cuentas, bolsillos, tarjetas, movimientos, presupuestos, nómina, créditos, regalos, suscripciones, tu nombre y tus preferencias. Se apagan las copias automáticas.
+- **No se borra:** las copias de **"Moni Respaldos"** en tu Drive (contienen tus datos; en la ventana puedes elegir mandarlas también a la papelera) ni los archivos que hayas guardado en Drive, como extractos en PDF.
+- **No se puede deshacer.** Si dudas, crea antes un respaldo en **Ajustes → Respaldos**.
+- Al terminar vuelves a ver la bienvenida.
 - Nada se borra de golpe: se **desactiva** y se puede **reactivar**. Si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 
 ## 14. Arranque (1 de enero)

@@ -56,6 +56,12 @@ class HojaFalsa {
         });
       },
       setValue(v) { this.setValues([[v]]); },
+      clearContent() {
+        for (let r = 0; r < nFilas; r++) {
+          const f = hoja.filas[fila - 1 + r];
+          if (f) for (let c = 0; c < nCols; c++) if (col - 1 + c < f.length) f[col - 1 + c] = '';
+        }
+      },
       setNumberFormat(f) { hoja.formatos[col] = f; }
     };
     // Cualquier otro método (estilos, validación) no hace nada.
@@ -132,7 +138,8 @@ function crearEntorno(hojasIniciales, opciones) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in propiedades ? propiedades[k] : null),
-        setProperty: (k, v) => { propiedades[k] = v; }
+        setProperty: (k, v) => { propiedades[k] = v; },
+        deleteProperty: (k) => { delete propiedades[k]; }
       })
     },
     LockService: {
