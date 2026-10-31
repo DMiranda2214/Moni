@@ -38,10 +38,13 @@ En el editor de Apps Script, elige la función en la barra superior y pulsa **Ej
 3. Copia la **URL** que termina en `/exec` y guárdala como favorito o *"Agregar a pantalla de inicio"* en el celular.
 4. (Recomendado) En Configuración del proyecto → Propiedades de la secuencia de comandos, crea `USUARIOS_PERMITIDOS` con tu correo.
 
+## Permisos nuevos (Calendar)
+Las versiones con **recordatorios** agregan el permiso `https://www.googleapis.com/auth/calendar` al manifiesto. Al actualizar: sube `appsscript.json`, crea una **nueva versión** de la implementación y abre la app; Google pedirá aceptar el permiso una vez. Sin él, el resto de la app funciona igual; solo falla activar los recordatorios (con un mensaje claro).
+
 ## Actualizar una instalación existente
 1. Sube el código nuevo (`npm run push` o pegando los archivos).
 2. **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar.** (La URL no cambia.)
-3. Abre la app. Si el esquema cambió (por ejemplo, la pestaña `Suscripciones`), verás **"Falta instalar la base de datos"**: pulsa **Instalar**. Solo crea lo que falta.
+3. Abre la app. Si el esquema cambió (por ejemplo, la pestaña `Suscripciones` o la columna `Divisa` de `Bancos`), verás **"Falta instalar o actualizar la base de datos"**: pulsa **Instalar**. Solo crea lo que falta y agrega las columnas nuevas (sin tocar tus datos).
 4. Si alguna pestaña tiene encabezados distintos a los esperados, la app **no la modifica**: la reporta en Ajustes → Diagnóstico.
 
 ## Menú del Sheet

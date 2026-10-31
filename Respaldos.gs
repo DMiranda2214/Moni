@@ -48,6 +48,10 @@ function crearRespaldo() {
 
 /** Lo que ejecuta el disparador diario: copia solo si ya toca. */
 function respaldoAutomatico() {
+  return ejecutarConLog_('respaldoAutomatico', respaldoAutomatico_);
+}
+
+function respaldoAutomatico_() {
   const dias = numeroConfig_('Respaldo_Frecuencia_Dias', 7);
   const ultimo = Number(PropertiesService.getScriptProperties().getProperty('ULTIMO_RESPALDO_MS')) || 0;
   if (ultimo && Date.now() - ultimo < dias * 86400000 - 3600000) return { omitido: true };

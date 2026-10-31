@@ -2,6 +2,47 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Gráficos en cada módulo
+- **Nuevo** componentes de gráfico reutilizables (líneas de una o varias series, columnas agrupadas, barras ordenadas y medidores) con tooltip por hover, foco y flechas, y tabla alternativa. Se registran por pantalla y se conectan en `render()`.
+- **Inicio:** saldo de 6 meses y gastos del mes (se piden aparte y se refrescan tras registrar algo). **Presupuesto:** plan frente a real. **Deudas:** cupo usado y avance de créditos; en un crédito, saldo cuota a cuota. **Ahorro:** evolución total y por cuenta, avance de metas. **Vista anual:** entró/planeado/real. **Bolsillo:** saldo al cierre de cada mes.
+- Servidor: `saldosMensuales_` y `evolucion` en el detalle de bolsillo y en cada cuenta de ahorro. Tercera serie de la paleta (verde) validada; el aqua en claro queda bajo 3:1 y se compensa con leyenda y tabla.
+- **Pruebas** de evolución en `tests/test_graficos.js`.
+
+## Tasa de referencia con Google Finance
+- **Nuevo** Ajustes → Divisas: botón *Actualizar ahora* e interruptor *Traerla sola de Google Finance cada día* (hoja auxiliar `Tasas_Google` con `GOOGLEFINANCE`; `TasasGoogle.gs`). La tasa muestra su fecha y fuente (Manual o Google Finance).
+- Solo informativa: no interviene en saldos ni conversiones.
+- **Pendiente de validar en el Sheet real:** el simulador no calcula `GOOGLEFINANCE`; las pruebas cubren la lectura y el guardado.
+
+## Conversión con tasa del banco y comisión
+- **Cambia** Convertir divisas: se escribe la cantidad y la tasa que dio el banco por unidad (la TRM solo se muestra como referencia); Moni calcula cuánto sale y cuánto llega.
+- **Nuevo** comisión opcional, cobrada aparte del bolsillo de origen o de destino: gasto de la categoría *Comisión bancaria* (se crea sola) dentro de la misma conversión (`Subtipo = Comision`); se anula y restaura junto.
+- **Pruebas** de comisión en `tests/test_divisas.js`.
+
+## Recordatorios en Google Calendar
+- **Nuevo** Ajustes → Recordatorios: calendario "Moni" con un evento por pago de los próximos 45 días (tarjetas, cuotas, suscripciones y servicios, prima y cesantías), con aviso el mismo día y N días antes, a la hora elegida.
+- Sincronización idempotente (crea, corrige y borra por clave; no toca eventos ajenos), disparador diario, sincronización en segundo plano tras registrar cambios y botones Sincronizar ahora / Quitar.
+- **Permiso** nuevo `calendar` en `appsscript.json` (hay que crear una versión nueva de la implementación y aceptarlo al abrir).
+- El borrado total de datos también quita el calendario y el disparador.
+- **Pruebas** `tests/test_recordatorios.js` con un Calendar simulado.
+
+## Gráficos
+- **Nuevo** Más → Gráficos: gastos por categoría del mes, entró y salió por mes, saldo al cierre de cada mes y cifras del mes con su cambio. Filtros de mes, rango (3/6/12 meses) y moneda en una sola fila.
+- SVG sin librerías: marcas finas, hover/foco/teclado con tooltip, tabla con los mismos datos, claro y oscuro. Paleta de dos series validada contra las superficies de la app.
+- **Pruebas** `tests/test_graficos.js` (el último saldo coincide con el total del Inicio).
+
+## Divisas
+- **Nuevo** la moneda (COP, USD o EUR) se elige al crear el banco; sus cuentas y bolsillos la heredan. Los saldos de distintas monedas no se suman: el Inicio muestra **Otras monedas** aparte, con el equivalente en pesos si anotas la tasa (Ajustes → Divisas).
+- **Nuevo** **Convertir divisas** (Bolsillos): sale un valor de un bolsillo y llega otro en la otra moneda, con la tasa implícita anotada; se anula junto.
+- **Nuevo** migración de esquema: `setupDatabase` agrega la columna `Divisa` a un Sheet ya instalado (Instalar). `ESQUEMA_VERSION` evita que la caché oculte cambios de esquema.
+- **Regla** presupuesto, nómina, tarjetas, créditos, ahorro, suscripciones y regalos solo aceptan pesos (validado en el servidor y sin ofrecer bolsillos en otras monedas en la pantalla). Los traslados entre monedas distintas se rechazan: se usa la conversión.
+- **Límite conocido** la hoja de consulta `Vista_Anual` (fórmulas) suma todas las monedas; la vista anual de la app solo suma pesos.
+- **Pruebas** `tests/test_divisas.js`.
+
+## Registro de errores
+- **Nuevo** `Logs.gs`: cada error de la API, del navegador y de los disparadores queda en la tabla `Log` con función, mensaje, traza y versión (`VERSION_APP`). Se conservan las últimas 500 entradas.
+- **Nuevo** Ajustes → Registro de errores: filtro Errores/Todo, detalle desplegable, copiar y limpiar.
+- **Pruebas** `tests/test_logs.js`.
+
 ## Bienvenida y borrado de datos
 - **Nuevo** asistente de bienvenida y primeros pasos: un paso por pantalla con barra de progreso (nombre y color, bancos, cuentas, bolsillos, tarjetas), validación en línea, "Guardar y agregar otro" y "Seguir más tarde". Reutiliza los campos de los catálogos y se retoma desde Inicio.
 - **Nuevo** Ajustes → Privacidad → **Borrar todos mis datos**: pantalla informativa, ventana de confirmación que exige escribir `BORRAR` y opción de mandar también los respaldos de Drive a la papelera (`Reinicio.gs`, `resetAllData`).

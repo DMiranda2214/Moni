@@ -86,6 +86,10 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
   const bolsillos = leer_('Bolsillos');
   const desde = exigirActivo_(bolsillos, 'ID_Bolsillo', origenId, 'El bolsillo de origen');
   const hacia = exigirActivo_(bolsillos, 'ID_Bolsillo', destinoId, 'El bolsillo de destino');
+  const divisas = mapaDivisas_().bolsillos;
+  if (divisas[origenId] !== divisas[destinoId]) {
+    throw new Error('"' + desde.Nombre + '" está en ' + divisas[origenId] + ' y "' + hacia.Nombre + '" en ' + divisas[destinoId] + '. Para pasar dinero entre divisas usa "Convertir divisas".');
+  }
   const monto = numero_(valor, 'El valor', { requerido: true, max: VALOR_MAXIMO });
   if (monto <= 0) throw new Error('El valor debe ser mayor que cero.');
 
@@ -101,6 +105,66 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
   insertRows('Movimientos', [salida, entrada]);
 
   return { ok: true, idGrupo: idGrupo, patas: [salida, entrada] };
+}
+
+/** Categoría de las comisiones de conversión: se crea la primera vez; si la persona la desactivó, queda sin categoría. */
+function categoriaComision_() {
+  const cats = leer_('Categorias');
+  const existente = buscarPorId_(cats, 'ID_Categoria', 'cat-comision');
+  if (existente) return estaActivo(existente) ? existente.ID_Categoria : '';
+  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats) });
+  return 'cat-comision';
+}
+
+/**
+ * Convierte dinero de una divisa a otra (por ejemplo, comprar dólares): sale un valor de un bolsillo y entra
+ * otro, en la divisa del bolsillo de destino. Son dos filas con el mismo ID_Grupo (se anulan juntas); como cada
+ * una está en su divisa, no suman cero. La tasa implícita queda anotada.
+ * La comisión del banco, si la hay, es un gasto aparte dentro de la misma conversión (mismo ID_Grupo): se cobra
+ * del bolsillo de origen o del de destino, queda como gasto de su categoría y se anula junto con la conversión.
+ * @param {Object} c { origen, destino, valorOrigen, valorDestino, fecha, concepto, notas, comision, comisionEn: 'origen'|'destino' }
+ */
+function registrarConversion(c) {
+  const x = c || {};
+  const bolsillos = leer_('Bolsillos');
+  const desde = exigirActivo_(bolsillos, 'ID_Bolsillo', x.origen, 'El bolsillo de origen');
+  const hacia = exigirActivo_(bolsillos, 'ID_Bolsillo', x.destino, 'El bolsillo de destino');
+  const divisas = mapaDivisas_().bolsillos;
+  const dOrigen = divisas[desde.ID_Bolsillo], dDestino = divisas[hacia.ID_Bolsillo];
+  if (dOrigen === dDestino) throw new Error('Los dos bolsillos están en ' + dOrigen + '. Para moverlo entre bolsillos usa "Mover dinero".');
+  const sale = numero_(x.valorOrigen, 'Lo que sale', { requerido: true, max: VALOR_MAXIMO });
+  const entra = numero_(x.valorDestino, 'Lo que entra', { requerido: true, max: VALOR_MAXIMO });
+  if (sale <= 0) throw new Error('Lo que sale debe ser mayor que cero.');
+  if (entra <= 0) throw new Error('Lo que entra debe ser mayor que cero.');
+  const comision = numero_(x.comision, 'La comisión', { min: 0, max: VALOR_MAXIMO, defecto: 0 });
+  const comisionEn = x.comisionEn === 'destino' ? 'destino' : 'origen';
+
+  // Tasa implícita en pesos por unidad de la otra divisa (si no hay pesos de por medio, la de origen por la de destino)
+  let tasaTexto;
+  if (dOrigen === DIVISA_BASE) tasaTexto = '1 ' + dDestino + ' = ' + redondear2_(sale / entra) + ' ' + DIVISA_BASE;
+  else if (dDestino === DIVISA_BASE) tasaTexto = '1 ' + dOrigen + ' = ' + redondear2_(entra / sale) + ' ' + DIVISA_BASE;
+  else tasaTexto = '1 ' + dOrigen + ' = ' + redondear2_(entra / sale) + ' ' + dDestino;
+
+  const f = fechaMovimiento_(x.fecha);
+  const idGrupo = nuevoId_('grp');
+  const comun = {
+    Fecha: f, Concepto: texto_(x.concepto).slice(0, 120) || ('Conversión ' + dOrigen + ' → ' + dDestino), Tipo_Mov: 'Transferencia', Subtipo: 'Conversion',
+    ID_Categoria: '', ID_Grupo: idGrupo, ID_Item_Ppto: '', Notas: (texto_(x.notas) ? texto_(x.notas) + ' · ' : '') + tasaTexto, Origen: 'App', Anulado: false
+  };
+  const salida = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: desde.ID_Bolsillo, Valor: -sale }, comun);
+  const entrada = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: hacia.ID_Bolsillo, Valor: entra }, comun);
+  const filas = [salida, entrada];
+  let comisionInfo = null;
+  if (comision > 0) {
+    const bolsillo = comisionEn === 'destino' ? hacia : desde;
+    filas.push({
+      ID_Mov: nuevoId_('mov'), Fecha: f, Concepto: 'Comisión · ' + comun.Concepto, ID_Bolsillo: bolsillo.ID_Bolsillo, Valor: -comision, Tipo_Mov: 'Gasto', Subtipo: 'Comision',
+      ID_Categoria: categoriaComision_(), ID_Grupo: idGrupo, ID_Item_Ppto: '', Notas: 'Comisión de la conversión (' + tasaTexto + ')', Origen: 'App', Anulado: false
+    });
+    comisionInfo = { valor: comision, divisa: divisas[bolsillo.ID_Bolsillo], enBolsillo: bolsillo.ID_Bolsillo };
+  }
+  insertRows('Movimientos', filas);
+  return { ok: true, idGrupo: idGrupo, patas: filas, tasa: tasaTexto, comision: comisionInfo };
 }
 
 /** Filas de un movimiento y, si es parte de un grupo, de todo el grupo. */
@@ -212,6 +276,7 @@ function listarMovimientos(f) {
   if (filtro.idBolsillo) movs = movs.filter(m => m.ID_Bolsillo === filtro.idBolsillo);
   if (filtro.idCuenta) movs = movs.filter(m => bolPorId[m.ID_Bolsillo] && bolPorId[m.ID_Bolsillo].ID_Cuenta === filtro.idCuenta);
 
+  const divisas = mapaDivisas_();
   const nombreBolsillo = id => (bolPorId[id] ? bolPorId[id].Nombre : '');
   const nombreCuenta = id => { const b = bolPorId[id]; const c = b && ctaPorId[b.ID_Cuenta]; return c ? c.Nombre : ''; };
 
@@ -219,7 +284,7 @@ function listarMovimientos(f) {
   movs.forEach(m => {
     const base = {
       ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Tipo_Mov: m.Tipo_Mov, Subtipo: m.Subtipo || '',
-      ID_Bolsillo: m.ID_Bolsillo, Bolsillo: nombreBolsillo(m.ID_Bolsillo), Cuenta: nombreCuenta(m.ID_Bolsillo),
+      ID_Bolsillo: m.ID_Bolsillo, Bolsillo: nombreBolsillo(m.ID_Bolsillo), Cuenta: nombreCuenta(m.ID_Bolsillo), Divisa: divisas.bolsillos[m.ID_Bolsillo] || DIVISA_BASE,
       ID_Categoria: m.ID_Categoria || '', Categoria: catPorId[m.ID_Categoria] ? catPorId[m.ID_Categoria].Nombre : '',
       ID_Grupo: m.ID_Grupo || '', ID_Item_Ppto: m.ID_Item_Ppto || '', Notas: m.Notas || '', Anulado: esVerdadero(m.Anulado),
       Creado_En: m.Creado_En || '', _fila: m._rowIndex, Valor: Number(m.Valor) || 0,
@@ -236,6 +301,11 @@ function listarMovimientos(f) {
       base.Valor = Math.abs(base.Valor);
       base.Origen = base.Bolsillo;
       base.Destino = par ? nombreBolsillo(par.ID_Bolsillo) : '';
+      // Una conversión entra en otra divisa y por otro valor: se muestra lo que llegó
+      if (par && (divisas.bolsillos[par.ID_Bolsillo] || DIVISA_BASE) !== base.Divisa) {
+        base.DivisaDestino = divisas.bolsillos[par.ID_Bolsillo];
+        base.ValorDestino = Math.abs(Number(par.Valor) || 0);
+      }
       items.push(base);
     }
   });
@@ -248,10 +318,12 @@ function listarMovimientos(f) {
   items.sort((a, b) => (b.Fecha > a.Fecha ? 1 : b.Fecha < a.Fecha ? -1 : 0) ||
     (b.Creado_En > a.Creado_En ? 1 : b.Creado_En < a.Creado_En ? -1 : 0) || (b._fila - a._fila));
 
-  // Totales sobre lo que se ve; los traslados no son ingreso ni gasto
+  // Totales sobre lo que se ve; los traslados no son ingreso ni gasto. Solo de una divisa: la del bolsillo o
+  // la cuenta que se mira; sin filtro, pesos (no se suman divisas distintas).
+  const divisaTotales = filtro.idBolsillo ? (divisas.bolsillos[filtro.idBolsillo] || DIVISA_BASE) : (filtro.idCuenta ? (divisas.cuentas[filtro.idCuenta] || DIVISA_BASE) : DIVISA_BASE);
   let ingresos = 0, gastos = 0, traslados = 0;
   items.forEach(i => {
-    if (i.Anulado) return;
+    if (i.Anulado || i.Divisa !== divisaTotales) return;
     if (i.esTransferencia) { traslados += conFiltroDeLugar ? i.Valor : 0; return; }
     if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor;
   });
@@ -262,7 +334,7 @@ function listarMovimientos(f) {
     items: items.slice(0, limite),
     total: items.length,
     hayMas: items.length > limite,
-    totales: { ingresos: redondear2_(ingresos), gastos: redondear2_(gastos), neto: redondear2_(ingresos - gastos), trasladosNetos: redondear2_(traslados) }
+    totales: { ingresos: redondear2_(ingresos), gastos: redondear2_(gastos), neto: redondear2_(ingresos - gastos), trasladosNetos: redondear2_(traslados), Divisa: divisaTotales }
   };
 }
 
@@ -280,11 +352,12 @@ function obtenerDetalleBolsillo(idBolsillo, mes, incluirAnulados) {
       ID_Bolsillo: bolsillo.ID_Bolsillo, Nombre: bolsillo.Nombre, Rol: bolsillo.Rol, Es_Interno: esVerdadero(bolsillo.Es_Interno),
       Activo: estaActivo(bolsillo), Saldo: saldos[idBolsillo] || 0, Saldo_Apertura: Number(bolsillo.Saldo_Apertura) || 0
     },
-    cuenta: { ID_Cuenta: cuenta.ID_Cuenta, Nombre: cuenta.Nombre, Banco: banco.Nombre || '', Tipo: cuenta.Tipo },
+    cuenta: { ID_Cuenta: cuenta.ID_Cuenta, Nombre: cuenta.Nombre, Banco: banco.Nombre || '', Tipo: cuenta.Tipo, Divisa: divisaBanco_(banco) },
     mes: mes || hoyIso_().slice(0, 7),
     movimientos: lista.items,
     totales: lista.totales,
-    hayMas: lista.hayMas
+    hayMas: lista.hayMas,
+    evolucion: saldosMensuales_({ [idBolsillo]: true }, mes || hoyIso_().slice(0, 7), 6)
   };
 }
 

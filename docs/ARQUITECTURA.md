@@ -45,11 +45,14 @@
 | `Ahorro.gs` | Rendimientos, retiros, reposiciones, deuda con el ahorro |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
-| `Recordatorios.gs` | Próximos pagos para Inicio |
+| `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |
 | `Arranque.gs` | Aperturas, archivo de pruebas, inicio de operación |
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
+| `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
+| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta |
+| `TasasGoogle.gs` | Tasa de referencia desde Google Finance (hoja auxiliar `Tasas_Google`) |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)

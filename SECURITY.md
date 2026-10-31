@@ -15,6 +15,7 @@ Todo vive en **un Google Sheet de la cuenta de la persona usuaria** y en su Goog
 | Drive | Crear la carpeta de respaldos y las copias |
 | Activadores (`script.scriptapp`) | El disparador diario de copias automáticas |
 | Correo (`userinfo.email`) | Comprobar la lista `USUARIOS_PERMITIDOS` |
+| Google Calendar | Crear el calendario "Moni" y sus eventos de pagos (solo si activas los recordatorios). Los eventos incluyen el valor de cada pago: no compartas ese calendario con quien no deba verlo |
 
 ## Qué no debe subirse al repositorio
 - `.clasp.json` (identifica tu proyecto de Apps Script) y `.clasprc.json` (**credenciales de clasp**): están en `.gitignore`. Usa `.clasp.json.example` como plantilla.

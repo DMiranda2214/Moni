@@ -119,7 +119,9 @@ function normalizarCredito_(c) {
   if (c.ID_Persona) exigirActivo_(leer_('Personas'), 'ID_Persona', c.ID_Persona, 'La persona');
   const cuenta = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', c.ID_Cuenta_Ahorro, 'La cuenta de ahorro');
   if (cuenta.Tipo !== 'Ahorro') throw new Error('El dinero de un crédito sale de una cuenta de tipo Ahorro. "' + cuenta.Nombre + '" no lo es.');
+  exigirCuentaPesos_(cuenta.ID_Cuenta, 'La cuenta de ahorro');
   exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', c.ID_Bolsillo_Pago, 'El bolsillo desde el que pagas');
+  exigirPesos_(c.ID_Bolsillo_Pago, 'El bolsillo desde el que pagas');
 
   const monto = numero_(c.Monto, 'El monto', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const periodicidad = opcion_(c.Periodicidad || 'Mensual', ENUMS.Creditos.Periodicidad, 'La periodicidad');
@@ -320,7 +322,7 @@ function editarCredito(idCredito, datos) {
     cambios.Nombre = nombre;
   }
   if (d.ID_Persona !== undefined) { if (d.ID_Persona) exigirActivo_(leer_('Personas'), 'ID_Persona', d.ID_Persona, 'La persona'); cambios.ID_Persona = d.ID_Persona || ''; }
-  if (d.ID_Bolsillo_Pago !== undefined) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', d.ID_Bolsillo_Pago, 'El bolsillo de pago'); cambios.ID_Bolsillo_Pago = d.ID_Bolsillo_Pago; }
+  if (d.ID_Bolsillo_Pago !== undefined) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', d.ID_Bolsillo_Pago, 'El bolsillo de pago'); exigirPesos_(d.ID_Bolsillo_Pago, 'El bolsillo de pago'); cambios.ID_Bolsillo_Pago = d.ID_Bolsillo_Pago; }
   if (d.Notas !== undefined) cambios.Notas = texto_(d.Notas).slice(0, 300);
   updateRow('Creditos', c._rowIndex, cambios);
   return { idCredito: idCredito };

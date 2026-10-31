@@ -22,6 +22,13 @@ function movimientosDeCuenta_(idCuenta, bolsillos, movs) {
   return movs.filter(m => ids[m.ID_Bolsillo]);
 }
 
+/** { ID_Bolsillo: true } de los bolsillos de una cuenta. */
+function idsDeCuenta_(idCuenta, bolsillos) {
+  const ids = {};
+  bolsillos.filter(b => b.ID_Cuenta === idCuenta).forEach(b => { ids[b.ID_Bolsillo] = true; });
+  return ids;
+}
+
 /** Resumen de una cuenta de ahorro a partir de sus movimientos y los créditos activos. */
 function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
   const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs);
@@ -47,13 +54,15 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
     rendimiento: { interes: redondear2_(interes), retencion: redondear2_(retencion), gmf: redondear2_(gmf), neto: redondear2_(interes - retencion - gmf) },
     deuda: { paraGastos: redondear2_(paraGastos), reposicion: redondear2_(reposicion), manual: deudaManual, creditos: deudaCreditos, total: redondear2_(deudaManual + deudaCreditos) },
     saldoSiRepones: redondear2_(saldo + deudaManual + deudaCreditos),
-    creditos: deCreditos.map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre, saldo: c.saldo }))
+    creditos: deCreditos.map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre, saldo: c.saldo })),
+    evolucion: saldosMensuales_(idsDeCuenta_(cuenta.ID_Cuenta, bolsillos), hoyIso_().slice(0, 7), 12, movs)
   };
 }
 
 /** Todas las cuentas de ahorro activas, para la pantalla de Ahorro. */
 function obtenerAhorro() {
-  const cuentas = getTableData('Cuentas').filter(c => estaActivo(c) && c.Tipo === 'Ahorro');
+  const divisas = mapaDivisas_().cuentas;
+  const cuentas = getTableData('Cuentas').filter(c => estaActivo(c) && c.Tipo === 'Ahorro' && divisas[c.ID_Cuenta] === DIVISA_BASE);
   const bolsillos = getTableData('Bolsillos');
   const movs = getTableData('Movimientos', { excludeAnulados: true });
   const saldos = mapaSaldosBolsillos_();
@@ -87,6 +96,7 @@ function obtenerCuentaAhorro(idCuenta, mes) {
 function cuentaAhorroActiva_(idCuenta) {
   const c = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', idCuenta, 'La cuenta');
   if (c.Tipo !== 'Ahorro') throw new Error('"' + c.Nombre + '" no es una cuenta de ahorro.');
+  exigirCuentaPesos_(c.ID_Cuenta, 'La cuenta de ahorro'); // el ahorro con deuda y rendimientos es en pesos
   return c;
 }
 

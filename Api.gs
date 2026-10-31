@@ -26,6 +26,7 @@ function responder_(fn) {
     return r;
   } catch (e) {
     const r = apiError(e);
+    registrarErrorApi_(e);
     r.ms = Date.now() - inicio;
     return r;
   }
@@ -150,6 +151,38 @@ function addMovimiento(m, vista) {
     return resultadoEscritura_([fila.ID_Mov], vista);
   });
 }
+
+/** Convierte dinero entre bolsillos de distinta divisa (por ejemplo, pesos a dólares). */
+function addConversion(c, vista) {
+  return responder_(function () {
+    const r = registrarConversion(c);
+    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista, { idGrupo: r.idGrupo, tasa: r.tasa, comision: r.comision });
+  });
+}
+
+/** Anota cuántos pesos vale una unidad de una divisa (vacío = quitar la tasa). */
+function saveTasaDivisa(divisa, tasa) {
+  return responder_(function () {
+    if (DIVISAS.indexOf(divisa) === -1 || divisa === DIVISA_BASE) throw new Error('La divisa no es válida.');
+    const t = texto_(tasa).replace(',', '.');
+    if (t === '') {
+      guardarConfig_('Tasa_' + divisa, '');
+      guardarConfig_('Tasa_' + divisa + '_Fecha', '');
+      guardarConfig_('Tasa_' + divisa + '_Fuente', '');
+      return { divisa: divisa, tasa: '', fecha: '' };
+    }
+    const n = Number(t);
+    if (!isFinite(n) || n <= 0 || n > 1e7) throw new Error('La tasa debe ser un número mayor que cero.');
+    guardarConfig_('Tasa_' + divisa, String(n));
+    guardarConfig_('Tasa_' + divisa + '_Fecha', hoyIso_());
+    guardarConfig_('Tasa_' + divisa + '_Fuente', 'Manual');
+    return { divisa: divisa, tasa: String(n), fecha: hoyIso_() };
+  });
+}
+
+/** Trae la tasa de referencia de Google Finance (la hoja auxiliar Tasas_Google). */
+function updateTasasGoogle() { return responder_(function () { return actualizarTasasGoogle(); }); }
+function saveTasaAuto(activar) { return responder_(function () { return configurarTasaAuto(!!activar); }); }
 
 function addTransferencia(t, vista) {
   return responder_(function () {
@@ -502,7 +535,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho') throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 
@@ -548,10 +581,26 @@ function runDiagnostics() {
       tablasEsperadas: Object.keys(SCHEMAS).length,
       listo: v.listo,
       faltantes: v.faltantes,
-      diferencias: v.diferencias
+      diferencias: v.diferencias,
+      version: VERSION_APP
     };
   });
 }
+
+/** Datos de los gráficos: gastos por categoría, entró/salió por mes y saldo al cierre de cada mes. */
+function getGraficos(opciones) { return responder_(function () { return obtenerGraficos(opciones); }); }
+
+// ---- Recordatorios en Google Calendar ----
+function getRecordatorios() { return responder_(function () { return estadoRecordatorios_(); }); }
+function saveRecordatorios(ajustes) { return responder_(function () { return configurarRecordatorios(ajustes); }); }
+function syncRecordatorios() { return responder_(function () { return sincronizarRecordatoriosYa(); }); }
+function removeRecordatorios() { return responder_(function () { return quitarRecordatorios(); }); }
+
+// ---- Registro de errores ----
+function getLogs(opciones) { return responder_(function () { return obtenerLogs(opciones); }); }
+function clearLogs() { return responder_(function () { return limpiarLogs(); }); }
+/** El navegador reporta sus errores aquí; no pasa por responder_ para no registrar un fallo del propio registro. */
+function logClientError(mensaje, detalle) { return registrarErrorCliente(mensaje, detalle); }
 
 // ---- Arranque (Fase 6) ----
 function getArranque() { return responder_(function () { return obtenerArranque(); }); }

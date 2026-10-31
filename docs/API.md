@@ -117,6 +117,18 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `setRespaldoAuto` | `activar` |
 | `seedDemo` | — |
 | `clearDemo` | — |
+| `getRecordatorios` | — |
+| `saveRecordatorios` | `ajustes` (`{ activos, diasAntes (0-7), hora (5-21), nomina }`) |
+| `syncRecordatorios` | — |
+| `removeRecordatorios` | — |
+| `updateTasasGoogle` | — |
+| `saveTasaAuto` | `activar` |
+| `getGraficos` | `opciones` (`{ mes: 'AAAA-MM', meses: 3\|6\|12, divisa }`) |
+| `getLogs` | `opciones` (`{ soloErrores, limite }`) |
+| `clearLogs` | — |
+| `logClientError` | `mensaje, detalle` |
+| `addConversion` | `conversion` (`{ origen, destino, valorOrigen, valorDestino, fecha, notas }`), `vista` |
+| `saveTasaDivisa` | `divisa` (`USD`/`EUR`), `tasa` (vacío = quitar) |
 | `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
 | `saveConfigParam` | `clave, valor` |
 | `saveConfigParams` | `mapa` |

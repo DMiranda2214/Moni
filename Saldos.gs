@@ -32,6 +32,14 @@ function mapaSaldosBolsillos_(hastaFecha) {
   return saldos;
 }
 
+/** Totales de las divisas distintas al peso, con su equivalente en pesos si la persona anotó la tasa. */
+function resumenOtrasDivisas_(totales) {
+  return Object.keys(totales).sort().map(d => {
+    const tasa = tasaDivisa_(d);
+    return { Divisa: d, Total: redondear2_(totales[d]), Tasa: tasa, Equivalente: tasa ? redondear2_(totales[d] * tasa) : null };
+  });
+}
+
 /**
  * Saldos por cuenta y bolsillo, con el cuadre contra el saldo real auditado de cada cuenta.
  * @param {string} hastaFecha AAAA-MM-DD (opcional; por defecto, todo el historial)
@@ -44,9 +52,12 @@ function obtenerSaldos(hastaFecha) {
 
   let disponible = 0;
   let ahorro = 0;
+  const otras = {}; // saldo total de cada divisa distinta al peso
+  const divisas = mapaDivisas_();
 
   const resultado = cuentas.map(c => {
     const banco = bancos.find(b => b.ID_Banco === c.ID_Banco);
+    const divisa = divisas.cuentas[c.ID_Cuenta] || DIVISA_BASE;
     const susBolsillos = bolsillos
       .filter(b => b.ID_Cuenta === c.ID_Cuenta)
       .map(b => ({
@@ -59,12 +70,15 @@ function obtenerSaldos(hastaFecha) {
       }));
 
     const saldo = redondear2_(susBolsillos.reduce((a, b) => a + b.Saldo, 0));
-    if (c.Tipo === 'Ahorro') ahorro += saldo; else disponible += saldo;
+    // Los pesos no se suman con otras divisas: cada una lleva su total aparte.
+    if (divisa !== DIVISA_BASE) otras[divisa] = (otras[divisa] || 0) + saldo;
+    else if (c.Tipo === 'Ahorro') ahorro += saldo; else disponible += saldo;
 
     const tieneReal = c.Saldo_Real !== '' && c.Saldo_Real !== undefined && c.Saldo_Real !== null;
     return {
       ID_Cuenta: c.ID_Cuenta,
       Nombre: c.Nombre,
+      Divisa: divisa,
       Tipo: c.Tipo,
       Banco: banco ? banco.Nombre : '',
       Color: banco ? banco.Color : '',
@@ -83,7 +97,8 @@ function obtenerSaldos(hastaFecha) {
     cuentas: resultado,
     disponible: redondear2_(disponible),
     ahorro: redondear2_(ahorro),
-    total: redondear2_(disponible + ahorro)
+    total: redondear2_(disponible + ahorro),
+    divisas: resumenOtrasDivisas_(otras)
   };
 }
 
@@ -101,11 +116,15 @@ function resumenSaldos_() {
 
   let disponible = 0;
   let ahorro = 0;
+  const otras = {};
+  const divisaDeCuenta = mapaDivisas_().cuentas;
   const cuentas = {};
   getTableData('Cuentas').forEach(c => {
     if (!estaActivo(c)) return;
     const saldo = redondear2_(porCuenta[c.ID_Cuenta] || 0);
-    if (c.Tipo === 'Ahorro') ahorro += saldo; else disponible += saldo;
+    const divisa = divisaDeCuenta[c.ID_Cuenta] || DIVISA_BASE;
+    if (divisa !== DIVISA_BASE) otras[divisa] = (otras[divisa] || 0) + saldo;
+    else if (c.Tipo === 'Ahorro') ahorro += saldo; else disponible += saldo;
     const tieneReal = c.Saldo_Real !== '' && c.Saldo_Real !== undefined && c.Saldo_Real !== null;
     cuentas[c.ID_Cuenta] = {
       Saldo: saldo,
@@ -115,5 +134,5 @@ function resumenSaldos_() {
     };
   });
 
-  return { bolsillos: saldos, cuentas: cuentas, disponible: redondear2_(disponible), ahorro: redondear2_(ahorro), total: redondear2_(disponible + ahorro) };
+  return { bolsillos: saldos, cuentas: cuentas, disponible: redondear2_(disponible), ahorro: redondear2_(ahorro), total: redondear2_(disponible + ahorro), divisas: resumenOtrasDivisas_(otras) };
 }

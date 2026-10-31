@@ -48,16 +48,21 @@ function ico(nombre, extra) {
   return '<svg class="m-icon ' + (extra || '') + '" aria-hidden="true" focusable="false"><use href="#i-' + nombre + '"/></svg>';
 }
 
-let _formato = null;
-function dinero(n) {
-  if (!_formato) {
-    const moneda = (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
-    _formato = new Intl.NumberFormat('es-CO', { style: 'currency', currency: moneda, maximumFractionDigits: 0 });
+const _formatos = {};
+/** Monto con su moneda: sin decimales en pesos, con dos en las demás. Sin `divisa`, la moneda base de la app. */
+function dinero(n, divisa) {
+  const d = divisa || (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
+  if (!_formatos[d]) {
+    const dec = d === 'COP' ? 0 : 2;
+    _formatos[d] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
   }
-  return _formato.format(Number(n) || 0).replace(/ /g, ' ');
+  return _formatos[d].format(Number(n) || 0).replace(/ /g, ' ');
 }
 
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
+/** Una tasa de cambio en pesos, con decimales: $ 4.012,5 */
+const tasaPesos = n => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+
 function leerDinero(texto) {
   const t = String(texto || '').replace(/[^\d,.\-]/g, '');
   if (t === '' || t === '-') return '';
@@ -138,6 +143,22 @@ function api(fn) {
 }
 
 /**
+ * Errores del navegador al registro del servidor (Ajustes → Registro de errores), con tope por sesión
+ * para que un fallo repetido no inunde el registro.
+ */
+let _erroresReportados = 0;
+function reportarErrorCliente(mensaje, detalle) {
+  if (_erroresReportados >= 5) return;
+  _erroresReportados++;
+  try { api('logClientError', String(mensaje).slice(0, 400), String(detalle || '').slice(0, 1800)).catch(() => {}); } catch (e) {}
+}
+window.addEventListener('error', ev => reportarErrorCliente(ev.message, (ev.filename || '') + ':' + ev.lineno + ':' + ev.colno + '\n' + ((ev.error && ev.error.stack) || '')));
+window.addEventListener('unhandledrejection', ev => {
+  const r = ev.reason;
+  reportarErrorCliente('Promesa rechazada: ' + ((r && r.message) || r), (r && r.stack) || '');
+});
+
+/**
  * Aviso breve. `opc` puede ser `true` (error) o { error, deshacer }.
  * Con `deshacer` (una función) el aviso ofrece "Deshacer" durante 8 segundos.
  */
@@ -210,8 +231,10 @@ async function cargar() {
 
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.proximosViejos = false;
+  App.pag.data = null; App.graf.data = null; App.proximosViejos = false;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
+  pedirSyncRecordatorios();
 }
 
 const cat = tabla => (App.boot && App.boot.catalogos && App.boot.catalogos[tabla]) || [];
@@ -219,6 +242,14 @@ const activos = tabla => cat(tabla).filter(f => esVerdad(f.Activo) || f.Activo =
 const esVerdad = v => v === true || String(v).toUpperCase() === 'TRUE';
 const porId = (tabla, idCol, id) => cat(tabla).find(f => f[idCol] === id);
 const cfg = clave => (App.boot && App.boot.config && App.boot.config[clave]) || '';
+
+// Divisas: se elige en el banco; sus cuentas y bolsillos la heredan.
+const DIVISAS_UI = [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']];
+const NOMBRE_DIVISA = { COP: 'Pesos', USD: 'Dólares', EUR: 'Euros' };
+function divisaDeBanco(idBanco) { const b = porId('Bancos', 'ID_Banco', idBanco); return (b && b.Divisa) || 'COP'; }
+function divisaDeCuenta(idCuenta) { const c = porId('Cuentas', 'ID_Cuenta', idCuenta); return c ? divisaDeBanco(c.ID_Banco) : 'COP'; }
+function divisaDeBolsillo(idBolsillo) { const b = porId('Bolsillos', 'ID_Bolsillo', idBolsillo); return b ? divisaDeCuenta(b.ID_Cuenta) : 'COP'; }
+const hayOtrasDivisas = () => activos('Bancos').some(b => (b.Divisa || 'COP') !== 'COP');
 
 function saldoBolsillo(id) {
   const cuentas = (App.boot.saldos && App.boot.saldos.cuentas) || [];
@@ -271,13 +302,15 @@ function aplicarSaldos(s) {
     if (n) { c.Saldo = n.Saldo; c.Saldo_Real = n.Saldo_Real; c.Diferencia = n.Diferencia; c.Fecha_Saldo_Real = n.Fecha_Saldo_Real; }
     c.bolsillos.forEach(b => { if (s.bolsillos[b.ID_Bolsillo] !== undefined) b.Saldo = s.bolsillos[b.ID_Bolsillo]; });
   });
-  sal.disponible = s.disponible; sal.ahorro = s.ahorro; sal.total = s.total;
+  sal.disponible = s.disponible; sal.ahorro = s.ahorro; sal.total = s.total; sal.divisas = s.divisas || [];
 }
 
-function totalesDe(lista) {
+/** Totales de una lista, de una sola divisa (los pesos y los dólares no se suman). */
+function totalesDe(lista, divisa) {
+  const dv = divisa || 'COP';
   let ingresos = 0, gastos = 0;
-  lista.forEach(i => { if (i.Anulado || i.esTransferencia) return; if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor; });
-  return { ingresos: ingresos, gastos: gastos, neto: ingresos - gastos };
+  lista.forEach(i => { if (i.Anulado || i.esTransferencia || (i.Divisa || 'COP') !== dv) return; if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor; });
+  return { ingresos: ingresos, gastos: gastos, neto: ingresos - gastos, Divisa: dv };
 }
 
 function fusionarItems(lista, items, verAnulados, enRango) {
@@ -291,19 +324,21 @@ function fusionarItems(lista, items, verAnulados, enRango) {
 
 /** Aplica el resultado de una escritura: saldos, últimos movimientos y la lista que se está viendo. */
 function aplicarEscritura(res) {
+  pedirSyncRecordatorios();
   aplicarSaldos(res.saldos);
   if (res.ultimos) App.boot.ultimos = res.ultimos;
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null;
-  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null;
+  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
   const d = App.det;
   if (d.data && ruta === 'bolsillo/' + d.id) {
     if (res.saldos.bolsillos[d.id] !== undefined) d.data.bolsillo.Saldo = res.saldos.bolsillos[d.id];
     fusionarItems(d.data.movimientos, res.items, d.anulados, i => i.Fecha.slice(0, 7) === d.data.mes);
-    d.data.totales = totalesDe(d.data.movimientos);
+    d.data.totales = totalesDe(d.data.movimientos, divisaDeBolsillo(d.id));
   } else { d.data = null; }
 
   const m = App.mov;
@@ -359,6 +394,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'movimientos') return 'Movimientos';
   if (partes[0] === 'nomina') return 'Nómina';
   if (partes[0] === 'regalos') return 'Regalos';
+  if (partes[0] === 'graficos') return 'Gráficos';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -368,10 +404,12 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
+  VIZ.items = {}; // los gráficos de esta pantalla se registran al armar su HTML
+  ocultarTip();
   const ruta = rutaActual();
   const raiz = App.pila[0];
 
@@ -387,6 +425,7 @@ function render(enfocar) {
   try {
     vista = App.error ? vErrorCarga() : pantalla(ruta);
   } catch (e) {
+    reportarErrorCliente('Pantalla ' + ruta + ': ' + e.message, e.stack);
     vista = { titulo: 'Error', html: '<div class="m-vacio">' + ico('alerta') + '<h2>No se pudo mostrar esta pantalla</h2><p>' + esc(e.message) + '</p></div>' };
   }
 
@@ -405,6 +444,7 @@ function render(enfocar) {
   if (fab) fab.hidden = !!vista.asistente || !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
 
   if (vista.despues) vista.despues();
+  activarViz();
   if (enfocar) {
     window.scrollTo(0, 0);
     const h = $('#titulo-pantalla');
@@ -424,6 +464,7 @@ function pantalla(ruta) {
     case 'presupuesto': return vPresupuesto();
     case 'nomina': return vNomina();
     case 'regalos': return vRegalos();
+    case 'graficos': return vGraficos();
     case 'anual': return vAnual();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
@@ -443,6 +484,9 @@ function pantalla(ruta) {
       if (partes[1] === 'respaldos') return vRespaldos();
       if (partes[1] === 'arranque') return vArranque();
       if (partes[1] === 'borrar') return vBorrar();
+      if (partes[1] === 'registro') return vRegistro();
+      if (partes[1] === 'divisas') return vDivisas();
+      if (partes[1] === 'recordatorios') return vRecordatorios();
       if (partes[1] === 'parametros') return vParametros();
       if (partes[1] === 'diagnostico') return vDiagnostico();
       if (CAT[partes[1]]) return vCatalogo(partes[1]);
@@ -491,7 +535,7 @@ function vErrorCarga() {
 function vInstalar() {
   return {
     titulo: 'Moni', ocultarTitulo: true,
-    html: vacio('capas', 'Falta instalar la base de datos',
+    html: vacio('capas', 'Falta instalar o actualizar la base de datos',
       'Moni va a crear las tablas que necesita en tu hoja de cálculo. No borra ni modifica nada de lo que ya exista.',
       '<button class="m-btn m-btn-primary" data-acc="instalar">Instalar</button>')
   };
@@ -572,10 +616,22 @@ function vInicio() {
     html += seccion('Cuentas', s.cuentas.map(c => fila({
       icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
       titulo: esc(c.Nombre),
-      sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)),
-      final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo) + '</strong>',
+      sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (c.Divisa !== 'COP' ? ' · ' + esc(c.Divisa) : ''),
+      final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo, c.Divisa) + '</strong>',
       attrs: 'data-acc="ir" data-ruta="bolsillos"'
     })).join(''));
+
+    html += htmlInicioGraficos();
+
+    // Los saldos en otras monedas no se suman al total en pesos: cada una va aparte.
+    if ((s.divisas || []).length) {
+      html += seccion('Otras monedas', s.divisas.map(x => fila({
+        icono: 'banco', titulo: esc(NOMBRE_DIVISA[x.Divisa] || x.Divisa),
+        sub: x.Equivalente !== null ? '≈ ' + dinero(x.Equivalente) + ' · 1 ' + x.Divisa + ' = ' + tasaPesos(x.Tasa) : 'Anota la tasa en Ajustes → Divisas para ver el equivalente en pesos',
+        final: '<strong class="m-num ' + claseSaldo(x.Total) + '">' + dinero(x.Total, x.Divisa) + '</strong>',
+        chevron: true, attrs: 'data-acc="ir" data-ruta="bolsillos"'
+      })).join(''));
+    }
   } else if (!(estado.pasos && !estado.completo)) {
     html += vacio('bolsillos', 'Aún no tienes cuentas', 'Agrega una cuenta desde Ajustes para ver tus saldos aquí.');
   }
@@ -618,7 +674,11 @@ function vInicio() {
   return {
     titulo: nombre ? 'Hola, ' + nombre : 'Inicio', html: html, ancha: true,
     // Tras un pago o una compra, la lista de próximos pagos se vuelve a pedir (liviana) en segundo plano.
-    despues: () => { if (App.proximosViejos && !App.proximosCargando) refrescarProximos(); }
+    despues: () => {
+      if (App.proximosViejos && !App.proximosCargando) refrescarProximos();
+      const g = App.inicioGraf;
+      if (hayBolsillos() && !g.cargando && ((!g.data && !g.intentado) || g.viejo)) cargarInicioGraf();
+    }
   };
 }
 
@@ -630,13 +690,17 @@ function vBolsillos() {
       '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Cuentas">Crear una cuenta</button>') };
   }
 
+  if (hayOtrasDivisas() && s.cuentas.some(x => x.bolsillos.length)) {
+    html += '<div class="m-acciones-fila" style="margin:0 0 var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="convertir">Convertir divisas</button></div>';
+  }
+
   s.cuentas.forEach(c => {
     const filas = c.bolsillos.length
       ? c.bolsillos.map(b => fila({
           icono: b.Rol === 'Reserva_Tarjeta' ? 'tarjetas' : 'bolsillos',
           titulo: esc(b.Es_Interno ? c.Nombre : b.Nombre),
           sub: b.Es_Interno ? 'Cuenta sin bolsillos' : (b.Rol === 'Operativo' ? '' : esc(etiqueta('RolBolsillo', b.Rol))),
-          final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo) + '</strong>',
+          final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</strong>',
           chevron: true,
           attrs: 'data-acc="ir" data-ruta="bolsillo/' + esc(b.ID_Bolsillo) + '"'
         })).join('')
@@ -644,9 +708,9 @@ function vBolsillos() {
 
     let pie = '';
     if (c.Saldo_Real !== null && c.Saldo_Real !== undefined) {
-      pie = 'Saldo según tu banco: ' + dinero(c.Saldo_Real) + (Math.abs(c.Diferencia) < 0.005 ? ' · cuadra' : ' · diferencia de ' + dinero(c.Diferencia));
+      pie = 'Saldo según tu banco: ' + dinero(c.Saldo_Real, c.Divisa) + (Math.abs(c.Diferencia) < 0.005 ? ' · cuadra' : ' · diferencia de ' + dinero(c.Diferencia, c.Divisa));
     }
-    html += '<section class="m-seccion" aria-label="' + esc(c.Nombre) + '"><div class="m-seccion-cab"><h2 class="m-seccion-titulo">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + ' — ' + dinero(c.Saldo) + '</h2>' +
+    html += '<section class="m-seccion" aria-label="' + esc(c.Nombre) + '"><div class="m-seccion-cab"><h2 class="m-seccion-titulo">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + ' — ' + dinero(c.Saldo, c.Divisa) + '</h2>' +
       '<button class="m-btn-texto" data-acc="cuadrar" data-cuenta="' + esc(c.ID_Cuenta) + '">Cuadrar</button></div>' +
       '<div class="m-group">' + filas + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</section>';
   });
@@ -664,6 +728,7 @@ function vMas() {
       irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
       irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
       irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
+      irA('graficos', { icono: 'pulso', titulo: 'Gráficos', sub: 'En qué gastas y cómo evoluciona tu dinero' }) +
       irA('anual', { icono: 'presupuesto', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante' }) +
       irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Cuentas, bolsillos, tarjetas y apariencia' }))
   };
@@ -679,7 +744,8 @@ function vAjustes() {
         irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
-        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' })) +
       seccion('Presupuesto y nómina',
         irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
         ['Escenarios', 'Nomina_Escenarios', 'Subsidios'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
@@ -687,9 +753,11 @@ function vAjustes() {
       seccion('Organización',
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
+        irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
         irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
+        irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
       seccion('Privacidad',
         irA('ajustes/borrar', { icono: 'alerta', titulo: 'Borrar todos mis datos', sub: 'Empieza de cero. No se puede deshacer', clase: 'm-fila-peligro' }))
@@ -779,6 +847,7 @@ function vDiagnostico() {
         const d = await api('runDiagnostics');
         caja.innerHTML =
           '<p><strong>' + esc(d.hoja) + '</strong></p>' +
+          '<p class="m-ayuda">Versión de Moni ' + esc(d.version) + '</p>' +
           '<p class="m-ayuda">' + d.tablasEsperadas + ' tablas esperadas · ' + (d.listo ? 'todas listas' : d.faltantes.length + ' por crear, ' + d.diferencias.length + ' con encabezados distintos') + '</p>' +
           (d.diferencias.length ? '<p class="m-ayuda">Con diferencias: ' + esc(d.diferencias.map(x => x.tabla).join(', ')) + '. No se modifican automáticamente.</p>' : '') +
           '<p style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="instalar">Instalar o reparar</button></p>' +
@@ -803,10 +872,12 @@ const CAT = {
     vacio: 'Agrega los bancos o billeteras que usas, como Nequi, Nu o tu banco de siempre.',
     fila: b => ({
       titulo: esc(b.Nombre),
-      sub: (n => n ? n + (n === 1 ? ' cuenta' : ' cuentas') : 'Sin cuentas')(activos('Cuentas').filter(c => c.ID_Banco === b.ID_Banco).length)
+      sub: (n => n ? n + (n === 1 ? ' cuenta' : ' cuentas') : 'Sin cuentas')(activos('Cuentas').filter(c => c.ID_Banco === b.ID_Banco).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : '')
     }),
     campos: [
-      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Divisa', label: 'Moneda', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
+        ayuda: 'La moneda de todas las cuentas de este banco. Para ahorrar en dólares, crea un banco en dólares. No se puede cambiar cuando ya tiene cuentas.' }
     ]
   },
   Cuentas: {
@@ -818,7 +889,7 @@ const CAT = {
       return {
         titulo: esc(c.Nombre),
         sub: esc(banco ? banco.Nombre : '') + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (esVerdad(c.Permite_Bolsillos) ? '' : ' · sin bolsillos'),
-        final: '<span class="m-num ' + claseSaldo(saldoCuenta(c.ID_Cuenta)) + '">' + dinero(saldoCuenta(c.ID_Cuenta)) + '</span>'
+        final: '<span class="m-num ' + claseSaldo(saldoCuenta(c.ID_Cuenta)) + '">' + dinero(saldoCuenta(c.ID_Cuenta), divisaDeCuenta(c.ID_Cuenta)) + '</span>'
       };
     },
     alEditar: c => {
@@ -827,7 +898,7 @@ const CAT = {
       return Object.assign({}, c, { Saldo_Apertura: g ? g.Saldo_Apertura : '' });
     },
     campos: [
-      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco') },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco', b => b.Nombre + ((b.Divisa || 'COP') !== 'COP' ? ' (' + b.Divisa + ')' : '')) },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Tipo', label: 'Tipo', tipo: 'select', requerido: true, opciones: optsEnum(['Cuentas', 'Tipo'], 'TipoCuenta') },
       { k: 'Permite_Bolsillos', label: 'Usar bolsillos', tipo: 'interruptor', ayuda: 'Los bolsillos reparten el dinero de la cuenta por propósito. Si lo desactivas, la cuenta se maneja como un solo saldo.', defecto: true },
@@ -850,7 +921,7 @@ const CAT = {
       return {
         titulo: esc(b.Nombre),
         sub: esc(c ? c.Nombre : '') + (b.Rol !== 'Operativo' ? ' · ' + esc(etiqueta('RolBolsillo', b.Rol)) : ''),
-        final: '<span class="m-num ' + claseSaldo(saldoBolsillo(b.ID_Bolsillo)) + '">' + dinero(saldoBolsillo(b.ID_Bolsillo)) + '</span>'
+        final: '<span class="m-num ' + claseSaldo(saldoBolsillo(b.ID_Bolsillo)) + '">' + dinero(saldoBolsillo(b.ID_Bolsillo), divisaDeBolsillo(b.ID_Bolsillo)) + '</span>'
       };
     },
     campos: [
@@ -872,19 +943,20 @@ const CAT = {
     },
     alEditar: t => Object.assign({}, t, { reserva: t.ID_Bolsillo_Reserva }),
     campos: [
-      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco') },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: () => activos('Bancos').filter(b => (b.Divisa || 'COP') === 'COP').map(b => [b.ID_Banco, b.Nombre]),
+        ayuda: 'Las tarjetas se llevan en pesos.' },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Cupo', label: 'Cupo', tipo: 'dinero' },
       { k: 'Dia_Corte', label: 'Día de corte', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'Dia_Pago', label: 'Día límite de pago', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'reserva', label: 'Reserva para pagar el extracto', tipo: 'select', requerido: true,
-        opciones: () => activos('Bolsillos').filter(b => b.Rol === 'Reserva_Tarjeta').map(b => [b.ID_Bolsillo, b.Nombre]).concat([['__nueva', 'Crear una reserva nueva…']]),
+        opciones: () => activos('Bolsillos').filter(b => b.Rol === 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => [b.ID_Bolsillo, b.Nombre]).concat([['__nueva', 'Crear una reserva nueva…']]),
         defecto: '__nueva', ayuda: 'Es el bolsillo donde apartas el dinero para pagar esta tarjeta.' },
       { k: 'cuentaReserva', label: 'Cuenta de la reserva nueva', tipo: 'select', requerido: true,
         visible: v => v.reserva === '__nueva',
-        opciones: () => activos('Cuentas').filter(c => esVerdad(c.Permite_Bolsillos)).map(c => [c.ID_Cuenta, c.Nombre]) },
+        opciones: () => activos('Cuentas').filter(c => esVerdad(c.Permite_Bolsillos) && divisaDeCuenta(c.ID_Cuenta) === 'COP').map(c => [c.ID_Cuenta, c.Nombre]) },
       { k: 'ID_Bolsillo_Personal', label: 'Pagar tus gastos personales desde (opcional)', tipo: 'select',
-        opciones: () => [['', 'Ninguno']].concat(activos('Bolsillos').filter(b => b.Rol !== 'Reserva_Tarjeta').map(b => {
+        opciones: () => [['', 'Ninguno']].concat(activos('Bolsillos').filter(b => b.Rol !== 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => {
           const c = porId('Cuentas', 'ID_Cuenta', b.ID_Cuenta);
           return [b.ID_Bolsillo, (c ? c.Nombre + ' · ' : '') + b.Nombre];
         })) }
@@ -1125,7 +1197,7 @@ function activarEcoDinero(raiz) {
     const eco = $('[data-eco="' + inp.id + '"]', raiz);
     const actualizar = () => {
       const n = leerDinero(inp.value);
-      eco.textContent = inp.value === '' ? '' : (isNaN(n) ? 'Escribe solo números. Usa coma para los decimales.' : '= ' + dinero(n));
+      eco.textContent = inp.value === '' ? '' : (isNaN(n) ? 'Escribe solo números. Usa coma para los decimales.' : '= ' + dinero(n, inp.dataset.divisa || undefined));
     };
     inp.addEventListener('input', actualizar);
     inp.addEventListener('blur', () => {
@@ -1135,6 +1207,21 @@ function activarEcoDinero(raiz) {
     });
     actualizar();
   });
+}
+
+/** Los saldos de una cuenta o bolsillo se escriben en la moneda de su banco: el eco "= US$ 1.000,00" la sigue. */
+function sincronizarDivisa(raiz, tabla, existente) {
+  const claves = tabla === 'Cuentas' ? ['Saldo_Apertura', 'Saldo_Real', 'Meta'] : ['Saldo_Apertura'];
+  const actual = () => {
+    if (tabla === 'Cuentas') { const s = $('#' + idCampo('ID_Banco'), raiz); return divisaDeBanco(s ? s.value : existente && existente.ID_Banco); }
+    const s = $('#' + idCampo('ID_Cuenta'), raiz); return divisaDeCuenta(s ? s.value : existente && existente.ID_Cuenta);
+  };
+  const aplicar = () => {
+    const d = actual();
+    claves.forEach(k => { const el = $('#' + idCampo(k), raiz); if (el) { el.dataset.divisa = d; el.dispatchEvent(new Event('input')); } });
+  };
+  raiz.addEventListener('change', aplicar);
+  aplicar();
 }
 
 async function abrirFormulario(tabla, id, defaults) {
@@ -1169,6 +1256,7 @@ async function abrirFormulario(tabla, id, defaults) {
     alAbrir: raiz => {
       activarEcoDinero(raiz);
       actualizarVisibilidad(raiz, campos, ctx);
+      if (tabla === 'Cuentas' || tabla === 'Bolsillos') sincronizarDivisa(raiz, tabla, existente);
       const sel = $('#' + idCampo('Tipo'), raiz);
       const sw = $('#' + idCampo('Permite_Bolsillos'), raiz);
       if (tabla === 'Cuentas' && sel && sw && !existente) {
@@ -1345,11 +1433,13 @@ function esqueleto(filas) {
 
 /** Monto con su signo y color; el signo va en el texto para no depender solo del color. */
 function montoMov(i, enBolsillo) {
-  if (i.esTransferencia && !enBolsillo) return { texto: dinero(i.Valor), clase: '' };
+  const d = i.Divisa;
+  // Una conversión sale en una moneda y llega en otra: se ven las dos
+  if (i.esTransferencia && !enBolsillo) return { texto: dinero(i.Valor, d) + (i.DivisaDestino ? ' → ' + dinero(i.ValorDestino, i.DivisaDestino) : ''), clase: '' };
   const v = Number(i.Valor) || 0;
   return v >= 0 && !i.esTransferencia
-    ? { texto: '+' + dinero(v), clase: 'm-entra' }
-    : { texto: (v >= 0 ? '+' : '−') + dinero(Math.abs(v)), clase: '' };
+    ? { texto: '+' + dinero(v, d), clase: 'm-entra' }
+    : { texto: (v >= 0 ? '+' : '−') + dinero(Math.abs(v), d), clase: '' };
 }
 
 function filaMov(i, enBolsillo) {
@@ -1392,15 +1482,15 @@ function interruptorAnulados(vista, marcado) {
 }
 
 function cambiarMes(vista, delta) {
-  const st = vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
+  const st = vista === 'graf' ? App.graf : vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
   st.mes = mesMas(st.mes, delta); st.data = null; st.error = null;
   render();
 }
 
 function resumenMes(t) {
   return '<div class="m-group" style="padding:var(--m-space-3) var(--m-space-4);margin-bottom:var(--m-space-4)"><div class="m-resumen-fila" style="margin:0">' +
-    '<div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Salió</div><strong class="m-num">' + dinero(t.gastos) + '</strong></div></div></div>';
+    '<div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos, t.Divisa) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Salió</div><strong class="m-num">' + dinero(t.gastos, t.Divisa) + '</strong></div></div></div>';
 }
 
 function bloqueError(mensaje, accion) {
@@ -1417,7 +1507,7 @@ function vBolsillo(id) {
 
   const b = inf.b, c = inf.c;
   let html = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + '</div>' +
-    '<div class="m-resumen-cifra m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo) + '</div>' +
+    '<div class="m-resumen-cifra m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</div>' +
     '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar" data-bolsillo="' + esc(id) + '">Registrar</button>' +
     '<button class="m-btn m-btn-secondary" data-acc="mover" data-bolsillo="' + esc(id) + '">Mover dinero</button></div></div>';
 
@@ -1425,6 +1515,7 @@ function vBolsillo(id) {
   if (d.error) html += bloqueError(d.error, 'recargar-det');
   else if (!d.data) html += esqueleto(4);
   else {
+    if (d.data.evolucion) html += tarjetaViz('bol-saldo', 'Saldo al cierre de cada mes', lineaSaldo(d.data.evolucion, c.Divisa, 150), tablaSaldo(d.data.evolucion, c.Divisa));
     html += resumenMes(d.data.totales);
     html += d.data.movimientos.length ? htmlListaMov(d.data.movimientos, true)
       : vacio('presupuesto', 'Sin movimientos en este mes', 'Cuando registres un gasto, un ingreso o un traslado de este bolsillo, aparecerá aquí.');
@@ -1498,8 +1589,8 @@ async function cargarMov() {
 /** Opciones de bolsillos agrupadas por cuenta, con su saldo. */
 function opcionesBolsillos() {
   return ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
-    grupo: c.Banco + ' · ' + c.Nombre,
-    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, (b.Es_Interno ? c.Nombre : b.Nombre) + ' — ' + dinero(b.Saldo)])
+    grupo: c.Banco + ' · ' + c.Nombre + (c.Divisa !== 'COP' ? ' (' + c.Divisa + ')' : ''),
+    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, (b.Es_Interno ? c.Nombre : b.Nombre) + ' — ' + dinero(b.Saldo, c.Divisa)])
   }));
 }
 
@@ -1572,7 +1663,13 @@ async function abrirRegistrar(o) {
     cuerpo: cuerpo,
     alAbrir: raiz => {
       activarEcoDinero(raiz); actualizar(raiz);
-      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipo') actualizar(raiz); });
+      // El valor se escribe en la moneda del bolsillo elegido (en un traslado, la del que sale)
+      const monedaDelValor = () => {
+        const sel = $(tipoActual(raiz) === 'Mover' ? '#f-Origen' : '#f-ID_Bolsillo', raiz), v = $('#f-Valor', raiz);
+        if (sel && v) { v.dataset.divisa = divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
+      };
+      monedaDelValor();
+      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipo') actualizar(raiz); monedaDelValor(); });
       const v = $('#f-Valor', raiz); if (v) v.focus();
     },
     alGuardar: async raiz => {
@@ -1591,6 +1688,7 @@ async function abrirRegistrar(o) {
       }
       if (t === 'Mover') {
         if (v.Origen === v.Destino) throw new Error('Elige dos bolsillos distintos.');
+        if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
         res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '' }, vistaActual());
         recordarBolsillo(v.Origen);
       } else {
@@ -1669,7 +1767,7 @@ async function abrirCuadre(idCuenta) {
   if (!c) return;
   const opcionesAjuste = [['', 'No ajustar: solo guardar el saldo']].concat(c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre]));
   const cuerpo = '<form novalidate data-form="cuadre">' +
-    '<p class="m-hoja-mensaje">Moni suma <strong>' + dinero(c.Saldo) + '</strong> en “' + esc(c.Nombre) + '”. Escribe lo que muestra tu banco para compararlos.</p>' +
+    '<p class="m-hoja-mensaje">Moni suma <strong>' + dinero(c.Saldo, c.Divisa) + '</strong> en “' + esc(c.Nombre) + '”. Escribe lo que muestra tu banco para compararlos.</p>' +
     htmlCampo({ k: 'Valor', label: 'Saldo según tu banco', tipo: 'dinero', requerido: true }, c.Saldo_Real === null || c.Saldo_Real === undefined ? '' : c.Saldo_Real) +
     '<p id="cuadre-dif" class="m-ayuda" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
     '<div class="m-campo" id="cuadre-ajuste" hidden><label class="m-label" for="f-Ajuste">Registrar la diferencia como ajuste en</label>' +
@@ -1680,14 +1778,15 @@ async function abrirCuadre(idCuenta) {
   await abrirHoja({
     titulo: 'Cuadrar cuenta', cuerpo: cuerpo,
     alAbrir: raiz => {
-      activarEcoDinero(raiz);
       const entrada = $('#f-Valor', raiz);
+      entrada.dataset.divisa = c.Divisa;
+      activarEcoDinero(raiz);
       const calcular = () => {
         const n = leerDinero(entrada.value);
         const dif = $('#cuadre-dif', raiz), aj = $('#cuadre-ajuste', raiz);
         if (n === '' || isNaN(n)) { dif.textContent = ''; aj.hidden = true; return; }
         const d = Math.round((n - c.Saldo) * 100) / 100;
-        dif.textContent = Math.abs(d) < 0.005 ? 'Cuadra: no hay diferencia.' : 'Diferencia: ' + (d > 0 ? 'el banco muestra ' : 'Moni suma ') + dinero(Math.abs(d)) + ' más.';
+        dif.textContent = Math.abs(d) < 0.005 ? 'Cuadra: no hay diferencia.' : 'Diferencia: ' + (d > 0 ? 'el banco muestra ' : 'Moni suma ') + dinero(Math.abs(d), c.Divisa) + ' más.';
         aj.hidden = Math.abs(d) < 0.005;
       };
       entrada.addEventListener('input', calcular); calcular(); entrada.focus();
@@ -1723,7 +1822,7 @@ function aplicarPresupuesto(data) {
 const TIPOS_RENGLON = [['Gasto', 'Gasto'], ['Cuota', 'Cuota de un crédito'], ['Ahorro', 'Ahorro'], ['Fondo', 'Fondo para una meta']];
 
 function opcionesDestino(conNinguno) {
-  const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
+  const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length && c.Divisa === 'COP').map(c => ({
     grupo: c.Banco + ' · ' + c.Nombre,
     opciones: c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre])
   }));
@@ -1802,7 +1901,7 @@ function htmlPresupuesto(d) {
     '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div>' +
     '<p class="m-ayuda">Gastado ' + dinero(t.real) + ' de ' + dinero(t.plan) + ' planeado · ' + t.pagados + ' de ' + t.renglones + ' pagados' + (d.escenario ? ' · ' + esc(d.escenario.Nombre) : '') + '</p></div>';
 
-  h += '<div style="height:var(--m-space-4)"></div><div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
+  h += '<div style="height:var(--m-space-5)"></div>' + htmlPlanVsReal(d) + '<div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
   h += '<div class="m-acciones-fila" style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-primary" data-acc="distribuir">Repartir la nómina en los bolsillos</button></div>';
   return h;
 }
@@ -2178,7 +2277,7 @@ function htmlDeudas(d) {
         '<button class="m-btn m-btn-secondary" data-acc="nuevo-credito">Crear un crédito</button>') + '</div></section>';
   }
   if (pagados.length) h += seccion('Pagados', pagados.map(filaCredito).join(''));
-  return h;
+  return h + htmlMedidoresDeudas(d);
 }
 
 function filaCredito(c) {
@@ -2406,7 +2505,7 @@ function htmlCredito(d) {
     '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(c.avance * 100) + '" aria-label="Avance del pago"><span style="width:' + Math.round(c.avance * 100) + '%"></span></div>' +
     '<p class="m-ayuda">' + c.cuotasPagadas + ' de ' + c.cuotasTotal + ' cuotas pagadas · ' + Math.round(c.avance * 100) + ' % del capital</p>' +
     (activo && c.proxima ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Próxima cuota (' + c.proxima.Num + ')</div><strong class="m-num">' + dinero(c.proxima.Cuota) + '</strong></div><div><div class="m-resumen-etiqueta">Fecha prevista</div><strong>' + esc(fechaCorta(c.proxima.Fecha)) + '</strong></div></div>' : '') +
-    (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-4)"></div>';
+    (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-5)"></div>' + htmlSaldoCredito(d);
 
   h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>' +
@@ -2615,7 +2714,7 @@ function vAhorro() {
     html += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Total ahorrado</div><div class="m-resumen-cifra m-num">' + dinero(t.saldo) + '</div>' +
       '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Le debes al ahorro</div><strong class="m-num">' + dinero(t.deuda) + '</strong></div>' +
       '<div><div class="m-resumen-etiqueta">Tendrías si repones</div><strong class="m-num">' + dinero(t.saldoSiRepones) + '</strong></div></div>' +
-      '<p class="m-ayuda">Rendimiento neto acumulado: ' + dinero(t.rendimientoNeto) + '</p></div><div style="height:var(--m-space-4)"></div>';
+      '<p class="m-ayuda">Rendimiento neto acumulado: ' + dinero(t.rendimientoNeto) + '</p></div><div style="height:var(--m-space-5)"></div>' + htmlGraficosAhorro(a.data);
     html += '<div class="m-group">' + a.data.cuentas.map(c => fila({
       icono: 'bolsillos', titulo: esc(c.Nombre),
       sub: esc(c.Banco) + (c.avanceMeta !== null ? ' · ' + Math.round(c.avanceMeta * 100) + ' % de la meta' : '') + (c.deuda.total > 0 ? ' · debes ' + dinero(c.deuda.total) : ''),
@@ -2645,7 +2744,7 @@ function htmlCuentaAhorro(d) {
     '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="aportar-ahorro">Aportar</button><button class="m-btn m-btn-secondary" data-acc="rendimiento">Registrar rendimiento</button></div>' +
     '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="retirar-ahorro">Sacar para gastos</button>' + (de.manual > 0 ? '<button class="m-btn m-btn-secondary" data-acc="reponer-ahorro">Reponer</button>' : '') + '</div></div>';
 
-  h += '<div style="height:var(--m-space-4)"></div>' + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
+  h += '<div style="height:var(--m-space-5)"></div>' + tarjetaViz('ahoc-saldo', 'Saldo al cierre de cada mes', lineaSaldo(a.evolucion, 'COP', 170), tablaSaldo(a.evolucion, 'COP')) + seccion('Rendimientos', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Interés ganado</dt><dd class="m-num m-positivo">' + dinero(r.interes) + '</dd></div><div><dt>Retención en la fuente</dt><dd class="m-num">−' + dinero(r.retencion) + '</dd></div>' +
     '<div><dt>GMF (4x1000)</dt><dd class="m-num">−' + dinero(r.gmf) + '</dd></div><div><dt><strong>Neto</strong></dt><dd class="m-num"><strong>' + dinero(r.neto) + '</strong></dd></div></dl></div>');
 
@@ -2820,7 +2919,7 @@ function htmlAnual(d) {
   h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Restante del año</div><div class="m-resumen-cifra m-num ' + claseSaldo(t.restante) + '">' + dinero(t.restante) + '</div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingreso) + '</strong></div><div><div class="m-resumen-etiqueta">Planeado</div><strong class="m-num">' + dinero(t.plan) + '</strong></div><div><div class="m-resumen-etiqueta">Real</div><strong class="m-num">' + dinero(t.real) + '</strong></div></div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ahorrado</div><strong class="m-num">' + dinero(t.ahorro) + '</strong></div><div><div class="m-resumen-etiqueta">Tarjetas</div><strong class="m-num">' + dinero(t.tc) + '</strong></div></div>' +
-    '<p class="m-ayuda">Restante = entró − planeado − tarjetas, como en el Excel.</p></div><div style="height:var(--m-space-4)"></div>';
+    '<p class="m-ayuda">Restante = entró − planeado − tarjetas, como en el Excel.</p></div><div style="height:var(--m-space-5)"></div>' + htmlGraficoAnual(d);
   h += '<div class="m-group">' + d.meses.map(m => {
     const vacio_ = !m.conPresupuesto && !m.ingreso && !m.tc;
     return '<button class="m-row' + (vacio_ ? ' m-hecho' : '') + '" data-acc="mes-anual" data-mes="' + esc(m.mes) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(m.nombre) + '</span>' +
@@ -2876,7 +2975,7 @@ function vArranque() {
     }
     const filas = d.aperturas.map(x => fila({
       titulo: esc(x.Bolsillo || x.Cuenta), sub: x.Bolsillo ? esc(x.Cuenta) : esc(x.Banco),
-      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura) + '</span>'
+      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura, x.Divisa) + '</span>'
     })).join('');
     html += seccion('Saldos de apertura · ' + dinero(d.totalApertura), filas || '<p class="m-ayuda" style="padding:var(--m-space-4)">Aún no hay bolsillos.</p>');
     if (!d.hecho) {
@@ -2895,7 +2994,7 @@ async function abrirAperturas() {
   if (!d) return;
   const cuerpo = '<form novalidate data-form="aperturas"><p class="m-hoja-mensaje">Escribe cuánto dinero hay en cada lugar al cierre del día anterior al arranque (' + esc(d.fecha) + '). Puede ser negativo.</p>' +
     d.aperturas.map((x, i) => '<div class="m-campo"><label class="m-label" for="ap-' + i + '">' + esc(x.Bolsillo ? x.Cuenta + ' · ' + x.Bolsillo : x.Cuenta) + '</label>' +
-      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
+      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" data-divisa="' + esc(x.Divisa) + '" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
   await abrirHoja({
     titulo: 'Saldos de apertura', cuerpo: cuerpo, alAbrir: raiz => activarEcoDinero(raiz),
@@ -3101,6 +3200,601 @@ async function abrirCodigoServicio(id) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Recordatorios en Google Calendar (Ajustes → Recordatorios)
+// ---------------------------------------------------------------------------
+
+App.rec = { data: null, error: null };
+
+/** Si los recordatorios están activos, el calendario se pone al día unos segundos después de cada cambio (sin esperar al aviso diario). */
+let _temporizadorSync = null;
+function pedirSyncRecordatorios() {
+  if (!App.boot || !esVerdad(cfg('Recordatorios_Activos'))) return;
+  clearTimeout(_temporizadorSync);
+  _temporizadorSync = setTimeout(() => { api('syncRecordatorios').then(r => { App.rec.data = r; }).catch(() => {}); }, 5000);
+}
+
+const CAMPOS_REC = [
+  { k: 'activos', label: 'Recordarme mis pagos en Google Calendar', tipo: 'interruptor' },
+  { k: 'diasAntes', label: 'Avisar con anticipación', tipo: 'select', opciones: () => [[0, 'Solo el mismo día']].concat([1, 2, 3, 4, 5, 6, 7].map(n => [n, n === 1 ? '1 día antes' : n + ' días antes'])),
+    ayuda: 'Además del aviso del mismo día.' },
+  { k: 'hora', label: 'Hora de los avisos', tipo: 'select', opciones: () => Array.from({ length: 17 }, (_, i) => [i + 5, (i + 5) + ':00']) },
+  { k: 'nomina', label: 'Incluir las fechas de prima y cesantías', tipo: 'interruptor', ayuda: 'Las fechas límite salen de Ajustes → Parámetros de nómina.' }
+];
+
+function vRecordatorios() {
+  const valores = { activos: esVerdad(cfg('Recordatorios_Activos')), diasAntes: cfg('Recordatorios_Dias_Antes') || 2, hora: cfg('Recordatorios_Hora') || 9, nomina: cfg('Recordatorios_Nomina') === '' ? true : esVerdad(cfg('Recordatorios_Nomina')) };
+  return {
+    titulo: 'Recordatorios',
+    html:
+      '<p class="m-subtitulo-cuerpo" style="padding:0 var(--m-space-1)">Moni crea un calendario llamado <strong>Moni</strong> en tu Google Calendar con un evento por cada pago de los próximos 45 días: tarjetas, cuotas de crédito, suscripciones y servicios. Se actualiza solo cada día y unos segundos después de que registras algo.</p>' +
+      '<form class="m-group" style="padding:var(--m-space-4)" data-form="recordatorios" novalidate>' + CAMPOS_REC.map(c => htmlCampo(c, valores[c.k], {})).join('') +
+      '<div class="m-error-form" id="rec-error" role="alert" hidden></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>' +
+      '<div id="rec-estado" style="margin-top:var(--m-space-4)"></div>' +
+      '<p class="m-ayuda" style="margin-top:var(--m-space-4);padding:0 var(--m-space-1)">Los eventos llevan el valor de cada pago: cuida con quién compartes ese calendario.</p>',
+    despues: cargarRecordatorios
+  };
+}
+
+function htmlEstadoRecordatorios(d) {
+  if (!d.tieneCalendario) return '';
+  return '<div class="m-group" style="padding:var(--m-space-4)"><p><strong>Calendario “Moni”</strong></p>' +
+    '<p class="m-ayuda">' + (d.ultima ? 'Última sincronización: ' + esc(fechaLog(d.ultima)) + '. ' + esc(d.resumen) : 'Aún no se ha sincronizado.') + '</p>' +
+    '<div class="m-acciones-fila">' + (d.activos ? '<button class="m-btn m-btn-secondary" data-acc="rec-sync">Sincronizar ahora</button>' : '') +
+    '<button class="m-btn m-btn-secondary" style="color:var(--m-danger)" data-acc="rec-quitar">Quitar de mi calendario</button></div></div>';
+}
+
+async function cargarRecordatorios() {
+  const caja = $('#rec-estado');
+  if (!caja) return;
+  try { App.rec.data = await api('getRecordatorios'); caja.innerHTML = htmlEstadoRecordatorios(App.rec.data); }
+  catch (e) { caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>'; }
+}
+
+// ---------------------------------------------------------------------------
+// Gráficos (SVG sin librerías): componentes reutilizables y la pantalla Más → Gráficos.
+// Los usan Inicio, Presupuesto, Deudas, Ahorro, la Vista anual y el detalle de un bolsillo.
+// Cada gráfico se registra en VIZ con su id al armar el HTML; render() llama a activarViz() para conectar
+// hover, foco y teclado. Marcas finas, cuadrícula recesiva y una tabla con los mismos datos.
+// Una sola moneda por gráfico: los pesos y los dólares no se suman.
+// ---------------------------------------------------------------------------
+
+App.graf = { mes: null, meses: 6, divisa: 'COP', data: null, cargando: false, error: null };
+App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
+const VIZ = { items: {}, n: 0 };
+
+const compactoPlano = n => new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0);
+const compactoMoneda = (n, d) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: d || 'COP', notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0).replace(/ /g, ' ');
+const mesCorto = mes => { const p = mes.split('-').map(Number); return new Date(p[0], p[1] - 1, 1).toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''); };
+const porcentajeDe = (v, total) => total > 0 ? (v / total * 100 < 1 ? '<1 %' : Math.round(v / total * 100) + ' %') : '';
+
+/** Etiqueta de eje compacta (mil, M) con los decimales justos para que dos marcas vecinas no se vean iguales. */
+function etiquetaEje(v, escala) {
+  if (v === 0) return '0';
+  const tope = Math.max(Math.abs(escala.min), Math.abs(escala.max));
+  const [div, suf] = tope >= 1e9 ? [1e9, ' mil M'] : tope >= 1e6 ? [1e6, ' M'] : tope >= 1e3 ? [1e3, ' mil'] : [1, ''];
+  const dec = Math.max(0, Math.min(3, Math.ceil(-Math.log10(escala.paso / div) - 1e-9)));
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(v / div) + suf;
+}
+
+/** Marcas de eje "redondas": el paso es 1, 2 o 5 por una potencia de 10. */
+function ticksNice(min, max, cuantos) {
+  if (max === min) { const p = Math.abs(max) * 0.1 || 1; min -= p; max += p; }
+  const crudo = (max - min) / cuantos, pot = Math.pow(10, Math.floor(Math.log10(crudo)));
+  const paso = [1, 2, 5, 10].map(f => f * pot).find(p => p >= crudo);
+  const ini = Math.floor(min / paso) * paso, fin = Math.ceil(max / paso) * paso, ticks = [];
+  for (let v = ini; v <= fin + paso / 1000; v += paso) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { min: ini, max: fin, ticks: ticks, paso: paso };
+}
+
+/** Barra con el extremo de datos redondeado (4 px) y la base recta. */
+function trazoBarra(x, y, w, h, r) {
+  if (h <= 0) return '';
+  const rr = Math.min(r, h, w / 2);
+  return 'M' + x + ',' + (y + h) + 'V' + (y + rr) + 'Q' + x + ',' + y + ' ' + (x + rr) + ',' + y + 'H' + (x + w - rr) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + rr) + 'V' + (y + h) + 'Z';
+}
+
+/** Puntos de un eje de meses: etiqueta corta, año (en el primero y en enero) y título para el tooltip. */
+const puntosMeses = lista => lista.map((mes, i) => ({ x: mesCorto(mes), anio: (i === 0 || mes.slice(5) === '01') ? mes.slice(2, 4) : '', titulo: mesTexto(mes), previo: 'vs ' + mesCorto(lista[Math.max(0, i - 1)]) }));
+
+const tablaViz = (cab, filas) => '<div style="overflow-x:auto"><table class="m-tabla"><thead><tr>' + cab.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+  filas.map(f => '<tr>' + f.map(c => '<td class="m-num">' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+
+/** Tarjeta de un gráfico con su título y, si hay, la tabla alternativa. */
+function tarjetaViz(id, titulo, cuerpo, tabla) {
+  return '<section class="m-seccion m-viz" aria-labelledby="' + id + '"><h2 class="m-seccion-titulo" id="' + id + '">' + esc(titulo) + '</h2>' +
+    '<div class="m-group m-viz-tarjeta">' + cuerpo + (tabla ? '<details class="m-viz-tabla"><summary>Ver como tabla</summary>' + tabla + '</details>' : '') + '</div></section>';
+}
+
+const VIZ_W = 340, VIZ_M = { l: 48, r: 10, t: 10, b: 34 };
+
+/** Ejes y cuadrícula comunes: líneas finas y continuas, solo la base un poco más marcada. */
+function ejesViz(escala, alto, puntos, xDe, cadaN) {
+  const h = alto - VIZ_M.t - VIZ_M.b, y = v => VIZ_M.t + h - (v - escala.min) / (escala.max - escala.min) * h;
+  let s = '';
+  escala.ticks.forEach(t => {
+    s += '<line class="viz-grid' + (t === 0 ? ' viz-base' : '') + '" x1="' + VIZ_M.l + '" x2="' + (VIZ_W - VIZ_M.r) + '" y1="' + y(t) + '" y2="' + y(t) + '"/>' +
+      '<text class="viz-eje" x="' + (VIZ_M.l - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + esc(etiquetaEje(t, escala)) + '</text>';
+  });
+  puntos.forEach((q, i) => {
+    if (cadaN > 1 && i % cadaN !== 0) return;
+    s += '<text class="viz-eje" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 14) + '" text-anchor="middle">' + esc(q.x) + '</text>' +
+      (q.anio ? '<text class="viz-eje viz-anio" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 26) + '" text-anchor="middle">' + esc(q.anio) + '</text>' : '');
+  });
+  return { y: y, svg: s };
+}
+
+const clavesViz = series => '<div class="m-viz-claves">' + series.map(s => '<span class="m-viz-clave"><i class="viz-sw ' + s.clave + '"></i>' + esc(s.nombre) + '</span>').join('') + '</div>';
+
+/**
+ * Líneas sobre un eje de puntos. series: [{ nombre, clave: 'viz-s1'|'viz-s2'|'viz-s3'|'viz-acento', valores }] (null = sin dato).
+ * Una sola serie en el color de acento lleva el valor final y el cambio frente al punto anterior en el tooltip.
+ */
+function vizLinea(o) {
+  const id = 'viz' + (++VIZ.n), p = o.puntos, n = p.length, alto = o.alto || 190, solo = o.series.length === 1;
+  const todos = [].concat.apply([], o.series.map(s => s.valores)).filter(v => v !== null && v !== undefined);
+  if (!todos.length) todos.push(0);
+  const escala = ticksNice(Math.min.apply(null, todos), Math.max.apply(null, todos), 4);
+  const paso = n > 1 ? (VIZ_W - VIZ_M.l - VIZ_M.r - 8) / (n - 1) : 0, xc = i => VIZ_M.l + 4 + paso * i;
+  const ejes = ejesViz(escala, alto, p, xc, Math.ceil(n / 8));
+  const ys = o.series.map(s => s.valores.map(v => v === null || v === undefined ? null : ejes.y(v)));
+  const base = ejes.y(escala.min);
+
+  let trazos = '', fin = '';
+  o.series.forEach((s, k) => {
+    let seg = [];
+    const cerrar = () => {
+      if (!seg.length) return;
+      const linea = seg.map((q, j) => (j ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('');
+      if (solo && seg.length > 1) trazos += '<path class="viz-area ' + s.clave + '" d="' + linea + 'L' + seg[seg.length - 1][0] + ',' + base + 'L' + seg[0][0] + ',' + base + 'Z"/>';
+      trazos += '<path class="viz-trazo ' + s.clave + '" d="' + (seg.length === 1 ? linea + 'h0.01' : linea) + '"/>';
+      seg = [];
+    };
+    ys[k].forEach((y, i) => { if (y === null) cerrar(); else seg.push([xc(i), y]); });
+    cerrar();
+  });
+  if (solo) {
+    let u = n - 1; while (u >= 0 && ys[0][u] === null) u--;
+    if (u >= 0) fin = '<circle class="viz-fin ' + o.series[0].clave + '" cx="' + xc(u) + '" cy="' + ys[0][u] + '" r="4"/><text class="viz-valor" x="' + xc(u) + '" y="' + (ys[0][u] - 10) + '" text-anchor="end">' + esc(compactoMoneda(o.series[0].valores[u], o.divisa)) + '</text>';
+  }
+  const ancho = Math.max(paso, 24);
+  const zonas = p.map((q, i) => '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (xc(i) - ancho / 2) + '" y="' + VIZ_M.t + '" width="' + ancho + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
+    esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + (s.valores[i] === null || s.valores[i] === undefined ? 'sin dato' : dinero(s.valores[i], o.divisa))).join(', ')) + '"/>').join('');
+  const puntosHover = o.series.map((s, k) => '<circle class="viz-punto ' + s.clave + '" data-s="' + k + '" r="4.5" hidden/>').join('');
+
+  VIZ.items[id] = { tipo: 'linea', puntos: p, series: o.series, ys: ys, xc: xc, fm: v => dinero(v, o.divisa), delta: solo && o.delta, extraTip: o.extraTip };
+  return (solo ? '' : clavesViz(o.series)) + '<svg class="m-viz-svg" data-viz-id="' + id + '" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="' + esc(o.etiqueta || '') + '">' + ejes.svg + trazos +
+    '<line class="viz-mira" x1="0" x2="0" y1="' + VIZ_M.t + '" y2="' + (alto - VIZ_M.b) + '" hidden/>' + puntosHover + fin + zonas + '</svg>';
+}
+
+/** Columnas agrupadas (2 o 3 series), de 24 px como máximo, con 2 px de aire entre barras vecinas. */
+function vizColumnas(o) {
+  const id = 'viz' + (++VIZ.n), p = o.puntos, n = p.length, alto = o.alto || 210, ns = o.series.length;
+  const escala = ticksNice(0, Math.max.apply(null, [1].concat([].concat.apply([], o.series.map(s => s.valores)))), 4);
+  const banda = (VIZ_W - VIZ_M.l - VIZ_M.r) / n, xc = i => VIZ_M.l + banda * (i + 0.5);
+  const ejes = ejesViz(escala, alto, p, xc, 1);
+  const ancho = Math.max(4, Math.min(24, (banda - 8) / ns - 2)), base = ejes.y(0);
+  let marcas = '', zonas = '';
+  p.forEach((q, i) => {
+    o.series.forEach((s, k) => { marcas += '<path class="viz-barra ' + s.clave + '" d="' + trazoBarra(xc(i) - (ns * (ancho + 2) - 2) / 2 + k * (ancho + 2), ejes.y(s.valores[i]), ancho, base - ejes.y(s.valores[i]), 4) + '"/>'; });
+    zonas += '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (VIZ_M.l + banda * i) + '" y="' + VIZ_M.t + '" width="' + banda + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
+      esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + dinero(s.valores[i], o.divisa)).join(', ')) + '"/>';
+  });
+  VIZ.items[id] = { tipo: 'columnas', puntos: p, series: o.series, fm: v => dinero(v, o.divisa), extraTip: o.extraTip };
+  return clavesViz(o.series) + '<svg class="m-viz-svg" data-viz-id="' + id + '" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="' + esc(o.etiqueta || '') + '">' + ejes.svg + marcas + zonas + '</svg>';
+}
+
+/** Barras horizontales ordenadas, de un solo color (es una sola serie: el color no codifica nada más). items: [{ nombre, valor, detalle }]. */
+function vizBarrasH(o) {
+  if (!o.items.length) return '<p class="m-ayuda">' + esc(o.vacio || 'Sin datos.') + '</p>';
+  const id = 'viz' + (++VIZ.n), max = Math.max.apply(null, o.items.map(c => c.valor)) || 1;
+  VIZ.items[id] = { tipo: 'barras', items: o.items, divisa: o.divisa };
+  return '<div class="m-barras" role="list">' + o.items.map((c, i) =>
+    '<div class="m-barra" role="listitem" tabindex="0" data-viz-id="' + id + '" data-i="' + i + '" aria-label="' + esc(c.nombre + ': ' + dinero(c.valor, o.divisa) + (c.detalle ? ', ' + c.detalle : '')) + '">' +
+    '<span class="m-barra-nombre">' + esc(c.nombre) + '</span><span class="m-barra-valor m-num">' + esc(dinero(c.valor, o.divisa)) + '</span>' +
+    '<span class="m-barra-pista"><i style="width:' + Math.max(1, c.valor / max * 100).toFixed(1) + '%"></i></span></div>').join('') + '</div>';
+}
+
+/**
+ * Medidores de avance: cuánto se lleva de un tope (lo gastado frente a lo planeado, el cupo usado, lo pagado de un crédito).
+ * Pasar del tope lo marca con la palabra "excedido" y un relleno de alerta (el color nunca va solo).
+ * items: [{ nombre, valor, tope, texto }]
+ */
+function vizMedidores(items) {
+  if (!items.length) return '<p class="m-ayuda">Sin datos.</p>';
+  return '<div class="m-medidores">' + items.map(m => {
+    const pct = m.tope > 0 ? m.valor / m.tope * 100 : 0, excede = pct > 100.0001;
+    return '<div class="m-medidor"><div class="m-medidor-cab"><span class="m-medidor-nombre">' + esc(m.nombre) + '</span><span class="m-num m-medidor-texto">' + esc(m.texto) + (excede ? ' · excedido' : '') + '</span></div>' +
+      '<div class="m-progreso' + (excede ? ' m-progreso-excede' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, Math.round(pct)) + '" aria-label="' + esc(m.nombre) + '"><span style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%"></span></div></div>';
+  }).join('') + '</div>';
+}
+
+/** Línea del saldo al cierre de cada mes: [{ mes, saldo }]. */
+function lineaSaldo(serie, divisa, alto) {
+  return vizLinea({ puntos: puntosMeses(serie.map(s => s.mes)), series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: serie.map(s => s.saldo) }], divisa: divisa, delta: true, alto: alto || 170, etiqueta: 'Saldo al cierre de cada mes' });
+}
+const tablaSaldo = (serie, divisa) => tablaViz(['Mes', 'Saldo'], serie.map(s => [mesTexto(s.mes), dinero(s.saldo, divisa)]));
+
+// ---- Tooltip: uno solo, con textContent (los nombres vienen de datos del usuario) ----
+let _tip = null;
+function mostrarTip(titulo, filas, rect) {
+  if (!_tip) { _tip = document.createElement('div'); _tip.className = 'm-viz-tip'; _tip.setAttribute('role', 'presentation'); document.body.appendChild(_tip); }
+  _tip.textContent = '';
+  const t = document.createElement('div'); t.className = 'm-viz-tip-titulo'; t.textContent = titulo; _tip.appendChild(t);
+  filas.forEach(f => {
+    const r = document.createElement('div'); r.className = 'm-viz-tip-fila';
+    if (f.clave) { const k = document.createElement('i'); k.className = 'viz-clave-linea ' + f.clave; r.appendChild(k); }
+    const v = document.createElement('strong'); v.className = 'm-num'; v.textContent = f.valor; r.appendChild(v);
+    if (f.etiqueta) { const e = document.createElement('span'); e.textContent = f.etiqueta; r.appendChild(e); }
+    _tip.appendChild(r);
+  });
+  _tip.hidden = false;
+  const w = _tip.offsetWidth, h = _tip.offsetHeight;
+  let x = rect.left + rect.width / 2 - w / 2, y = rect.top - h - 8;
+  if (y < 4) y = rect.bottom + 8;
+  _tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + 'px';
+  _tip.style.top = y + 'px';
+}
+function ocultarTip() { if (_tip) _tip.hidden = true; }
+
+/** Conecta hover, foco y flechas de todos los gráficos de la pantalla. */
+function activarViz() {
+  $$('.m-barra[data-viz-id]').forEach(el => {
+    const it = VIZ.items[el.dataset.vizId];
+    if (!it) return;
+    const c = it.items[Number(el.dataset.i)];
+    const mostrar = () => mostrarTip(c.nombre, [{ valor: dinero(c.valor, it.divisa), etiqueta: c.detalle || '' }], el.getBoundingClientRect());
+    el.addEventListener('pointerenter', mostrar); el.addEventListener('focus', mostrar);
+    el.addEventListener('pointerleave', ocultarTip); el.addEventListener('blur', ocultarTip);
+  });
+
+  $$('svg[data-viz-id]').forEach(svg => {
+    const it = VIZ.items[svg.dataset.vizId];
+    if (!it) return;
+    const mira = $('.viz-mira', svg), puntos = $$('.viz-punto', svg);
+    const ocultar = () => {
+      ocultarTip();
+      $$('.viz-zona', svg).forEach(z => z.classList.remove('viz-activa'));
+      if (mira) mira.setAttribute('hidden', '');
+      puntos.forEach(q => q.setAttribute('hidden', ''));
+    };
+    const mostrar = zona => {
+      const i = Number(zona.dataset.i);
+      $$('.viz-zona', svg).forEach(z => z.classList.toggle('viz-activa', z === zona));
+      const filas = it.series.map(s => ({ clave: s.clave, valor: s.valores[i] === null || s.valores[i] === undefined ? '—' : it.fm(s.valores[i]), etiqueta: s.nombre }));
+      if (it.delta) {
+        const v = it.series[0].valores, antes = i > 0 ? v[i - 1] : null;
+        if (antes !== null && antes !== undefined && v[i] !== null && v[i] !== undefined) filas.push({ valor: (v[i] - antes >= 0 ? '+' : '−') + it.fm(Math.abs(v[i] - antes)), etiqueta: it.puntos[i].previo });
+      }
+      if (it.extraTip) it.extraTip(i).forEach(f => filas.push(f));
+      let ancla = zona;
+      if (it.tipo === 'linea') {
+        if (mira) { mira.setAttribute('x1', it.xc(i)); mira.setAttribute('x2', it.xc(i)); mira.removeAttribute('hidden'); }
+        puntos.forEach(q => {
+          const y = it.ys[Number(q.dataset.s)][i];
+          if (y === null) { q.setAttribute('hidden', ''); return; }
+          q.setAttribute('cx', it.xc(i)); q.setAttribute('cy', y); q.removeAttribute('hidden');
+          if (ancla === zona) ancla = q;
+        });
+      }
+      mostrarTip(it.puntos[i].titulo, filas, ancla.getBoundingClientRect());
+    };
+    $$('.viz-zona', svg).forEach(z => {
+      z.addEventListener('pointerenter', () => mostrar(z)); z.addEventListener('focus', () => mostrar(z));
+      z.addEventListener('pointerleave', ocultar); z.addEventListener('blur', ocultar);
+      z.addEventListener('keydown', ev => {
+        const zs = $$('.viz-zona', svg), i = zs.indexOf(z);
+        const sig = ev.key === 'ArrowRight' ? zs[i + 1] : ev.key === 'ArrowLeft' ? zs[i - 1] : null;
+        if (sig) { ev.preventDefault(); sig.focus(); }
+      });
+    });
+  });
+}
+
+// ---- Pantalla Más → Gráficos ----
+
+function vGraficos() {
+  const g = App.graf;
+  if (!g.mes) g.mes = App.boot.hoy.slice(0, 7);
+  const divisas = ['COP'].concat(activos('Bancos').map(b => b.Divisa || 'COP').filter((d, i, a) => d !== 'COP' && a.indexOf(d) === i));
+  if (divisas.indexOf(g.divisa) === -1) g.divisa = 'COP';
+  const segmentos = (nombre, etiqueta, opciones, actual) => '<div class="m-segmentado" role="radiogroup" aria-label="' + esc(etiqueta) + '">' +
+    opciones.map(o => '<label><input type="radio" name="' + nombre + '" value="' + esc(o[0]) + '"' + (String(o[0]) === String(actual) ? ' checked' : '') + '><span>' + esc(o[1]) + '</span></label>').join('') + '</div>';
+
+  // Los filtros van en una sola fila sobre los gráficos y valen para todos
+  let html = bannerDemo() + '<div class="m-filtros-viz">' + navegadorMes('graf', g.mes) +
+    segmentos('graf-rango', 'Meses a mostrar', [[3, '3 meses'], [6, '6 meses'], [12, '12 meses']], g.meses) +
+    (divisas.length > 1 ? segmentos('graf-divisa', 'Moneda', divisas.map(d => [d, d]), g.divisa) : '') + '</div>';
+
+  if (g.error) html += bloqueError(g.error, 'recargar-graf');
+  else if (!g.data) html += esqueleto(5);
+  else html += htmlGraficos(g.data);
+  return {
+    titulo: 'Gráficos', html: html,
+    despues: () => {
+      if (!g.data && !g.cargando && !g.error) {
+        const clave = () => g.mes + '|' + g.meses + '|' + g.divisa, k = clave();
+        cargarEn(g, 'graficos', 'getGraficos', [{ mes: g.mes, meses: g.meses, divisa: g.divisa }], () => k === clave());
+      }
+    }
+  };
+}
+
+/** Barras de las categorías con mayor gasto (y "Otras"), con su porcentaje. */
+function itemsCategorias(d, cats) {
+  return cats.map(c => ({ nombre: c.Nombre, valor: c.Valor, detalle: porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió' }));
+}
+
+/** Las 7 mayores categorías y, si hay más, "Otras". */
+function categoriasVisibles(d) {
+  const TOP = 7;
+  if (d.categorias.length <= TOP + 1) return d.categorias;
+  const resto = d.categorias.slice(TOP).reduce((a, c) => a + c.Valor, 0);
+  return d.categorias.slice(0, TOP).concat([{ Nombre: 'Otras', Valor: Math.round(resto * 100) / 100 }]);
+}
+
+function htmlGraficos(d) {
+  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
+  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null, fm = n => dinero(n, dv);
+
+  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
+  const tile = (etiqueta, valor, previo, subeEsBueno) => {
+    let delta = '';
+    if (previo !== null && previo !== undefined && previo !== 0) {
+      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
+      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
+    }
+    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(fm(valor)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
+  };
+  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
+
+  const puntos = puntosMeses(s.map(m => m.mes)), cats = categoriasVisibles(d);
+  return kpis +
+    tarjetaViz('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), vizBarrasH({ items: itemsCategorias(d, cats), divisa: dv, vacio: 'Sin gastos este mes.' }),
+      d.categorias.length ? tablaViz(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '') +
+    tarjetaViz('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses',
+      vizColumnas({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: s.map(m => m.ingresos) }, { nombre: 'Salió', clave: 'viz-s2', valores: s.map(m => m.gastos) }], divisa: dv, etiqueta: 'Entró y salió por mes',
+        extraTip: i => [{ valor: fm(s[i].neto), etiqueta: 'Diferencia' }] }),
+      tablaViz(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
+    tarjetaViz('gv-saldo', 'Saldo al cierre de cada mes', lineaSaldo(s, dv, 190), tablaSaldo(s, dv));
+}
+
+// ---- Gráficos dentro de los módulos ----
+
+/** Inicio: saldo de los últimos 6 meses y en qué se fue el dinero este mes (se pide aparte, sin frenar la pantalla). */
+function htmlInicioGraficos() {
+  const g = App.inicioGraf.data;
+  if (!g || !g.hayDatos) return '';
+  const cats = categoriasVisibles(g).slice(0, 3);
+  return tarjetaViz('ini-saldo', 'Tu saldo en los últimos ' + g.serie.length + ' meses', lineaSaldo(g.serie, 'COP', 150), tablaSaldo(g.serie, 'COP')) +
+    (cats.length ? tarjetaViz('ini-cat', 'En qué gastaste · ' + mesTexto(g.mes), vizBarrasH({ items: itemsCategorias(g, cats), divisa: 'COP' }),
+      tablaViz(['Categoría', 'Valor', '%'], g.categorias.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, g.totalGastos)]))) : '') +
+    '<section class="m-seccion"><div class="m-group">' + fila({ icono: 'pulso', titulo: 'Ver todos los gráficos', chevron: true, attrs: 'data-acc="ir" data-ruta="graficos"' }) + '</div></section>';
+}
+
+async function cargarInicioGraf() {
+  const st = App.inicioGraf;
+  st.cargando = true;
+  try { st.data = await api('getGraficos', { meses: 6, divisa: 'COP' }); } catch (e) { /* es un adorno: si falla, Inicio sigue igual */ }
+  st.cargando = false; st.viejo = false; st.intentado = true;
+  if (rutaActual() === 'inicio') render();
+}
+
+/** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
+function htmlPlanVsReal(d) {
+  const items = d.items.filter(i => Number(i.Plan) > 0).map(i => ({ nombre: i.Concepto, valor: Number(i.Real) || 0, tope: Number(i.Plan), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Plan)) }))
+    .sort((a, b) => b.valor / b.tope - a.valor / a.tope).slice(0, 8);
+  return items.length ? '<section class="m-seccion"><h2 class="m-seccion-titulo">Plan frente a real</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>' : '';
+}
+
+/** Deudas: cupo usado de cada tarjeta y avance de pago de cada crédito activo. */
+function htmlMedidoresDeudas(d) {
+  let h = '';
+  const tarjetas = d.tarjetas.filter(t => t.Cupo > 0).map(t => { const usado = Math.round((t.Cupo - t.cupoDisponible) * 100) / 100; return { nombre: t.Nombre, valor: usado, tope: t.Cupo, texto: dinero(usado) + ' de ' + dinero(t.Cupo) }; });
+  if (tarjetas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Cupo usado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(tarjetas) + '</div></section>';
+  const creditos = d.creditos.filter(c => c.Estado === 'Activo' && c.Monto > 0).map(c => { const pagado = Math.round((c.Monto - c.saldo) * 100) / 100; return { nombre: c.Nombre, valor: pagado, tope: c.Monto, texto: dinero(pagado) + ' de ' + dinero(c.Monto) }; });
+  if (creditos.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance de los créditos</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(creditos) + '</div></section>';
+  return h;
+}
+
+/** Detalle de un crédito: cómo baja el saldo cuota a cuota. */
+function htmlSaldoCredito(d) {
+  const c = d.credito, cuotas = d.cronograma;
+  if (!cuotas.length) return '';
+  const puntos = [{ x: '0', anio: '', titulo: 'Al inicio', previo: '' }].concat(cuotas.map((f, i) => ({ x: String(f.Num), anio: '', titulo: 'Cuota ' + f.Num + ' · ' + fechaCorta(f.Fecha) + (f.Estado === 'Pagada' ? ' (pagada)' : ''), previo: 'vs cuota anterior' })));
+  const valores = [c.Monto].concat(cuotas.map(f => f.Saldo_Final));
+  return tarjetaViz('cre-saldo', 'Cómo baja el saldo, cuota a cuota',
+    vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: valores }], divisa: 'COP', delta: true, alto: 170, etiqueta: 'Saldo del crédito por cuota' }));
+}
+
+/** Ahorro: evolución del ahorro total (suma de las cuentas) y avance hacia cada meta. */
+function htmlGraficosAhorro(d) {
+  if (!d.cuentas.length) return '';
+  const meses = d.cuentas[0].evolucion.map((p, i) => ({ mes: p.mes, saldo: Math.round(d.cuentas.reduce((a, c) => a + c.evolucion[i].saldo, 0) * 100) / 100 }));
+  let h = tarjetaViz('aho-total', 'Ahorro total · últimos 12 meses', lineaSaldo(meses, 'COP', 170), tablaSaldo(meses, 'COP'));
+  const metas = d.cuentas.filter(c => c.Meta > 0).map(c => ({ nombre: c.Nombre, valor: c.Saldo, tope: c.Meta, texto: dinero(c.Saldo) + ' de ' + dinero(c.Meta) }));
+  if (metas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance hacia la meta</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(metas) + '</div></section>';
+  return h;
+}
+
+/** Vista anual: lo que entró, lo planeado y lo real, mes a mes (los meses sin datos quedan en blanco). */
+function htmlGraficoAnual(d) {
+  const dato = m => m.conPresupuesto || m.ingreso || m.tc;
+  if (!d.meses.some(dato)) return '';
+  const v = k => d.meses.map(m => dato(m) ? m[k] : null);
+  const puntos = d.meses.map((m, i) => ({ x: m.nombre.slice(0, 3).toLowerCase(), anio: i === 0 ? String(d.anio).slice(2) : '', titulo: m.nombre + ' de ' + d.anio, previo: '' }));
+  return tarjetaViz('anual-lineas', 'Entró, planeado y real · ' + d.anio,
+    vizLinea({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: v('ingreso') }, { nombre: 'Planeado', clave: 'viz-s2', valores: v('plan') }, { nombre: 'Real', clave: 'viz-s3', valores: v('real') }], divisa: 'COP', alto: 210, etiqueta: 'Entró, planeado y real por mes' }),
+    tablaViz(['Mes', 'Entró', 'Planeado', 'Real'], d.meses.filter(dato).map(m => [m.nombre, dinero(m.ingreso), dinero(m.plan), dinero(m.real)])));
+}
+
+// ---------------------------------------------------------------------------
+// Divisas: tasas de referencia y conversión entre monedas
+// ---------------------------------------------------------------------------
+
+function vDivisas() {
+  const filas = ['USD', 'EUR'].map(d => {
+    const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha'), fuente = cfg('Tasa_' + d + '_Fuente');
+    return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(NOMBRE_DIVISA[d].toLowerCase()) + ') vale, en pesos</label>' +
+      '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" data-tipo="dinero" data-divisa="COP" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
+      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + (fuente ? ' · ' + esc(fuente) : '') + '</p>' : '') + '</div>';
+  }).join('');
+  return {
+    titulo: 'Divisas',
+    html: '<div class="m-group" style="padding:var(--m-space-4);margin-bottom:var(--m-space-4)">' +
+      '<p class="m-subtitulo-cuerpo">Moni guarda cada cuenta en su moneda y no mezcla los saldos. La tasa de referencia solo sirve para ver cuánto equivale un saldo en pesos y para compararla con lo que te cobró el banco: <strong>no cambia tus saldos ni tus conversiones</strong>, porque cada banco cambia a su propio precio.</p>' +
+      '<div class="m-interruptor-fila"><label for="tasa-auto">Traerla sola de Google Finance cada día</label><span class="m-interruptor"><input type="checkbox" role="switch" id="tasa-auto" data-acc-cambio="tasa-auto"' + (esVerdad(cfg('Tasa_Auto')) ? ' checked' : '') + '><i></i></span></div>' +
+      '<p class="m-ayuda">Es la tasa del mercado, no la TRM oficial. Si la actualización automática está activa, reemplaza lo que escribas aquí.</p>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-top:var(--m-space-3)" data-acc="tasas-google">Actualizar ahora con Google Finance</button></div>' +
+      '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
+      '<p class="m-subtitulo-cuerpo">O anótala tú. Las monedas se eligen al crear el banco.</p>' +
+      filas + '<div class="m-error-form" id="tasas-error" role="alert" hidden></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>',
+    despues: () => { const f = $('form[data-form="tasas"]'); if (f) activarEcoDinero(f); }
+  };
+}
+
+/**
+ * Compra o venta de moneda. Se escribe cuánta moneda se compra o se vende y la tasa que dio el banco por cada
+ * unidad (la TRM solo es una referencia: cada banco cambia a su precio). La comisión, si la hay, se cobra aparte.
+ */
+async function abrirConversion() {
+  const todos = opcionesBolsillos();
+  const ids = [].concat.apply([], todos.map(g => g.opciones.map(x => x[0])));
+  const origenInicial = ids.find(i => divisaDeBolsillo(i) === 'COP') || ids[0] || '';
+  const destinoInicial = ids.find(i => divisaDeBolsillo(i) !== divisaDeBolsillo(origenInicial)) || '';
+  const sel = (k, label, valor) => '<div class="m-campo"><label class="m-label" for="' + idCampo(k) + '">' + esc(label) + '</label><select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' +
+    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>';
+  const hoy = App.boot.hoy;
+  const cuerpo = '<form novalidate data-form="conversion">' +
+    '<p class="m-hoja-mensaje">Escribe cuánta moneda compras o vendes y la tasa que te dio el banco por cada unidad. Moni calcula cuánto sale y cuánto llega.</p>' +
+    sel('Origen', 'Sale de', origenInicial) + sel('Destino', 'Llega a', destinoInicial) +
+    htmlCampo({ k: 'Cantidad', label: 'Cantidad', tipo: 'dinero', requerido: true }, '') +
+    htmlCampo({ k: 'Tasa', label: 'Tasa del banco', tipo: 'dinero', requerido: true }, '') +
+    '<p class="m-ayuda" id="conv-resumen" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
+    htmlCampo({ k: 'Comision', label: 'Comisión del banco (opcional)', tipo: 'dinero' }, '') +
+    '<div class="m-campo"><label class="m-label" for="f-ComisionEn">La comisión se cobra de</label><select class="m-input" id="f-ComisionEn"><option value="origen"></option><option value="destino"></option></select></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + esc(hoy) + '"></div>' +
+    htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  /** Qué se está convirtiendo: la moneda "de afuera", si se compra (sale pesos) y las tasas de referencia. */
+  const leer = raiz => {
+    const dO = divisaDeBolsillo($('#f-Origen', raiz).value), dD = divisaDeBolsillo($('#f-Destino', raiz).value);
+    const ext = dO === 'COP' ? dD : (dD === 'COP' ? dO : null);
+    return { dO: dO, dD: dD, ext: ext, compra: dO === 'COP', cant: leerDinero($('#f-Cantidad', raiz).value), tasa: leerDinero($('#f-Tasa', raiz).value), com: leerDinero($('#f-Comision', raiz).value) };
+  };
+  const valido = n => n !== '' && !isNaN(n) && n > 0;
+  const pct = x => (Math.round(Math.abs(x) * 10) / 10).toLocaleString('es-CO') + ' %';
+
+  await abrirHoja({
+    titulo: 'Convertir divisas', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const actualizar = () => {
+        const c = leer(raiz), nombre = c.ext ? (NOMBRE_DIVISA[c.ext] || c.ext).toLowerCase() : 'moneda', resumen = $('#conv-resumen', raiz);
+        const cant = $('#f-Cantidad', raiz), tasa = $('#f-Tasa', raiz), com = $('#f-Comision', raiz), comEn = $('#f-ComisionEn', raiz);
+        cant.dataset.divisa = c.ext || ''; tasa.dataset.divisa = 'COP';
+        com.dataset.divisa = comEn.value === 'destino' ? c.dD : c.dO;
+        comEn.options[0].textContent = 'El bolsillo de origen (' + c.dO + ')'; comEn.options[1].textContent = 'El bolsillo de destino (' + c.dD + ')';
+        $('label[for="f-Cantidad"]', raiz).textContent = 'Cuántos ' + nombre + ' ' + (c.compra ? 'compras' : 'vendes');
+        $('label[for="f-Tasa"]', raiz).textContent = 'Tasa del banco: pesos por cada ' + (c.ext || 'unidad');
+        [cant, tasa, com].forEach(i => i.dispatchEvent(new Event('input')));
+        if (valido(c.tasa)) $('[data-eco="f-Tasa"]', raiz).textContent = '= ' + tasaPesos(c.tasa) + ' por unidad';
+
+        if (c.dO === c.dD) { resumen.textContent = 'Elige bolsillos en monedas distintas.'; return; }
+        if (!c.ext) { resumen.textContent = 'Las conversiones se hacen entre pesos y otra moneda.'; return; }
+        if (!valido(c.cant) || !valido(c.tasa)) { resumen.textContent = ''; return; }
+        const cop = Math.round(c.cant * c.tasa * 100) / 100;
+        let t = c.compra ? 'Sale ' + dinero(cop, 'COP') + ' · llega ' + dinero(c.cant, c.ext) : 'Sale ' + dinero(c.cant, c.ext) + ' · llega ' + dinero(cop, 'COP');
+        const ref = Number(String(cfg('Tasa_' + c.ext)).replace(',', '.'));
+        if (ref > 0) { // solo informativa: el banco cambia a su propio precio
+          const d = (c.tasa / ref - 1) * 100;
+          t += ' · Referencia (TRM estimada) ' + tasaPesos(ref) + (Math.abs(d) < 0.05 ? ': igual a la tuya' : (c.compra ? ': pagas ' + pct(d) + (d > 0 ? ' más' : ' menos') : ': recibes ' + pct(d) + (d > 0 ? ' más' : ' menos')));
+        }
+        resumen.textContent = t;
+      };
+      raiz.addEventListener('input', actualizar); raiz.addEventListener('change', actualizar);
+      actualizar();
+      $('#f-Cantidad', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const c = leer(raiz);
+      if (c.dO === c.dD) throw new Error('Elige bolsillos en monedas distintas.');
+      if (!c.ext) throw new Error('Las conversiones se hacen entre pesos y otra moneda.');
+      if (!valido(c.cant)) throw new Error('Escribe la cantidad.');
+      if (!valido(c.tasa)) throw new Error('Escribe la tasa que te dio el banco.');
+      if (c.com !== '' && (isNaN(c.com) || c.com < 0)) throw new Error('Revisa la comisión.');
+      const cop = Math.round(c.cant * c.tasa * 100) / 100;
+      const res = await api('addConversion', { origen: $('#f-Origen', raiz).value, destino: $('#f-Destino', raiz).value, valorOrigen: c.compra ? cop : c.cant, valorDestino: c.compra ? c.cant : cop,
+        comision: c.com === '' ? 0 : c.com, comisionEn: $('#f-ComisionEn', raiz).value, fecha: $('#f-Fecha', raiz).value, notas: ($('#f-Notas', raiz) || {}).value || '' }, vistaActual());
+      aplicarEscritura(res); render();
+      const id = res.items[0] && res.items[0].ID_Mov;
+      aviso('Conversión registrada · ' + res.tasa + (res.comision ? ' · comisión ' + dinero(res.comision.valor, res.comision.divisa) : ''), { deshacer: () => anularYAvisar(id) });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Registro de errores (Ajustes → Registro de errores)
+// ---------------------------------------------------------------------------
+
+App.log = { soloErrores: true, data: null, error: null };
+
+function fechaLog(iso) {
+  const p = String(iso || '').split('T');
+  return p[0] ? fechaCorta(p[0]) + (p[1] ? ' ' + p[1].slice(0, 5) : '') : '';
+}
+
+function htmlRegistro(d) {
+  if (!d.items.length) {
+    return vacio('check', App.log.soloErrores ? 'Sin errores registrados' : 'El registro está vacío', App.log.soloErrores ? 'Cuando algo falle quedará anotado aquí.' : '');
+  }
+  return '<div class="m-group">' + d.items.map(l =>
+    '<details class="m-log"><summary><span class="m-log-cab"><span class="m-insignia' + (l.Nivel === 'Error' ? ' m-nivel-error' : '') + '">' + esc(l.Nivel) + '</span>' +
+    '<span class="m-log-meta">' + esc(fechaLog(l.Fecha_Hora)) + ' · ' + esc(l.Funcion) + '</span></span>' +
+    '<span class="m-log-msg">' + esc(l.Mensaje) + '</span></summary>' +
+    '<pre class="m-log-detalle">' + esc(l.Detalle || 'Sin detalle') + '</pre></details>').join('') + '</div>' +
+    (d.hayMas ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Se muestran las ' + d.items.length + ' más recientes.</p>' : '');
+}
+
+async function cargarRegistro() {
+  const caja = $('#log-lista');
+  if (!caja) return;
+  try {
+    App.log.data = await api('getLogs', { soloErrores: App.log.soloErrores });
+    App.log.error = null;
+    caja.innerHTML = htmlRegistro(App.log.data);
+    const resumen = $('#log-resumen');
+    if (resumen) resumen.textContent = App.log.data.errores + (App.log.data.errores === 1 ? ' error' : ' errores') + ' en total · versión ' + App.log.data.version;
+  } catch (e) {
+    caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>';
+  }
+}
+
+function vRegistro() {
+  return {
+    titulo: 'Registro de errores',
+    subtitulo: 'Lo que falla queda anotado aquí. Si algo no funciona, copia el registro y envíalo para corregirlo.',
+    html:
+      '<div class="m-segmentado" role="radiogroup" aria-label="Qué mostrar" style="margin-bottom:var(--m-space-3)">' +
+      '<label><input type="radio" name="log-filtro" value="errores"' + (App.log.soloErrores ? ' checked' : '') + '><span>Errores</span></label>' +
+      '<label><input type="radio" name="log-filtro" value="todo"' + (App.log.soloErrores ? '' : ' checked') + '><span>Todo</span></label></div>' +
+      '<p class="m-ayuda" id="log-resumen" aria-live="polite" style="margin-bottom:var(--m-space-3)"></p>' +
+      '<div id="log-lista"><div class="m-cargando">Cargando…</div></div>' +
+      '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="log-copiar">Copiar el registro</button>' +
+      '<button class="m-btn m-btn-secondary" data-acc="log-limpiar">Limpiar</button></div>',
+    despues: cargarRegistro
+  };
+}
+
+/** Texto plano para pegar en un mensaje: versión, fecha de cada entrada y su detalle. */
+function textoRegistro(d) {
+  return 'Moni v' + d.version + ' — registro (' + d.items.length + ' entradas)\n\n' + d.items.map(l =>
+    '[' + l.Fecha_Hora + '] ' + l.Nivel + ' · ' + l.Funcion + ' · ' + l.Mensaje + (l.Detalle ? '\n' + String(l.Detalle).split('\n').map(x => '    ' + x).join('\n') : '')).join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
 // Asistente de bienvenida y primeros pasos: un paso por pantalla, con el progreso a la vista.
 // Reutiliza los campos de los catálogos (CAT) y guarda con los mismos servicios que Ajustes.
 // Aparece en Inicio mientras falten pasos obligatorios; "Seguir más tarde" lo deja y Inicio muestra la lista.
@@ -3117,13 +3811,13 @@ const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
 
 /** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
 const CAMPOS_ASIST = {
-  Bancos: ['Nombre'],
+  Bancos: ['Nombre', 'Divisa'],
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
-  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios.' },
+  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tu primera cuenta', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito.' },
   bolsillos: { titulo: 'Reparte tu cuenta en bolsillos', sub: 'Un bolsillo es una parte de tu cuenta con un propósito: casa, mercado, un viaje. Escribe cuánto dinero hay hoy en cada uno.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas.' }
@@ -3278,6 +3972,7 @@ function vPasoAsistente(id) {
       if (!f || !campos) return;
       activarEcoDinero(f);
       actualizarVisibilidad(f, campos, {});
+      if (p.tabla === 'Cuentas' || p.tabla === 'Bolsillos') sincronizarDivisa(f, p.tabla, null);
       f.addEventListener('input', () => actualizarVisibilidad(f, campos, {}));
       f.addEventListener('change', () => actualizarVisibilidad(f, campos, {}));
       // Igual que en Ajustes: una cuenta débito se maneja, por defecto, como un solo saldo.
@@ -3394,7 +4089,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -3402,6 +4097,7 @@ function olvidarDatosLocales() {
     if ('anulados' in s) s.anulados = false;
   });
   App.plantillaEsc = null; App.inactivos = {}; App.proximosViejos = false;
+  App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
   App.asist = { activo: false, paso: null, omitido: false, ultimo: {} };
   recordarAsistenteOmitido(false);
   try { localStorage.removeItem('moni.ultimoBolsillo'); } catch (e) {}
@@ -3438,6 +4134,32 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  'tasas-google': async el => {
+    el.disabled = true; el.textContent = 'Consultando…';
+    try {
+      const r = await api('updateTasasGoogle');
+      await refrescar(); render();
+      aviso('Tasa actualizada: ' + r.actualizadas.map(x => '1 ' + x.moneda + ' = ' + tasaPesos(x.tasa)).join(' · '));
+    } catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Actualizar ahora con Google Finance'; }
+  },
+  'rec-sync': async el => {
+    el.disabled = true; el.textContent = 'Sincronizando…';
+    try { const r = await api('syncRecordatorios'); App.rec.data = r; $('#rec-estado').innerHTML = htmlEstadoRecordatorios(r); aviso('Calendario al día: ' + r.sincronizado.total + ' pagos'); }
+    catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Sincronizar ahora'; }
+  },
+  'rec-quitar': async () => {
+    const ok = await confirmar({ titulo: 'Quitar de mi calendario', accion: 'Quitar', mensaje: 'Se borra el calendario “Moni” con todos sus eventos y se apagan los recordatorios. Tus datos en Moni no cambian.' });
+    if (!ok) return;
+    try { await api('removeRecordatorios'); await refrescar(); render(); aviso('Recordatorios quitados'); } catch (e) { aviso(e.message, true); }
+  },
+  'recargar-graf': () => { App.graf.error = null; App.graf.data = null; render(); },
+  convertir: () => abrirConversion(),
+  'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
+  'log-limpiar': async () => {
+    const ok = await confirmar({ titulo: 'Limpiar el registro', accion: 'Limpiar', mensaje: 'Se borran todas las entradas del registro. Tus datos no se tocan.' });
+    if (!ok) return;
+    try { await api('clearLogs'); await cargarRegistro(); aviso('Registro limpio'); } catch (e) { aviso(e.message, true); }
+  },
   'asist-empezar': () => moverAsist(1),
   'asist-atras': () => moverAsist(-1),
   'asist-omitir': () => terminarAsistente(true),
@@ -3597,6 +4319,17 @@ document.addEventListener('change', async ev => {
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
+  if (t.dataset.accCambio === 'tasa-auto') {
+    try {
+      const r = await api('saveTasaAuto', t.checked);
+      await refrescar(); render();
+      aviso(r.activa ? (r.resultado ? 'Se actualizará sola cada día' : 'Activada. ' + (r.aviso || '')) : 'Actualización automática desactivada');
+    } catch (e) { t.checked = !t.checked; aviso(e.message, true); }
+    return;
+  }
+  if (t.name === 'graf-rango') { App.graf.meses = Number(t.value); App.graf.data = null; render(); return; }
+  if (t.name === 'graf-divisa') { App.graf.divisa = t.value; App.graf.data = null; render(); return; }
+  if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
   if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
   if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }
   if (t.id === 'anual-anio') { App.anual.anio = Number(t.value); App.anual.data = null; render(); return; }
@@ -3631,6 +4364,35 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('submit', async ev => {
   const f = ev.target;
+  if (f.dataset.form === 'recordatorios') {
+    ev.preventDefault();
+    const caja = $('#rec-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true; boton.textContent = 'Guardando…';
+    try {
+      const v = leerFormulario(f, CAMPOS_REC);
+      const r = await api('saveRecordatorios', { activos: v.activos, diasAntes: Number(v.diasAntes), hora: Number(v.hora), nomina: v.nomina });
+      App.rec.data = r;
+      await refrescar(); render();
+      aviso(r.activos ? 'Recordatorios activos: ' + r.sincronizado.total + (r.sincronizado.total === 1 ? ' pago' : ' pagos') + ' en tu calendario' : 'Recordatorios desactivados');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; boton.disabled = false; boton.textContent = 'Guardar'; }
+    return;
+  }
+  if (f.dataset.form === 'tasas') {
+    ev.preventDefault();
+    const caja = $('#tasas-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true;
+    try {
+      for (const inp of $$('[data-tasa]', f)) {
+        const d = inp.dataset.tasa, n = leerDinero(inp.value);
+        if (n !== '' && isNaN(n)) throw new Error('Revisa la tasa del ' + d + '.');
+        const nueva = n === '' ? '' : String(n);
+        if (String(cfg('Tasa_' + d)) !== nueva) await api('saveTasaDivisa', d, nueva);
+      }
+      await refrescar(); render(); aviso('Tasas guardadas');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; }
+    boton.disabled = false;
+    return;
+  }
   if (f.dataset.form === 'asistente') { ev.preventDefault(); enviarPasoAsist(f, false); return; }
   if (f.dataset.form === 'parametros' || f.dataset.form === 'respaldos') {
     ev.preventDefault();
