@@ -52,5 +52,8 @@ function borrarTodosLosDatos(confirmacion, opciones) {
   props.deleteProperty('ULTIMO_RESPALDO');
   props.deleteProperty('ULTIMO_RESPALDO_MS');
 
-  return { ok: true, eliminadas: eliminadas, respaldosEliminados: o.respaldos ? borrarRespaldos_() : 0 };
+  const respaldosEliminados = o.respaldos ? borrarRespaldos_() : 0;
+  // El registro también se vació: esta entrada deja constancia de que fue a propósito.
+  registrarLog('Info', 'borrarTodosLosDatos', 'Se borró toda la información', respaldosEliminados ? respaldosEliminados + ' respaldo(s) a la papelera' : '');
+  return { ok: true, eliminadas: eliminadas, respaldosEliminados: respaldosEliminados };
 }

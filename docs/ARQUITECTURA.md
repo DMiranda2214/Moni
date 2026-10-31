@@ -50,6 +50,7 @@
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
+| `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)

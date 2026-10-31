@@ -132,5 +132,6 @@ function iniciarOperacion() {
   configurarRespaldoAutomatico(true);
   guardarConfig_('Arranque_Hecho', 'TRUE');
   guardarConfig_('Anio_Activo', antes.fecha.slice(0, 4));
+  registrarLog('Info', 'iniciarOperacion', 'Empezó la operación real', 'Fecha de arranque ' + antes.fecha);
   return Object.assign(obtenerArranque(), { respaldo: respaldo.nombre });
 }

@@ -26,6 +26,7 @@ function responder_(fn) {
     return r;
   } catch (e) {
     const r = apiError(e);
+    registrarErrorApi_(e);
     r.ms = Date.now() - inicio;
     return r;
   }
@@ -548,10 +549,17 @@ function runDiagnostics() {
       tablasEsperadas: Object.keys(SCHEMAS).length,
       listo: v.listo,
       faltantes: v.faltantes,
-      diferencias: v.diferencias
+      diferencias: v.diferencias,
+      version: VERSION_APP
     };
   });
 }
+
+// ---- Registro de errores ----
+function getLogs(opciones) { return responder_(function () { return obtenerLogs(opciones); }); }
+function clearLogs() { return responder_(function () { return limpiarLogs(); }); }
+/** El navegador reporta sus errores aquí; no pasa por responder_ para no registrar un fallo del propio registro. */
+function logClientError(mensaje, detalle) { return registrarErrorCliente(mensaje, detalle); }
 
 // ---- Arranque (Fase 6) ----
 function getArranque() { return responder_(function () { return obtenerArranque(); }); }

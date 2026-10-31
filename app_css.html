@@ -301,6 +301,17 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-asist-hero .m-icon { width: 36px; height: 36px; }
 .m-asist-lista { margin-bottom: var(--m-space-5); text-align: left; }
 
+/* ---------- Registro de errores ---------- */
+.m-log { border-bottom: 0.5px solid var(--m-separator); }
+.m-log:last-child { border-bottom: 0; }
+.m-log summary { display: block; padding: var(--m-space-3) var(--m-space-4); cursor: pointer; list-style: none; }
+.m-log summary::-webkit-details-marker { display: none; }
+.m-log-cab { display: flex; align-items: center; gap: var(--m-space-2); }
+.m-log-meta { color: var(--m-label-2); font-size: var(--m-text-footnote); }
+.m-log-msg { display: block; margin-top: var(--m-space-1); font-size: var(--m-text-subheadline); overflow-wrap: anywhere; }
+.m-nivel-error { color: var(--m-danger); }
+.m-log-detalle { margin: 0; padding: 0 var(--m-space-4) var(--m-space-3); color: var(--m-label-2); font: var(--m-text-caption)/1.5 var(--m-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- Borrar todos los datos ---------- */
 .m-fila-peligro .m-row-titulo { color: var(--m-danger); }
 .m-lista-simple { margin: var(--m-space-2) 0 var(--m-space-4); padding-left: var(--m-space-5); color: var(--m-label-2); font-size: var(--m-text-subheadline); }

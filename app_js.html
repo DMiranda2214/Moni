@@ -138,6 +138,22 @@ function api(fn) {
 }
 
 /**
+ * Errores del navegador al registro del servidor (Ajustes → Registro de errores), con tope por sesión
+ * para que un fallo repetido no inunde el registro.
+ */
+let _erroresReportados = 0;
+function reportarErrorCliente(mensaje, detalle) {
+  if (_erroresReportados >= 5) return;
+  _erroresReportados++;
+  try { api('logClientError', String(mensaje).slice(0, 400), String(detalle || '').slice(0, 1800)).catch(() => {}); } catch (e) {}
+}
+window.addEventListener('error', ev => reportarErrorCliente(ev.message, (ev.filename || '') + ':' + ev.lineno + ':' + ev.colno + '\n' + ((ev.error && ev.error.stack) || '')));
+window.addEventListener('unhandledrejection', ev => {
+  const r = ev.reason;
+  reportarErrorCliente('Promesa rechazada: ' + ((r && r.message) || r), (r && r.stack) || '');
+});
+
+/**
  * Aviso breve. `opc` puede ser `true` (error) o { error, deshacer }.
  * Con `deshacer` (una función) el aviso ofrece "Deshacer" durante 8 segundos.
  */
@@ -368,7 +384,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -387,6 +403,7 @@ function render(enfocar) {
   try {
     vista = App.error ? vErrorCarga() : pantalla(ruta);
   } catch (e) {
+    reportarErrorCliente('Pantalla ' + ruta + ': ' + e.message, e.stack);
     vista = { titulo: 'Error', html: '<div class="m-vacio">' + ico('alerta') + '<h2>No se pudo mostrar esta pantalla</h2><p>' + esc(e.message) + '</p></div>' };
   }
 
@@ -443,6 +460,7 @@ function pantalla(ruta) {
       if (partes[1] === 'respaldos') return vRespaldos();
       if (partes[1] === 'arranque') return vArranque();
       if (partes[1] === 'borrar') return vBorrar();
+      if (partes[1] === 'registro') return vRegistro();
       if (partes[1] === 'parametros') return vParametros();
       if (partes[1] === 'diagnostico') return vDiagnostico();
       if (CAT[partes[1]]) return vCatalogo(partes[1]);
@@ -690,6 +708,7 @@ function vAjustes() {
         irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
         irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
+        irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
       seccion('Privacidad',
         irA('ajustes/borrar', { icono: 'alerta', titulo: 'Borrar todos mis datos', sub: 'Empieza de cero. No se puede deshacer', clase: 'm-fila-peligro' }))
@@ -779,6 +798,7 @@ function vDiagnostico() {
         const d = await api('runDiagnostics');
         caja.innerHTML =
           '<p><strong>' + esc(d.hoja) + '</strong></p>' +
+          '<p class="m-ayuda">Versión de Moni ' + esc(d.version) + '</p>' +
           '<p class="m-ayuda">' + d.tablasEsperadas + ' tablas esperadas · ' + (d.listo ? 'todas listas' : d.faltantes.length + ' por crear, ' + d.diferencias.length + ' con encabezados distintos') + '</p>' +
           (d.diferencias.length ? '<p class="m-ayuda">Con diferencias: ' + esc(d.diferencias.map(x => x.tabla).join(', ')) + '. No se modifican automáticamente.</p>' : '') +
           '<p style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="instalar">Instalar o reparar</button></p>' +
@@ -3101,6 +3121,65 @@ async function abrirCodigoServicio(id) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Registro de errores (Ajustes → Registro de errores)
+// ---------------------------------------------------------------------------
+
+App.log = { soloErrores: true, data: null, error: null };
+
+function fechaLog(iso) {
+  const p = String(iso || '').split('T');
+  return p[0] ? fechaCorta(p[0]) + (p[1] ? ' ' + p[1].slice(0, 5) : '') : '';
+}
+
+function htmlRegistro(d) {
+  if (!d.items.length) {
+    return vacio('check', App.log.soloErrores ? 'Sin errores registrados' : 'El registro está vacío', App.log.soloErrores ? 'Cuando algo falle quedará anotado aquí.' : '');
+  }
+  return '<div class="m-group">' + d.items.map(l =>
+    '<details class="m-log"><summary><span class="m-log-cab"><span class="m-insignia' + (l.Nivel === 'Error' ? ' m-nivel-error' : '') + '">' + esc(l.Nivel) + '</span>' +
+    '<span class="m-log-meta">' + esc(fechaLog(l.Fecha_Hora)) + ' · ' + esc(l.Funcion) + '</span></span>' +
+    '<span class="m-log-msg">' + esc(l.Mensaje) + '</span></summary>' +
+    '<pre class="m-log-detalle">' + esc(l.Detalle || 'Sin detalle') + '</pre></details>').join('') + '</div>' +
+    (d.hayMas ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Se muestran las ' + d.items.length + ' más recientes.</p>' : '');
+}
+
+async function cargarRegistro() {
+  const caja = $('#log-lista');
+  if (!caja) return;
+  try {
+    App.log.data = await api('getLogs', { soloErrores: App.log.soloErrores });
+    App.log.error = null;
+    caja.innerHTML = htmlRegistro(App.log.data);
+    const resumen = $('#log-resumen');
+    if (resumen) resumen.textContent = App.log.data.errores + (App.log.data.errores === 1 ? ' error' : ' errores') + ' en total · versión ' + App.log.data.version;
+  } catch (e) {
+    caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>';
+  }
+}
+
+function vRegistro() {
+  return {
+    titulo: 'Registro de errores',
+    subtitulo: 'Lo que falla queda anotado aquí. Si algo no funciona, copia el registro y envíalo para corregirlo.',
+    html:
+      '<div class="m-segmentado" role="radiogroup" aria-label="Qué mostrar" style="margin-bottom:var(--m-space-3)">' +
+      '<label><input type="radio" name="log-filtro" value="errores"' + (App.log.soloErrores ? ' checked' : '') + '><span>Errores</span></label>' +
+      '<label><input type="radio" name="log-filtro" value="todo"' + (App.log.soloErrores ? '' : ' checked') + '><span>Todo</span></label></div>' +
+      '<p class="m-ayuda" id="log-resumen" aria-live="polite" style="margin-bottom:var(--m-space-3)"></p>' +
+      '<div id="log-lista"><div class="m-cargando">Cargando…</div></div>' +
+      '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="log-copiar">Copiar el registro</button>' +
+      '<button class="m-btn m-btn-secondary" data-acc="log-limpiar">Limpiar</button></div>',
+    despues: cargarRegistro
+  };
+}
+
+/** Texto plano para pegar en un mensaje: versión, fecha de cada entrada y su detalle. */
+function textoRegistro(d) {
+  return 'Moni v' + d.version + ' — registro (' + d.items.length + ' entradas)\n\n' + d.items.map(l =>
+    '[' + l.Fecha_Hora + '] ' + l.Nivel + ' · ' + l.Funcion + ' · ' + l.Mensaje + (l.Detalle ? '\n' + String(l.Detalle).split('\n').map(x => '    ' + x).join('\n') : '')).join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
 // Asistente de bienvenida y primeros pasos: un paso por pantalla, con el progreso a la vista.
 // Reutiliza los campos de los catálogos (CAT) y guarda con los mismos servicios que Ajustes.
 // Aparece en Inicio mientras falten pasos obligatorios; "Seguir más tarde" lo deja y Inicio muestra la lista.
@@ -3438,6 +3517,12 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
+  'log-limpiar': async () => {
+    const ok = await confirmar({ titulo: 'Limpiar el registro', accion: 'Limpiar', mensaje: 'Se borran todas las entradas del registro. Tus datos no se tocan.' });
+    if (!ok) return;
+    try { await api('clearLogs'); await cargarRegistro(); aviso('Registro limpio'); } catch (e) { aviso(e.message, true); }
+  },
   'asist-empezar': () => moverAsist(1),
   'asist-atras': () => moverAsist(-1),
   'asist-omitir': () => terminarAsistente(true),
@@ -3597,6 +3682,7 @@ document.addEventListener('change', async ev => {
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
+  if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
   if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
   if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }
   if (t.id === 'anual-anio') { App.anual.anio = Number(t.value); App.anual.data = null; render(); return; }
