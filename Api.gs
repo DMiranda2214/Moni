@@ -152,6 +152,32 @@ function addMovimiento(m, vista) {
   });
 }
 
+/** Convierte dinero entre bolsillos de distinta divisa (por ejemplo, pesos a dólares). */
+function addConversion(c, vista) {
+  return responder_(function () {
+    const r = registrarConversion(c);
+    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista, { idGrupo: r.idGrupo, tasa: r.tasa });
+  });
+}
+
+/** Anota cuántos pesos vale una unidad de una divisa (vacío = quitar la tasa). */
+function saveTasaDivisa(divisa, tasa) {
+  return responder_(function () {
+    if (DIVISAS.indexOf(divisa) === -1 || divisa === DIVISA_BASE) throw new Error('La divisa no es válida.');
+    const t = texto_(tasa).replace(',', '.');
+    if (t === '') {
+      guardarConfig_('Tasa_' + divisa, '');
+      guardarConfig_('Tasa_' + divisa + '_Fecha', '');
+      return { divisa: divisa, tasa: '', fecha: '' };
+    }
+    const n = Number(t);
+    if (!isFinite(n) || n <= 0 || n > 1e7) throw new Error('La tasa debe ser un número mayor que cero.');
+    guardarConfig_('Tasa_' + divisa, String(n));
+    guardarConfig_('Tasa_' + divisa + '_Fecha', hoyIso_());
+    return { divisa: divisa, tasa: String(n), fecha: hoyIso_() };
+  });
+}
+
 function addTransferencia(t, vista) {
   return responder_(function () {
     const x = t || {};
@@ -503,7 +529,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho') throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0) throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 

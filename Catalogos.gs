@@ -73,6 +73,52 @@ function leer_(tabla) {
   return getTableData(tabla, { forceRefresh: true });
 }
 
+// ---------------------------------------------------------------------------
+// Divisas: la divisa se elige en el banco; sus cuentas y bolsillos la heredan.
+// ---------------------------------------------------------------------------
+
+function divisaBanco_(banco) {
+  return banco && DIVISAS.indexOf(banco.Divisa) !== -1 ? banco.Divisa : DIVISA_BASE;
+}
+
+/** Divisa de cada cuenta y bolsillo: { cuentas: {id: 'USD'}, bolsillos: {id: 'USD'} }. */
+function mapaDivisas_() {
+  const porBanco = {};
+  getTableData('Bancos').forEach(b => { porBanco[b.ID_Banco] = divisaBanco_(b); });
+  const cuentas = {};
+  getTableData('Cuentas').forEach(c => { cuentas[c.ID_Cuenta] = porBanco[c.ID_Banco] || DIVISA_BASE; });
+  const bolsillos = {};
+  getTableData('Bolsillos').forEach(b => { bolsillos[b.ID_Bolsillo] = cuentas[b.ID_Cuenta] || DIVISA_BASE; });
+  return { cuentas: cuentas, bolsillos: bolsillos };
+}
+
+function divisaDeBolsillo_(idBolsillo) { return mapaDivisas_().bolsillos[idBolsillo] || DIVISA_BASE; }
+function divisaDeCuenta_(idCuenta) { return mapaDivisas_().cuentas[idCuenta] || DIVISA_BASE; }
+
+/** Presupuesto, nómina, tarjetas, créditos, suscripciones y regalos trabajan en pesos: rechaza un bolsillo en otra divisa. */
+function exigirPesos_(idBolsillo, etiqueta) {
+  const divisa = divisaDeBolsillo_(idBolsillo);
+  if (divisa !== DIVISA_BASE) {
+    const b = getTableData('Bolsillos').find(x => x.ID_Bolsillo === idBolsillo);
+    throw new Error(etiqueta + ' ("' + (b ? b.Nombre : idBolsillo) + '") está en ' + divisa + '. Aquí solo se usan bolsillos en ' + DIVISA_BASE + '.');
+  }
+}
+
+function exigirCuentaPesos_(idCuenta, etiqueta) {
+  const divisa = divisaDeCuenta_(idCuenta);
+  if (divisa !== DIVISA_BASE) {
+    const c = getTableData('Cuentas').find(x => x.ID_Cuenta === idCuenta);
+    throw new Error(etiqueta + ' ("' + (c ? c.Nombre : idCuenta) + '") está en ' + divisa + '. Aquí solo se usan cuentas en ' + DIVISA_BASE + '.');
+  }
+}
+
+/** Pesos que vale una unidad de la divisa, según la tasa que la persona anotó (o null si no hay). */
+function tasaDivisa_(divisa) {
+  if (divisa === DIVISA_BASE) return 1;
+  const n = Number(String(cfgValor_('Tasa_' + divisa)).replace(',', '.'));
+  return isFinite(n) && n > 0 ? n : null;
+}
+
 function buscarPorId_(filas, idCol, id) {
   return filas.find(f => f[idCol] === id) || null;
 }
@@ -108,7 +154,13 @@ const CATALOGOS = {
     normalizar: function (item, actual, filas) {
       const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
       exigirNombreUnico_(filas, nombre, actual, 'ID_Banco');
+      const divisa = opcion_(item.Divisa !== undefined ? item.Divisa : actual && actual.Divisa, DIVISAS, 'La divisa', DIVISA_BASE);
+      // Cambiarla reinterpretaría los saldos ya registrados: se pide crear otro banco.
+      if (actual && divisaBanco_(actual) !== divisa && leer_('Cuentas').some(c => c.ID_Banco === actual.ID_Banco)) {
+        throw new Error('No se puede cambiar la divisa de un banco que ya tiene cuentas. Crea otro banco en ' + divisa + '.');
+      }
       return {
+        Divisa: divisa,
         Nombre: nombre,
         Color: colorHex_(item.Color !== undefined ? item.Color : actual && actual.Color),
         Icono: texto_(item.Icono !== undefined ? item.Icono : actual && actual.Icono),
@@ -276,7 +328,8 @@ const CATALOGOS = {
     },
     normalizar: function (item, actual, filas) {
       const idBanco = item.ID_Banco !== undefined ? item.ID_Banco : actual && actual.ID_Banco;
-      exigirActivo_(leer_('Bancos'), 'ID_Banco', idBanco, 'El banco');
+      const banco = exigirActivo_(leer_('Bancos'), 'ID_Banco', idBanco, 'El banco');
+      if (divisaBanco_(banco) !== DIVISA_BASE) throw new Error('Las tarjetas se registran en bancos en ' + DIVISA_BASE + '; "' + banco.Nombre + '" está en ' + divisaBanco_(banco) + '.');
       const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
       exigirNombreUnico_(filas, nombre, actual, 'ID_Tarjeta');
 
@@ -284,9 +337,10 @@ const CATALOGOS = {
       const idReserva = item.ID_Bolsillo_Reserva !== undefined ? item.ID_Bolsillo_Reserva : actual && actual.ID_Bolsillo_Reserva;
       const reserva = exigirActivo_(bolsillos, 'ID_Bolsillo', idReserva, 'El bolsillo de reserva');
       if (reserva.Rol !== 'Reserva_Tarjeta') throw new Error('El bolsillo de reserva debe tener el rol "Reserva de tarjeta".');
+      exigirPesos_(idReserva, 'El bolsillo de reserva');
 
       const idPersonal = item.ID_Bolsillo_Personal !== undefined ? item.ID_Bolsillo_Personal : actual && actual.ID_Bolsillo_Personal;
-      if (idPersonal) exigirActivo_(bolsillos, 'ID_Bolsillo', idPersonal, 'El bolsillo personal');
+      if (idPersonal) { exigirActivo_(bolsillos, 'ID_Bolsillo', idPersonal, 'El bolsillo personal'); exigirPesos_(idPersonal, 'El bolsillo personal'); }
 
       return {
         ID_Banco: idBanco,
@@ -384,7 +438,7 @@ const CATALOGOS = {
       const proximo = fechaIso_(pick('Proximo_Cobro'), 'La fecha del próximo cobro');
       if (!proximo) throw new Error('Indica cuándo es el próximo cobro.');
       const idBolsillo = texto_(pick('ID_Bolsillo')), idTarjeta = texto_(pick('ID_Tarjeta'));
-      if (idBolsillo) exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo');
+      if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo'); exigirPesos_(idBolsillo, 'El bolsillo'); }
       if (idTarjeta) exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
       if (idBolsillo && idTarjeta) throw new Error('Elige cómo se paga: desde un bolsillo o con una tarjeta, no ambos.');
       const idCat = texto_(pick('ID_Categoria'));
@@ -416,7 +470,7 @@ const CATALOGOS = {
 
       const tipo = opcion_(item.Tipo !== undefined ? item.Tipo : actual && actual.Tipo, ENUMS.Presupuesto_Plantilla.Tipo, 'El tipo', 'Gasto');
       const idBolsillo = item.ID_Bolsillo_Destino !== undefined ? item.ID_Bolsillo_Destino : actual && actual.ID_Bolsillo_Destino;
-      if (idBolsillo) exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo de destino');
+      if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo de destino'); exigirPesos_(idBolsillo, 'El bolsillo de destino'); }
       if (tipo !== 'Gasto' && !idBolsillo) throw new Error('Un renglón de ' + tipo.toLowerCase() + ' necesita un bolsillo de destino: ahí se aparta el dinero.');
       const idCat = item.ID_Categoria !== undefined ? item.ID_Categoria : actual && actual.ID_Categoria;
       if (idCat) exigirActivo_(leer_('Categorias'), 'ID_Categoria', idCat, 'La categoría');

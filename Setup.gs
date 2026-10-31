@@ -6,6 +6,16 @@
 
 const COL_AUDITORIA = ['Creado_En', 'Actualizado_En'];
 
+/** Divisas que admite un banco. COP es la divisa de la app: presupuesto, nómina, tarjetas y créditos solo la usan a ella. */
+const DIVISAS = ['COP', 'USD', 'EUR'];
+const DIVISA_BASE = 'COP';
+
+/**
+ * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
+ * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
+ */
+const ESQUEMA_VERSION = '2';
+
 /** Define una tabla: encabezados propios + auditoría. `anchos` cubre solo las columnas propias. */
 function tabla_(headers, anchos) {
   return {
@@ -17,7 +27,7 @@ function tabla_(headers, anchos) {
 const SCHEMAS = {
   // ---- Configuración ----
   Config: tabla_(['Clave', 'Valor', 'Grupo', 'Tipo', 'Descripcion'], [200, 240, 110, 100, 360]),
-  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden'], [170, 200, 90, 90, 70, 60]),
+  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa'], [170, 200, 90, 90, 70, 60, 80]),
   Cuentas: tabla_(
     ['ID_Cuenta', 'ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Fecha_Apertura', 'Saldo_Real', 'Fecha_Saldo_Real', 'Meta', 'Activo', 'Orden'],
     [170, 170, 200, 100, 130, 120, 120, 130, 110, 70, 60]),
@@ -85,13 +95,14 @@ const SCHEMAS = {
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
+  Bancos: { Divisa: DIVISAS },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
   Categorias: { Tipo: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'] },
   Personas: { Rol: ['Titular', 'Familiar', 'Otro'] },
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
-    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion'],
+    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -157,7 +168,11 @@ const DEFAULT_CONFIG = [
   ['Cesantias_Fecha_Consignacion', '02-14', 'Nomina', 'texto', 'Fecha máxima de consignación al fondo'],
   ['Intereses_Cesantias_Fecha', '01-31', 'Nomina', 'texto', 'Fecha máxima de pago de intereses de cesantías'],
   ['Tasa_Interes_Cesantias', '0.12', 'Nomina', 'porcentaje', 'Tasa legal de intereses de cesantías'],
-  ['Credito_Metodo_Tasa', 'Excel', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica: Excel o Exacta']
+  ['Credito_Metodo_Tasa', 'Excel', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica: Excel o Exacta'],
+  ['Tasa_USD', '', 'Divisas', 'texto', 'Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos'],
+  ['Tasa_USD_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del dólar'],
+  ['Tasa_EUR', '', 'Divisas', 'texto', 'Pesos que vale 1 euro'],
+  ['Tasa_EUR_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del euro']
 ];
 
 /** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden]. */
@@ -197,7 +212,7 @@ function verificarEsquema(spreadsheet, opciones) {
   // Verificar son 26 lecturas de hoja. Con usarCache, un resultado correcto se recuerda 6 horas;
   // setupDatabase lo olvida. Solo se guardan los resultados "listo", nunca los fallos.
   const cache = CacheService.getScriptCache();
-  if (opciones && opciones.usarCache && cache.get('ESQUEMA_OK') === '1') {
+  if (opciones && opciones.usarCache && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
     return { faltantes: [], diferencias: [], listo: true, desdeCache: true };
   }
 
@@ -218,8 +233,46 @@ function verificarEsquema(spreadsheet, opciones) {
   });
 
   const listo = faltantes.length === 0 && diferencias.length === 0;
-  if (listo) { try { cache.put('ESQUEMA_OK', '1', 21600); } catch (e) {} }
+  if (listo) { try { cache.put('ESQUEMA_OK', ESQUEMA_VERSION, 21600); } catch (e) {} }
   return { faltantes: faltantes, diferencias: diferencias, listo: listo };
+}
+
+/**
+ * Columnas agregadas después de la primera versión. Si una pestaña ya existe sin la columna (y todo lo
+ * demás coincide con el esquema), se inserta en su lugar con un valor por defecto para las filas que ya hay.
+ * Una pestaña con otras diferencias no se toca: se reporta en el diagnóstico.
+ */
+const MIGRACIONES_COLUMNAS = [
+  { tabla: 'Bancos', columna: 'Divisa', valor: DIVISA_BASE }
+];
+
+function migrarColumnas_(ss) {
+  const migradas = [];
+  MIGRACIONES_COLUMNAS.forEach(mg => {
+    const sheet = ss.getSheetByName(mg.tabla);
+    if (!sheet || sheet.getLastRow() === 0) return;
+    const esperado = SCHEMAS[mg.tabla].headers;
+    const sinColumna = esperado.filter(h => h !== mg.columna);
+    const actual = sheet.getRange(1, 1, 1, sinColumna.length).getValues()[0].map(h => String(h).trim());
+    const yaTiene = sheet.getRange(1, 1, 1, esperado.length).getValues()[0].map(h => String(h).trim()).join('|') === esperado.join('|');
+    if (yaTiene || actual.join('|') !== sinColumna.join('|')) return;
+
+    const col = esperado.indexOf(mg.columna) + 1;
+    sheet.insertColumnBefore(col);
+    sheet.getRange(1, col).setValue(mg.columna);
+    const filas = sheet.getLastRow() - 1;
+    if (filas > 0) sheet.getRange(2, col, filas, 1).setValues(Array.from({ length: filas }, () => [mg.valor]));
+    // Aspecto igual al de las demás columnas (si algo de esto falla, los datos ya quedaron bien)
+    try {
+      sheet.getRange(1, col - 1).copyTo(sheet.getRange(1, col), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      sheet.setColumnWidth(col, SCHEMAS[mg.tabla].widths[col - 1]);
+      if (ENUMS[mg.tabla] && ENUMS[mg.tabla][mg.columna]) {
+        sheet.getRange(2, col, 1000, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ENUMS[mg.tabla][mg.columna], true).setAllowInvalid(true).build());
+      }
+    } catch (e) {}
+    migradas.push(mg.tabla + '.' + mg.columna);
+  });
+  return migradas;
 }
 
 /**
@@ -256,6 +309,7 @@ function setupDatabase(spreadsheet) {
     }
   });
 
+  const migradas = migrarColumnas_(ss);
   sembrarPorDefecto_(ss);
   invalidateCache();
   CacheService.getScriptCache().remove('ESQUEMA_OK');
@@ -266,6 +320,7 @@ function setupDatabase(spreadsheet) {
     tablas: Object.keys(SCHEMAS).length,
     creadas: creadas,
     existentes: existentes,
+    migradas: migradas,
     diferencias: verificacion.diferencias,
     url: ss.getUrl()
   };

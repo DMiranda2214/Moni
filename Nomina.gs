@@ -127,6 +127,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo) {
   const calculo = calcularNominaEscenario_(esc, p);
   const neto = numero_(netoReal === undefined || netoReal === '' ? calculo.totales.neto : netoReal, 'El neto recibido', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const f = fechaMovimiento_(fecha);
+  exigirPesos_(idBolsillo, 'El bolsillo donde llega la nómina');
 
   const catSalario = leer_('Categorias').find(c => c.ID_Categoria === 'cat-salario' && estaActivo(c));
   const mov = registrarMovimiento({

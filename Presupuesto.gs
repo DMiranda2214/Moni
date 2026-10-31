@@ -134,7 +134,7 @@ function guardarRenglonMes(item) {
   }
   const tipo = opcion_(item.Tipo !== undefined ? item.Tipo : actual && actual.Tipo, ENUMS.Presupuesto_Mes.Tipo, 'El tipo', 'Gasto');
   const idBolsillo = item.ID_Bolsillo_Destino !== undefined ? item.ID_Bolsillo_Destino : actual && actual.ID_Bolsillo_Destino;
-  if (idBolsillo) exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo de destino');
+  if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo de destino'); exigirPesos_(idBolsillo, 'El bolsillo de destino'); }
   if (tipo !== 'Gasto' && !idBolsillo) throw new Error('Un renglón de ' + tipo.toLowerCase() + ' necesita un bolsillo de destino.');
 
   const datos = {

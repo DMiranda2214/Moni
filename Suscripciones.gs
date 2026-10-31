@@ -81,6 +81,7 @@ function pagarSuscripcion(id, d) {
   const idTarjeta = x.ID_Tarjeta !== undefined ? texto_(x.ID_Tarjeta) : texto_(s.ID_Tarjeta);
   const idBolsillo = x.ID_Bolsillo !== undefined ? texto_(x.ID_Bolsillo) : texto_(s.ID_Bolsillo);
   if (!idTarjeta && !idBolsillo) throw new Error('Elige con qué la pagas: un bolsillo o una tarjeta.');
+  if (idBolsillo) exigirPesos_(idBolsillo, 'El bolsillo de pago');
 
   const anterior = { Proximo_Cobro: s.Proximo_Cobro, Ultimo_Pago: s.Ultimo_Pago || '', Valor: Number(s.Valor) || 0 };
   const resultado = { idMov: '', idCompra: '' };

@@ -21,7 +21,7 @@ El script de instalación (`setupDatabase`, Fase 1) crea estas 27 tablas, una po
 **Config** — `Clave, Valor, Grupo, Tipo, Descripcion`
 Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad de nómina (por defecto `Mensual`), día de pago, SMMLV, aportes, método de tasa (`Excel`/`Exacta`), tema (`Claro`/`Oscuro`/`Automático`), color de acento, respaldos.
 
-**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden`
+**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa` (`Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
 
 **Cuentas** — `ID_Cuenta, ID_Banco, Nombre, Tipo, Permite_Bolsillos, Fecha_Apertura, Saldo_Real, Fecha_Saldo_Real, Meta, Activo, Orden`
 - `Tipo`: `Billetera`, `Debito`, `Ahorro`, `Otra`.
@@ -56,7 +56,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 **Movimientos** (libro mayor de bolsillos) —
 `ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado`
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
-- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`.
+- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion` (dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`).
 - `ID_Grupo`: une las filas de una misma operación (transferencia, pago de extracto, pago de cuota). **La suma de un grupo de transferencia interna es 0.**
 - `ID_Item_Ppto`: enlaza el gasto con su renglón del presupuesto del mes.
 

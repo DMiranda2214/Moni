@@ -53,7 +53,8 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
 
 /** Todas las cuentas de ahorro activas, para la pantalla de Ahorro. */
 function obtenerAhorro() {
-  const cuentas = getTableData('Cuentas').filter(c => estaActivo(c) && c.Tipo === 'Ahorro');
+  const divisas = mapaDivisas_().cuentas;
+  const cuentas = getTableData('Cuentas').filter(c => estaActivo(c) && c.Tipo === 'Ahorro' && divisas[c.ID_Cuenta] === DIVISA_BASE);
   const bolsillos = getTableData('Bolsillos');
   const movs = getTableData('Movimientos', { excludeAnulados: true });
   const saldos = mapaSaldosBolsillos_();
@@ -87,6 +88,7 @@ function obtenerCuentaAhorro(idCuenta, mes) {
 function cuentaAhorroActiva_(idCuenta) {
   const c = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', idCuenta, 'La cuenta');
   if (c.Tipo !== 'Ahorro') throw new Error('"' + c.Nombre + '" no es una cuenta de ahorro.');
+  exigirCuentaPesos_(c.ID_Cuenta, 'La cuenta de ahorro'); // el ahorro con deuda y rendimientos es en pesos
   return c;
 }
 

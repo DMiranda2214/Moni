@@ -88,6 +88,7 @@ function eliminarRegalo(idRegalo) {
 function registrarGastoRegalo(idRegalo, valor, idBolsillo, fecha) {
   const regalo = buscarPorId_(leer_('Regalos'), 'ID_Regalo', idRegalo);
   if (!regalo) throw new Error('El regalo no existe.');
+  exigirPesos_(idBolsillo, 'El bolsillo del regalo');
   const p = buscarPorId_(leer_('Personas'), 'ID_Persona', regalo.ID_Persona);
   const cat = leer_('Categorias').find(c => c.ID_Categoria === 'cat-regalos' && estaActivo(c));
   const mov = registrarMovimiento({

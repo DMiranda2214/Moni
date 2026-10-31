@@ -70,7 +70,7 @@ class HojaFalsa {
   appendRow(valores) { this.filas.splice(this.getLastRow(), 0, valores.slice()); }
   deleteRow(n) { this.filas.splice(n - 1, 1); }
   deleteRows(desde, cuantas) { this.filas.splice(desde - 1, cuantas); }
-  insertColumnBefore() {}
+  insertColumnBefore(col) { this.filas.forEach(f => { if (f.length >= col - 1) f.splice(col - 1, 0, ""); }); }
   setFrozenRows() {}
   setColumnWidth() {}
   protect() { return inerte(); }

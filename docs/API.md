@@ -120,6 +120,8 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getLogs` | `opciones` (`{ soloErrores, limite }`) |
 | `clearLogs` | — |
 | `logClientError` | `mensaje, detalle` |
+| `addConversion` | `conversion` (`{ origen, destino, valorOrigen, valorDestino, fecha, notas }`), `vista` |
+| `saveTasaDivisa` | `divisa` (`USD`/`EUR`), `tasa` (vacío = quitar) |
 | `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
 | `saveConfigParam` | `clave, valor` |
 | `saveConfigParams` | `mapa` |

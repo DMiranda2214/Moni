@@ -43,12 +43,13 @@ function obtenerArranque() {
   const bolsillos = getTableData('Bolsillos').filter(estaActivo);
   const saldos = mapaSaldosBolsillos_();
 
+  const divisas = mapaDivisas_().bolsillos;
   const aperturas = bolsillos.map(b => {
     const c = buscarPorId_(cuentas, 'ID_Cuenta', b.ID_Cuenta);
     const bn = c ? buscarPorId_(bancos, 'ID_Banco', c.ID_Banco) : null;
     return {
       ID_Bolsillo: b.ID_Bolsillo, Bolsillo: esVerdadero(b.Es_Interno) ? '' : b.Nombre, Cuenta: c ? c.Nombre : '', Banco: bn ? bn.Nombre : '',
-      Saldo_Apertura: Number(b.Saldo_Apertura) || 0, Saldo: saldos[b.ID_Bolsillo] || 0
+      Divisa: divisas[b.ID_Bolsillo] || DIVISA_BASE, Saldo_Apertura: Number(b.Saldo_Apertura) || 0, Saldo: saldos[b.ID_Bolsillo] || 0
     };
   });
 
@@ -81,7 +82,7 @@ function obtenerArranque() {
       otrosPrevios.comprasTC ? [otrosPrevios.comprasTC + ' compra(s) de tarjeta anteriores al arranque: revísalas en Deudas.'] : [],
       otrosPrevios.creditosActivos ? [otrosPrevios.creditosActivos + ' crédito(s) activo(s): confirma que su saldo y cuota corresponden a la realidad.'] : []
     ),
-    totalApertura: redondear2_(aperturas.reduce((a, x) => a + x.Saldo_Apertura, 0))
+    totalApertura: redondear2_(aperturas.filter(a => a.Divisa === DIVISA_BASE).reduce((a, x) => a + x.Saldo_Apertura, 0))
   };
 }
 

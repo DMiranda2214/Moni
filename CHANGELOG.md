@@ -2,6 +2,14 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Divisas
+- **Nuevo** la moneda (COP, USD o EUR) se elige al crear el banco; sus cuentas y bolsillos la heredan. Los saldos de distintas monedas no se suman: el Inicio muestra **Otras monedas** aparte, con el equivalente en pesos si anotas la tasa (Ajustes → Divisas).
+- **Nuevo** **Convertir divisas** (Bolsillos): sale un valor de un bolsillo y llega otro en la otra moneda, con la tasa implícita anotada; se anula junto.
+- **Nuevo** migración de esquema: `setupDatabase` agrega la columna `Divisa` a un Sheet ya instalado (Instalar). `ESQUEMA_VERSION` evita que la caché oculte cambios de esquema.
+- **Regla** presupuesto, nómina, tarjetas, créditos, ahorro, suscripciones y regalos solo aceptan pesos (validado en el servidor y sin ofrecer bolsillos en otras monedas en la pantalla). Los traslados entre monedas distintas se rechazan: se usa la conversión.
+- **Límite conocido** la hoja de consulta `Vista_Anual` (fórmulas) suma todas las monedas; la vista anual de la app solo suma pesos.
+- **Pruebas** `tests/test_divisas.js`.
+
 ## Registro de errores
 - **Nuevo** `Logs.gs`: cada error de la API, del navegador y de los disparadores queda en la tabla `Log` con función, mensaje, traza y versión (`VERSION_APP`). Se conservan las últimas 500 entradas.
 - **Nuevo** Ajustes → Registro de errores: filtro Errores/Todo, detalle desplegable, copiar y limpiar.

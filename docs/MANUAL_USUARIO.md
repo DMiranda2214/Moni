@@ -27,6 +27,13 @@ Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para 
 ## 4. Bolsillos
 Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimientos por mes, **Registrar**, **Mover dinero** o **Editar**. En la cuenta, **Cuadrar** compara con el saldo de tu banco: escribe lo que dice el banco; si hay diferencia, puedes dejar un **ajuste**.
 
+### Dólares y otras monedas
+- La moneda se elige **al crear el banco** (pesos, dólares o euros). Sus cuentas y bolsillos la heredan, y todo se muestra en esa moneda.
+- Los saldos **no se mezclan**: el Total del Inicio es solo en pesos y, aparte, aparece **Otras monedas**. Si anotas cuánto vale el dólar en **Ajustes → Divisas**, se ve el equivalente en pesos (solo como referencia).
+- Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Bolsillos → Convertir divisas**: escribes lo que salió y lo que llegó y Moni anota la tasa. Se puede deshacer.
+- Entre bolsillos de la misma moneda, **Mover dinero** funciona igual que siempre.
+- Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones y regalos funcionan solo en pesos: no ofrecen bolsillos en otras monedas.
+
 ## 5. Presupuesto
 1. **Plantilla:** Ajustes → Plantilla del presupuesto. Cada renglón tiene concepto, monto, tipo (Gasto, Cuota de un crédito, Ahorro, Fondo) y bolsillo.
 2. **Generar** el mes: elige escenario (Normal, Contingencia…).

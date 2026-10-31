@@ -41,7 +41,7 @@ En el editor de Apps Script, elige la función en la barra superior y pulsa **Ej
 ## Actualizar una instalación existente
 1. Sube el código nuevo (`npm run push` o pegando los archivos).
 2. **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar.** (La URL no cambia.)
-3. Abre la app. Si el esquema cambió (por ejemplo, la pestaña `Suscripciones`), verás **"Falta instalar la base de datos"**: pulsa **Instalar**. Solo crea lo que falta.
+3. Abre la app. Si el esquema cambió (por ejemplo, la pestaña `Suscripciones` o la columna `Divisa` de `Bancos`), verás **"Falta instalar o actualizar la base de datos"**: pulsa **Instalar**. Solo crea lo que falta y agrega las columnas nuevas (sin tocar tus datos).
 4. Si alguna pestaña tiene encabezados distintos a los esperados, la app **no la modifica**: la reporta en Ajustes → Diagnóstico.
 
 ## Menú del Sheet

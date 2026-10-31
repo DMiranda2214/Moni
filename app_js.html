@@ -48,16 +48,21 @@ function ico(nombre, extra) {
   return '<svg class="m-icon ' + (extra || '') + '" aria-hidden="true" focusable="false"><use href="#i-' + nombre + '"/></svg>';
 }
 
-let _formato = null;
-function dinero(n) {
-  if (!_formato) {
-    const moneda = (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
-    _formato = new Intl.NumberFormat('es-CO', { style: 'currency', currency: moneda, maximumFractionDigits: 0 });
+const _formatos = {};
+/** Monto con su moneda: sin decimales en pesos, con dos en las demás. Sin `divisa`, la moneda base de la app. */
+function dinero(n, divisa) {
+  const d = divisa || (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
+  if (!_formatos[d]) {
+    const dec = d === 'COP' ? 0 : 2;
+    _formatos[d] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
   }
-  return _formato.format(Number(n) || 0).replace(/ /g, ' ');
+  return _formatos[d].format(Number(n) || 0).replace(/ /g, ' ');
 }
 
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
+/** Una tasa de cambio en pesos, con decimales: $ 4.012,5 */
+const tasaPesos = n => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+
 function leerDinero(texto) {
   const t = String(texto || '').replace(/[^\d,.\-]/g, '');
   if (t === '' || t === '-') return '';
@@ -236,6 +241,14 @@ const esVerdad = v => v === true || String(v).toUpperCase() === 'TRUE';
 const porId = (tabla, idCol, id) => cat(tabla).find(f => f[idCol] === id);
 const cfg = clave => (App.boot && App.boot.config && App.boot.config[clave]) || '';
 
+// Divisas: se elige en el banco; sus cuentas y bolsillos la heredan.
+const DIVISAS_UI = [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']];
+const NOMBRE_DIVISA = { COP: 'Pesos', USD: 'Dólares', EUR: 'Euros' };
+function divisaDeBanco(idBanco) { const b = porId('Bancos', 'ID_Banco', idBanco); return (b && b.Divisa) || 'COP'; }
+function divisaDeCuenta(idCuenta) { const c = porId('Cuentas', 'ID_Cuenta', idCuenta); return c ? divisaDeBanco(c.ID_Banco) : 'COP'; }
+function divisaDeBolsillo(idBolsillo) { const b = porId('Bolsillos', 'ID_Bolsillo', idBolsillo); return b ? divisaDeCuenta(b.ID_Cuenta) : 'COP'; }
+const hayOtrasDivisas = () => activos('Bancos').some(b => (b.Divisa || 'COP') !== 'COP');
+
 function saldoBolsillo(id) {
   const cuentas = (App.boot.saldos && App.boot.saldos.cuentas) || [];
   for (let i = 0; i < cuentas.length; i++) {
@@ -287,13 +300,15 @@ function aplicarSaldos(s) {
     if (n) { c.Saldo = n.Saldo; c.Saldo_Real = n.Saldo_Real; c.Diferencia = n.Diferencia; c.Fecha_Saldo_Real = n.Fecha_Saldo_Real; }
     c.bolsillos.forEach(b => { if (s.bolsillos[b.ID_Bolsillo] !== undefined) b.Saldo = s.bolsillos[b.ID_Bolsillo]; });
   });
-  sal.disponible = s.disponible; sal.ahorro = s.ahorro; sal.total = s.total;
+  sal.disponible = s.disponible; sal.ahorro = s.ahorro; sal.total = s.total; sal.divisas = s.divisas || [];
 }
 
-function totalesDe(lista) {
+/** Totales de una lista, de una sola divisa (los pesos y los dólares no se suman). */
+function totalesDe(lista, divisa) {
+  const dv = divisa || 'COP';
   let ingresos = 0, gastos = 0;
-  lista.forEach(i => { if (i.Anulado || i.esTransferencia) return; if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor; });
-  return { ingresos: ingresos, gastos: gastos, neto: ingresos - gastos };
+  lista.forEach(i => { if (i.Anulado || i.esTransferencia || (i.Divisa || 'COP') !== dv) return; if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor; });
+  return { ingresos: ingresos, gastos: gastos, neto: ingresos - gastos, Divisa: dv };
 }
 
 function fusionarItems(lista, items, verAnulados, enRango) {
@@ -319,7 +334,7 @@ function aplicarEscritura(res) {
   if (d.data && ruta === 'bolsillo/' + d.id) {
     if (res.saldos.bolsillos[d.id] !== undefined) d.data.bolsillo.Saldo = res.saldos.bolsillos[d.id];
     fusionarItems(d.data.movimientos, res.items, d.anulados, i => i.Fecha.slice(0, 7) === d.data.mes);
-    d.data.totales = totalesDe(d.data.movimientos);
+    d.data.totales = totalesDe(d.data.movimientos, divisaDeBolsillo(d.id));
   } else { d.data = null; }
 
   const m = App.mov;
@@ -384,7 +399,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -461,6 +476,7 @@ function pantalla(ruta) {
       if (partes[1] === 'arranque') return vArranque();
       if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'registro') return vRegistro();
+      if (partes[1] === 'divisas') return vDivisas();
       if (partes[1] === 'parametros') return vParametros();
       if (partes[1] === 'diagnostico') return vDiagnostico();
       if (CAT[partes[1]]) return vCatalogo(partes[1]);
@@ -509,7 +525,7 @@ function vErrorCarga() {
 function vInstalar() {
   return {
     titulo: 'Moni', ocultarTitulo: true,
-    html: vacio('capas', 'Falta instalar la base de datos',
+    html: vacio('capas', 'Falta instalar o actualizar la base de datos',
       'Moni va a crear las tablas que necesita en tu hoja de cálculo. No borra ni modifica nada de lo que ya exista.',
       '<button class="m-btn m-btn-primary" data-acc="instalar">Instalar</button>')
   };
@@ -590,10 +606,20 @@ function vInicio() {
     html += seccion('Cuentas', s.cuentas.map(c => fila({
       icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
       titulo: esc(c.Nombre),
-      sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)),
-      final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo) + '</strong>',
+      sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (c.Divisa !== 'COP' ? ' · ' + esc(c.Divisa) : ''),
+      final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo, c.Divisa) + '</strong>',
       attrs: 'data-acc="ir" data-ruta="bolsillos"'
     })).join(''));
+
+    // Los saldos en otras monedas no se suman al total en pesos: cada una va aparte.
+    if ((s.divisas || []).length) {
+      html += seccion('Otras monedas', s.divisas.map(x => fila({
+        icono: 'banco', titulo: esc(NOMBRE_DIVISA[x.Divisa] || x.Divisa),
+        sub: x.Equivalente !== null ? '≈ ' + dinero(x.Equivalente) + ' · 1 ' + x.Divisa + ' = ' + tasaPesos(x.Tasa) : 'Anota la tasa en Ajustes → Divisas para ver el equivalente en pesos',
+        final: '<strong class="m-num ' + claseSaldo(x.Total) + '">' + dinero(x.Total, x.Divisa) + '</strong>',
+        chevron: true, attrs: 'data-acc="ir" data-ruta="bolsillos"'
+      })).join(''));
+    }
   } else if (!(estado.pasos && !estado.completo)) {
     html += vacio('bolsillos', 'Aún no tienes cuentas', 'Agrega una cuenta desde Ajustes para ver tus saldos aquí.');
   }
@@ -648,13 +674,17 @@ function vBolsillos() {
       '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Cuentas">Crear una cuenta</button>') };
   }
 
+  if (hayOtrasDivisas() && s.cuentas.some(x => x.bolsillos.length)) {
+    html += '<div class="m-acciones-fila" style="margin:0 0 var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="convertir">Convertir divisas</button></div>';
+  }
+
   s.cuentas.forEach(c => {
     const filas = c.bolsillos.length
       ? c.bolsillos.map(b => fila({
           icono: b.Rol === 'Reserva_Tarjeta' ? 'tarjetas' : 'bolsillos',
           titulo: esc(b.Es_Interno ? c.Nombre : b.Nombre),
           sub: b.Es_Interno ? 'Cuenta sin bolsillos' : (b.Rol === 'Operativo' ? '' : esc(etiqueta('RolBolsillo', b.Rol))),
-          final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo) + '</strong>',
+          final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</strong>',
           chevron: true,
           attrs: 'data-acc="ir" data-ruta="bolsillo/' + esc(b.ID_Bolsillo) + '"'
         })).join('')
@@ -662,9 +692,9 @@ function vBolsillos() {
 
     let pie = '';
     if (c.Saldo_Real !== null && c.Saldo_Real !== undefined) {
-      pie = 'Saldo según tu banco: ' + dinero(c.Saldo_Real) + (Math.abs(c.Diferencia) < 0.005 ? ' · cuadra' : ' · diferencia de ' + dinero(c.Diferencia));
+      pie = 'Saldo según tu banco: ' + dinero(c.Saldo_Real, c.Divisa) + (Math.abs(c.Diferencia) < 0.005 ? ' · cuadra' : ' · diferencia de ' + dinero(c.Diferencia, c.Divisa));
     }
-    html += '<section class="m-seccion" aria-label="' + esc(c.Nombre) + '"><div class="m-seccion-cab"><h2 class="m-seccion-titulo">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + ' — ' + dinero(c.Saldo) + '</h2>' +
+    html += '<section class="m-seccion" aria-label="' + esc(c.Nombre) + '"><div class="m-seccion-cab"><h2 class="m-seccion-titulo">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + ' — ' + dinero(c.Saldo, c.Divisa) + '</h2>' +
       '<button class="m-btn-texto" data-acc="cuadrar" data-cuenta="' + esc(c.ID_Cuenta) + '">Cuadrar</button></div>' +
       '<div class="m-group">' + filas + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</section>';
   });
@@ -697,7 +727,8 @@ function vAjustes() {
         irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
-        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' })) +
       seccion('Presupuesto y nómina',
         irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
         ['Escenarios', 'Nomina_Escenarios', 'Subsidios'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
@@ -823,10 +854,12 @@ const CAT = {
     vacio: 'Agrega los bancos o billeteras que usas, como Nequi, Nu o tu banco de siempre.',
     fila: b => ({
       titulo: esc(b.Nombre),
-      sub: (n => n ? n + (n === 1 ? ' cuenta' : ' cuentas') : 'Sin cuentas')(activos('Cuentas').filter(c => c.ID_Banco === b.ID_Banco).length)
+      sub: (n => n ? n + (n === 1 ? ' cuenta' : ' cuentas') : 'Sin cuentas')(activos('Cuentas').filter(c => c.ID_Banco === b.ID_Banco).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : '')
     }),
     campos: [
-      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Divisa', label: 'Moneda', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
+        ayuda: 'La moneda de todas las cuentas de este banco. Para ahorrar en dólares, crea un banco en dólares. No se puede cambiar cuando ya tiene cuentas.' }
     ]
   },
   Cuentas: {
@@ -838,7 +871,7 @@ const CAT = {
       return {
         titulo: esc(c.Nombre),
         sub: esc(banco ? banco.Nombre : '') + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (esVerdad(c.Permite_Bolsillos) ? '' : ' · sin bolsillos'),
-        final: '<span class="m-num ' + claseSaldo(saldoCuenta(c.ID_Cuenta)) + '">' + dinero(saldoCuenta(c.ID_Cuenta)) + '</span>'
+        final: '<span class="m-num ' + claseSaldo(saldoCuenta(c.ID_Cuenta)) + '">' + dinero(saldoCuenta(c.ID_Cuenta), divisaDeCuenta(c.ID_Cuenta)) + '</span>'
       };
     },
     alEditar: c => {
@@ -847,7 +880,7 @@ const CAT = {
       return Object.assign({}, c, { Saldo_Apertura: g ? g.Saldo_Apertura : '' });
     },
     campos: [
-      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco') },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco', b => b.Nombre + ((b.Divisa || 'COP') !== 'COP' ? ' (' + b.Divisa + ')' : '')) },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Tipo', label: 'Tipo', tipo: 'select', requerido: true, opciones: optsEnum(['Cuentas', 'Tipo'], 'TipoCuenta') },
       { k: 'Permite_Bolsillos', label: 'Usar bolsillos', tipo: 'interruptor', ayuda: 'Los bolsillos reparten el dinero de la cuenta por propósito. Si lo desactivas, la cuenta se maneja como un solo saldo.', defecto: true },
@@ -870,7 +903,7 @@ const CAT = {
       return {
         titulo: esc(b.Nombre),
         sub: esc(c ? c.Nombre : '') + (b.Rol !== 'Operativo' ? ' · ' + esc(etiqueta('RolBolsillo', b.Rol)) : ''),
-        final: '<span class="m-num ' + claseSaldo(saldoBolsillo(b.ID_Bolsillo)) + '">' + dinero(saldoBolsillo(b.ID_Bolsillo)) + '</span>'
+        final: '<span class="m-num ' + claseSaldo(saldoBolsillo(b.ID_Bolsillo)) + '">' + dinero(saldoBolsillo(b.ID_Bolsillo), divisaDeBolsillo(b.ID_Bolsillo)) + '</span>'
       };
     },
     campos: [
@@ -892,19 +925,20 @@ const CAT = {
     },
     alEditar: t => Object.assign({}, t, { reserva: t.ID_Bolsillo_Reserva }),
     campos: [
-      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco') },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: () => activos('Bancos').filter(b => (b.Divisa || 'COP') === 'COP').map(b => [b.ID_Banco, b.Nombre]),
+        ayuda: 'Las tarjetas se llevan en pesos.' },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Cupo', label: 'Cupo', tipo: 'dinero' },
       { k: 'Dia_Corte', label: 'Día de corte', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'Dia_Pago', label: 'Día límite de pago', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'reserva', label: 'Reserva para pagar el extracto', tipo: 'select', requerido: true,
-        opciones: () => activos('Bolsillos').filter(b => b.Rol === 'Reserva_Tarjeta').map(b => [b.ID_Bolsillo, b.Nombre]).concat([['__nueva', 'Crear una reserva nueva…']]),
+        opciones: () => activos('Bolsillos').filter(b => b.Rol === 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => [b.ID_Bolsillo, b.Nombre]).concat([['__nueva', 'Crear una reserva nueva…']]),
         defecto: '__nueva', ayuda: 'Es el bolsillo donde apartas el dinero para pagar esta tarjeta.' },
       { k: 'cuentaReserva', label: 'Cuenta de la reserva nueva', tipo: 'select', requerido: true,
         visible: v => v.reserva === '__nueva',
-        opciones: () => activos('Cuentas').filter(c => esVerdad(c.Permite_Bolsillos)).map(c => [c.ID_Cuenta, c.Nombre]) },
+        opciones: () => activos('Cuentas').filter(c => esVerdad(c.Permite_Bolsillos) && divisaDeCuenta(c.ID_Cuenta) === 'COP').map(c => [c.ID_Cuenta, c.Nombre]) },
       { k: 'ID_Bolsillo_Personal', label: 'Pagar tus gastos personales desde (opcional)', tipo: 'select',
-        opciones: () => [['', 'Ninguno']].concat(activos('Bolsillos').filter(b => b.Rol !== 'Reserva_Tarjeta').map(b => {
+        opciones: () => [['', 'Ninguno']].concat(activos('Bolsillos').filter(b => b.Rol !== 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => {
           const c = porId('Cuentas', 'ID_Cuenta', b.ID_Cuenta);
           return [b.ID_Bolsillo, (c ? c.Nombre + ' · ' : '') + b.Nombre];
         })) }
@@ -1145,7 +1179,7 @@ function activarEcoDinero(raiz) {
     const eco = $('[data-eco="' + inp.id + '"]', raiz);
     const actualizar = () => {
       const n = leerDinero(inp.value);
-      eco.textContent = inp.value === '' ? '' : (isNaN(n) ? 'Escribe solo números. Usa coma para los decimales.' : '= ' + dinero(n));
+      eco.textContent = inp.value === '' ? '' : (isNaN(n) ? 'Escribe solo números. Usa coma para los decimales.' : '= ' + dinero(n, inp.dataset.divisa || undefined));
     };
     inp.addEventListener('input', actualizar);
     inp.addEventListener('blur', () => {
@@ -1155,6 +1189,21 @@ function activarEcoDinero(raiz) {
     });
     actualizar();
   });
+}
+
+/** Los saldos de una cuenta o bolsillo se escriben en la moneda de su banco: el eco "= US$ 1.000,00" la sigue. */
+function sincronizarDivisa(raiz, tabla, existente) {
+  const claves = tabla === 'Cuentas' ? ['Saldo_Apertura', 'Saldo_Real', 'Meta'] : ['Saldo_Apertura'];
+  const actual = () => {
+    if (tabla === 'Cuentas') { const s = $('#' + idCampo('ID_Banco'), raiz); return divisaDeBanco(s ? s.value : existente && existente.ID_Banco); }
+    const s = $('#' + idCampo('ID_Cuenta'), raiz); return divisaDeCuenta(s ? s.value : existente && existente.ID_Cuenta);
+  };
+  const aplicar = () => {
+    const d = actual();
+    claves.forEach(k => { const el = $('#' + idCampo(k), raiz); if (el) { el.dataset.divisa = d; el.dispatchEvent(new Event('input')); } });
+  };
+  raiz.addEventListener('change', aplicar);
+  aplicar();
 }
 
 async function abrirFormulario(tabla, id, defaults) {
@@ -1189,6 +1238,7 @@ async function abrirFormulario(tabla, id, defaults) {
     alAbrir: raiz => {
       activarEcoDinero(raiz);
       actualizarVisibilidad(raiz, campos, ctx);
+      if (tabla === 'Cuentas' || tabla === 'Bolsillos') sincronizarDivisa(raiz, tabla, existente);
       const sel = $('#' + idCampo('Tipo'), raiz);
       const sw = $('#' + idCampo('Permite_Bolsillos'), raiz);
       if (tabla === 'Cuentas' && sel && sw && !existente) {
@@ -1365,11 +1415,13 @@ function esqueleto(filas) {
 
 /** Monto con su signo y color; el signo va en el texto para no depender solo del color. */
 function montoMov(i, enBolsillo) {
-  if (i.esTransferencia && !enBolsillo) return { texto: dinero(i.Valor), clase: '' };
+  const d = i.Divisa;
+  // Una conversión sale en una moneda y llega en otra: se ven las dos
+  if (i.esTransferencia && !enBolsillo) return { texto: dinero(i.Valor, d) + (i.DivisaDestino ? ' → ' + dinero(i.ValorDestino, i.DivisaDestino) : ''), clase: '' };
   const v = Number(i.Valor) || 0;
   return v >= 0 && !i.esTransferencia
-    ? { texto: '+' + dinero(v), clase: 'm-entra' }
-    : { texto: (v >= 0 ? '+' : '−') + dinero(Math.abs(v)), clase: '' };
+    ? { texto: '+' + dinero(v, d), clase: 'm-entra' }
+    : { texto: (v >= 0 ? '+' : '−') + dinero(Math.abs(v), d), clase: '' };
 }
 
 function filaMov(i, enBolsillo) {
@@ -1419,8 +1471,8 @@ function cambiarMes(vista, delta) {
 
 function resumenMes(t) {
   return '<div class="m-group" style="padding:var(--m-space-3) var(--m-space-4);margin-bottom:var(--m-space-4)"><div class="m-resumen-fila" style="margin:0">' +
-    '<div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Salió</div><strong class="m-num">' + dinero(t.gastos) + '</strong></div></div></div>';
+    '<div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos, t.Divisa) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Salió</div><strong class="m-num">' + dinero(t.gastos, t.Divisa) + '</strong></div></div></div>';
 }
 
 function bloqueError(mensaje, accion) {
@@ -1437,7 +1489,7 @@ function vBolsillo(id) {
 
   const b = inf.b, c = inf.c;
   let html = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + '</div>' +
-    '<div class="m-resumen-cifra m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo) + '</div>' +
+    '<div class="m-resumen-cifra m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</div>' +
     '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar" data-bolsillo="' + esc(id) + '">Registrar</button>' +
     '<button class="m-btn m-btn-secondary" data-acc="mover" data-bolsillo="' + esc(id) + '">Mover dinero</button></div></div>';
 
@@ -1518,8 +1570,8 @@ async function cargarMov() {
 /** Opciones de bolsillos agrupadas por cuenta, con su saldo. */
 function opcionesBolsillos() {
   return ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
-    grupo: c.Banco + ' · ' + c.Nombre,
-    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, (b.Es_Interno ? c.Nombre : b.Nombre) + ' — ' + dinero(b.Saldo)])
+    grupo: c.Banco + ' · ' + c.Nombre + (c.Divisa !== 'COP' ? ' (' + c.Divisa + ')' : ''),
+    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, (b.Es_Interno ? c.Nombre : b.Nombre) + ' — ' + dinero(b.Saldo, c.Divisa)])
   }));
 }
 
@@ -1592,7 +1644,13 @@ async function abrirRegistrar(o) {
     cuerpo: cuerpo,
     alAbrir: raiz => {
       activarEcoDinero(raiz); actualizar(raiz);
-      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipo') actualizar(raiz); });
+      // El valor se escribe en la moneda del bolsillo elegido (en un traslado, la del que sale)
+      const monedaDelValor = () => {
+        const sel = $(tipoActual(raiz) === 'Mover' ? '#f-Origen' : '#f-ID_Bolsillo', raiz), v = $('#f-Valor', raiz);
+        if (sel && v) { v.dataset.divisa = divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
+      };
+      monedaDelValor();
+      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipo') actualizar(raiz); monedaDelValor(); });
       const v = $('#f-Valor', raiz); if (v) v.focus();
     },
     alGuardar: async raiz => {
@@ -1611,6 +1669,7 @@ async function abrirRegistrar(o) {
       }
       if (t === 'Mover') {
         if (v.Origen === v.Destino) throw new Error('Elige dos bolsillos distintos.');
+        if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
         res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '' }, vistaActual());
         recordarBolsillo(v.Origen);
       } else {
@@ -1689,7 +1748,7 @@ async function abrirCuadre(idCuenta) {
   if (!c) return;
   const opcionesAjuste = [['', 'No ajustar: solo guardar el saldo']].concat(c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre]));
   const cuerpo = '<form novalidate data-form="cuadre">' +
-    '<p class="m-hoja-mensaje">Moni suma <strong>' + dinero(c.Saldo) + '</strong> en “' + esc(c.Nombre) + '”. Escribe lo que muestra tu banco para compararlos.</p>' +
+    '<p class="m-hoja-mensaje">Moni suma <strong>' + dinero(c.Saldo, c.Divisa) + '</strong> en “' + esc(c.Nombre) + '”. Escribe lo que muestra tu banco para compararlos.</p>' +
     htmlCampo({ k: 'Valor', label: 'Saldo según tu banco', tipo: 'dinero', requerido: true }, c.Saldo_Real === null || c.Saldo_Real === undefined ? '' : c.Saldo_Real) +
     '<p id="cuadre-dif" class="m-ayuda" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
     '<div class="m-campo" id="cuadre-ajuste" hidden><label class="m-label" for="f-Ajuste">Registrar la diferencia como ajuste en</label>' +
@@ -1700,14 +1759,15 @@ async function abrirCuadre(idCuenta) {
   await abrirHoja({
     titulo: 'Cuadrar cuenta', cuerpo: cuerpo,
     alAbrir: raiz => {
-      activarEcoDinero(raiz);
       const entrada = $('#f-Valor', raiz);
+      entrada.dataset.divisa = c.Divisa;
+      activarEcoDinero(raiz);
       const calcular = () => {
         const n = leerDinero(entrada.value);
         const dif = $('#cuadre-dif', raiz), aj = $('#cuadre-ajuste', raiz);
         if (n === '' || isNaN(n)) { dif.textContent = ''; aj.hidden = true; return; }
         const d = Math.round((n - c.Saldo) * 100) / 100;
-        dif.textContent = Math.abs(d) < 0.005 ? 'Cuadra: no hay diferencia.' : 'Diferencia: ' + (d > 0 ? 'el banco muestra ' : 'Moni suma ') + dinero(Math.abs(d)) + ' más.';
+        dif.textContent = Math.abs(d) < 0.005 ? 'Cuadra: no hay diferencia.' : 'Diferencia: ' + (d > 0 ? 'el banco muestra ' : 'Moni suma ') + dinero(Math.abs(d), c.Divisa) + ' más.';
         aj.hidden = Math.abs(d) < 0.005;
       };
       entrada.addEventListener('input', calcular); calcular(); entrada.focus();
@@ -1743,7 +1803,7 @@ function aplicarPresupuesto(data) {
 const TIPOS_RENGLON = [['Gasto', 'Gasto'], ['Cuota', 'Cuota de un crédito'], ['Ahorro', 'Ahorro'], ['Fondo', 'Fondo para una meta']];
 
 function opcionesDestino(conNinguno) {
-  const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
+  const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length && c.Divisa === 'COP').map(c => ({
     grupo: c.Banco + ' · ' + c.Nombre,
     opciones: c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre])
   }));
@@ -2896,7 +2956,7 @@ function vArranque() {
     }
     const filas = d.aperturas.map(x => fila({
       titulo: esc(x.Bolsillo || x.Cuenta), sub: x.Bolsillo ? esc(x.Cuenta) : esc(x.Banco),
-      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura) + '</span>'
+      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura, x.Divisa) + '</span>'
     })).join('');
     html += seccion('Saldos de apertura · ' + dinero(d.totalApertura), filas || '<p class="m-ayuda" style="padding:var(--m-space-4)">Aún no hay bolsillos.</p>');
     if (!d.hecho) {
@@ -2915,7 +2975,7 @@ async function abrirAperturas() {
   if (!d) return;
   const cuerpo = '<form novalidate data-form="aperturas"><p class="m-hoja-mensaje">Escribe cuánto dinero hay en cada lugar al cierre del día anterior al arranque (' + esc(d.fecha) + '). Puede ser negativo.</p>' +
     d.aperturas.map((x, i) => '<div class="m-campo"><label class="m-label" for="ap-' + i + '">' + esc(x.Bolsillo ? x.Cuenta + ' · ' + x.Bolsillo : x.Cuenta) + '</label>' +
-      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
+      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" data-divisa="' + esc(x.Divisa) + '" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
   await abrirHoja({
     titulo: 'Saldos de apertura', cuerpo: cuerpo, alAbrir: raiz => activarEcoDinero(raiz),
@@ -3121,6 +3181,78 @@ async function abrirCodigoServicio(id) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Divisas: tasas de referencia y conversión entre monedas
+// ---------------------------------------------------------------------------
+
+function vDivisas() {
+  const filas = ['USD', 'EUR'].map(d => {
+    const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha');
+    return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(NOMBRE_DIVISA[d].toLowerCase()) + ') vale, en pesos</label>' +
+      '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" data-tipo="dinero" data-divisa="COP" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
+      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + '</p>' : '') + '</div>';
+  }).join('');
+  return {
+    titulo: 'Divisas',
+    html: '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
+      '<p class="m-subtitulo-cuerpo">Moni guarda cada cuenta en su moneda y no mezcla los saldos. Si anotas cuánto vale cada moneda en pesos, el Inicio te muestra el equivalente. Es solo una referencia: no cambia tus saldos. Las monedas se eligen al crear el banco.</p>' +
+      filas + '<div class="m-error-form" id="tasas-error" role="alert" hidden></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>',
+    despues: () => { const f = $('form[data-form="tasas"]'); if (f) activarEcoDinero(f); }
+  };
+}
+
+/** Compra o venta de moneda: sale un valor de un bolsillo y llega otro, en la moneda del bolsillo de destino. */
+async function abrirConversion() {
+  const todos = opcionesBolsillos();
+  const ids = [].concat.apply([], todos.map(g => g.opciones.map(x => x[0])));
+  const origenInicial = ids.find(i => divisaDeBolsillo(i) === 'COP') || ids[0] || '';
+  const destinoInicial = ids.find(i => divisaDeBolsillo(i) !== divisaDeBolsillo(origenInicial)) || '';
+  const sel = (k, label, valor) => '<div class="m-campo"><label class="m-label" for="' + idCampo(k) + '">' + esc(label) + '</label><select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' +
+    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>';
+  const hoy = App.boot.hoy;
+  const cuerpo = '<form novalidate data-form="conversion">' +
+    '<p class="m-hoja-mensaje">Por ejemplo, al comprar dólares: sale dinero de un bolsillo en pesos y llega a uno en dólares. Escribe lo que salió y lo que llegó; Moni calcula la tasa.</p>' +
+    sel('Origen', 'Sale de', origenInicial) + htmlCampo({ k: 'Sale', label: 'Cuánto sale', tipo: 'dinero', requerido: true }, '') +
+    sel('Destino', 'Llega a', destinoInicial) + htmlCampo({ k: 'Entra', label: 'Cuánto llega', tipo: 'dinero', requerido: true }, '') +
+    '<p class="m-ayuda" id="conv-tasa" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + esc(hoy) + '"></div>' +
+    htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  await abrirHoja({
+    titulo: 'Convertir divisas', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const actualizar = () => {
+        const dO = divisaDeBolsillo($('#f-Origen', raiz).value), dD = divisaDeBolsillo($('#f-Destino', raiz).value);
+        const sale = $('#f-Sale', raiz), entra = $('#f-Entra', raiz);
+        sale.dataset.divisa = dO; entra.dataset.divisa = dD;
+        sale.dispatchEvent(new Event('input')); entra.dispatchEvent(new Event('input'));
+        const a = leerDinero(sale.value), b = leerDinero(entra.value), caja = $('#conv-tasa', raiz);
+        if (dO === dD) caja.textContent = 'Elige bolsillos en monedas distintas.';
+        else if (a === '' || b === '' || isNaN(a) || isNaN(b) || a <= 0 || b <= 0) caja.textContent = '';
+        else if (dO === 'COP') caja.textContent = 'Tasa: 1 ' + dD + ' = ' + tasaPesos(a / b);
+        else if (dD === 'COP') caja.textContent = 'Tasa: 1 ' + dO + ' = ' + tasaPesos(b / a);
+        else caja.textContent = 'Tasa: 1 ' + dO + ' = ' + (Math.round(b / a * 10000) / 10000) + ' ' + dD;
+      };
+      raiz.addEventListener('input', actualizar); raiz.addEventListener('change', actualizar);
+      actualizar();
+      $('#f-Sale', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const sale = leerDinero($('#f-Sale', raiz).value), entra = leerDinero($('#f-Entra', raiz).value);
+      if (sale === '' || isNaN(sale)) throw new Error('Escribe cuánto sale.');
+      if (entra === '' || isNaN(entra)) throw new Error('Escribe cuánto llega.');
+      const res = await api('addConversion', { origen: $('#f-Origen', raiz).value, destino: $('#f-Destino', raiz).value, valorOrigen: sale, valorDestino: entra,
+        fecha: $('#f-Fecha', raiz).value, notas: ($('#f-Notas', raiz) || {}).value || '' }, vistaActual());
+      aplicarEscritura(res); render();
+      const id = res.items[0] && res.items[0].ID_Mov;
+      aviso('Conversión registrada · ' + res.tasa, { deshacer: () => anularYAvisar(id) });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Registro de errores (Ajustes → Registro de errores)
 // ---------------------------------------------------------------------------
 
@@ -3196,13 +3328,13 @@ const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
 
 /** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
 const CAMPOS_ASIST = {
-  Bancos: ['Nombre'],
+  Bancos: ['Nombre', 'Divisa'],
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
-  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios.' },
+  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tu primera cuenta', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito.' },
   bolsillos: { titulo: 'Reparte tu cuenta en bolsillos', sub: 'Un bolsillo es una parte de tu cuenta con un propósito: casa, mercado, un viaje. Escribe cuánto dinero hay hoy en cada uno.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas.' }
@@ -3357,6 +3489,7 @@ function vPasoAsistente(id) {
       if (!f || !campos) return;
       activarEcoDinero(f);
       actualizarVisibilidad(f, campos, {});
+      if (p.tabla === 'Cuentas' || p.tabla === 'Bolsillos') sincronizarDivisa(f, p.tabla, null);
       f.addEventListener('input', () => actualizarVisibilidad(f, campos, {}));
       f.addEventListener('change', () => actualizarVisibilidad(f, campos, {}));
       // Igual que en Ajustes: una cuenta débito se maneja, por defecto, como un solo saldo.
@@ -3517,6 +3650,7 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  convertir: () => abrirConversion(),
   'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
   'log-limpiar': async () => {
     const ok = await confirmar({ titulo: 'Limpiar el registro', accion: 'Limpiar', mensaje: 'Se borran todas las entradas del registro. Tus datos no se tocan.' });
@@ -3717,6 +3851,22 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('submit', async ev => {
   const f = ev.target;
+  if (f.dataset.form === 'tasas') {
+    ev.preventDefault();
+    const caja = $('#tasas-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true;
+    try {
+      for (const inp of $$('[data-tasa]', f)) {
+        const d = inp.dataset.tasa, n = leerDinero(inp.value);
+        if (n !== '' && isNaN(n)) throw new Error('Revisa la tasa del ' + d + '.');
+        const nueva = n === '' ? '' : String(n);
+        if (String(cfg('Tasa_' + d)) !== nueva) await api('saveTasaDivisa', d, nueva);
+      }
+      await refrescar(); render(); aviso('Tasas guardadas');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; }
+    boton.disabled = false;
+    return;
+  }
   if (f.dataset.form === 'asistente') { ev.preventDefault(); enviarPasoAsist(f, false); return; }
   if (f.dataset.form === 'parametros' || f.dataset.form === 'respaldos') {
     ev.preventDefault();

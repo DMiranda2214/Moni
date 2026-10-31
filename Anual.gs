@@ -28,8 +28,9 @@ function obtenerVistaAnual(anio) {
     m.plan += plan; m.real += r; m.conPresupuesto = true;
     if (esVerdadero(i.Pagado)) m.ahorro += plan - r;
   });
+  const divisaDe = mapaDivisas_().bolsillos;
   movs.forEach(mv => {
-    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha) return;
+    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha || (divisaDe[mv.ID_Bolsillo] || DIVISA_BASE) !== DIVISA_BASE) return;
     const m = porMes[mv.Fecha.slice(0, 7)];
     if (m) m.ingreso += Number(mv.Valor) || 0;
   });
