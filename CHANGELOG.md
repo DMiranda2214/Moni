@@ -2,6 +2,11 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Conversión con tasa del banco y comisión
+- **Cambia** Convertir divisas: se escribe la cantidad y la tasa que dio el banco por unidad (la TRM solo se muestra como referencia); Moni calcula cuánto sale y cuánto llega.
+- **Nuevo** comisión opcional, cobrada aparte del bolsillo de origen o de destino: gasto de la categoría *Comisión bancaria* (se crea sola) dentro de la misma conversión (`Subtipo = Comision`); se anula y restaura junto.
+- **Pruebas** de comisión en `tests/test_divisas.js`.
+
 ## Recordatorios en Google Calendar
 - **Nuevo** Ajustes → Recordatorios: calendario "Moni" con un evento por pago de los próximos 45 días (tarjetas, cuotas, suscripciones y servicios, prima y cesantías), con aviso el mismo día y N días antes, a la hora elegida.
 - Sincronización idempotente (crea, corrige y borra por clave; no toca eventos ajenos), disparador diario, sincronización en segundo plano tras registrar cambios y botones Sincronizar ahora / Quitar.

@@ -107,11 +107,22 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
   return { ok: true, idGrupo: idGrupo, patas: [salida, entrada] };
 }
 
+/** Categoría de las comisiones de conversión: se crea la primera vez; si la persona la desactivó, queda sin categoría. */
+function categoriaComision_() {
+  const cats = leer_('Categorias');
+  const existente = buscarPorId_(cats, 'ID_Categoria', 'cat-comision');
+  if (existente) return estaActivo(existente) ? existente.ID_Categoria : '';
+  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats) });
+  return 'cat-comision';
+}
+
 /**
  * Convierte dinero de una divisa a otra (por ejemplo, comprar dólares): sale un valor de un bolsillo y entra
  * otro, en la divisa del bolsillo de destino. Son dos filas con el mismo ID_Grupo (se anulan juntas); como cada
  * una está en su divisa, no suman cero. La tasa implícita queda anotada.
- * @param {Object} c { origen, destino, valorOrigen, valorDestino, fecha, concepto, notas }
+ * La comisión del banco, si la hay, es un gasto aparte dentro de la misma conversión (mismo ID_Grupo): se cobra
+ * del bolsillo de origen o del de destino, queda como gasto de su categoría y se anula junto con la conversión.
+ * @param {Object} c { origen, destino, valorOrigen, valorDestino, fecha, concepto, notas, comision, comisionEn: 'origen'|'destino' }
  */
 function registrarConversion(c) {
   const x = c || {};
@@ -125,6 +136,8 @@ function registrarConversion(c) {
   const entra = numero_(x.valorDestino, 'Lo que entra', { requerido: true, max: VALOR_MAXIMO });
   if (sale <= 0) throw new Error('Lo que sale debe ser mayor que cero.');
   if (entra <= 0) throw new Error('Lo que entra debe ser mayor que cero.');
+  const comision = numero_(x.comision, 'La comisión', { min: 0, max: VALOR_MAXIMO, defecto: 0 });
+  const comisionEn = x.comisionEn === 'destino' ? 'destino' : 'origen';
 
   // Tasa implícita en pesos por unidad de la otra divisa (si no hay pesos de por medio, la de origen por la de destino)
   let tasaTexto;
@@ -140,8 +153,18 @@ function registrarConversion(c) {
   };
   const salida = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: desde.ID_Bolsillo, Valor: -sale }, comun);
   const entrada = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: hacia.ID_Bolsillo, Valor: entra }, comun);
-  insertRows('Movimientos', [salida, entrada]);
-  return { ok: true, idGrupo: idGrupo, patas: [salida, entrada], tasa: tasaTexto };
+  const filas = [salida, entrada];
+  let comisionInfo = null;
+  if (comision > 0) {
+    const bolsillo = comisionEn === 'destino' ? hacia : desde;
+    filas.push({
+      ID_Mov: nuevoId_('mov'), Fecha: f, Concepto: 'Comisión · ' + comun.Concepto, ID_Bolsillo: bolsillo.ID_Bolsillo, Valor: -comision, Tipo_Mov: 'Gasto', Subtipo: 'Comision',
+      ID_Categoria: categoriaComision_(), ID_Grupo: idGrupo, ID_Item_Ppto: '', Notas: 'Comisión de la conversión (' + tasaTexto + ')', Origen: 'App', Anulado: false
+    });
+    comisionInfo = { valor: comision, divisa: divisas[bolsillo.ID_Bolsillo], enBolsillo: bolsillo.ID_Bolsillo };
+  }
+  insertRows('Movimientos', filas);
+  return { ok: true, idGrupo: idGrupo, patas: filas, tasa: tasaTexto, comision: comisionInfo };
 }
 
 /** Filas de un movimiento y, si es parte de un grupo, de todo el grupo. */

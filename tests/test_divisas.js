@@ -146,6 +146,60 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 5, valorDestino: -1 }).ok, false);
   });
 
+  prueba('comisión: es un gasto aparte, con su categoría, dentro de la misma conversión', () => {
+    const { e, casa, bolUsd } = escenario();
+    const r = e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 1012500, valorDestino: 250, comision: 15000, fecha: hoy() }).data;
+    assert.strictEqual(r.tasa, '1 USD = 4050 COP');
+    assert.deepStrictEqual(r.comision, { valor: 15000, divisa: 'COP', enBolsillo: casa.ID_Bolsillo });
+    const m = e.llamar('mapaSaldosBolsillos_');
+    assert.strictEqual(m[casa.ID_Bolsillo], 2000000 - 1012500 - 15000, 'la comisión sale del bolsillo de origen');
+    assert.strictEqual(m[bolUsd.ID_Bolsillo], 1250, 'lo que llega no se reduce');
+
+    const items = e.llamar('listarMovimientos', { mes: hoy().slice(0, 7) }).items;
+    const com = items.find(i => i.Subtipo === 'Comision');
+    assert.strictEqual(com.Valor, -15000);
+    assert.strictEqual(com.Categoria, 'Comisión bancaria');
+    assert.strictEqual(com.Editable, false);
+    assert.strictEqual(e.llamar('listarMovimientos', { mes: hoy().slice(0, 7) }).totales.gastos, 15000, 'cuenta como gasto; la conversión no');
+    assert.strictEqual(r.idGrupo, com.ID_Grupo);
+  });
+
+  prueba('comisión: anular la conversión anula también la comisión, y restaurar la devuelve', () => {
+    const { e, casa, bolUsd } = escenario();
+    const res = e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 400000, valorDestino: 100, comision: 8000, fecha: hoy() }).data;
+    const id = res.items[0].ID_Mov;
+    e.llamar('anularMovimiento', id);
+    let m = e.llamar('mapaSaldosBolsillos_');
+    assert.deepStrictEqual([m[casa.ID_Bolsillo], m[bolUsd.ID_Bolsillo]], [2000000, 1000]);
+    e.llamar('restaurarMovimiento', id);
+    m = e.llamar('mapaSaldosBolsillos_');
+    assert.deepStrictEqual([m[casa.ID_Bolsillo], m[bolUsd.ID_Bolsillo]], [2000000 - 408000, 1100]);
+  });
+
+  prueba('comisión: puede cobrarse del bolsillo de destino, en su moneda', () => {
+    const { e, casa, bolUsd } = escenario();
+    const r = e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 400000, valorDestino: 100, comision: 2.5, comisionEn: 'destino' }).data;
+    assert.deepStrictEqual(r.comision, { valor: 2.5, divisa: 'USD', enBolsillo: bolUsd.ID_Bolsillo });
+    const m = e.llamar('mapaSaldosBolsillos_');
+    assert.strictEqual(m[bolUsd.ID_Bolsillo], 1000 + 100 - 2.5);
+    assert.strictEqual(m[casa.ID_Bolsillo], 1600000);
+  });
+
+  prueba('comisión: sin comisión no se crea fila; una negativa se rechaza; categoría desactivada = sin categoría', () => {
+    const { e, casa, bolUsd } = escenario();
+    const sin = e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 400000, valorDestino: 100, comision: 0 }).data;
+    assert.strictEqual(sin.comision, null);
+    assert.strictEqual(e.llamar('listarMovimientos', { mes: hoy().slice(0, 7) }).items.filter(i => i.Subtipo === 'Comision').length, 0);
+    assert.strictEqual(e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 1, valorDestino: 1, comision: -5 }).ok, false);
+
+    e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 400000, valorDestino: 100, comision: 5000 });
+    e.llamar('desactivarCatalogo', 'Categorias', 'cat-comision');
+    e.llamar('addConversion', { origen: casa.ID_Bolsillo, destino: bolUsd.ID_Bolsillo, valorOrigen: 400000, valorDestino: 100, comision: 6000 });
+    const coms = e.llamar('listarMovimientos', { mes: hoy().slice(0, 7) }).items.filter(i => i.Subtipo === 'Comision');
+    assert.deepStrictEqual(coms.map(c => c.Categoria).sort(), ['', 'Comisión bancaria']);
+    assert.strictEqual(e.llamar('listarCatalogo', 'Categorias', { incluirInactivos: true }).filter(c => c.ID_Categoria === 'cat-comision').length, 1, 'la categoría no se duplica');
+  });
+
   prueba('movimientos: los totales del mes son en pesos; al mirar un bolsillo en dólares, en dólares', () => {
     const { e, casa, bolUsd } = escenario();
     e.llamar('registrarMovimiento', { ID_Bolsillo: casa.ID_Bolsillo, Valor: 50000, Tipo_Mov: 'Gasto', Concepto: 'Mercado' });

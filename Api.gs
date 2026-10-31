@@ -156,7 +156,7 @@ function addMovimiento(m, vista) {
 function addConversion(c, vista) {
   return responder_(function () {
     const r = registrarConversion(c);
-    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista, { idGrupo: r.idGrupo, tasa: r.tasa });
+    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista, { idGrupo: r.idGrupo, tasa: r.tasa, comision: r.comision });
   });
 }
 

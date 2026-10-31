@@ -102,7 +102,7 @@ const ENUMS = {
   Personas: { Rol: ['Titular', 'Familiar', 'Otro'] },
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
-    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion'],
+    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },

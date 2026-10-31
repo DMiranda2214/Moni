@@ -3495,7 +3495,10 @@ function vDivisas() {
   };
 }
 
-/** Compra o venta de moneda: sale un valor de un bolsillo y llega otro, en la moneda del bolsillo de destino. */
+/**
+ * Compra o venta de moneda. Se escribe cuánta moneda se compra o se vende y la tasa que dio el banco por cada
+ * unidad (la TRM solo es una referencia: cada banco cambia a su precio). La comisión, si la hay, se cobra aparte.
+ */
 async function abrirConversion() {
   const todos = opcionesBolsillos();
   const ids = [].concat.apply([], todos.map(g => g.opciones.map(x => x[0])));
@@ -3505,43 +3508,70 @@ async function abrirConversion() {
     todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>';
   const hoy = App.boot.hoy;
   const cuerpo = '<form novalidate data-form="conversion">' +
-    '<p class="m-hoja-mensaje">Por ejemplo, al comprar dólares: sale dinero de un bolsillo en pesos y llega a uno en dólares. Escribe lo que salió y lo que llegó; Moni calcula la tasa.</p>' +
-    sel('Origen', 'Sale de', origenInicial) + htmlCampo({ k: 'Sale', label: 'Cuánto sale', tipo: 'dinero', requerido: true }, '') +
-    sel('Destino', 'Llega a', destinoInicial) + htmlCampo({ k: 'Entra', label: 'Cuánto llega', tipo: 'dinero', requerido: true }, '') +
-    '<p class="m-ayuda" id="conv-tasa" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
+    '<p class="m-hoja-mensaje">Escribe cuánta moneda compras o vendes y la tasa que te dio el banco por cada unidad. Moni calcula cuánto sale y cuánto llega.</p>' +
+    sel('Origen', 'Sale de', origenInicial) + sel('Destino', 'Llega a', destinoInicial) +
+    htmlCampo({ k: 'Cantidad', label: 'Cantidad', tipo: 'dinero', requerido: true }, '') +
+    htmlCampo({ k: 'Tasa', label: 'Tasa del banco', tipo: 'dinero', requerido: true }, '') +
+    '<p class="m-ayuda" id="conv-resumen" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
+    htmlCampo({ k: 'Comision', label: 'Comisión del banco (opcional)', tipo: 'dinero' }, '') +
+    '<div class="m-campo"><label class="m-label" for="f-ComisionEn">La comisión se cobra de</label><select class="m-input" id="f-ComisionEn"><option value="origen"></option><option value="destino"></option></select></div>' +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + esc(hoy) + '"></div>' +
     htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  /** Qué se está convirtiendo: la moneda "de afuera", si se compra (sale pesos) y las tasas de referencia. */
+  const leer = raiz => {
+    const dO = divisaDeBolsillo($('#f-Origen', raiz).value), dD = divisaDeBolsillo($('#f-Destino', raiz).value);
+    const ext = dO === 'COP' ? dD : (dD === 'COP' ? dO : null);
+    return { dO: dO, dD: dD, ext: ext, compra: dO === 'COP', cant: leerDinero($('#f-Cantidad', raiz).value), tasa: leerDinero($('#f-Tasa', raiz).value), com: leerDinero($('#f-Comision', raiz).value) };
+  };
+  const valido = n => n !== '' && !isNaN(n) && n > 0;
+  const pct = x => (Math.round(Math.abs(x) * 10) / 10).toLocaleString('es-CO') + ' %';
 
   await abrirHoja({
     titulo: 'Convertir divisas', cuerpo: cuerpo,
     alAbrir: raiz => {
       activarEcoDinero(raiz);
       const actualizar = () => {
-        const dO = divisaDeBolsillo($('#f-Origen', raiz).value), dD = divisaDeBolsillo($('#f-Destino', raiz).value);
-        const sale = $('#f-Sale', raiz), entra = $('#f-Entra', raiz);
-        sale.dataset.divisa = dO; entra.dataset.divisa = dD;
-        sale.dispatchEvent(new Event('input')); entra.dispatchEvent(new Event('input'));
-        const a = leerDinero(sale.value), b = leerDinero(entra.value), caja = $('#conv-tasa', raiz);
-        if (dO === dD) caja.textContent = 'Elige bolsillos en monedas distintas.';
-        else if (a === '' || b === '' || isNaN(a) || isNaN(b) || a <= 0 || b <= 0) caja.textContent = '';
-        else if (dO === 'COP') caja.textContent = 'Tasa: 1 ' + dD + ' = ' + tasaPesos(a / b);
-        else if (dD === 'COP') caja.textContent = 'Tasa: 1 ' + dO + ' = ' + tasaPesos(b / a);
-        else caja.textContent = 'Tasa: 1 ' + dO + ' = ' + (Math.round(b / a * 10000) / 10000) + ' ' + dD;
+        const c = leer(raiz), nombre = c.ext ? (NOMBRE_DIVISA[c.ext] || c.ext).toLowerCase() : 'moneda', resumen = $('#conv-resumen', raiz);
+        const cant = $('#f-Cantidad', raiz), tasa = $('#f-Tasa', raiz), com = $('#f-Comision', raiz), comEn = $('#f-ComisionEn', raiz);
+        cant.dataset.divisa = c.ext || ''; tasa.dataset.divisa = 'COP';
+        com.dataset.divisa = comEn.value === 'destino' ? c.dD : c.dO;
+        comEn.options[0].textContent = 'El bolsillo de origen (' + c.dO + ')'; comEn.options[1].textContent = 'El bolsillo de destino (' + c.dD + ')';
+        $('label[for="f-Cantidad"]', raiz).textContent = 'Cuántos ' + nombre + ' ' + (c.compra ? 'compras' : 'vendes');
+        $('label[for="f-Tasa"]', raiz).textContent = 'Tasa del banco: pesos por cada ' + (c.ext || 'unidad');
+        [cant, tasa, com].forEach(i => i.dispatchEvent(new Event('input')));
+        if (valido(c.tasa)) $('[data-eco="f-Tasa"]', raiz).textContent = '= ' + tasaPesos(c.tasa) + ' por unidad';
+
+        if (c.dO === c.dD) { resumen.textContent = 'Elige bolsillos en monedas distintas.'; return; }
+        if (!c.ext) { resumen.textContent = 'Las conversiones se hacen entre pesos y otra moneda.'; return; }
+        if (!valido(c.cant) || !valido(c.tasa)) { resumen.textContent = ''; return; }
+        const cop = Math.round(c.cant * c.tasa * 100) / 100;
+        let t = c.compra ? 'Sale ' + dinero(cop, 'COP') + ' · llega ' + dinero(c.cant, c.ext) : 'Sale ' + dinero(c.cant, c.ext) + ' · llega ' + dinero(cop, 'COP');
+        const ref = Number(String(cfg('Tasa_' + c.ext)).replace(',', '.'));
+        if (ref > 0) { // solo informativa: el banco cambia a su propio precio
+          const d = (c.tasa / ref - 1) * 100;
+          t += ' · Referencia (TRM estimada) ' + tasaPesos(ref) + (Math.abs(d) < 0.05 ? ': igual a la tuya' : (c.compra ? ': pagas ' + pct(d) + (d > 0 ? ' más' : ' menos') : ': recibes ' + pct(d) + (d > 0 ? ' más' : ' menos')));
+        }
+        resumen.textContent = t;
       };
       raiz.addEventListener('input', actualizar); raiz.addEventListener('change', actualizar);
       actualizar();
-      $('#f-Sale', raiz).focus();
+      $('#f-Cantidad', raiz).focus();
     },
     alGuardar: async raiz => {
-      const sale = leerDinero($('#f-Sale', raiz).value), entra = leerDinero($('#f-Entra', raiz).value);
-      if (sale === '' || isNaN(sale)) throw new Error('Escribe cuánto sale.');
-      if (entra === '' || isNaN(entra)) throw new Error('Escribe cuánto llega.');
-      const res = await api('addConversion', { origen: $('#f-Origen', raiz).value, destino: $('#f-Destino', raiz).value, valorOrigen: sale, valorDestino: entra,
-        fecha: $('#f-Fecha', raiz).value, notas: ($('#f-Notas', raiz) || {}).value || '' }, vistaActual());
+      const c = leer(raiz);
+      if (c.dO === c.dD) throw new Error('Elige bolsillos en monedas distintas.');
+      if (!c.ext) throw new Error('Las conversiones se hacen entre pesos y otra moneda.');
+      if (!valido(c.cant)) throw new Error('Escribe la cantidad.');
+      if (!valido(c.tasa)) throw new Error('Escribe la tasa que te dio el banco.');
+      if (c.com !== '' && (isNaN(c.com) || c.com < 0)) throw new Error('Revisa la comisión.');
+      const cop = Math.round(c.cant * c.tasa * 100) / 100;
+      const res = await api('addConversion', { origen: $('#f-Origen', raiz).value, destino: $('#f-Destino', raiz).value, valorOrigen: c.compra ? cop : c.cant, valorDestino: c.compra ? c.cant : cop,
+        comision: c.com === '' ? 0 : c.com, comisionEn: $('#f-ComisionEn', raiz).value, fecha: $('#f-Fecha', raiz).value, notas: ($('#f-Notas', raiz) || {}).value || '' }, vistaActual());
       aplicarEscritura(res); render();
       const id = res.items[0] && res.items[0].ID_Mov;
-      aviso('Conversión registrada · ' + res.tasa, { deshacer: () => anularYAvisar(id) });
+      aviso('Conversión registrada · ' + res.tasa + (res.comision ? ' · comisión ' + dinero(res.comision.valor, res.comision.divisa) : ''), { deshacer: () => anularYAvisar(id) });
     }
   });
 }
