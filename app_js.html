@@ -231,7 +231,7 @@ async function cargar() {
 
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.proximosViejos = false;
+  App.pag.data = null; App.graf.data = null; App.proximosViejos = false;
   aplicarApariencia();
 }
 
@@ -327,7 +327,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null;
-  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null;
+  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
   const ruta = rutaActual();
 
   const d = App.det;
@@ -390,6 +390,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'movimientos') return 'Movimientos';
   if (partes[0] === 'nomina') return 'Nómina';
   if (partes[0] === 'regalos') return 'Regalos';
+  if (partes[0] === 'graficos') return 'Gráficos';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -456,6 +457,7 @@ function pantalla(ruta) {
     case 'presupuesto': return vPresupuesto();
     case 'nomina': return vNomina();
     case 'regalos': return vRegalos();
+    case 'graficos': return vGraficos();
     case 'anual': return vAnual();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
@@ -712,6 +714,7 @@ function vMas() {
       irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
       irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
       irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
+      irA('graficos', { icono: 'pulso', titulo: 'Gráficos', sub: 'En qué gastas y cómo evoluciona tu dinero' }) +
       irA('anual', { icono: 'presupuesto', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante' }) +
       irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Cuentas, bolsillos, tarjetas y apariencia' }))
   };
@@ -1464,7 +1467,7 @@ function interruptorAnulados(vista, marcado) {
 }
 
 function cambiarMes(vista, delta) {
-  const st = vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
+  const st = vista === 'graf' ? App.graf : vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
   st.mes = mesMas(st.mes, delta); st.data = null; st.error = null;
   render();
 }
@@ -3181,6 +3184,241 @@ async function abrirCodigoServicio(id) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Gráficos (Más → Gráficos): SVG sin librerías. Una sola moneda a la vez; los traslados no cuentan.
+// Marcas finas, cuadrícula recesiva, hover y foco con tooltip, y una tabla con los mismos datos.
+// ---------------------------------------------------------------------------
+
+App.graf = { mes: null, meses: 6, divisa: 'COP', data: null, cargando: false, error: null };
+
+const compactoPlano = n => new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0);
+const compactoMoneda = (n, d) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: d || 'COP', notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0).replace(/ /g, ' ');
+const mesCorto = mes => { const p = mes.split('-').map(Number); return new Date(p[0], p[1] - 1, 1).toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''); };
+
+/** Etiqueta de eje compacta (mil, M) con los decimales justos para que dos marcas vecinas no se vean iguales. */
+function etiquetaEje(v, escala) {
+  if (v === 0) return '0';
+  const tope = Math.max(Math.abs(escala.min), Math.abs(escala.max));
+  const [div, suf] = tope >= 1e9 ? [1e9, ' mil M'] : tope >= 1e6 ? [1e6, ' M'] : tope >= 1e3 ? [1e3, ' mil'] : [1, ''];
+  const dec = Math.max(0, Math.min(3, Math.ceil(-Math.log10(escala.paso / div) - 1e-9)));
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(v / div) + suf;
+}
+
+/** Marcas de eje "redondas": el paso es 1, 2 o 5 por una potencia de 10. */
+function ticksNice(min, max, cuantos) {
+  if (max === min) { const p = Math.abs(max) * 0.1 || 1; min -= p; max += p; }
+  const crudo = (max - min) / cuantos, pot = Math.pow(10, Math.floor(Math.log10(crudo)));
+  const paso = [1, 2, 5, 10].map(f => f * pot).find(p => p >= crudo);
+  const ini = Math.floor(min / paso) * paso, fin = Math.ceil(max / paso) * paso, ticks = [];
+  for (let v = ini; v <= fin + paso / 1000; v += paso) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { min: ini, max: fin, ticks: ticks, paso: paso };
+}
+
+/** Barra con el extremo de datos redondeado (4 px) y la base recta. */
+function trazoBarra(x, y, w, h, r) {
+  if (h <= 0) return '';
+  const rr = Math.min(r, h, w / 2);
+  return 'M' + x + ',' + (y + h) + 'V' + (y + rr) + 'Q' + x + ',' + y + ' ' + (x + rr) + ',' + y + 'H' + (x + w - rr) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + rr) + 'V' + (y + h) + 'Z';
+}
+
+function vGraficos() {
+  const g = App.graf;
+  if (!g.mes) g.mes = App.boot.hoy.slice(0, 7);
+  const divisas = ['COP'].concat(activos('Bancos').map(b => b.Divisa || 'COP').filter((d, i, a) => d !== 'COP' && a.indexOf(d) === i));
+  if (divisas.indexOf(g.divisa) === -1) g.divisa = 'COP';
+  const segmentos = (nombre, etiqueta, opciones, actual) => '<div class="m-segmentado" role="radiogroup" aria-label="' + esc(etiqueta) + '">' +
+    opciones.map(o => '<label><input type="radio" name="' + nombre + '" value="' + esc(o[0]) + '"' + (String(o[0]) === String(actual) ? ' checked' : '') + '><span>' + esc(o[1]) + '</span></label>').join('') + '</div>';
+
+  // Los filtros van en una sola fila sobre los gráficos y valen para todos
+  let html = bannerDemo() + '<div class="m-filtros-viz">' + navegadorMes('graf', g.mes) +
+    segmentos('graf-rango', 'Meses a mostrar', [[3, '3 meses'], [6, '6 meses'], [12, '12 meses']], g.meses) +
+    (divisas.length > 1 ? segmentos('graf-divisa', 'Moneda', divisas.map(d => [d, d]), g.divisa) : '') + '</div>';
+
+  if (g.error) html += bloqueError(g.error, 'recargar-graf');
+  else if (!g.data) html += esqueleto(5);
+  else html += htmlGraficos(g.data);
+  return {
+    titulo: 'Gráficos', html: html,
+    despues: () => {
+      if (!g.data && !g.cargando && !g.error) {
+        const clave = () => g.mes + '|' + g.meses + '|' + g.divisa, k = clave();
+        cargarEn(g, 'graficos', 'getGraficos', [{ mes: g.mes, meses: g.meses, divisa: g.divisa }], () => k === clave());
+      }
+      activarGraficos();
+    }
+  };
+}
+
+function htmlGraficos(d) {
+  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
+  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null;
+
+  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
+  const tile = (etiqueta, valor, previo, subeEsBueno) => {
+    let delta = '';
+    if (previo !== null && previo !== undefined && previo !== 0) {
+      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
+      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
+    }
+    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(dinero(valor, dv)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
+  };
+  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
+
+  const tarjeta = (id, titulo, cuerpo, tabla) => '<section class="m-seccion m-viz" aria-labelledby="' + id + '"><h2 class="m-seccion-titulo" id="' + id + '">' + esc(titulo) + '</h2>' +
+    '<div class="m-group m-viz-tarjeta">' + cuerpo + '<details class="m-viz-tabla"><summary>Ver como tabla</summary>' + tabla + '</details></div></section>';
+  const fm = n => dinero(n, dv);
+  const tabla = (cab, filas) => '<div style="overflow-x:auto"><table class="m-tabla"><thead><tr>' + cab.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+    filas.map(f => '<tr>' + f.map(c => '<td class="m-num">' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+
+  const cats = categoriasVisibles(d);
+  return kpis +
+    tarjeta('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), htmlCategorias(d, cats), d.categorias.length ? tabla(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '<p class="m-ayuda">Sin gastos este mes.</p>') +
+    tarjeta('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses', svgFlujo(d), tabla(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
+    tarjeta('gv-saldo', 'Saldo al cierre de cada mes', svgSaldo(d), tabla(['Mes', 'Saldo'], s.map(m => [mesTexto(m.mes), fm(m.saldo)])));
+}
+
+const porcentajeDe = (v, total) => total > 0 ? (v / total * 100 < 1 ? '<1 %' : Math.round(v / total * 100) + ' %') : '';
+
+/** Las 7 mayores categorías y, si hay más, "Otras". */
+function categoriasVisibles(d) {
+  const TOP = 7;
+  if (d.categorias.length <= TOP + 1) return d.categorias;
+  const resto = d.categorias.slice(TOP).reduce((a, c) => a + c.Valor, 0);
+  return d.categorias.slice(0, TOP).concat([{ Nombre: 'Otras', Valor: Math.round(resto * 100) / 100 }]);
+}
+
+/** Barras horizontales ordenadas, de un solo color: es una sola serie, así que el color no codifica nada más. */
+function htmlCategorias(d, cats) {
+  if (!cats.length) return '<p class="m-ayuda">Sin gastos este mes.</p>';
+  const max = Math.max.apply(null, cats.map(c => c.Valor)) || 1;
+  return '<div class="m-barras" role="list">' + cats.map((c, i) =>
+    '<div class="m-barra" role="listitem" tabindex="0" data-i="' + i + '" aria-label="' + esc(c.Nombre + ': ' + dinero(c.Valor, d.divisa) + ', ' + porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió') + '">' +
+    '<span class="m-barra-nombre">' + esc(c.Nombre) + '</span><span class="m-barra-valor m-num">' + esc(dinero(c.Valor, d.divisa)) + '</span>' +
+    '<span class="m-barra-pista"><i style="width:' + Math.max(1, c.Valor / max * 100).toFixed(1) + '%"></i></span></div>').join('') + '</div>';
+}
+
+const VIZ_W = 340, VIZ_M = { l: 48, r: 10, t: 10, b: 34 };
+
+/** Ejes y cuadrícula comunes: líneas finas y continuas, solo la base un poco más marcada. */
+function ejesViz(escala, alto, meses, xDe) {
+  const h = alto - VIZ_M.t - VIZ_M.b, y = v => VIZ_M.t + h - (v - escala.min) / (escala.max - escala.min) * h;
+  let s = '';
+  escala.ticks.forEach(t => {
+    s += '<line class="viz-grid' + (t === 0 ? ' viz-base' : '') + '" x1="' + VIZ_M.l + '" x2="' + (VIZ_W - VIZ_M.r) + '" y1="' + y(t) + '" y2="' + y(t) + '"/>' +
+      '<text class="viz-eje" x="' + (VIZ_M.l - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + esc(etiquetaEje(t, escala)) + '</text>';
+  });
+  meses.forEach((m, i) => {
+    const mm = m.mes.slice(5), mostrarAnio = i === 0 || mm === '01';
+    s += '<text class="viz-eje" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 14) + '" text-anchor="middle">' + esc(mesCorto(m.mes)) + '</text>' +
+      (mostrarAnio ? '<text class="viz-eje viz-anio" x="' + xDe(i) + '" y="' + (alto - VIZ_M.b + 26) + '" text-anchor="middle">' + esc(m.mes.slice(2, 4)) + '</text>' : '');
+  });
+  return { y: y, svg: s };
+}
+
+function svgFlujo(d) {
+  const s = d.serie, n = s.length, alto = 210;
+  const escala = ticksNice(0, Math.max.apply(null, s.map(m => Math.max(m.ingresos, m.gastos))), 4);
+  const banda = (VIZ_W - VIZ_M.l - VIZ_M.r) / n, xc = i => VIZ_M.l + banda * (i + 0.5);
+  const ejes = ejesViz(escala, alto, s, xc);
+  const ancho = Math.max(4, Math.min(24, (banda - 8) / 2 - 1)), base = ejes.y(0);
+  let marcas = '', zonas = '';
+  s.forEach((m, i) => {
+    // Dos barras pegadas, separadas por 2 px de aire; crecen desde la base
+    [[m.ingresos, 'viz-s1', xc(i) - ancho - 1], [m.gastos, 'viz-s2', xc(i) + 1]].forEach(b => {
+      marcas += '<path class="' + b[1] + '" d="' + trazoBarra(b[2], ejes.y(b[0]), ancho, base - ejes.y(b[0]), 4) + '"/>';
+    });
+    zonas += '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (VIZ_M.l + banda * i) + '" y="' + VIZ_M.t + '" width="' + banda + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
+      esc(mesTexto(m.mes) + ': entró ' + dinero(m.ingresos, d.divisa) + ', salió ' + dinero(m.gastos, d.divisa)) + '"/>';
+  });
+  return '<div class="m-viz-claves"><span class="m-viz-clave"><i class="viz-sw viz-s1"></i>Entró</span><span class="m-viz-clave"><i class="viz-sw viz-s2"></i>Salió</span></div>' +
+    '<svg class="m-viz-svg" data-viz="flujo" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="Entró y salió por mes">' + ejes.svg + marcas + zonas + '</svg>';
+}
+
+function svgSaldo(d) {
+  const s = d.serie, n = s.length, alto = 190, vals = s.map(m => m.saldo);
+  const escala = ticksNice(Math.min.apply(null, vals), Math.max.apply(null, vals), 4);
+  const paso = n > 1 ? (VIZ_W - VIZ_M.l - VIZ_M.r - 8) / (n - 1) : 0, xc = i => VIZ_M.l + 4 + paso * i;
+  const ejes = ejesViz(escala, alto, s, xc), pts = s.map((m, i) => [xc(i), ejes.y(m.saldo)]);
+  const linea = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
+  const area = linea + 'L' + pts[n - 1][0] + ',' + ejes.y(escala.min) + 'L' + pts[0][0] + ',' + ejes.y(escala.min) + 'Z';
+  const fin = pts[n - 1];
+  const zonas = s.map((m, i) => '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (xc(i) - Math.max(paso, 24) / 2) + '" y="' + VIZ_M.t + '" width="' + Math.max(paso, 24) + '" height="' + (alto - VIZ_M.t - VIZ_M.b) +
+    '" aria-label="' + esc(mesTexto(m.mes) + ': saldo ' + dinero(m.saldo, d.divisa)) + '"/>').join('');
+  return '<svg class="m-viz-svg" data-viz="saldo" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="Saldo al cierre de cada mes">' + ejes.svg +
+    '<path class="viz-area" d="' + area + '"/><path class="viz-linea" d="' + linea + '"/>' +
+    '<line class="viz-mira" x1="0" x2="0" y1="' + VIZ_M.t + '" y2="' + (alto - VIZ_M.b) + '" hidden/><circle class="viz-punto" r="4.5" hidden/>' +
+    '<circle class="viz-fin" cx="' + fin[0] + '" cy="' + fin[1] + '" r="4"/>' +
+    '<text class="viz-valor" x="' + fin[0] + '" y="' + (fin[1] - 10) + '" text-anchor="end">' + esc(compactoMoneda(s[n - 1].saldo, d.divisa)) + '</text>' + zonas + '</svg>';
+}
+
+// ---- Tooltip: uno solo, con textContent (los nombres vienen de datos del usuario) ----
+let _tip = null;
+function mostrarTip(titulo, filas, rect) {
+  if (!_tip) { _tip = document.createElement('div'); _tip.className = 'm-viz-tip'; _tip.setAttribute('role', 'presentation'); document.body.appendChild(_tip); }
+  _tip.textContent = '';
+  const t = document.createElement('div'); t.className = 'm-viz-tip-titulo'; t.textContent = titulo; _tip.appendChild(t);
+  filas.forEach(f => {
+    const r = document.createElement('div'); r.className = 'm-viz-tip-fila';
+    if (f.clave) { const k = document.createElement('i'); k.className = 'viz-clave-linea ' + f.clave; r.appendChild(k); }
+    const v = document.createElement('strong'); v.className = 'm-num'; v.textContent = f.valor; r.appendChild(v);
+    const e = document.createElement('span'); e.textContent = f.etiqueta; r.appendChild(e);
+    _tip.appendChild(r);
+  });
+  _tip.hidden = false;
+  const w = _tip.offsetWidth, h = _tip.offsetHeight;
+  let x = rect.left + rect.width / 2 - w / 2, y = rect.top - h - 8;
+  if (y < 4) y = rect.bottom + 8;
+  _tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + 'px';
+  _tip.style.top = y + 'px';
+}
+function ocultarTip() { if (_tip) _tip.hidden = true; }
+
+/** Hover, foco y teclado: cada barra de categoría y cada mes de los otros dos gráficos. */
+function activarGraficos() {
+  const d = App.graf.data;
+  if (!d) return;
+  const fm = n => dinero(n, d.divisa);
+
+  $$('.m-barra').forEach(el => {
+    const cats = categoriasVisibles(d), c = cats[Number(el.dataset.i)];
+    const mostrar = () => mostrarTip(c.Nombre, [{ valor: fm(c.Valor), etiqueta: porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió' }], el.getBoundingClientRect());
+    el.addEventListener('pointerenter', mostrar); el.addEventListener('focus', mostrar);
+    el.addEventListener('pointerleave', ocultarTip); el.addEventListener('blur', ocultarTip);
+  });
+
+  $$('svg[data-viz]').forEach(svg => {
+    const tipo = svg.dataset.viz, mira = $('.viz-mira', svg), punto = $('.viz-punto', svg);
+    const mostrar = zona => {
+      const i = Number(zona.dataset.i), m = d.serie[i], ant = i > 0 ? d.serie[i - 1] : null;
+      $$('.viz-zona', svg).forEach(z => z.classList.toggle('viz-activa', z === zona));
+      if (tipo === 'flujo') {
+        mostrarTip(mesTexto(m.mes), [{ clave: 'viz-s1', valor: fm(m.ingresos), etiqueta: 'Entró' }, { clave: 'viz-s2', valor: fm(m.gastos), etiqueta: 'Salió' }, { valor: fm(m.neto), etiqueta: 'Diferencia' }], zona.getBoundingClientRect());
+      } else {
+        const cx = Number(zona.getAttribute('x')) + Number(zona.getAttribute('width')) / 2;
+        if (mira) { mira.setAttribute('x1', cx); mira.setAttribute('x2', cx); mira.removeAttribute('hidden'); }
+        if (punto) { punto.setAttribute('cx', cx); punto.setAttribute('cy', svg.dataset['y' + i]); punto.removeAttribute('hidden'); }
+        const filas = [{ clave: 'viz-linea-clave', valor: fm(m.saldo), etiqueta: 'Saldo' }];
+        if (ant) filas.push({ valor: (m.saldo - ant.saldo >= 0 ? '+' : '−') + fm(Math.abs(m.saldo - ant.saldo)), etiqueta: 'vs ' + mesCorto(ant.mes) });
+        mostrarTip(mesTexto(m.mes), filas, (punto && !punto.hasAttribute('hidden') ? punto : zona).getBoundingClientRect());
+      }
+    };
+    const ocultar = () => { ocultarTip(); $$('.viz-zona', svg).forEach(z => z.classList.remove('viz-activa')); if (mira) mira.setAttribute('hidden', ''); if (punto) punto.setAttribute('hidden', ''); };
+    if (tipo === 'saldo') { // la altura de cada punto, para colocar el marcador
+      const vals = d.serie.map(m => m.saldo), alto = 190, esc_ = ticksNice(Math.min.apply(null, vals), Math.max.apply(null, vals), 4), h = alto - VIZ_M.t - VIZ_M.b;
+      d.serie.forEach((m, i) => { svg.dataset['y' + i] = VIZ_M.t + h - (m.saldo - esc_.min) / (esc_.max - esc_.min) * h; });
+    }
+    $$('.viz-zona', svg).forEach(z => {
+      z.addEventListener('pointerenter', () => mostrar(z)); z.addEventListener('focus', () => mostrar(z));
+      z.addEventListener('pointerleave', ocultar); z.addEventListener('blur', ocultar);
+      z.addEventListener('keydown', ev => {
+        const zs = $$('.viz-zona', svg), i = zs.indexOf(z);
+        const sig = ev.key === 'ArrowRight' ? zs[i + 1] : ev.key === 'ArrowLeft' ? zs[i - 1] : null;
+        if (sig) { ev.preventDefault(); sig.focus(); }
+      });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Divisas: tasas de referencia y conversión entre monedas
 // ---------------------------------------------------------------------------
 
@@ -3606,7 +3844,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -3650,6 +3888,7 @@ async function abrirBorrar() {
 }
 
 const ACCIONES = {
+  'recargar-graf': () => { App.graf.error = null; App.graf.data = null; render(); },
   convertir: () => abrirConversion(),
   'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
   'log-limpiar': async () => {
@@ -3816,6 +4055,8 @@ document.addEventListener('change', async ev => {
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
+  if (t.name === 'graf-rango') { App.graf.meses = Number(t.value); App.graf.data = null; render(); return; }
+  if (t.name === 'graf-divisa') { App.graf.divisa = t.value; App.graf.data = null; render(); return; }
   if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
   if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
   if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }

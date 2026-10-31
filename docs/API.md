@@ -117,6 +117,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `setRespaldoAuto` | `activar` |
 | `seedDemo` | — |
 | `clearDemo` | — |
+| `getGraficos` | `opciones` (`{ mes: 'AAAA-MM', meses: 3\|6\|12, divisa }`) |
 | `getLogs` | `opciones` (`{ soloErrores, limite }`) |
 | `clearLogs` | — |
 | `logClientError` | `mensaje, detalle` |

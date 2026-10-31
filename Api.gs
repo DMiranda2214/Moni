@@ -581,6 +581,9 @@ function runDiagnostics() {
   });
 }
 
+/** Datos de los gráficos: gastos por categoría, entró/salió por mes y saldo al cierre de cada mes. */
+function getGraficos(opciones) { return responder_(function () { return obtenerGraficos(opciones); }); }
+
 // ---- Registro de errores ----
 function getLogs(opciones) { return responder_(function () { return obtenerLogs(opciones); }); }
 function clearLogs() { return responder_(function () { return limpiarLogs(); }); }

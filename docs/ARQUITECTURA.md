@@ -51,6 +51,7 @@
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
 | `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
+| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió y saldo por mes |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)

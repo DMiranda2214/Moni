@@ -75,6 +75,15 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 ## 11. Vista anual
 **Más → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
+### Gráficos
+**Más → Gráficos** muestra, para el mes y la moneda que elijas (los filtros van arriba y valen para todo):
+- **Cifras del mes** (entró, salió y diferencia) con el cambio frente al mes anterior.
+- **Gastos por categoría** del mes, de mayor a menor (las 7 mayores y "Otras").
+- **Entró y salió** de los últimos 3, 6 o 12 meses.
+- **Saldo al cierre de cada mes.**
+
+Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto. Los traslados no cuentan como entrada ni salida; cada moneda se ve por separado.
+
 ## 12. Movimientos
 **Más → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
 

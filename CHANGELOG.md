@@ -2,6 +2,11 @@
 
 Historia por fases. Las fechas son de 2026.
 
+## Gráficos
+- **Nuevo** Más → Gráficos: gastos por categoría del mes, entró y salió por mes, saldo al cierre de cada mes y cifras del mes con su cambio. Filtros de mes, rango (3/6/12 meses) y moneda en una sola fila.
+- SVG sin librerías: marcas finas, hover/foco/teclado con tooltip, tabla con los mismos datos, claro y oscuro. Paleta de dos series validada contra las superficies de la app.
+- **Pruebas** `tests/test_graficos.js` (el último saldo coincide con el total del Inicio).
+
 ## Divisas
 - **Nuevo** la moneda (COP, USD o EUR) se elige al crear el banco; sus cuentas y bolsillos la heredan. Los saldos de distintas monedas no se suman: el Inicio muestra **Otras monedas** aparte, con el equivalente en pesos si anotas la tasa (Ajustes → Divisas).
 - **Nuevo** **Convertir divisas** (Bolsillos): sale un valor de un bolsillo y llega otro en la otra moneda, con la tasa implícita anotada; se anula junto.
