@@ -72,12 +72,13 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 `Estado`: `Abierto`, `Pagado`.
 
 **Presupuesto_Plantilla** —
-`ID_Plantilla, ID_Escenario, Concepto, Monto_Plan, Tipo, ID_Bolsillo_Destino, ID_Categoria, ID_Credito, Activo, Orden`
+`ID_Plantilla, ID_Escenario, Concepto, Monto_Plan, Tipo, ID_Bolsillo_Destino, ID_Categoria, ID_Credito, ID_Tarjeta, Activo, Orden`
 - `Tipo`: `Gasto`, `Cuota`, `Ahorro`, `Fondo`.
+- `ID_Tarjeta`: con qué se suele pagar un gasto (vacío = el bolsillo del renglón). Solo en renglones de tipo `Gasto`.
 - No hay "Continuar/Congelar": un gasto "congelado" simplemente no existe, o vale 0, en el escenario `Contingencia`. Se crea un escenario copiando otro.
 
 **Presupuesto_Mes** —
-`ID_Item, Mes, ID_Escenario, ID_Plantilla, Concepto, Tipo, Plan, Pagado, ID_Bolsillo_Destino, ID_Credito, Notas`
+`ID_Item, Mes, ID_Escenario, ID_Plantilla, Concepto, Tipo, Plan, Pagado, ID_Bolsillo_Destino, ID_Credito, ID_Tarjeta, Notas`
 - **No existe la columna `Real`: se calcula** = Σ `Movimientos` con ese `ID_Item_Ppto` + Σ `Compras_TC` (Fuente `Ppto`) con ese `ID_Item_Ppto`.
 - `Ahorro` del renglón = `Plan − Real` solo si `Pagado`.
 
