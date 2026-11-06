@@ -156,4 +156,41 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.como('otra@example.com');
     assert.deepStrictEqual(e.llamar('listCatalogo', 'Bancos').data.map(b => b.Nombre), ['Uno']);
   });
+
+  prueba('instalación por partes: si no alcanza el tiempo avanza y se continúa sin perder lo hecho', () => {
+    const e = app();
+    e.como(ANA);
+    const ss = e.ejecutar("SpreadsheetApp.create('x')");
+    e.propiedades.__p = 1;
+    e.ctx.__ss = ss;
+    let r = plano(e.ejecutar('setupDatabase(__ss, { presupuestoMs: -1 })'));
+    assert.strictEqual(r.parcial, true);
+    assert.ok(r.hechas >= 1 && r.hechas < r.tablas, 'avanza al menos una tabla por llamada');
+    let vueltas = 0;
+    while (r.parcial && vueltas++ < 100) r = plano(e.ejecutar('setupDatabase(__ss, { presupuestoMs: -1 })'));
+    assert.strictEqual(r.parcial, false);
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(plano(e.ejecutar('verificarEsquema(__ss)')).listo, true);
+  });
+
+  prueba('rendimiento: el libro se abre una vez por petición y la segunda carga sale de la caché', () => {
+    const e = crearEntorno({}, { cache: true });
+    e.cargar(...archivos);
+    e.propiedades.MODO_MULTIUSUARIO = 'TRUE'; delete e.propiedades.SPREADSHEET_ID;
+    e.como(ANA);
+    let abiertas = 0;
+    const abrir = e.ctx.SpreadsheetApp.openById;
+    e.ctx.SpreadsheetApp.openById = id => { abiertas++; return abrir(id); };
+    e.ctx.__args = [];
+    e.ejecutar('createMySheet()');
+    abiertas = 0;
+    const a = plano(e.ejecutar('getBootstrap()'));
+    assert.strictEqual(a.ok, true);
+    assert.ok(abiertas <= 2, 'abrió el libro ' + abiertas + ' veces');
+    // Guardar invalida la tabla: el siguiente arranque ya trae el cambio
+    e.ctx.__args = ['Personas', { Nombre: 'Ana' }];
+    assert.strictEqual(plano(e.ejecutar('saveCatalogo(...__args)')).ok, true);
+    const b = plano(e.ejecutar('getBootstrap()'));
+    assert.ok(b.data.catalogos.Personas.some(p => p.Nombre === 'Ana'));
+  });
 };

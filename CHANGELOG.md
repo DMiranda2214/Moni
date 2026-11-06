@@ -1,5 +1,10 @@
 # Cambios
 
+## Rendimiento (6 nov)
+- **Crear la hoja ya no se agota:** las 28 pestañas se preparan por partes (≈20 s por paso, con avance "n de 28" en el botón). Si se corta, *Reintentar* continúa donde quedó. Antes todo iba en una sola petición con cientos de llamadas a Google y chocaba con el tiempo límite.
+- **Menos llamadas a Google:** el libro se abre una vez por petición (antes 12–23), las columnas de texto se formatean en una llamada, y todas las tablas (no solo los catálogos) se guardan en caché en trozos y se invalidan al escribir. Cargar la app con caché pasó de ~44 lecturas de hoja a 4; guardar un nombre y recargar, de ~30 a ~10.
+- `node tests/medir_llamadas.js` cuenta las llamadas por operación.
+
 ## Listo para cualquier persona (6 nov)
 - **Producción sin datos de demostración:** el paquete de producción reemplaza el generador (`Demo.gs`) por un archivo vacío y el script se niega a subirlo si queda algo; además `sembrarDatosDemo` exige la propiedad `DEMO_HABILITADO`, que solo existe en desarrollo. *Datos de demostración*, *Arranque* y "Explorar con datos de ejemplo" desaparecen de la app y el servidor rechaza esas operaciones.
 - **El arranque** (anular pruebas, fijar saldos) solo corre en el entorno de pruebas: en producción habría anulado movimientos reales.

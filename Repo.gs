@@ -35,7 +35,11 @@ function getSpreadsheet() {
   // La propiedad tiene prioridad: en una web app getActiveSpreadsheet() puede devolver null.
   const id = idHojaUsuario_();
   if (id) {
-    return SpreadsheetApp.openById(id);
+    // Abrir el libro cuesta una llamada a Google: se hace una vez por petición, no una por lectura o escritura.
+    if (MEMO_LIBRO && MEMO_LIBRO.id === id) return MEMO_LIBRO.ss;
+    const ss = SpreadsheetApp.openById(id);
+    MEMO_LIBRO = { id: id, ss: ss };
+    return ss;
   }
   // En modo multiusuario cada persona tiene su propia hoja: no se usa la hoja a la que está unido el script.
   if (modoMultiusuario_()) {
@@ -105,10 +109,12 @@ function tomarBloqueo(ms) {
  * tabla se lee de la hoja una sola vez. Toda escritura invalida la tabla afectada.
  */
 let MEMO_TABLAS = {};
+let MEMO_LIBRO = null;
 
 /** Olvida lo leído. Se llama al empezar cada petición de la API (y entre llamadas en las pruebas). */
 function reiniciarMemoria_() {
   MEMO_TABLAS = {};
+  MEMO_LIBRO = null;
 }
 
 /**
@@ -130,15 +136,11 @@ function invalidateCache(sheetName) {
  * Devuelve { filas, fresco }: `fresco` indica que vino de la hoja en esta petición.
  */
 function leerTabla_(sheetName, forzar) {
-  const isCacheable = TABLAS_CACHEABLES.includes(sheetName);
   const cache = cache_();
-  const cacheKey = 'TABLE_' + sheetName;
 
-  if (isCacheable && !forzar) {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      try { return { filas: JSON.parse(cached), fresco: false }; } catch (e) {}
-    }
+  if (!forzar) {
+    const guardada = leerDeCache_(cache, sheetName);
+    if (guardada) return { filas: guardada, fresco: false };
   }
 
   const sheet = getSpreadsheet().getSheetByName(sheetName);
@@ -164,10 +166,47 @@ function leerTabla_(sheetName, forzar) {
     }
   }
 
-  if (isCacheable) {
-    try { cache.put(cacheKey, JSON.stringify(filas), CACHE_TTL_SECONDS); } catch (e) {}
-  }
+  guardarEnCache_(cache, sheetName, filas);
   return { filas: filas, fresco: true };
+}
+
+/**
+ * Caché por tabla, partida en trozos (cada valor de CacheService admite ~100 KB). La clave "TABLE_x" guarda
+ * un sello y cuántos trozos hay; los trozos llevan ese sello, así que nunca se mezclan trozos de dos escrituras.
+ * Invalidar es borrar solo la clave principal. Las tablas de movimientos duran menos que los catálogos.
+ */
+const TROZO_CACHE = 40000;
+
+function leerDeCache_(cache, tabla) {
+  const meta = cache.get('TABLE_' + tabla);
+  if (!meta) return null;
+  const p = String(meta).split('|');
+  const n = Number(p[1]);
+  if (p.length !== 2 || !isFinite(n) || n < 1) return null;
+  const claves = [];
+  for (let i = 0; i < n; i++) claves.push('TABLE_' + tabla + '_' + p[0] + '_' + i);
+  const trozos = cache.getAll(claves);
+  let texto = '';
+  for (let i = 0; i < n; i++) {
+    const t = trozos[claves[i]];
+    if (t === undefined || t === null) return null;
+    texto += t;
+  }
+  try { return JSON.parse(texto); } catch (e) { return null; }
+}
+
+function guardarEnCache_(cache, tabla, filas) {
+  try {
+    const texto = JSON.stringify(filas);
+    const sello = Utilities.getUuid().slice(0, 8);
+    const n = Math.max(1, Math.ceil(texto.length / TROZO_CACHE));
+    if (n > 20) return; // una tabla enorme se lee siempre de la hoja
+    const ttl = TABLAS_CACHEABLES.includes(tabla) ? CACHE_TTL_SECONDS : 120;
+    const valores = {};
+    for (let i = 0; i < n; i++) valores['TABLE_' + tabla + '_' + sello + '_' + i] = texto.slice(i * TROZO_CACHE, (i + 1) * TROZO_CACHE);
+    cache.putAll(valores, ttl);
+    cache.put('TABLE_' + tabla, sello + '|' + n, ttl);
+  } catch (e) {}
 }
 
 /**
