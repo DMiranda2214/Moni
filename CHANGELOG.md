@@ -1,5 +1,8 @@
 # Cambios
 
+## 1.1.1 — Arreglo de actualización (6 nov 2026)
+- **Corregido:** tras publicar la 1.1.0, las hojas ya creadas mostraban *"La tabla CDTs no existe en la base de datos"* en vez de actualizarse. La app recordaba por 6 horas que la hoja estaba bien y no la revisaba. Ahora esa revisión recordada cambia con cada versión de la app y, si aun así falta una tabla, la app olvida lo recordado y revisa de nuevo: con varias personas la hoja se actualiza sola; con una sola hoja se ofrece *Instalar*.
+
 ## 1.1.0 — CDT, hogares y avisos (6 nov 2026)
 - **CDT:** nuevo módulo (*Más → CDT*). Capital, tasa EA, plazo, banco, pago de intereses (al vencimiento, mensual o trimestral) y retención. El capital se muestra como **Invertido**, no como disponible. Calcula intereses y neto, registra pagos de intereses, cobra o cancela (con renovación) y se puede anular. Admite CDT que la persona ya tenía antes de usar Moni (sin descontar nada). Vencimientos en *Por recibir* y en Google Calendar. Tabla nueva `CDTs`.
 - **Avisos en Inicio:** el panel *Para tener en cuenta* muestra lo que falta configurar o está desactualizado (importantes, sugerencias y novedades), se actualiza solo y los no urgentes se ocultan con *Ahora no*.

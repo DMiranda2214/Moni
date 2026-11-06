@@ -50,6 +50,19 @@ function exigirCatalogo_(tabla) {
  */
 function getBootstrap() {
   return responder_(function () {
+    try { return armarBootstrap_(); }
+    catch (e) {
+      // Una tabla que la versión nueva necesita todavía no existe en la hoja: se olvida la revisión recordada y se revisa de
+      // nuevo (en varias personas la hoja se actualiza sola; en una sola, se ofrece Instalar).
+      if (!/no existe en la base de datos/.test(String(e && e.message))) throw e;
+      cache_().remove('ESQUEMA_OK'); invalidateCache(); reiniciarMemoria_();
+      return armarBootstrap_();
+    }
+  });
+}
+
+function armarBootstrap_() {
+  return (function () {
     // Varias personas: sin hoja propia todavía, solo se ofrece crearla o vincularla.
     if (modoMultiusuario_() && !idHojaUsuario_()) {
       return { instalado: false, sinHoja: true, cuenta: estadoMiCuenta() };
@@ -101,7 +114,7 @@ function getBootstrap() {
       enums: ENUMS,
       hoy: hoyIso_()
     };
-  });
+  })();
 }
 
 /** Tablas que cambian cuando se guarda una de estas (una cuenta crea su bolsillo interno, etc.). */

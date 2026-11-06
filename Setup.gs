@@ -14,7 +14,10 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '4';
+const ESQUEMA_VERSION = '5';
+
+/** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
+function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
 
 /** Define una tabla: encabezados propios + auditoría. `anchos` cubre solo las columnas propias. */
 function tabla_(headers, anchos) {
@@ -233,7 +236,7 @@ function verificarEsquema(spreadsheet, opciones) {
   // Verificar son 26 lecturas de hoja. Con usarCache, un resultado correcto se recuerda 6 horas;
   // setupDatabase lo olvida. Solo se guardan los resultados "listo", nunca los fallos.
   const cache = cache_();
-  if (opciones && opciones.usarCache && !(opciones.solo) && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
+  if (opciones && opciones.usarCache && !(opciones.solo) && cache.get('ESQUEMA_OK') === firmaEsquema_()) {
     return { faltantes: [], diferencias: [], listo: true, desdeCache: true };
   }
 
@@ -256,7 +259,7 @@ function verificarEsquema(spreadsheet, opciones) {
   });
 
   const listo = faltantes.length === 0 && diferencias.length === 0;
-  if (listo && !solo) { try { cache.put('ESQUEMA_OK', ESQUEMA_VERSION, 21600); } catch (e) {} }
+  if (listo && !solo) { try { cache.put('ESQUEMA_OK', firmaEsquema_(), 21600); } catch (e) {} }
   return { faltantes: faltantes, diferencias: diferencias, listo: listo };
 }
 

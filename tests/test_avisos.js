@@ -113,4 +113,44 @@ module.exports = function (prueba, assert, crearEntorno) {
     const lista = e.llamar('obtenerSuscripciones').items;
     assert.deepStrictEqual(lista.map(x => x.Hogar).sort(), ['Casa de mamá', 'Mi casa']);
   });
+
+  prueba('actualización: una hoja sin una tabla nueva que la caché daba por buena se arregla sola (varias personas) o ofrece Instalar (una hoja)', () => {
+    const cargar = e => e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'CDT.gs', 'Avisos.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    const llamar = (e, fn, ...a) => { e.ctx.__args = a; return plano(e.ejecutar(fn + '(...__args)')); };
+
+    // Varias personas
+    const m = crearEntorno({}, { cache: true });
+    cargar(m);
+    m.propiedades.MODO_MULTIUSUARIO = 'TRUE'; delete m.propiedades.SPREADSHEET_ID;
+    m.como('ana@example.com');
+    llamar(m, 'createMySheet');
+    assert.strictEqual(llamar(m, 'getBootstrap').data.instalado, true);
+    const id = m.propsUsuario['ana@example.com'].SPREADSHEET_ID;
+    delete m.libros[id].hojas.CDTs;          // como una hoja de la versión anterior
+    m.ejecutar('invalidateCache()');         // (y sin datos de esa tabla en la caché)
+    m.ctx.__x = 1; m.ejecutar("CacheService.getUserCache().put('ESQUEMA_OK', firmaEsquema_(), 21600)"); // y la caché diciendo que está bien
+    const r = llamar(m, 'getBootstrap');
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(r.data.instalado, true);
+    assert.ok(m.libros[id].hojas.CDTs, 'la tabla nueva se creó sola');
+
+    // Una sola hoja: se ofrece Instalar en vez de un error
+    const u = crearEntorno({}, { cache: true });
+    cargar(u);
+    llamar(u, 'setupDatabase');
+    assert.strictEqual(llamar(u, 'getBootstrap').data.instalado, true);
+    delete u.hojas.CDTs;
+    u.ejecutar('invalidateCache()');
+    u.ejecutar("CacheService.getScriptCache().put('ESQUEMA_OK', firmaEsquema_(), 21600)");
+    const r2 = llamar(u, 'getBootstrap');
+    assert.strictEqual(r2.ok, true, r2.error && r2.error.message);
+    assert.strictEqual(r2.data.instalado, false);
+    assert.ok(r2.data.faltantes.indexOf('CDTs') !== -1);
+    assert.strictEqual(llamar(u, 'instalarBaseDatos').data.ok, true);
+    assert.strictEqual(llamar(u, 'getBootstrap').data.instalado, true);
+
+    // Una versión nueva de la app no confía en la revisión recordada de la anterior
+    u.ejecutar("CacheService.getScriptCache().put('ESQUEMA_OK', '5|0.0.1', 21600)");
+    assert.strictEqual(plano(u.ejecutar('verificarEsquema(undefined, { usarCache: true })')).desdeCache, undefined);
+  });
 };
