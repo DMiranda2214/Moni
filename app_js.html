@@ -52,11 +52,16 @@ const _formatos = {};
 /** Monto con su moneda: sin decimales en pesos, con dos en las demás. Sin `divisa`, la moneda base de la app. */
 function dinero(n, divisa) {
   const d = divisa || (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
-  if (!_formatos[d]) {
-    const dec = d === 'COP' ? 0 : 2;
-    _formatos[d] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const v = Number(n) || 0;
+  // En pesos no se muestran centavos... salvo cuando el valor los tiene (un rendimiento, un saldo del banco): así lo que se ve
+  // es lo que se guardó y las sumas cuadran. Las demás monedas siempre llevan dos decimales.
+  const conCentavos = d !== 'COP' || Math.abs(v - Math.round(v)) >= 0.005;
+  const llave = d + (conCentavos ? '2' : '0');
+  if (!_formatos[llave]) {
+    const dec = conCentavos ? 2 : 0;
+    _formatos[llave] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
   }
-  return _formatos[d].format(Number(n) || 0).replace(/ /g, ' ');
+  return _formatos[llave].format(v).replace(/ /g, ' ');
 }
 
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
@@ -1035,7 +1040,7 @@ const CAT = {
         visible: (v, x) => !!x.existente && esVerdad(x.existente.Permite_Bolsillos) && !v.Permite_Bolsillos && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1,
         opciones: x => x.existente ? bolsillosActivosDe(x.existente.ID_Cuenta).map(b => [b.ID_Bolsillo, b.Nombre]) : [] },
       { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', visible: (v, x) => !v.Permite_Bolsillos && !(x.existente && esVerdad(x.existente.Permite_Bolsillos) && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1), ayuda: 'Cuánto dinero hay hoy en esta cuenta.' },
-      { k: 'Saldo_Real', label: 'Saldo según tu banco (opcional)', tipo: 'dinero', ayuda: 'Sirve para cuadrar: la app compara este valor con la suma de tus bolsillos.' },
+      { k: 'Saldo_Real', label: 'Saldo que muestra tu banco (para cuadrar)', tipo: 'dinero', soloAlEditar: true, ayuda: 'Opcional. Cuando quieras comprobar que todo cuadra, escribe aquí lo que dice la app de tu banco: Moni lo compara con su propio saldo.' },
       { k: 'Meta', label: 'Meta de ahorro (opcional)', tipo: 'dinero', visible: v => v.Tipo === 'Ahorro' }
     ]
   },
@@ -1239,8 +1244,8 @@ const INFO_CAMPOS = {
     Tipo: 'Billetera: el dinero del día a día. Débito: una cuenta de banco. Ahorro: dinero que guardas, con meta y rendimientos. Otra: lo demás.',
     Permite_Bolsillos: 'Con bolsillos repartes el dinero de la cuenta por propósito (casa, mercado, un viaje). Sin bolsillos, la cuenta es un solo saldo.',
     fusionarEn: 'Al quitar los bolsillos, el dinero de todos se junta en este, con un traslado que queda en el historial.',
-    Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: después el saldo se calcula con tus movimientos.',
-    Saldo_Real: 'Lo que dice tu banco hoy. Moni lo compara con su cálculo para avisarte si algo no cuadra.',
+    Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: desde aquí Moni suma y resta cada movimiento que registres.',
+    Saldo_Real: 'No es el saldo inicial. Es lo que dice la app de tu banco hoy: Moni lo compara con el saldo que ella calcula con tus movimientos y te avisa si hay diferencia. Al crear la cuenta no hace falta.',
     Meta: 'Cuánto quieres ahorrar en esta cuenta. Moni muestra qué tanto llevas.'
   },
   Bolsillos: {
@@ -1541,7 +1546,7 @@ async function abrirFormulario(tabla, id, defaults) {
   const def = CAT[tabla];
   const existente = id ? cat(tabla).find(f => f[def.id] === id) : null;
   const item = existente ? (def.alEditar ? def.alEditar(existente) : existente) : {};
-  const campos = def.campos.filter(c => !(c.soloAlCrear && existente));
+  const campos = def.campos.filter(c => !(c.soloAlCrear && existente) && !(c.soloAlEditar && !existente));
   const ctx = { existente: existente };
 
   const valorInicial = c => {
@@ -4457,7 +4462,7 @@ const PASOS_ASIST = [
   { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
   { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un inmueble', otro: 'Guardar y agregar otro', opcional: true },
-  { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', clave: 'Tipo', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'tasa', corto: 'Dólar', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
@@ -4597,7 +4602,7 @@ function vPasoAsistente(id) {
   const p = PASOS_ASIST.find(x => x.id === id);
   const t = TEXTOS_ASIST[id];
   const campos = p.tabla && CAMPOS_ASIST[p.tabla] ? camposAsist(p.tabla) : null;
-  let cuerpo, hechos = '', continuar = 'Continuar';
+  let cuerpo, hechos = '', continuar = (p.tabla && CAMPOS_ASIST[p.tabla]) || id === 'nomina' ? 'Guardar y continuar' : 'Continuar';
 
   if (id === 'perfil') {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
@@ -4615,21 +4620,19 @@ function vPasoAsistente(id) {
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
         htmlSubsidiosAsist() + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist('Nomina_Escenarios');
-    if (!yaHay) continuar = 'Omitir por ahora';
   } else if (id === 'tasa') {
-    const activa = esVerdad(cfg('Tasa_Auto'));
+    const activa = esVerdad(cfg('Tasa_Auto')); // por defecto apagado: la persona decide
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
       '<div class="m-interruptor-fila"><span class="m-label-fila"><label for="asist-tasa">Traer el dólar de Google Finance</label>' + htmlInfo('Se crea una pestaña auxiliar en tu hoja (Tasas_Google) con una fórmula de Google Finance y la tasa se actualiza sola cada día. Puedes apagarlo cuando quieras en Ajustes → Divisas.') + '</span>' +
       '<span class="m-interruptor"><input type="checkbox" role="switch" id="asist-tasa"' + (activa ? ' checked' : '') + '><i></i></span></div>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-    continuar = activa ? 'Continuar' : 'Continuar sin vincular';
+    continuar = activa ? 'Guardar y continuar' : 'Continuar sin vincular';
   } else if (campos) {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
       campos.map(c => htmlCampo(c, valorInicialAsist(c), {})).join('') +
       (id === 'cuentas' ? htmlBolsillosAsist() : '') +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist(p.tabla);
-    if (p.opcional && !listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
   } else {
     // Tarjetas: se abre el mismo formulario de Ajustes. La reserva puede ir en cualquier cuenta en pesos:
     // si esa cuenta era de un solo saldo, pasa a usar bolsillos sin perder nada.
@@ -4638,24 +4641,35 @@ function vPasoAsistente(id) {
         '<p class="m-ayuda">Cada tarjeta aparta lo que vas a pagar en una “reserva”, un bolsillo dentro de la cuenta que elijas.</p>'
       : '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Primero crea al menos una cuenta (paso anterior): ahí se guarda la reserva de la tarjeta.</p></div>';
     hechos = htmlHechosAsist(p.tabla);
-    if (!listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
   }
 
   return {
     titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true,
     html: '<div class="m-asist">' + htmlPasosAsist(id) +
-      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + '</p>' +
+      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + ' · ' + esc(p.corto) + (p.opcional ? ' · opcional' : '') + '</p>' +
       '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(t.titulo) + '</h1>' +
       '<p class="m-subtitulo">' + esc(t.sub) + '</p>' +
       '<div class="m-error-form" id="asist-error" role="alert" hidden></div>' + cuerpo +
       '<div class="m-asist-acciones">' +
-        '<button type="button" class="m-btn m-btn-primary" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
+        '<button type="button" class="m-btn m-btn-primary" id="asist-principal" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
         (p.otro && campos ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-otro">' + esc(p.otro) + '</button>' : '') +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
-        '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button></div></div>' +
+        (p.opcional
+          ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar este paso</button>'
+          : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button>') + '</div></div>' +
       hechos + '</div>',
     despues: () => {
       const f = $('#asist-form');
+      const principal = $('#asist-principal');
+      // El botón principal dice lo que va a pasar: guarda lo escrito, o solo continúa si no hay nada nuevo.
+      const etiquetar = () => {
+        if (!principal || !f) return;
+        if (id === 'tasa') { const sw = $('#asist-tasa', f); principal.textContent = sw && sw.checked ? 'Vincular y continuar' : 'Continuar sin vincular'; return; }
+        const clave = id === 'nomina' ? $('#asist-sueldo', f) : $('#' + idCampo(p.clave || 'Nombre'), f);
+        const escrito = !!(clave && String(clave.value).trim());
+        principal.textContent = escrito || (!p.opcional && !listaAsist(p.tabla || '').length && id !== 'nomina') ? 'Guardar y continuar' : 'Continuar';
+      };
+      if (f && ['tasa', 'nomina'].indexOf(id) !== -1 || (f && campos)) { f.addEventListener('input', etiquetar); f.addEventListener('change', etiquetar); etiquetar(); }
       if (f && id === 'nomina') { activarEcoDinero(f); return; }
       if (!f || !campos) return;
       activarEcoDinero(f);
@@ -4787,8 +4801,8 @@ async function guardarCatalogoAsist(paso, f, otro) {
   const p = PASOS_ASIST.find(x => x.id === paso);
   const campos = camposAsist(p.tabla);
   const v = leerFormulario(f, campos);
-  if (!v.Nombre) {
-    if (otro) throw new Error('Escribe el nombre para agregar ' + p.uno + ' más.');
+  if (!v[p.clave || 'Nombre']) { // sin el dato principal no hay nada que guardar (en un paso opcional, simplemente se continúa)
+    if (otro) throw new Error('Completa los datos para agregar ' + p.uno + ' más.');
     if (!p.opcional && !listaAsist(p.tabla).length) throw new Error('Agrega al menos ' + p.uno + ' para continuar.');
     return false;
   }
@@ -4952,6 +4966,7 @@ const ACCIONES = {
   'asist-empezar': () => moverAsist(1),
   'asist-atras': () => moverAsist(-1),
   'asist-omitir': () => terminarAsistente(true),
+  'asist-saltar': () => moverAsist(1),
   'asist-fin': () => terminarAsistente(false),
   'asist-reanudar': () => { App.asist.omitido = false; recordarAsistenteOmitido(false); App.asist.activo = false; App.asist.paso = null; render(true); },
   'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },

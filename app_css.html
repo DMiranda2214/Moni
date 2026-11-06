@@ -281,15 +281,15 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 
 .m-pasos { display: flex; margin: var(--m-space-2) 0 var(--m-space-5); padding: 0; list-style: none; }
 .m-paso { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--m-space-1); min-width: 0; text-align: center; }
-.m-paso::before { content: ""; position: absolute; top: 13px; right: 50%; width: 100%; height: 2px; background: var(--m-separator); }
+.m-paso::before { content: ""; position: absolute; top: 11px; right: 50%; width: 100%; height: 2px; background: var(--m-separator); }
 .m-paso:first-child::before { display: none; }
 .m-paso-hecho::before, .m-paso-actual::before { background: var(--m-tint); }
-.m-paso-punto { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid var(--m-label-3); border-radius: 50%; background: var(--m-bg); color: var(--m-label-2); font-size: var(--m-text-caption); font-weight: 700; }
+.m-paso-punto { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; border: 2px solid var(--m-label-3); border-radius: 50%; background: var(--m-bg); color: var(--m-label-2); font-size: var(--m-text-caption); font-weight: 700; }
 .m-paso-punto .m-icon { width: 16px; height: 16px; stroke-width: 2.5; }
 .m-paso-actual .m-paso-punto { border-color: var(--m-tint); color: var(--m-tint); }
 .m-paso-hecho .m-paso-punto { border-color: var(--m-tint); background: var(--m-tint); color: var(--m-on-tint); }
-.m-paso-nombre { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--m-label-2); font-size: var(--m-text-caption); font-weight: 500; }
-.m-paso-actual .m-paso-nombre { color: var(--m-tint); font-weight: 700; }
+/* Con 11 pasos no caben los nombres: la barra muestra solo los puntos y el nombre del paso actual va en el texto de abajo (los lectores de pantalla sí los leen todos). */
+.m-paso-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .m-asist-paso { padding: 0 var(--m-space-1); color: var(--m-tint); font-size: var(--m-text-footnote); font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
 .m-asist-paso + .m-titulo-grande { padding-top: var(--m-space-1); }

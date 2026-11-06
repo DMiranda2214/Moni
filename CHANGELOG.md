@@ -1,5 +1,12 @@
 # Cambios
 
+## Ajustes de diseño del asistente (6 nov)
+- **Barra de pasos legible:** con 11 pasos solo se muestran los puntos; el nombre del paso actual va en el texto de abajo ("Paso 10 de 11 · Servicios · opcional").
+- **Botones claros:** el principal dice lo que hace (*Guardar y continuar* si escribiste algo, *Continuar* si no) y ya no existe "Omitir por ahora". En pasos opcionales el enlace es **Saltar este paso**; en los obligatorios, **Seguir más tarde**. En el paso del dólar el botón cambia con el interruptor (*Vincular y continuar* / *Continuar sin vincular*), que empieza apagado.
+- **Corregido:** el paso de servicios públicos no guardaba nada (buscaba un "Nombre" que ese catálogo no tiene).
+- **Cuentas:** *Saldo según tu banco* solo aparece al editar (al crear la cuenta es lo mismo que el saldo inicial) y las ayudas explican la diferencia.
+- **Decimales:** siempre se guardaron (hasta 2); ahora los pesos también se *muestran* con centavos cuando el valor los tiene.
+
 ## Rendimientos, primeros pasos y nómina (6 nov)
 - **Rendimientos:** el pago diario o mensual sigue por banco; ahora también se elige **sobre qué saldo rinde** (todo, o solo el dinero en bolsillos, como en bancos que no pagan sobre el saldo suelto). Columna nueva `Bancos.Rendimiento_Base`, que se agrega sola al instalar.
 - **Primeros pasos:** nuevos pasos opcionales de **suscripciones**, **hogar**, **servicios públicos** y **dólar** (la persona decide si vincula la TRM de Google Finance).
