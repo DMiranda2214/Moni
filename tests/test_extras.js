@@ -336,7 +336,8 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(lista.length > 0, 'el demo tiene tarjetas con compras por pagar');
     assert.ok(lista.every(p => p.dias <= 14 && ['Tarjeta', 'Credito', 'Suscripcion', 'Servicio'].includes(p.tipo)));
     for (let i = 1; i < lista.length; i++) assert.ok(lista[i - 1].dias <= lista[i].dias, 'ordenados por cercanía');
-    assert.deepStrictEqual(e.llamar('getBootstrap').data.proximos, lista, 'viajan en el arranque');
+    assert.deepStrictEqual(e.llamar('getProximos').data, lista, 'se piden aparte del arranque');
+    assert.strictEqual(e.llamar('getBootstrap').data.proximosPendientes, true);
   });
 
   prueba('respuestas de la API traen el tiempo del servidor', () => {
@@ -665,7 +666,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(nom, 'sale cuando el pago cae en los próximos 14 días');
     assert.strictEqual(nom.valor, 3000000 - 240000);
     assert.strictEqual(nom.dias, 0);
-    assert.deepStrictEqual(e.llamar('getBootstrap').data.porRecibir, lista);
+    assert.deepStrictEqual(e.llamar('getProximosIngresos').data, lista);
   });
 
   prueba('primeros pasos: la nómina nace con sus subsidios (todo o nada) y los estados del asistente incluyen nómina e ingresos', () => {

@@ -3,6 +3,7 @@
 ## Rendimiento (6 nov)
 - **Crear la hoja ya no se agota:** las 28 pestañas se preparan por partes (≈20 s por paso, con avance "n de 28" en el botón). Si se corta, *Reintentar* continúa donde quedó. Antes todo iba en una sola petición con cientos de llamadas a Google y chocaba con el tiempo límite.
 - **Menos llamadas a Google:** el libro se abre una vez por petición (antes 12–23), las columnas de texto se formatean en una llamada, y todas las tablas (no solo los catálogos) se guardan en caché en trozos y se invalidan al escribir. Cargar la app con caché pasó de ~44 lecturas de hoja a 4; guardar un nombre y recargar, de ~30 a ~10.
+- **Guardar ya no recarga toda la app:** guardar un nombre, un catálogo, activar o desactivar piden solo lo que cambió (`getRefresco`). El arranque no incluye próximos pagos ni ingresos por recibir: se piden aparte, ya pintada la pantalla. Las tablas en caché se traen en 2 llamadas (antes ~49), y la caché de catálogos dura 1 h (movimientos, 10 min). *Ajustes → Actualizar desde la hoja* fuerza la relectura si editas la hoja a mano.
 - `node tests/medir_llamadas.js` cuenta las llamadas por operación.
 
 ## Listo para cualquier persona (6 nov)

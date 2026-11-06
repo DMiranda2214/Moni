@@ -221,6 +221,7 @@ if (window.matchMedia) {
 async function cargar() {
   try {
     App.boot = await api('getBootstrap');
+    App.proximosViejos = !!App.boot.proximosPendientes; // los próximos pagos se piden aparte, ya pintada la pantalla
     App.error = null;
   } catch (e) {
     App.error = e.message;
@@ -240,9 +241,26 @@ async function completarInstalacion(boton, hechas, tablas) {
   throw new Error('La instalación sigue en curso. Vuelve a intentarlo: continúa donde quedó.');
 }
 
+/**
+ * Refresco liviano tras guardar: pide solo lo que cambió (tablas y/o parámetros) en vez de recargar toda la app.
+ * opc = { tablas: ['Personas'], config: true }.
+ */
+async function refrescarParcial(opc) {
+  const r = await api('getRefresco', opc);
+  if (r.config) App.boot.config = r.config;
+  Object.keys(r.catalogos || {}).forEach(t => { App.boot.catalogos[t] = r.catalogos[t]; });
+  if (r.saldos) App.boot.saldos = r.saldos;
+  if (r.estado) App.boot.estado = r.estado;
+  const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos', 'Servicios_Publicos'].indexOf(t) !== -1);
+  if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
+  if (opc.config) aplicarApariencia();
+  App.graf.data = null; App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
+  return r;
+}
+
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = false;
+  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
@@ -634,7 +652,7 @@ function textoPlazo(dias) {
 
 async function refrescarProximos() {
   App.proximosCargando = true;
-  try { App.boot.proximos = await api('getProximos'); App.boot.porRecibir = await api('getProximosIngresos'); App.proximosViejos = false; }
+  try { const [a, b] = await Promise.all([api('getProximos'), api('getProximosIngresos')]); App.boot.proximos = a; App.boot.porRecibir = b; App.proximosViejos = false; }
   catch (e) { /* queda la lista anterior; no es crítico */ }
   App.proximosCargando = false;
   if (rutaActual() === 'inicio') render();
@@ -845,6 +863,7 @@ function vAjustes() {
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
+        fila({ icono: 'pulso', titulo: 'Actualizar desde la hoja', sub: 'Si editaste la hoja a mano, vuelve a leerla', chevron: true, attrs: 'data-acc="actualizar-datos"' }) +
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
         // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
@@ -1590,15 +1609,15 @@ async function abrirFormulario(tabla, id, defaults) {
         ['Saldo_Real', 'Meta'].forEach(k => { if (v[k] === '' && existente && existente[k] !== '' && existente[k] !== undefined) envio[k] = ''; });
       }
       await api('saveCatalogo', tabla, envio, opciones);
-      await refrescar();
+      await refrescarParcial({ tablas: [tabla] });
       render();
       aviso(existente ? 'Cambios guardados' : 'Se agregó ' + def.singular);
     },
     extra: {
       'pedir-desactivar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = true; $('[data-hoja-acc="desactivar"]', raiz).focus(); },
       'cancelar-desactivar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = false; },
-      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescar(); render(); aviso('Desactivado'); return true; },
-      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescar(); render(); aviso('Reactivado'); return true; }
+      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Desactivado'); return true; },
+      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Reactivado'); return true; }
     }
   });
 }
@@ -4738,7 +4757,10 @@ async function enviarPasoAsist(f, otro) {
     } else {
       await guardarCatalogoAsist(paso, f, otro);
     }
-    await refrescar();
+    // Solo se pide lo que ese paso cambió (el nombre toca un parámetro; una cuenta, sus tablas); la nómina cambia varias cosas.
+    if (paso === 'perfil') await refrescarParcial({ config: true });
+    else if (paso === 'nomina') await refrescar();
+    else await refrescarParcial({ tablas: [PASOS_ASIST.find(x => x.id === paso).tabla] });
     if (otro) {
       render();
       aviso('Se agregó ' + CAT[PASOS_ASIST.find(x => x.id === paso).tabla].singular);
@@ -4999,6 +5021,9 @@ const ACCIONES = {
   tab: el => navegar(el.dataset.ruta),
   ir: el => navegar(el.dataset.ruta),
   volver: () => volver(),
+  'actualizar-datos': async () => {
+    try { await api('refreshCache'); await refrescar(); render(); aviso('Datos actualizados desde la hoja'); } catch (e) { aviso(e.message, true); }
+  },
   recargar: () => { App.error = null; $('#vista').innerHTML = '<div class="m-cargando">Cargando…</div>'; cargar(); },
   nuevo: el => abrirFormulario(el.dataset.tabla),
   editar: el => abrirFormulario(el.dataset.tabla, el.dataset.id),
@@ -5161,7 +5186,7 @@ document.addEventListener('submit', async ev => {
   boton.disabled = true;
   try {
     await api('saveConfigParam', 'Nombre_Usuario', $('#f-nombre', f).value);
-    await refrescar();
+    await refrescarParcial({ config: true });
     aviso('Guardado');
     render();
   } catch (e) { aviso(e.message, true); }

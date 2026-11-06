@@ -69,6 +69,7 @@ function getBootstrap() {
       return { instalado: false, faltantes: verificacion.faltantes, diferencias: verificacion.diferencias };
     }
 
+    precargarTablas_(Object.keys(SCHEMAS)); // todo lo que esté en caché, en 2 llamadas
     const config = {};
     getTableData('Config').forEach(c => { config[c.Clave] = c.Valor; });
 
@@ -91,14 +92,47 @@ function getBootstrap() {
       renglones: renglones,
       creditos: getTableData('Creditos').filter(c => c.Estado === 'Activo').map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre })),
       ppto: (function () { const p = obtenerPresupuestoMes(mesActual); return { mes: p.mes, existe: p.existe, totales: p.totales }; })(),
-      proximos: proximosPagos_(),
-      porRecibir: proximosIngresos_(),
+      // Próximos pagos e ingresos por recibir se piden aparte (getProximos / getProximosIngresos) al pintar Inicio.
+      proximosPendientes: true,
       cuenta: estadoMiCuenta(),
       demoHabilitado: demoHabilitado_(),
       enums: ENUMS,
       hoy: hoyIso_()
     };
   });
+}
+
+/** Tablas que cambian cuando se guarda una de estas (una cuenta crea su bolsillo interno, etc.). */
+const RELACIONADAS_ = { Bancos: ['Bancos', 'Cuentas', 'Bolsillos'], Cuentas: ['Bancos', 'Cuentas', 'Bolsillos'], Bolsillos: ['Bancos', 'Cuentas', 'Bolsillos'] };
+
+/**
+ * Refresco liviano después de guardar: en vez de recargar toda la app, devuelve solo lo que cambió.
+ * opc = { tablas: ['Personas'], config: true }. Siempre trae el estado del asistente (usa catálogos en caché).
+ */
+function getRefresco(opc) {
+  return responder_(function () {
+    const o = opc || {};
+    const out = { catalogos: {} };
+    let tablas = [];
+    (o.tablas || []).forEach(t => { exigirCatalogo_(t); (RELACIONADAS_[t] || [t]).forEach(x => { if (tablas.indexOf(x) === -1) tablas.push(x); }); });
+    if (o.config) {
+      const config = {};
+      getTableData('Config').forEach(c => { config[c.Clave] = c.Valor; });
+      out.config = config;
+    }
+    tablas.forEach(t => {
+      out.catalogos[t] = listarCatalogo(t, { incluirInactivos: true });
+      if (t === 'Nomina_Escenarios') out.catalogos[t].forEach(e => { e.subsidios = subsidiosDeEscenario_(e.ID_Nomina_Esc); });
+    });
+    if (tablas.some(t => RELACIONADAS_[t])) out.saldos = obtenerSaldos();
+    out.estado = obtenerEstadoConfiguracion();
+    return out;
+  });
+}
+
+/** "Actualizar desde la hoja": olvida lo memorizado para releer todo (por si se editó la hoja a mano). */
+function refreshCache() {
+  return responder_(function () { invalidateCache(); return { ok: true }; });
 }
 
 function instalarBaseDatos() {
