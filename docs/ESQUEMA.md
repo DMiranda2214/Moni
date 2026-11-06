@@ -80,7 +80,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - `ID_Tarjeta`: con qué se suele pagar un gasto (vacío = el bolsillo del renglón). Solo en renglones de tipo `Gasto`.
 - No hay "Continuar/Congelar": un gasto "congelado" simplemente no existe, o vale 0, en el escenario `Contingencia`. Se crea un escenario copiando otro.
 
-**Presupuesto_Mes** —
+**Presupuesto_Mes** — (incluye `ID_Suscripcion`, el enlace con la suscripción o servicio que lo originó; se agrega sola al instalar) 
 `ID_Item, Mes, ID_Escenario, ID_Plantilla, Concepto, Tipo, Plan, Pagado, ID_Bolsillo_Destino, ID_Credito, ID_Tarjeta, Notas`
 - **No existe la columna `Real`: se calcula** = Σ `Movimientos` con ese `ID_Item_Ppto` + Σ `Compras_TC` (Fuente `Ppto`) con ese `ID_Item_Ppto`.
 - `Ahorro` del renglón = `Plan − Real` solo si `Pagado`.

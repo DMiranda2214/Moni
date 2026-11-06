@@ -645,6 +645,48 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(todo.saldoBase, 500000, 'con "todo", ese mismo saldo sí rinde');
   });
 
+  prueba('suscripciones: entran solas al presupuesto del mes según su periodicidad, y pagarlas marca el renglón', () => {
+    const { e, t, personal, m, item } = escenarioTC();
+    const mensual = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Netflix', Valor: 40000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    const luz = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Luz', Tipo: 'Servicio', Valor: 90000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Tarjeta: t.ID_Tarjeta });
+    // Un cobro anual que no cae este mes no entra
+    const anual = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Seguro', Valor: 600000, Periodicidad: 'Anual', Proximo_Cobro: e.llamar('sumarMeses_', hoy(), 5, 0), ID_Bolsillo: personal.ID_Bolsillo });
+    let p = e.llamar('obtenerPresupuestoMes', m);
+    const rn = p.items.find(i => i.Concepto === 'Netflix'), rl = p.items.find(i => i.Concepto === 'Luz');
+    assert.ok(rn && rl, 'al guardar la suscripción, entra al presupuesto que ya existe');
+    assert.strictEqual(rn.Plan, 40000); assert.strictEqual(rn.ID_Bolsillo_Destino, personal.ID_Bolsillo); assert.strictEqual(rn.ID_Suscripcion, mensual.ID_Suscripcion);
+    assert.strictEqual(rl.ID_Tarjeta, t.ID_Tarjeta, 'el servicio con tarjeta queda con su tarjeta');
+    assert.ok(!p.items.some(i => i.Concepto === 'Seguro'), 'el anual de otro mes no entra');
+    assert.strictEqual(p.faltanSuscripciones, 0);
+    assert.strictEqual(e.llamar('agregarSuscripcionesAlMes', m).agregados, 0, 'se puede repetir sin duplicar');
+
+    // Editar el valor actualiza el renglón mientras no esté pagado
+    e.llamar('guardarCatalogo', 'Suscripciones', { ID_Suscripcion: mensual.ID_Suscripcion, Valor: 45000 });
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items.find(i => i.Concepto === 'Netflix').Plan, 45000);
+
+    // Pagarla cuenta como real y deja el renglón pagado; deshacer lo devuelve
+    const r = e.llamar('paySuscripcion', mensual.ID_Suscripcion, {});
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    p = e.llamar('obtenerPresupuestoMes', m);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Real, 45000);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Pagado, true);
+    e.llamar('undoPagoSuscripcion', mensual.ID_Suscripcion, r.data.anterior, r.data.idMov, '');
+    p = e.llamar('obtenerPresupuestoMes', m);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Real, 0);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Pagado, false);
+
+    // Un mes nuevo se genera ya con sus suscripciones (el bimestral solo en los meses que toca)
+    const esc = e.llamar('listarCatalogo', 'Escenarios')[0];
+    const bim = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Agua', Valor: 70000, Periodicidad: 'Bimestral', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    const m1 = e.llamar('sumarMeses_', hoy(), 1, 0).slice(0, 7), m2 = e.llamar('sumarMeses_', hoy(), 2, 0).slice(0, 7);
+    e.llamar('generarPresupuestoMes', m1, esc.ID_Escenario);
+    e.llamar('generarPresupuestoMes', m2, esc.ID_Escenario);
+    assert.ok(!e.llamar('obtenerPresupuestoMes', m1).items.some(i => i.Concepto === 'Agua'), 'el bimestral no toca el mes siguiente');
+    assert.ok(e.llamar('obtenerPresupuestoMes', m2).items.some(i => i.Concepto === 'Agua'), 'sí toca dos meses después');
+    assert.ok(e.llamar('obtenerPresupuestoMes', m1).items.some(i => i.Concepto === 'Netflix'));
+    assert.ok(anual && bim && item);
+  });
+
   // ============================================================ ingresos recurrentes
   prueba('ingresos recurrentes: concepto, monto y cuenta; recibir registra el ingreso y avanza el cobro; se deshace', () => {
     const { e, casa, saldo } = escenario();

@@ -476,6 +476,8 @@ const CATALOGOS = {
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
       };
     },
+    // Si el presupuesto de este mes ya existe, la suscripción nueva (o editada) entra o se actualiza ahí.
+    despues: function () { agregarSuscripcionesAlMes(hoyIso_().slice(0, 7)); },
     bloqueos: function () { return []; }
   },
 

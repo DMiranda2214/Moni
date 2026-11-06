@@ -411,13 +411,13 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.llamar('sembrarDatosDemo');
     const mes = hoy();
     e.llamar('generarPresupuestoMes', mes);
-    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mes).items.length, 7, 'plantilla demo');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mes).items.length, 10, 'plantilla demo (7) + sus 3 suscripciones y servicios');
     e.llamar('registrarPagoNomina', mes, undefined, '', diaHoy(), 'demo-bol-casa');
     e.llamar('registrarMovimiento', { Concepto: 'Prueba', ID_Bolsillo: 'demo-bol-ocio', Valor: 10 });
     e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco real' });
 
     const r = e.llamar('limpiarDatosDemo');
-    assert.ok(r.eliminadas.Presupuesto_Mes === 7 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
+    assert.ok(r.eliminadas.Presupuesto_Mes === 10 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
     ['Presupuesto_Plantilla', 'Presupuesto_Mes', 'Nomina_Escenarios', 'Nomina_Conceptos', 'Nomina_Pagos', 'Nomina_Pagos_Detalle', 'Movimientos', 'Subsidios'].forEach(t => {
       assert.strictEqual(e.hojas[t].filas.slice(1).filter(f => f.some(c => c !== '' && c !== undefined)).length, 0, t + ' debe quedar vacía');
     });

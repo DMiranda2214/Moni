@@ -65,8 +65,8 @@ const SCHEMAS = {
     ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'Activo', 'Orden'],
     [170, 170, 240, 120, 90, 170, 170, 170, 170, 70, 60]),
   Presupuesto_Mes: tabla_(
-    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas'],
-    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220]),
+    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas', 'ID_Suscripcion'],
+    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220, 170]),
 
   // ---- Nómina (una vez al mes) ----
   Subsidios: tabla_(['ID_Subsidio', 'Nombre', 'Valor', 'Es_Salarial', 'Vigente_Desde', 'Vigente_Hasta', 'Activo'], [170, 260, 120, 100, 120, 120, 70]),
@@ -268,7 +268,8 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Suscripciones', columna: 'Renglon', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_EA', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' },
-  { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' }
+  { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' },
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' }
 ];
 
 function migrarColumnas_(ss) {

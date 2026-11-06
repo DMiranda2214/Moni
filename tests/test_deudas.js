@@ -529,4 +529,13 @@ module.exports = function (prueba, assert, crearEntorno) {
     });
     assert.deepStrictEqual(e.llamar('listarCatalogo', 'Bancos').map(b => b.Nombre), ['Banco real']);
   });
+
+  prueba('compra con tarjeta: un renglón sin bolsillo no apartar dinero ni da error, pero cuenta en el renglón', () => {
+    const x = escenario();
+    const item = x.e.llamar('guardarRenglonMes', { Mes: mesDe(hoy()), Concepto: 'Mercado', Plan: 500000, Tipo: 'Gasto', ID_Tarjeta: x.t.ID_Tarjeta });
+    const c = compra(x, { Concepto: 'Mercado', ID_Item_Ppto: item.ID_Item });
+    assert.strictEqual(c.Fuente, 'Personal');
+    assert.strictEqual(c.ID_Item_Ppto, item.ID_Item, 'sigue contando como real del renglón');
+    assert.strictEqual(c.ID_Mov_Reserva, '', 'no aparta dinero');
+  });
 };

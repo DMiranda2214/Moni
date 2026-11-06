@@ -71,9 +71,7 @@ function suscripcionActiva_(id) {
 
 /** El renglón del presupuesto de ese mes al que está ligado un cobro (por el nombre del renglón), o null. */
 function renglonDeCobro_(s, mes) {
-  const nombre = texto_(s.Renglon).toLowerCase();
-  if (!nombre) return null;
-  return leer_('Presupuesto_Mes').find(i => i.Mes === mes && texto_(i.Concepto).toLowerCase() === nombre) || null;
+  return renglonDeSuscripcion_(s, leer_('Presupuesto_Mes').filter(i => i.Mes === mes));
 }
 
 /**
@@ -96,6 +94,8 @@ function pagarSuscripcion(id, d) {
   // Si el cobro está ligado a un renglón del presupuesto, el pago cuenta en el renglón del mes en que se paga.
   const item = renglonDeCobro_(s, fecha.slice(0, 7));
   if (item) resultado.idItem = item.ID_Item;
+  // Un renglón que la app creó para esta suscripción queda como pagado al pagarla (así el ahorro del mes se calcula solo).
+  const marcarPagado = !!(item && item.ID_Suscripcion === s.ID_Suscripcion);
 
   if (idTarjeta) {
     // Con renglón, el dinero se aparta ahora desde el bolsillo del renglón; sin renglón no se aparta nada.
@@ -114,6 +114,8 @@ function pagarSuscripcion(id, d) {
     resultado.idMov = mov.ID_Mov;
   }
 
+  if (marcarPagado) marcarRenglonPagado(item.ID_Item, true);
+
   const cambios = { Proximo_Cobro: sumarMeses_(s.Proximo_Cobro, MESES_PERIODO[s.Periodicidad] || 1, Number(s.Dia_Cobro)), Ultimo_Pago: fecha };
   if (s.Tipo === 'Servicio') cambios.Valor = valor; // el estimado pasa a ser el último pago
   updateRow('Suscripciones', s._rowIndex, cambios);
@@ -125,8 +127,16 @@ function pagarSuscripcion(id, d) {
 function deshacerPagoSuscripcion(id, anterior, idMov, idCompra) {
   const s = suscripcionActiva_(id);
   if (!anterior || !anterior.Proximo_Cobro) throw new Error('Faltan los datos para deshacer.');
+  // El renglón que se había marcado como pagado vuelve a estar pendiente.
+  let idItem = '';
+  if (idMov) { const g = filasDelGrupo_(idMov); idItem = g.mov.ID_Item_Ppto || ''; }
+  else if (idCompra) { const c = buscarPorId_(leer_('Compras_TC'), 'ID_Compra', idCompra); idItem = c ? c.ID_Item_Ppto || '' : ''; }
   if (idMov) anularMovimiento(idMov);
   if (idCompra) anularCompraTC(idCompra);
+  if (idItem) {
+    const r = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
+    if (r && r.ID_Suscripcion === s.ID_Suscripcion && esVerdadero(r.Pagado)) marcarRenglonPagado(idItem, false);
+  }
   updateRow('Suscripciones', s._rowIndex, {
     Proximo_Cobro: fechaIso_(anterior.Proximo_Cobro, 'El cobro'), Ultimo_Pago: texto_(anterior.Ultimo_Pago),
     Valor: numero_(anterior.Valor, 'El valor', { defecto: s.Valor })

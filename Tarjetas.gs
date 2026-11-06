@@ -54,7 +54,9 @@ function registrarCompraTC(c) {
   const idItemPedido = texto_(c.ID_Item_Ppto);
   // Con renglón del presupuesto, el dinero sale de su bolsillo en el momento de la compra (el sobre se vacía el día
   // que gastas). Sin renglón no se aparta nada: al pagar el extracto se indica de dónde sale el dinero.
-  const fuente = opcion_(c.Fuente || (idItemPedido ? 'Ppto' : 'Personal'), ENUMS.Compras_TC.Fuente, 'La fuente');
+  // Si el renglón no tiene bolsillo de donde apartar, la compra igual cuenta en el renglón pero no aparta dinero (como dice la pantalla).
+  const renglonPedido = idItemPedido ? buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItemPedido) : null;
+  const fuente = opcion_(c.Fuente || (renglonPedido && renglonPedido.ID_Bolsillo_Destino ? 'Ppto' : 'Personal'), ENUMS.Compras_TC.Fuente, 'La fuente');
 
   let mes = texto_(c.Mes_Extracto);
   if (mes) mes = mesValido_(mes); else mes = calcularMesExtracto_(fecha, tarjeta.Dia_Corte);

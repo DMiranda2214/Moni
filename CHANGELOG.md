@@ -1,5 +1,11 @@
 # Cambios
 
+## Suscripciones en el presupuesto y detalle de movimientos (6 nov)
+- **Suscripciones y servicios dentro del presupuesto:** cada mes el presupuesto incluye lo que toca pagar (según su periodicidad), con su valor y su medio de pago. Las nuevas o editadas entran solas al mes ya generado; un aviso con *Agregar* cubre las que falten. Pagarlas cuenta como lo real y deja el renglón pagado. Columna nueva `Presupuesto_Mes.ID_Suscripcion`.
+- **Detalle de un movimiento:** ahora dice primero **qué es** (gasto, ingreso, movimiento de dinero entre bolsillos, ajuste, conversión).
+- **Editar un movimiento desde su detalle:** corregida una carrera al cerrar el diálogo que podía cerrar también el formulario de edición recién abierto.
+- **Gasto con tarjeta en un renglón sin bolsillo:** ya no da error ("Elige de qué bolsillo sale el dinero"); cuenta en el renglón y no aparta dinero, como ya decía la pantalla.
+
 ## Ajustes de diseño del asistente (6 nov)
 - **Barra de pasos legible:** con 11 pasos solo se muestran los puntos; el nombre del paso actual va en el texto de abajo ("Paso 10 de 11 · Servicios · opcional").
 - **Botones claros:** el principal dice lo que hace (*Guardar y continuar* si escribiste algo, *Continuar* si no) y ya no existe "Omitir por ahora". En pasos opcionales el enlace es **Saltar este paso**; en los obligatorios, **Seguir más tarde**. En el paso del dólar el botón cambia con el interruptor (*Vincular y continuar* / *Continuar sin vincular*), que empieza apagado.

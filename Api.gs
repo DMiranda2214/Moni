@@ -329,6 +329,14 @@ function saveRenglonMes(item) {
   });
 }
 
+/** Agrega al presupuesto de un mes las suscripciones y servicios que toca pagar y todavía no están. */
+function addSuscripcionesPpto(mes) {
+  return responder_(function () {
+    const r = agregarSuscripcionesAlMes(mes);
+    return Object.assign({ presupuesto: obtenerPresupuestoMes(mes) }, r);
+  });
+}
+
 function deleteRenglonMes(idItem) {
   return responder_(function () {
     const r = eliminarRenglonMes(idItem);

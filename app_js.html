@@ -258,6 +258,11 @@ async function refrescarParcial(opc) {
   if (r.estado) App.boot.estado = r.estado;
   const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos', 'Servicios_Publicos'].indexOf(t) !== -1);
   if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
+  // Una suscripción nueva o editada entra al presupuesto de este mes: se vuelve a pedir para que Registrar y Presupuesto la vean.
+  if ((opc.tablas || []).indexOf('Suscripciones') !== -1) {
+    App.ppto.data = null;
+    try { aplicarPresupuesto(await api('getPresupuesto', App.boot.hoy.slice(0, 7))); } catch (e) { /* se pedirá al abrir el presupuesto */ }
+  }
   if (opc.config) aplicarApariencia();
   App.graf.data = null; App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   return r;
@@ -2094,11 +2099,23 @@ async function restaurarYAvisar(id) {
 
 // ---------- Detalle de un movimiento ----------
 
+/** Qué es un movimiento, dicho en palabras: ingreso, gasto, movimiento de dinero (traslado)… */
+function tipoMovimientoTexto(it) {
+  const sub = it.Subtipo ? ' · ' + it.Subtipo.replace(/_/g, ' ').toLowerCase() : '';
+  if (it.Subtipo === 'Conversion') return 'Conversión de divisas';
+  if (it.esTransferencia || it.Tipo_Mov === 'Transferencia') return 'Movimiento de dinero (entre bolsillos)' + (it.Subtipo ? sub : '');
+  if (it.Tipo_Mov === 'Ingreso') return 'Ingreso' + sub;
+  if (it.Tipo_Mov === 'Gasto') return 'Gasto' + sub;
+  if (it.Tipo_Mov === 'Ajuste') return 'Ajuste de saldo';
+  return it.Tipo_Mov || 'Movimiento';
+}
+
 async function abrirDetalleMov(id) {
   const it = buscarMov(id);
   if (!it) return;
   const m = montoMov(it, false);
   const filas = [];
+  filas.push(['Tipo', '<strong>' + esc(tipoMovimientoTexto(it)) + '</strong>']);
   filas.push(['Valor', '<strong class="m-num ' + (m.clase === 'm-entra' ? 'm-positivo' : '') + '">' + esc(m.texto) + '</strong>']);
   filas.push(['Fecha', esc(etiquetaDia(it.Fecha) + ' · ' + it.Fecha)]);
   if (it.esTransferencia) {
@@ -2269,8 +2286,12 @@ function filaRenglon(i) {
 
 function htmlPresupuesto(d) {
   const t = d.totales;
+  const faltan = d.faltanSuscripciones
+    ? '<div class="m-banner" role="note">' + ico('tarjetas') + '<span>' + (d.faltanSuscripciones === 1 ? 'Hay 1 suscripción o servicio de este mes que no está en el presupuesto.' : 'Hay ' + d.faltanSuscripciones + ' suscripciones o servicios de este mes que no están en el presupuesto.') + '</span>' +
+      '<button class="m-btn-texto" data-acc="ppto-susc">Agregar</button></div>'
+    : '';
   const avance = t.plan > 0 ? Math.min(100, Math.round(t.real / t.plan * 100)) : 0;
-  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Te queda</div>' +
+  let h = faltan + '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Te queda</div>' +
     '<div class="m-resumen-cifra m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Gastado</div><strong class="m-num">' + dinero(t.real) + '</strong></div>' +
@@ -5085,6 +5106,10 @@ const ACCIONES = {
   },
   renglon: el => abrirRenglon(el.dataset.id),
   'nuevo-renglon': () => abrirRenglonMes(null),
+  'ppto-susc': async () => {
+    try { const r = await api('addSuscripcionesPpto', App.ppto.mes); aplicarPresupuesto(r.presupuesto); render(); aviso(r.agregados ? 'Se agregaron ' + r.agregados + (r.agregados === 1 ? ' renglón' : ' renglones') + ' al presupuesto' : 'Todo al día'); }
+    catch (e) { aviso(e.message, true); }
+  },
   distribuir: () => abrirDistribucion(App.ppto.mes),
   'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
   'registrar-nomina': () => abrirRegistrarNomina(),
@@ -5145,7 +5170,9 @@ const ACCIONES = {
   const dlg = $('#hoja');
   dlg.addEventListener('click', ev => { if (hojaActual) hojaActual.alClic(ev); });
   dlg.addEventListener('submit', ev => { if (hojaActual) hojaActual.alEnviar(ev); });
-  dlg.addEventListener('close', () => { if (hojaActual) hojaActual.finalizar(); }); // Esc o cierre nativo
+  // Esc o cierre nativo. El evento llega un instante DESPUÉS de cerrar: si mientras tanto se abrió otra hoja (Editar desde el
+  // detalle), no hay que cerrarla.
+  dlg.addEventListener('close', () => { if (hojaActual && !dlg.open) hojaActual.finalizar(); });
 })();
 
 document.addEventListener('click', ev => {
