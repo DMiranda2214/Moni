@@ -18,6 +18,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Obsidian: la bóveda privada vive fuera del repositorio; esto evita subir una por accidente
+.obsidian/
+
 # Archivos de trabajo de Claude Code
 .claude/
 
