@@ -108,5 +108,6 @@ function proximosIngresos_() {
     if (x.dias > DIAS_RECORDATORIO) return;
     lista.push({ tipo: 'Ingreso', id: x.ID_Ingreso, titulo: x.Nombre, fecha: x.Proximo_Cobro, dias: x.dias, valor: x.Valor, detalle: x.destino ? 'A ' + x.destino : 'Por recibir', ingreso: x });
   });
+  eventosCdt_(DIAS_RECORDATORIO).forEach(e => lista.push(e)); // vencimientos y pagos de intereses de CDT
   return lista.sort((a, b) => a.dias - b.dias || a.titulo.localeCompare(b.titulo));
 }

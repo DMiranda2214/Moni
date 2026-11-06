@@ -16,7 +16,7 @@
    Catalogos.gs (CRUD configurable) · Saldos.gs
         │
         ▼
-   Repo.gs (lectura memorizada, escrituras con bloqueo, caché)  ──►  Google Sheet (28 pestañas)
+   Repo.gs (lectura memorizada, escrituras con bloqueo, caché)  ──►  Google Sheet (29 pestañas)
 ```
 
 ## Principios
@@ -33,7 +33,7 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 28 tablas, enumeraciones, columnas de texto, instalación idempotente |
+| `Setup.gs` | Esquema de las 29 tablas, enumeraciones, columnas de texto, instalación idempotente |
 | `Repo.gs` | Lectura (memorizada por petición), inserción, actualización, bloqueo, caché |
 | `Catalogos.gs` | Definición y CRUD de los catálogos; estado de configuración |
 | `Saldos.gs` | Saldos por bolsillo, cuenta y total |
@@ -43,6 +43,8 @@
 | `Tarjetas.gs` | Compras, extractos, reserva, pago atómico |
 | `Creditos.gs` | Amortización francesa, cronograma versionado, pagos y abonos |
 | `Ahorro.gs` | Rendimientos, retiros, reposiciones, deuda con el ahorro |
+| `CDT.gs` | CDT: intereses, apertura, pagos periódicos, cobro, renovación y lo invertido |
+| `Avisos.gs` | Avisos de Inicio: configuración que falta o datos desactualizados |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
 | `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |

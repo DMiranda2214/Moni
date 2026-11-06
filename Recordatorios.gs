@@ -145,10 +145,12 @@ function recordatoriosDeseados_(ajustes) {
   const hoy = hoyIso_();
   let lista = proximosPagos_(HORIZONTE_CALENDARIO).filter(p => p.dias >= 0);
   if (ajustes.nomina) lista = lista.concat(fechasNomina_(hoy, HORIZONTE_CALENDARIO));
+  lista = lista.concat(eventosCdt_(HORIZONTE_CALENDARIO).filter(e => e.dias >= 0));
   return lista.map(p => {
     const titulo = p.tipo === 'Nomina' ? p.titulo
       : p.tipo === 'Tarjeta' ? 'Pagar tarjeta ' + p.titulo
       : p.tipo === 'Credito' ? 'Pagar cuota · ' + p.titulo
+      : p.tipo === 'CDT' ? 'Llega ' + p.titulo
       : 'Pagar ' + p.titulo;
     const lineas = [];
     if (p.valor) lineas.push((p.tipo === 'Tarjeta' ? 'Total del extracto: ' : 'Valor: ') + pesos_(p.valor));

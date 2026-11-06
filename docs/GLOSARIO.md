@@ -9,6 +9,9 @@
 | **Saldo** | Apertura + todo lo que entró y salió (sin contar lo anulado) |
 | **Movimiento** | Un gasto, ingreso, ajuste o traslado. Los traslados son dos movimientos que suman cero |
 | **Anular** | Quitar un movimiento sin borrarlo; se puede restaurar |
+| **CDT** | Certificado de depósito a término: dinero entregado a un banco por un plazo fijo a una tasa pactada |
+| **Invertido** | El capital de tus CDT vigentes: es tuyo, pero no está disponible hasta que venza |
+| **Hogar** | Una casa o apartamento cuyos servicios y suscripciones pagas; puedes tener varios |
 | **Cuadrar** | Comparar el saldo de Moni con el del banco y, si quieres, dejar un ajuste por la diferencia |
 | **Ajuste** | Movimiento que corrige una diferencia (puede ser negativo) |
 | **Presupuesto** | Lo que planeas gastar en un mes, por renglones |

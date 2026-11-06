@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.0.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.1.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -16,6 +16,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Nómina** | Tu sueldo y descuentos fijos, más lo de cada mes (horas extras, cesantías, prima, descuentos de la empresa); estimado con salud, pensión y prestaciones, y reparto a bolsillos |
 | **Otros ingresos** | Ingresos recurrentes (otro trabajo, arriendo, ventas…) con su cuenta de destino |
 | **Deudas** | Tarjetas de crédito (reserva, extracto, pago) y créditos de autopago con amortización francesa |
+| **CDT** | Lo que tienes a plazo fijo: capital "invertido" (no disponible), lo que ganarás, vencimientos, cobro y renovación |
 | **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
 | **Regalos** | Lista por año con estimado y gasto real |
@@ -37,11 +38,12 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
 | [Arquitectura](docs/ARQUITECTURA.md) | Capas, modelo de datos, convenciones |
 | [API interna](docs/API.md) | Funciones que el frontend llama |
-| [Esquema de datos](docs/ESQUEMA.md) | Las 28 tablas, columna por columna |
+| [Esquema de datos](docs/ESQUEMA.md) | Las 29 tablas, columna por columna |
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |
 | [Presupuesto y tarjetas](docs/ANALISIS_PRESUPUESTO_TARJETAS.md) | Análisis de cómo cuentan las compras con tarjeta y propuesta de cambios |
+| [Plan: unir servicios y suscripciones](docs/PLAN_SERVICIOS_UNIFICADOS.md) | Evaluación y plan para la versión 1.2 |
 | [Lanzamiento](docs/LANZAMIENTO.md) | Lista para pasar a producción y compartir la app |
 | [Plan del proyecto](PLAN.md) | Historia: decisiones y fases de construcción |
 | [Cambios](CHANGELOG.md) | Historia por fases |
@@ -69,7 +71,7 @@ docs/             Documentación
 
 **Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue](docs/DESPLIEGUE.md)).
 
-Probada con 251 pruebas automáticas sobre un Sheets simulado. La verificación en Google real (autorización, tiempos, varias personas) se hace con la [lista de lanzamiento](docs/LANZAMIENTO.md).
+Probada con más de 260 pruebas automáticas sobre un Sheets simulado. La verificación en Google real (autorización, tiempos, varias personas) se hace con la [lista de lanzamiento](docs/LANZAMIENTO.md).
 
 ## Licencia
 

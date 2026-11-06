@@ -45,8 +45,8 @@ function numero_(v, etiqueta, opc) {
 
 function fechaIso_(v, etiqueta, defecto) {
   if (v === undefined || v === null || v === '') return defecto === undefined ? '' : defecto;
-  const t = texto_(v);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error(etiqueta + ' debe tener formato AAAA-MM-DD.');
+  const t = texto_(v).replace(/\//g, '-'); // se acepta AAAA/MM/DD (como se escribe en la app) y AAAA-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error(etiqueta + ' debe tener formato AAAA/MM/DD.');
   return t;
 }
 
@@ -453,7 +453,10 @@ const CATALOGOS = {
     normalizar: function (item, actual, filas) {
       const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
       const nombre = textoRequerido_(pick('Nombre'), 'El nombre');
-      exigirNombreUnico_(filas, nombre, actual, 'ID_Suscripcion');
+      // El mismo nombre puede repetirse en hogares distintos (Netflix en mi casa y en la de mi mamá).
+      const idInmueble = texto_(pick('ID_Inmueble'));
+      if (idInmueble) exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El hogar');
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Suscripcion', f => texto_(f.ID_Inmueble) === idInmueble);
       const proximo = fechaIso_(pick('Proximo_Cobro'), 'La fecha del próximo cobro');
       if (!proximo) throw new Error('Indica cuándo es el próximo cobro.');
       const idBolsillo = texto_(pick('ID_Bolsillo')), idTarjeta = texto_(pick('ID_Tarjeta'));
@@ -470,7 +473,7 @@ const CATALOGOS = {
         Valor: numero_(pick('Valor'), 'El valor', { requerido: true, min: 0, max: VALOR_MAXIMO }),
         Periodicidad: opcion_(pick('Periodicidad'), ENUMS.Suscripciones.Periodicidad, 'La periodicidad', 'Mensual'),
         Proximo_Cobro: proximo, Dia_Cobro: Number(proximo.slice(8, 10)),
-        ID_Bolsillo: idBolsillo, ID_Tarjeta: idTarjeta, ID_Categoria: idCat, ID_Servicio: idSrv,
+        ID_Bolsillo: idBolsillo, ID_Tarjeta: idTarjeta, ID_Categoria: idCat, ID_Servicio: idSrv, ID_Inmueble: idInmueble,
         Renglon: texto_(pick('Renglon')).slice(0, 80),
         URL_Pago: urlSegura_(pick('URL_Pago')), Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
@@ -479,6 +482,69 @@ const CATALOGOS = {
     // Si el presupuesto de este mes ya existe, la suscripción nueva (o editada) entra o se actualiza ahí.
     despues: function () { agregarSuscripcionesAlMes(hoyIso_().slice(0, 7)); },
     bloqueos: function () { return []; }
+  },
+
+  CDTs: {
+    id: 'ID_CDT', prefijo: 'cdt', etiqueta: 'El CDT',
+    normalizar: function (item, actual, filas, opciones) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre');
+      exigirNombreUnico_(filas, nombre, actual, 'ID_CDT');
+      const idBanco = pick('ID_Banco');
+      const banco = exigirActivo_(leer_('Bancos'), 'ID_Banco', idBanco, 'El banco');
+      if (divisaBanco_(banco) !== DIVISA_BASE) throw new Error('Los CDT se registran en pesos: elige un banco en pesos.');
+
+      const eaCrudo = pick('Tasa_EA');
+      const ea = Number(String(eaCrudo === undefined || eaCrudo === null ? '' : eaCrudo).replace(',', '.'));
+      if (!isFinite(ea) || ea <= 0 || ea > 1) throw new Error('La tasa debe estar entre 0 % y 100 %.');
+      const capital = numero_(pick('Capital'), 'El capital', { requerido: true, min: 1, max: VALOR_MAXIMO });
+      const plazo = numero_(pick('Plazo_Dias'), 'El plazo en días', { requerido: true, min: 1, max: 3650, entero: true });
+      const inicio = fechaIso_(pick('Fecha_Inicio'), 'La fecha de inicio');
+      if (!inicio) throw new Error('Indica cuándo empezó el CDT.');
+      if (inicio > hoyIso_()) throw new Error('La fecha de inicio no puede ser futura.');
+      const pago = opcion_(pick('Pago_Intereses'), ENUMS.CDTs.Pago_Intereses, 'Cuándo paga los intereses', 'Vencimiento');
+      const pctCrudo = pick('Retencion_Pct');
+      const pct = pctCrudo === '' || pctCrudo === undefined || pctCrudo === null ? 0 : Number(String(pctCrudo).replace(',', '.'));
+      if (!isFinite(pct) || pct < 0 || pct >= 1) throw new Error('La retención debe estar entre 0 % y 100 %.');
+      const idDestino = texto_(pick('ID_Bolsillo_Destino'));
+      if (idDestino) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idDestino, 'El bolsillo de destino'); exigirPesos_(idDestino, 'El bolsillo de destino'); }
+
+      // Con apertura descontada, intereses cobrados o ya cerrado, las cifras no se cambian: se anula y se crea de nuevo.
+      if (actual) {
+        const bloqueado = actual.Estado !== 'Vigente' || actual.ID_Mov_Apertura || Number(actual.Intereses_Cobrados) > 0;
+        const cambia = Number(actual.Capital) !== capital || Number(actual.Tasa_EA) !== ea || Number(actual.Plazo_Dias) !== plazo ||
+          actual.Fecha_Inicio !== inicio || (actual.Pago_Intereses || 'Vencimiento') !== pago || idBanco !== actual.ID_Banco;
+        if (bloqueado && cambia) throw new Error('Este CDT ya tiene movimientos: no se cambian su capital, tasa, plazo, fechas ni banco. Anúlalo y créalo de nuevo, o ciérralo y renuévalo.');
+      }
+      const vencimiento = sumarDias_(inicio, plazo);
+      const datos = {
+        Nombre: nombre, ID_Banco: idBanco, Capital: capital, Tasa_EA: Math.round(ea * 100000) / 100000, Fecha_Inicio: inicio, Plazo_Dias: plazo,
+        Fecha_Vencimiento: vencimiento, Pago_Intereses: pago, Retencion_Pct: Math.round(pct * 100000) / 100000,
+        ID_Bolsillo_Destino: idDestino, Renovar: item.Renovar !== undefined ? esVerdadero(item.Renovar) : (actual ? esVerdadero(actual.Renovar) : false),
+        Notas: texto_(pick('Notas')).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+      if (!actual) {
+        datos.Estado = 'Vigente';
+        datos.Prox_Pago_Interes = proximoPagoInteresCdt_(inicio, PERIODO_PAGO_CDT[pago], vencimiento, hoyIso_());
+        if (opciones && esVerdadero(opciones.descontar)) {
+          const origen = texto_(opciones.ID_Bolsillo_Origen);
+          if (!origen) throw new Error('Elige de qué bolsillo salió el dinero del CDT.');
+          exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', origen, 'El bolsillo de origen');
+          exigirPesos_(origen, 'El bolsillo de origen');
+          datos.ID_Bolsillo_Origen = origen;
+        }
+      } else if (actual.Estado === 'Vigente' && (actual.Pago_Intereses || 'Vencimiento') !== pago) {
+        datos.Prox_Pago_Interes = proximoPagoInteresCdt_(inicio, PERIODO_PAGO_CDT[pago], vencimiento, hoyIso_());
+      }
+      return datos;
+    },
+    // Con "descontar", el capital sale del bolsillo de origen en la fecha de inicio (queda como un movimiento anulable).
+    despues: function (reg, anterior, item, opciones) {
+      if (anterior || !opciones || !esVerdadero(opciones.descontar)) return;
+      const mov = registrarMovimiento({ Tipo_Mov: 'Ajuste', Subtipo: 'CDT_Apertura', Valor: -Number(reg.Capital), Fecha: reg.Fecha_Inicio, Concepto: 'Apertura CDT ' + reg.Nombre, ID_Bolsillo: reg.ID_Bolsillo_Origen });
+      updateRowById('CDTs', 'ID_CDT', reg.ID_CDT, { ID_Mov_Apertura: mov.ID_Mov });
+    },
+    bloqueos: function (reg) { return reg.Estado === 'Vigente' ? ['está vigente: ciérralo o anúlalo desde la pantalla de CDT'] : []; }
   },
 
   Ingresos_Recurrentes: {
@@ -879,9 +945,10 @@ function obtenerEstadoConfiguracion(verificacionPrevia) {
     { id: 'tarjetas', titulo: 'Registra tus tarjetas de crédito', hecho: tarjetas.length > 0, opcional: true, pantalla: 'ajustes/Tarjetas' },
     { id: 'nomina', titulo: 'Configura tu nómina', hecho: listarCatalogo('Nomina_Escenarios').length > 0, opcional: true, pantalla: 'nomina' },
     { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' },
-    { id: 'suscripciones', titulo: 'Anota tus suscripciones y servicios', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
+    { id: 'cdt', titulo: 'Registra tus CDT', hecho: listarCatalogo('CDTs').length > 0, opcional: true, pantalla: 'cdt' },
     { id: 'hogar', titulo: 'Agrega tu hogar', hecho: listarCatalogo('Inmuebles').length > 0, opcional: true, pantalla: 'ajustes/Inmuebles' },
     { id: 'servicios', titulo: 'Guarda los códigos de tus servicios públicos', hecho: listarCatalogo('Servicios_Publicos').length > 0, opcional: true, pantalla: 'ajustes/Servicios_Publicos' },
+    { id: 'suscripciones', titulo: 'Anota tus suscripciones y servicios', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
     { id: 'tasa', titulo: 'Vincula el dólar de Google Finance', hecho: esVerdadero(config.Tasa_Auto), opcional: true, pantalla: 'ajustes/divisas' }
   ];
   const completo = pasos.filter(p => !p.opcional).every(p => p.hecho);

@@ -9,7 +9,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'CDT.gs', 'Avisos.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -50,7 +50,9 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.throws(f({ Valor: 'abc' }), /número/);
     assert.throws(f({ Valor: 2e12 }), /mayor que/);
     assert.throws(f({ Concepto: '  ' }), /concepto es obligatorio/);
-    assert.throws(f({ Fecha: '2027/01/05' }), /formato/);
+    assert.throws(f({ Fecha: '05/01/2027' }), /formato AAAA\/MM\/DD/);
+    assert.throws(f({ Fecha: '2027/01/05' }), /futura/, 'AAAA/MM/DD se entiende; esta es futura');
+    assert.strictEqual(e.llamar('fechaMovimiento_', '2026/01/05'), '2026-01-05', 'la barra se acepta y se guarda con guion');
     assert.throws(f({ Fecha: '2026-02-30' }), /no existe/);
     assert.throws(f({ Fecha: '2999-01-01' }), /futura/);
     assert.throws(f({ ID_Bolsillo: 'no-existe' }), /bolsillo no existe/);
@@ -348,7 +350,7 @@ module.exports = function (prueba, assert, crearEntorno) {
   // ---------------------------------------------------------------- rendimiento: una lectura por tabla y petición
   prueba('rendimiento: el arranque lee cada tabla una vez; con la caché tibia, casi nada', () => {
     const e = crearEntorno({}, { cache: true });
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'CDT.gs', 'Avisos.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.llamar('setupDatabase'); e.llamar('sembrarDatosDemo');
 

@@ -4,7 +4,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 
 ## 1. Primer uso
 1. Abre el enlace de la app (guárdalo como favorito o *Agregar a pantalla de inicio*).
-2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas, tu nómina, otros ingresos, suscripciones, hogar y servicios, y si vinculas el dólar de Google Finance. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
+2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas, tu nómina, otros ingresos, tus CDT, tu hogar, tus servicios y suscripciones, y si vinculas el dólar de Google Finance. Lo que ya agregaste se puede tocar para corregirlo. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
 4. *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
 
 ## 2. Inicio
@@ -129,6 +129,12 @@ Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar
 
 ## 14. Saldos iniciales
 Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o en Ajustes). Si algo no cuadra con tu banco, usa **Cuadrar** en la cuenta.
+
+## 14 bis. CDT
+**Más → CDT.** Registra cada CDT con su banco, capital, tasa (% EA), fecha de inicio, plazo en días, cuándo paga los intereses y la retención que te aplica el banco. Si el dinero sale hoy de un bolsillo, activa *Descontar el capital de un bolsillo*; si ya lo tenías antes de usar Moni, déjalo apagado. El capital aparece como **Invertido** (no como disponible). En el detalle ves cuánto ganarás (bruto, retención y neto) y cuánto del plazo ha pasado, y puedes **Registrar intereses** (si los paga por periodos), **Cobrar** o **Cancelar antes de tiempo** (con la opción de **renovar**), **Editar** o **Anular**. Los vencimientos salen en *Por recibir* de Inicio y en Google Calendar.
+
+## 14 ter. Avisos en Inicio
+**Para tener en cuenta** te dice qué falta configurar o está desactualizado (salario mínimo, un CDT vencido, suscripciones que faltan en el presupuesto, la nómina, los recordatorios…). Toca **Resolver** para ir a donde se arregla; los que no son urgentes se pueden ocultar con **Ahora no** y volver a mostrar en *Ajustes → Avisos de Inicio*.
 
 ## 15. Respaldos
 **Ajustes → Respaldos:** crea una copia ahora o activa copias automáticas (cada N días, conservando las últimas N). Quedan en tu Drive, carpeta **Moni Respaldos**.

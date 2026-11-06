@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.1.0 — CDT, hogares y avisos (6 nov 2026)
+- **CDT:** nuevo módulo (*Más → CDT*). Capital, tasa EA, plazo, banco, pago de intereses (al vencimiento, mensual o trimestral) y retención. El capital se muestra como **Invertido**, no como disponible. Calcula intereses y neto, registra pagos de intereses, cobra o cancela (con renovación) y se puede anular. Admite CDT que la persona ya tenía antes de usar Moni (sin descontar nada). Vencimientos en *Por recibir* y en Google Calendar. Tabla nueva `CDTs`.
+- **Avisos en Inicio:** el panel *Para tener en cuenta* muestra lo que falta configurar o está desactualizado (importantes, sugerencias y novedades), se actualiza solo y los no urgentes se ocultan con *Ahora no*.
+- **Hogares:** las suscripciones y servicios pueden pertenecer a un hogar (el mismo nombre en hogares distintos; el presupuesto los distingue). En los primeros pasos, *Hogar* va antes que *Servicios* y *Suscripciones*, y los servicios admiten enlace de pago.
+- **Fechas AAAA/MM/DD** en pantalla y al escribirlas (con botón de calendario).
+- **Primeros pasos:** lo ya agregado se puede tocar para editarlo, también el sueldo.
+- Plan para unir servicios y suscripciones en una sola cosa: [docs/PLAN_SERVICIOS_UNIFICADOS.md](docs/PLAN_SERVICIOS_UNIFICADOS.md).
+
 ## 1.0.0 — Primera versión (6 nov 2026)
 Moni queda lista para que **cualquier persona** la use como su app de finanzas personales (una hoja de Google por persona).
 - **Para quién y cómo:** se entra con la cuenta de Google, se crea la hoja y un asistente de primeros pasos deja todo configurado: nombre, bancos (con su rendimiento), cuentas y bolsillos con sus saldos iniciales, tarjetas, nómina, otros ingresos, suscripciones, hogar y servicios, y el dólar de Google Finance si se quiere.
