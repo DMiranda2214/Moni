@@ -12,6 +12,9 @@
     "abrir": "npx --yes @google/clasp open-script",
     "contraste": "node tests/contraste.js",
     "verificar": "node tests/sintaxis.js && node tests/run.js && node tests/contraste.js",
-    "vista": "node tests/dev_server.js"
+    "vista": "node tests/dev_server.js",
+    "push:dev": "npx --yes @google/clasp@3.4.1 -P .clasp.dev.json push --force",
+    "push:prod": "npx --yes @google/clasp@3.4.1 -P .clasp.prod.json push --force",
+    "vista:multi": "node tests/dev_server.js --multi"
   }
 }

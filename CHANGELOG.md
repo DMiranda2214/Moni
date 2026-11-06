@@ -1,5 +1,10 @@
 # Cambios
 
+## Varias personas y despliegue automático (5 nov)
+- **Modo multiusuario:** una sola aplicación, cada persona con su hoja (se crea en su Drive o vincula una existente), su caché, su bloqueo y sus activadores. La hoja se actualiza sola cuando una versión trae tablas o columnas nuevas. Pantalla de bienvenida y *Ajustes → Mi cuenta*. Se activa con `activarModoMultiusuario` ([guía](docs/MULTIUSUARIO.md)).
+- **CI/CD con GitHub Actions:** verificar en cada pull request; al entrar a `main`, desarrollo automático y producción con aprobación; `clasp push` + `deploy` sin copiar código ([guía](docs/DESPLIEGUE_CI.md)).
+- **Pruebas más estables:** las fechas de las pruebas usan la zona de la app (Bogotá) y no UTC; antes fallaban cada noche después de las 19:00 y los primeros 10 días del mes.
+
 ## Nómina estimada, rendimientos por banco e ingresos recurrentes (31 oct)
 - **Nómina como el estimado del Excel original:** casillas para incluir o no cada línea, días editables (mes incompleto, prima, vacaciones), salud y pensión sobre ordinario + vacaciones, intereses de cesantías por tramos del año, y descuentos o ingresos fijos del escenario. Abre en el mes del próximo pago.
 - **Rendimientos por banco:** tasa (% EA) y forma de pago (cada día o cada mes). La pantalla de ahorro estima lo que rinde y lo pendiente de registrar.

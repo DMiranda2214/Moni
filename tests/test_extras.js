@@ -1,14 +1,16 @@
 /**
  * Pruebas de la Fase 5: ahorro y rendimientos, regalos, vista anual y respaldos.
  */
+const { bogota } = require('./fecha');
+
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const hoy = () => new Date().toISOString().slice(0, 10);
+  const hoy = () => bogota();
   const mes = () => hoy().slice(0, 7);
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -359,8 +361,8 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   prueba('suscripciones: crear valida el medio de pago, calcula totales y avisa lo que vence pronto', () => {
     const { e, casa } = escenario();
-    const pronto = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-    const lejos = new Date(Date.now() + 40 * 86400000).toISOString().slice(0, 10);
+    const pronto = bogota(2 * 86400000);
+    const lejos = bogota(40 * 86400000);
     const s1 = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Streaming', Valor: 40000, Periodicidad: 'Mensual', Proximo_Cobro: pronto, ID_Bolsillo: casa.ID_Bolsillo });
     e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Nube', Valor: 120000, Periodicidad: 'Anual', Proximo_Cobro: lejos, ID_Bolsillo: casa.ID_Bolsillo });
     assert.throws(e.falla('guardarCatalogo', 'Suscripciones', { Nombre: 'Sin fecha', Valor: 1, ID_Bolsillo: casa.ID_Bolsillo }), /próximo cobro/);
@@ -609,9 +611,9 @@ module.exports = function (prueba, assert, crearEntorno) {
 
     // Desde el último rendimiento registrado, y con el interés del mes anterior ya sumado al saldo
     const x = prep('Mensual');
-    x.e2.llamar('registrarRendimiento', { ID_Cuenta: x.cta.ID_Cuenta, Tipo: 'Interes', Valor: 1000, Fecha: new Date(Date.now() - 86400000 * 0).toISOString().slice(0, 10) });
-    const tras = est(x, new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10));
-    assert.ok(tras.desde > new Date().toISOString().slice(0, 10), 'empieza el día siguiente al último rendimiento');
+    x.e2.llamar('registrarRendimiento', { ID_Cuenta: x.cta.ID_Cuenta, Tipo: 'Interes', Valor: 1000, Fecha: bogota(-86400000 * 0) });
+    const tras = est(x, bogota(86400000 * 3));
+    assert.ok(tras.desde > bogota(), 'empieza el día siguiente al último rendimiento');
 
     // API: la pantalla de ahorro trae la estimación y la tasa
     const api = x.e2.llamar('getAhorro').data.cuentas[0];
@@ -656,11 +658,13 @@ module.exports = function (prueba, assert, crearEntorno) {
   prueba('ingresos por recibir: la nómina estimada aparece junto a los ingresos recurrentes', () => {
     const { e } = escenario();
     e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3000000, Vigente: true });
-    e.llamar('saveConfigParam', 'Nomina_Dia_Pago', '31');
+    // Día de pago = hoy: el pago de este mes está a la vista.
+    e.llamar('saveConfigParam', 'Nomina_Dia_Pago', String(Number(hoy().slice(8, 10))));
     const lista = e.llamar('proximosIngresos_');
     const nom = lista.find(x => x.tipo === 'Nomina');
-    assert.ok(nom || e.llamar('mesProximoPagoNomina_') > hoy().slice(0, 7), 'sale cuando el pago cae en los próximos 14 días');
-    if (nom) assert.strictEqual(nom.valor, 3000000 - 240000);
+    assert.ok(nom, 'sale cuando el pago cae en los próximos 14 días');
+    assert.strictEqual(nom.valor, 3000000 - 240000);
+    assert.strictEqual(nom.dias, 0);
     assert.deepStrictEqual(e.llamar('getBootstrap').data.porRecibir, lista);
   });
 

@@ -6,6 +6,7 @@ coverage/
 # Credenciales y configuración local (nunca al repositorio)
 .clasprc.json
 .clasp.json
+.clasp.*.json
 .env
 .env.*
 *.pem

@@ -3,7 +3,7 @@
 Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Reemplaza un Excel de finanzas personales con las mismas reglas (bolsillos, presupuesto, tarjetas, créditos de autopago, nómina colombiana) y una interfaz pensada para el celular y el computador. Entra en operación el **1 de enero de 2027**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
-- **Una sola persona:** el acceso se limita a tu cuenta de Google.
+- **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
 - **Todo es configurable:** bancos, cuentas, bolsillos, tarjetas, categorías, personas, escenarios y apariencia.
 
 ## Qué hace
@@ -30,6 +30,8 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [Guía rápida](docs/GUIA_RAPIDA.md) | Quien usa la app: lo esencial en una página |
 | [Manual de usuario](docs/MANUAL_USUARIO.md) | Quien usa la app: todas las pantallas |
 | [Instalación y despliegue](docs/INSTALACION.md) | Quien publica la app por primera vez o la actualiza |
+| [Varias personas](docs/MULTIUSUARIO.md) | Una sola aplicación, cada persona con su hoja y sus datos |
+| [Despliegue automático (CI/CD)](docs/DESPLIEGUE_CI.md) | GitHub Actions: verificar, desarrollo y producción sin copiar código |
 | [Operación y solución de problemas](docs/OPERACION.md) | Respaldos, recuperación, errores frecuentes |
 | [Reglas de negocio](docs/REGLAS_DE_NEGOCIO.md) | Cómo se calculan saldos, presupuesto, tarjetas, créditos y nómina |
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |

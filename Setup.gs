@@ -228,7 +228,7 @@ function ahoraIso_() {
 function verificarEsquema(spreadsheet, opciones) {
   // Verificar son 26 lecturas de hoja. Con usarCache, un resultado correcto se recuerda 6 horas;
   // setupDatabase lo olvida. Solo se guardan los resultados "listo", nunca los fallos.
-  const cache = CacheService.getScriptCache();
+  const cache = cache_();
   if (opciones && opciones.usarCache && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
     return { faltantes: [], diferencias: [], listo: true, desdeCache: true };
   }
@@ -343,7 +343,7 @@ function setupDatabase(spreadsheet) {
   sembrarPorDefecto_(ss);
   completarConfig_(ss);
   invalidateCache();
-  CacheService.getScriptCache().remove('ESQUEMA_OK');
+  cache_().remove('ESQUEMA_OK');
 
   const verificacion = verificarEsquema(ss);
   return {
@@ -431,7 +431,7 @@ function sembrarPorDefecto_(ss) {
 function vincularHojaMoni(idHoja) {
   const ss = idHoja ? SpreadsheetApp.openById(idHoja) : SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('No hay una hoja a la que vincular. Abre el proyecto desde la hoja (Extensiones → Apps Script) o pasa su ID.');
-  PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', ss.getId());
+  propiedades_().setProperty('SPREADSHEET_ID', ss.getId());
   Logger.log('Vinculado a: ' + ss.getName() + ' — ' + ss.getUrl());
   return { ok: true, nombre: ss.getName(), url: ss.getUrl() };
 }

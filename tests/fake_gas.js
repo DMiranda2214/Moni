@@ -77,7 +77,9 @@ class HojaFalsa {
   protect() { return inerte(); }
 }
 
-function formatearFecha(d, patron) {
+function formatearFecha(d, patron, zona) {
+  // Apps Script formatea en la zona pedida; Bogotá es UTC−5 todo el año (sin horario de verano).
+  if (zona === 'America/Bogota') d = new Date(d.getTime() - 5 * 3600000);
   const p2 = n => String(n).padStart(2, '0');
   const partes = {
     yyyy: d.getUTCFullYear(), MM: p2(d.getUTCMonth() + 1), dd: p2(d.getUTCDate()),
@@ -99,15 +101,30 @@ function crearEntorno(hojasIniciales, opciones) {
   const propiedades = { SPREADSHEET_ID: 'id-falso' };
   let uuid = 0;
 
-  const hoja = {
-    getSheetByName: (n) => hojas[n] || null,
-    getSheets: () => Object.values(hojas),
-    insertSheet: (n) => { hojas[n] = new HojaFalsa(n, []); return hojas[n]; },
-    deleteSheet: (s) => { delete hojas[s.getName()]; },
-    getName: () => 'Moni (prueba)',
-    getUrl: () => 'https://docs.google.com/spreadsheets/d/falso',
-    getId: () => 'id-falso'
+  // Varias personas: cada una con sus propiedades, su caché y sus hojas (solo las que creó o le compartieron).
+  let usuarioActual = 'ana@example.com';
+  const propsUsuario = {};
+  const cachesUsuario = {};
+  const libros = {};
+  const crearLibro = (id, nombre, hojasLibro, editores) => {
+    const obj = {
+      getSheetByName: (n) => hojasLibro[n] || null,
+      getSheets: () => Object.values(hojasLibro),
+      insertSheet: (n) => { hojasLibro[n] = new HojaFalsa(n, []); return hojasLibro[n]; },
+      deleteSheet: (sh) => { delete hojasLibro[sh.getName()]; },
+      getName: () => nombre,
+      getUrl: () => 'https://docs.google.com/spreadsheets/d/' + id,
+      getId: () => id
+    };
+    libros[id] = { id, nombre, hojas: hojasLibro, editores, obj };
+    return obj;
   };
+  const hoja = crearLibro('id-falso', 'Moni (prueba)', hojas, null);
+  const mapaPropiedades = obj => ({
+    getProperty: (k) => (k in obj ? obj[k] : null),
+    setProperty: (k, v) => { obj[k] = v; },
+    deleteProperty: (k) => { delete obj[k]; }
+  });
 
   // Drive y disparadores en memoria (lo justo para probar los respaldos)
   const drive = { carpetas: {}, archivos: [], disparadores: [], reloj: 0 };
@@ -122,9 +139,9 @@ function crearEntorno(hojasIniciales, opciones) {
     getFileById: () => ({ makeCopy: (nombre, carpeta) => crearArchivo(nombre, carpeta.nombre) })
   };
   drive.script = {
-    getProjectTriggers: () => drive.disparadores.slice(),
+    getProjectTriggers: () => drive.disparadores.filter(t => t.dueno === usuarioActual),
     deleteTrigger: t => { drive.disparadores = drive.disparadores.filter(x => x !== t); },
-    newTrigger: fn => { const t = { getHandlerFunction: () => fn }; const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, create: () => { drive.disparadores.push(t); return t; } }; return b; }
+    newTrigger: fn => { const t = { getHandlerFunction: () => fn, dueno: usuarioActual }; const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, create: () => { drive.disparadores.push(t); return t; } }; return b; }
   };
 
   // Google Calendar en memoria: calendarios con eventos, etiquetas y avisos
@@ -160,27 +177,36 @@ function crearEntorno(hojasIniciales, opciones) {
     Logger: { log() {} },
     Utilities: {
       getUuid: () => String(++uuid).padStart(8, '0') + '-0000-0000-0000-000000000000',
-      formatDate: (d, tz, patron) => formatearFecha(d, patron)
+      formatDate: (d, tz, patron) => formatearFecha(d, patron, tz)
     },
-    CacheService: { getScriptCache: () => (opc.cache ? cacheReal : { get: () => null, put() {}, remove() {} }) },
+    CacheService: {
+      getScriptCache: () => (opc.cache ? cacheReal : { get: () => null, put() {}, remove() {} }),
+      getUserCache: () => {
+        if (!opc.cache) return { get: () => null, put() {}, remove() {} };
+        const m = cachesUsuario[usuarioActual] || (cachesUsuario[usuarioActual] = {});
+        return { get: k => (k in m ? m[k] : null), put: (k, v) => { m[k] = v; }, remove: k => { delete m[k]; } };
+      }
+    },
     PropertiesService: {
-      getScriptProperties: () => ({
-        getProperty: (k) => (k in propiedades ? propiedades[k] : null),
-        setProperty: (k, v) => { propiedades[k] = v; },
-        deleteProperty: (k) => { delete propiedades[k]; }
-      })
+      getScriptProperties: () => mapaPropiedades(propiedades),
+      getUserProperties: () => mapaPropiedades(propsUsuario[usuarioActual] || (propsUsuario[usuarioActual] = {}))
     },
     LockService: {
       getScriptLock: () => { registro.bloqueos.push('script'); return { waitLock() {}, releaseLock() {} }; },
       getUserLock: () => { registro.bloqueos.push('user'); return { waitLock() {}, releaseLock() {} }; }
     },
     SpreadsheetApp: {
-      openById: () => hoja,
+      openById: (id) => {
+        const l = libros[id];
+        if (!l || (l.editores && l.editores.indexOf(usuarioActual) === -1)) throw new Error('Exception: No se pudo abrir la hoja ' + id);
+        return l.obj;
+      },
+      create: (nombre) => crearLibro('libro-' + String(Object.keys(libros).length).padStart(30, '0'), nombre, {}, [usuarioActual]),
       getActiveSpreadsheet: () => null,
       newDataValidation: () => inerte(),
       flush() {}
     },
-    Session: { getActiveUser: () => ({ getEmail: () => 'ana@example.com' }) },
+    Session: { getActiveUser: () => ({ getEmail: () => usuarioActual }) },
     DriveApp: drive.api,
     ScriptApp: drive.script
   };
@@ -199,7 +225,9 @@ function crearEntorno(hojasIniciales, opciones) {
     return vm.runInContext(js, ctx);
   };
 
-  return { ctx, hojas, registro, propiedades, cargar, ejecutar, drive, calendario };
+  // como(correo): quién está usando la app a partir de ahora (otra persona = otras propiedades, caché y activadores).
+  const como = correo => { usuarioActual = correo; return correo; };
+  return { ctx, hojas, registro, propiedades, propsUsuario, libros, como, cargar, ejecutar, drive, calendario };
 }
 
 module.exports = { crearEntorno };

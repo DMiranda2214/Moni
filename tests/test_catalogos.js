@@ -8,7 +8,7 @@ module.exports = function (prueba, assert, crearEntorno) {
   /** Entorno con el esquema ya instalado. */
   function E(instalar) {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     if (instalar !== false) e.llamar('setupDatabase');
@@ -47,7 +47,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const e = E(false);
     e.hojas.Bancos = new (e.hojas.constructor === Object ? Object : Object)();
     delete e.hojas.Bancos;
-    e.ctx.SpreadsheetApp.openById().insertSheet('Bancos').filas.push(['Otro', 'Esquema'], ['dato', 'x']);
+    e.ctx.SpreadsheetApp.openById('id-falso').insertSheet('Bancos').filas.push(['Otro', 'Esquema'], ['dato', 'x']);
     const r = e.llamar('setupDatabase');
     assert.strictEqual(r.ok, false);
     assert.strictEqual(r.diferencias.length, 1);

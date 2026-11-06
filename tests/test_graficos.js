@@ -1,12 +1,14 @@
 /**
  * Pruebas de los datos de los gráficos (Graficos.gs).
  */
+const { bogota } = require('./fecha');
+
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
-  const hoy = () => new Date().toISOString().slice(0, 10);
-  /** Una fecha en el mes `atras` meses antes del actual, día 10 (nunca futura). */
-  const fechaDe = atras => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - atras); d.setUTCDate(10); return d.toISOString().slice(0, 10); };
+  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
+  const hoy = () => bogota();
+  /** Una fecha en el mes `atras` meses antes del actual: el día 10 (o hoy, si aún no llega el 10 de este mes), así nunca es futura. */
+  const fechaDe = atras => { const d = new Date(Date.now() - 5 * 3600000); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - atras); d.setUTCDate(atras === 0 ? Math.min(10, Number(bogota().slice(8, 10))) : 10); return d.toISOString().slice(0, 10); };
   const mesDe = atras => fechaDe(atras).slice(0, 7);
 
   function E() {
