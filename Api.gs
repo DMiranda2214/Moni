@@ -165,6 +165,14 @@ function saveNominaInicial(esc, subsidios) {
   return responder_(function () { return guardarNominaConSubsidios(esc, subsidios); });
 }
 
+/** Tu sueldo base (crea tu nómina la primera vez). Devuelve la nómina del mes para repintar la pantalla. */
+function saveMiNomina(sueldo, periodo, opciones) {
+  return responder_(function () {
+    const esc = guardarMiNomina(sueldo);
+    return { escenario: esc, nomina: obtenerNominaMes(periodo, '', opciones) };
+  });
+}
+
 function disableCatalogo(tabla, id) {
   return responder_(function () { return desactivarCatalogo(exigirCatalogo_(tabla), id); });
 }

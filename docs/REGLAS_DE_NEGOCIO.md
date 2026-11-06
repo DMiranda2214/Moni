@@ -26,6 +26,7 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - **Día base** = (sueldo + subsidios salariales) / 30. **IBC** (lo que cotiza) = sueldo del período + subsidios salariales + vacaciones. La prima y las cesantías no cotizan.
 - **Intereses de cesantías:** por tramos del año, cada uno = (sueldo × días / 360) × días × 12 % / 360. Con un solo sueldo todo el año da sueldo × 12 %. Si el sueldo cambió, `Cesantias_Dias_Actual` y `Cesantias_Sueldo_Anterior` (Parámetros de nómina) parten el año en dos tramos.
 - **Mes que se muestra al abrir:** el del próximo pago: este mes si aún no se registró y no pasó `Nomina_Dia_Pago`; si no, el siguiente.
+- Hay una sola nómina por persona: sueldo base más descuentos o ingresos fijos. Para cada pago se pueden sumar **conceptos adicionales solo de ese mes** (horas extras y bonos: ingresos, cotizan si son salariales; pago de cesantías o prima extra: prestaciones, no cotizan; descuentos de la empresa). No se guardan como fijos.
 - Al registrar la nómina se guarda lo estimado con las casillas que dejaste, y el neto real puede ser distinto.
 - Devengos: sueldo base y subsidios (salariales o no). Salud y pensión: 4 % del IBC cada una, con aporte redondeado a la centena superior (PILA).
 - **FSP** (Fondo de Solidaridad Pensional): 1 % del IBC cuando el IBC llega a 4 SMMLV (`FSP_Umbral_SMMLV`).
@@ -49,7 +50,7 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - Cifras de control: 2.400.000 a 48 quincenas con tasa 0,4067404 % → 55.140,90; 1.000.000 a 12 cuotas con 0,8333333 % → 87.915,89; 500.000 a 10 cuotas con 1 % → 52.791,04.
 
 ## 6. Ahorro
-- **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro.
+- **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro. Además `Rendimiento_Base` indica sobre qué saldo se paga: `Todo` (por defecto) o `Bolsillos` (hay bancos que solo pagan sobre el dinero guardado en bolsillos; el saldo suelto de una cuenta sin bolsillos no rinde).
 - **Estimación:** rinde cada día sobre el saldo con que empezó, a la tasa diaria (1 + EA)^(1/365) − 1. Si el banco paga a diario, lo ganado se suma al saldo día a día; si paga cada mes, se suma al cerrar el mes. Se calcula desde el último rendimiento registrado (o el inicio del mes) hasta ayer; "Registrar este rendimiento" lo anota (se puede corregir con el valor del banco). La retención y el GMF se siguen registrando a mano.
 - Subtipos de movimiento: *Interes* (+), *Retencion* (−), *GMF* (−), *Para_Gastos* (retiro), *Reposicion*.
 - **Deuda con el ahorro** = máx(0, Para_Gastos − Reposicion) + saldo de los créditos activos. El desembolso de un crédito no cuenta dos veces.

@@ -79,14 +79,22 @@ function estimarRendimiento_(cuenta, banco, bolsillos, movs, hoy) {
   if (!(ea > 0)) return null;
   const pago = banco.Rendimiento_Pago === 'Diario' ? 'Diario' : 'Mensual';
   const td = tasaDiaria_(ea);
-  const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs).filter(m => m.Fecha);
-  const apertura = bolsillos.filter(b => b.ID_Cuenta === cuenta.ID_Cuenta).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
+  const sobre = banco.Rendimiento_Base === 'Bolsillos' ? 'Bolsillos' : 'Todo';
+  // Hay bancos que solo pagan sobre el dinero guardado en bolsillos: el saldo suelto de una cuenta sin bolsillos
+  // (su bolsillo interno) no rinde; el de los bolsillos de una cuenta con bolsillos, sí.
+  const rinde = b => sobre === 'Todo' || !esVerdadero(b.Es_Interno);
+  const bolsillosQueRinden = bolsillos.filter(rinde);
+  const todos = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs).filter(m => m.Fecha);
+  const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillosQueRinden, movs).filter(m => m.Fecha);
+  const apertura = bolsillosQueRinden.filter(b => b.ID_Cuenta === cuenta.ID_Cuenta).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
 
-  const ultimo = propios.filter(m => m.Subtipo === 'Interes' && Number(m.Valor) > 0).map(m => String(m.Fecha)).sort().pop();
+  // El último rendimiento registrado se busca en toda la cuenta, caiga en el bolsillo que caiga.
+  const ultimo = todos.filter(m => m.Subtipo === 'Interes' && Number(m.Valor) > 0).map(m => String(m.Fecha)).sort().pop();
   const inicioMes = hoy.slice(0, 7) + '-01';
   let desde = ultimo ? sumarDias_(ultimo, 1) : inicioMes;
   const hasta = sumarDias_(hoy, -1); // el día de hoy todavía no termina
-  const resultado = { ea: ea, pago: pago, tasaDiaria: td, desde: desde, hasta: hasta, dias: 0, pendiente: 0, acumuladoMes: 0 };
+  const resultado = { ea: ea, pago: pago, base: sobre, tasaDiaria: td, desde: desde, hasta: hasta, dias: 0, pendiente: 0, acumuladoMes: 0,
+    saldoBase: redondear2_(apertura + propios.reduce((a, m) => a + (Number(m.Valor) || 0), 0)) };
   if (desde > hasta) return resultado;
   if (desde < sumarDias_(hoy, -400)) desde = sumarDias_(hoy, -400); // tope razonable
   resultado.desde = desde;

@@ -54,11 +54,11 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.cargar(...CARGA);
     assert.strictEqual(e.llamar('verificarEsquema').diferencias.some(d => d.tabla === 'Bancos'), true, 'antes de migrar hay diferencias');
     const r = e.llamar('setupDatabase');
-    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa', 'Bancos.Rendimiento_EA', 'Bancos.Rendimiento_Pago']);
+    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa', 'Bancos.Rendimiento_EA', 'Bancos.Rendimiento_Pago', 'Bancos.Rendimiento_Base']);
     assert.strictEqual(r.ok, true);
     const fila = e.hojas.Bancos.filas;
-    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Creado_En', 'Actualizado_En']);
-    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '', '', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
+    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'Creado_En', 'Actualizado_En']);
+    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '', '', '', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
     assert.strictEqual(e.llamar('setupDatabase').migradas.length, 0, 'es idempotente');
     assert.strictEqual(e.llamar('listarCatalogo', 'Bancos')[0].Divisa, 'COP');
   });

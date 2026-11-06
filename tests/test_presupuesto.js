@@ -255,26 +255,23 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(alto.deducciones[2].valor, 60000);
   });
 
-  prueba('nómina: escenarios con subsidios, comparación y vigencia de los subsidios', () => {
+  prueba('nómina: una sola nómina con subsidios y vigencia de los subsidios', () => {
     const { e } = escenario();
     const remoto = e.llamar('guardarCatalogo', 'Subsidios', { Nombre: 'Trabajo remoto', Valor: 200000, Es_Salarial: false });
     const viejo = e.llamar('guardarCatalogo', 'Subsidios', { Nombre: 'Bono viejo', Valor: 100000, Vigente_Hasta: '2020-12-31' });
     const a = e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true }, { subsidios: [remoto.ID_Subsidio, viejo.ID_Subsidio] });
-    const aumento = e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Aumento', Sueldo_Base: 4500000 }, { subsidios: [remoto.ID_Subsidio] });
+    assert.throws(e.falla('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Aumento', Sueldo_Base: 4500000 }), /Ya tienes tu nómina configurada/, 'ya no hay escenarios: es una sola nómina');
 
     const n = e.llamar('obtenerNominaMes', '2027-03');
     assert.strictEqual(n.calculo.escenario.Nombre, 'Actual');
     assert.strictEqual(n.calculo.devengos.length, 2, 'el subsidio vencido no cuenta');
     assert.strictEqual(n.calculo.totales.neto, 3127845 + 200000 - 250400);
-    assert.strictEqual(n.comparacion.length, 2);
-    assert.ok(n.comparacion[1].neto > n.comparacion[0].neto);
+    assert.strictEqual(n.comparacion, undefined, 'ya no se comparan escenarios');
 
     assert.throws(e.falla('desactivarCatalogo', 'Subsidios', remoto.ID_Subsidio), /escenario\(s\) de nómina/);
     assert.throws(e.falla('guardarCatalogo', 'Nomina_Escenarios', { ID_Nomina_Esc: a.ID_Nomina_Esc, Vigente: false }), /escenario vigente/);
     e.llamar('guardarCatalogo', 'Nomina_Escenarios', { ID_Nomina_Esc: a.ID_Nomina_Esc }, { subsidios: [] });
     assert.strictEqual(e.llamar('obtenerNominaMes', '2027-03', a.ID_Nomina_Esc).calculo.devengos.length, 1, 'quitar subsidios del escenario');
-    assert.throws(e.falla('desactivarCatalogo', 'Subsidios', remoto.ID_Subsidio), /escenario\(s\) de nómina/, 'aún lo usa el otro escenario');
-    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { ID_Nomina_Esc: aumento.ID_Nomina_Esc }, { subsidios: [] });
     assert.strictEqual(e.llamar('desactivarCatalogo', 'Subsidios', remoto.ID_Subsidio).Activo, false);
   });
 
@@ -282,7 +279,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const { e } = escenario();
     const n = e.llamar('obtenerNominaMes', '2027-03');
     assert.strictEqual(n.calculo, null);
-    assert.match(n.error, /Aún no hay escenarios de nómina/);
+    assert.match(n.error, /Aún no configuras tu nómina/);
   });
 
   prueba('nómina: registrar el pago crea el ingreso, guarda el detalle y no se repite', () => {
@@ -510,5 +507,43 @@ module.exports = function (prueba, assert, crearEntorno) {
     // Sin mes, se propone el del próximo pago (este mes si aún no se registra y no pasó el día de pago).
     const prox = e.llamar('mesProximoPagoNomina_');
     assert.ok(/^\d{4}-\d{2}$/.test(prox));
+  });
+
+  prueba('mi nómina: se guarda el sueldo, se cambia sin crear otra y los adicionales del mes entran al cálculo', () => {
+    const { e, nomina } = escenario();
+    e.llamar('guardarMiNomina', 3000000);
+    assert.strictEqual(e.llamar('listarCatalogo', 'Nomina_Escenarios').length, 1);
+    e.llamar('guardarMiNomina', 3500000);
+    const lista = e.llamar('listarCatalogo', 'Nomina_Escenarios');
+    assert.strictEqual(lista.length, 1, 'cambiar el sueldo no crea otra nómina');
+    assert.strictEqual(Number(lista[0].Sueldo_Base), 3500000);
+    assert.throws(e.falla('guardarMiNomina', 0), /sueldo/);
+
+    const base = e.llamar('obtenerNominaMes', '2027-03').calculo.totales;
+    const adic = [
+      { Tipo: 'Devengo', Concepto: 'Horas extras', Valor: 400000, Es_Salarial: true },
+      { Tipo: 'Extra', Concepto: 'Pago de cesantías', Valor: 3500000 },
+      { Tipo: 'Deduccion', Concepto: 'Descuento de la empresa', Valor: 50000 }
+    ];
+    const n = e.llamar('obtenerNominaMes', '2027-03', '', { adicionales: adic }).calculo;
+    const salud = k => n.deducciones.find(d => /Salud/.test(d.concepto)).valor;
+    assert.ok(n.devengos.some(d => d.concepto === 'Horas extras'), 'las horas extras son un ingreso');
+    assert.ok(n.extras.some(d => d.concepto === 'Pago de cesantías' && d.valor === 3500000), 'las cesantías son una prestación');
+    assert.ok(n.deducciones.some(d => d.concepto === 'Descuento de la empresa' && d.valor === 50000));
+    // Las horas extras son salariales (cotizan): salud y pensión suben; las cesantías no cotizan.
+    const sinHE = e.llamar('obtenerNominaMes', '2027-03', '', { adicionales: [adic[1]] }).calculo;
+    assert.ok(salud() > sinHE.deducciones.find(d => /Salud/.test(d.concepto)).valor);
+    assert.strictEqual(sinHE.deducciones.find(d => /Salud/.test(d.concepto)).valor, base.deducciones ? e.llamar('obtenerNominaMes', '2027-03').calculo.deducciones.find(d => /Salud/.test(d.concepto)).valor : 0, 'las cesantías no cotizan');
+    assert.ok(n.lineas.filter(l => l.adicional).length === 3);
+    // Validación: la pantalla recibe el motivo en `error`
+    const err = adicionales => e.llamar('obtenerNominaMes', '2027-03', '', { adicionales }).error;
+    assert.match(err([{ Tipo: 'Raro', Concepto: 'x', Valor: 1 }]), /tipo/i);
+    assert.match(err([{ Tipo: 'Extra', Concepto: '', Valor: 1 }]), /nombre/i);
+    assert.ok(err([{ Tipo: 'Extra', Concepto: 'x', Valor: 0 }]));
+    assert.throws(e.falla('registrarPagoNomina', hoy(), undefined, '', diaHoy(), nomina.ID_Bolsillo, { adicionales: [{ Tipo: 'Extra', Concepto: 'x', Valor: -5 }] }));
+    // Registrar el pago guarda el detalle con los adicionales
+    const r = e.llamar('registrarPagoNomina', hoy(), undefined, '', diaHoy(), nomina.ID_Bolsillo, { adicionales: adic });
+    const detalle = e.llamar('getTableData', 'Nomina_Pagos_Detalle').filter(d => d.ID_Nomina === r.idNomina).map(d => d.Concepto);
+    ['Horas extras', 'Pago de cesantías', 'Descuento de la empresa'].forEach(c => assert.ok(detalle.indexOf(c) !== -1, c + ' queda en el detalle'));
   });
 };

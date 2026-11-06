@@ -857,7 +857,9 @@ function vAjustes() {
         irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' })) +
       seccion('Presupuesto y nómina',
         irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
-        ['Escenarios', 'Nomina_Escenarios', 'Subsidios'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        irA('ajustes/Escenarios', { icono: CAT.Escenarios.icono, titulo: CAT.Escenarios.plural, final: n('Escenarios') }) +
+        irA('nomina', { icono: 'usuario', titulo: 'Mi nómina', sub: 'Tu sueldo y tus descuentos fijos' }) +
+        (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
@@ -1001,7 +1003,9 @@ const CAT = {
       { k: 'Rendimiento_EA', label: 'Rendimiento de las cuentas de ahorro (% EA)', tipo: 'porcentaje',
         ayuda: 'Opcional. La tasa efectiva anual que te da este banco en sus cuentas de ahorro, por ejemplo 9,5.' },
       { k: 'Rendimiento_Pago', label: 'El banco paga el rendimiento', tipo: 'select', defecto: 'Mensual', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
-        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] }
+        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] },
+      { k: 'Rendimiento_Base', label: 'El rendimiento se paga sobre', tipo: 'select', defecto: 'Todo', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
+        opciones: () => [['Todo', 'Todo el saldo de la cuenta'], ['Bolsillos', 'Solo el dinero en bolsillos (no el saldo suelto de una cuenta)']] }
     ]
   },
   Cuentas: {
@@ -1225,6 +1229,7 @@ const INFO_CAMPOS = {
   Bancos: {
     Rendimiento_EA: 'La tasa efectiva anual que te paga este banco en sus cuentas de ahorro. Moni la usa para estimar cuánto te rinde. Déjala vacía si no rinde.',
     Rendimiento_Pago: 'Cada día: el banco suma lo ganado a tu saldo a diario (interés compuesto). Cada mes: lo suma al cerrar el mes.',
+    Rendimiento_Base: 'Algunos bancos (por ejemplo, con "bolsillos" o "cajitas") solo pagan sobre el dinero que guardas en ellos, no sobre el saldo disponible. Elige "Solo bolsillos" y Moni ignora el saldo general de la cuenta.',
     Nombre: 'El banco o la billetera donde tienes dinero, por ejemplo Nequi, Nu o tu banco de siempre.',
     Divisa: 'La moneda en la que está el dinero de este banco. Si ahorras en dólares, crea otro banco en dólares. No se puede cambiar cuando ya tiene cuentas.'
   },
@@ -1600,7 +1605,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -2462,7 +2467,10 @@ function vNomina() {
 /** Lo que el usuario ajustó en el estimado (casillas y días), listo para mandarlo al servidor. */
 function opcionesNomina() {
   const o = App.nom.opciones || {};
-  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {} };
+  const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+  // Lo que se agrega "solo este mes" vale para el mes en que se agregó: al cambiar de mes se descarta.
+  const adicionales = o.mesAdicionales === mes ? (o.adicionales || []) : [];
+  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {}, adicionales: adicionales };
 }
 
 async function cargarNomina() {
@@ -2498,7 +2506,9 @@ function seccionNomina(titulo, lineas, clase) {
 function filaLineaNomina(l, bloqueado) {
   const dias = l.dias !== undefined && ['ordinario', 'prima', 'vacaciones'].indexOf(l.clave) !== -1
     ? '<span class="m-row-sub" style="display:flex;align-items:center;gap:var(--m-space-2)">Días <input class="m-input m-dias" type="number" inputmode="numeric" min="0" max="' + (l.clave === 'ordinario' ? 30 : 360) + '" value="' + esc(l.dias) + '" data-acc-cambio="nom-dias" data-que="' + l.clave + '" aria-label="Días de ' + esc(l.concepto) + '"' + (bloqueado ? ' disabled' : '') + '></span>' : '';
-  const quitar = l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '';
+  const quitar = l.adicional
+    ? '<button class="m-btn-texto" data-acc="nom-adic-quitar" data-id="' + esc(l.clave.slice(10)) + '" aria-label="Quitar ' + esc(l.concepto) + '">Quitar</button>'
+    : (l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '');
   return '<div class="m-row m-renglon' + (l.incluido ? '' : ' m-hecho') + '">' +
     '<label class="m-check"><input type="checkbox" data-acc-cambio="nom-incl" data-clave="' + esc(l.clave) + '"' + (l.incluido ? ' checked' : '') + (bloqueado ? ' disabled' : '') + ' aria-label="Incluir ' + esc(l.concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
     '<div class="m-row-main" style="cursor:default"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(l.concepto) + '</span>' + dias + '</span>' +
@@ -2507,23 +2517,18 @@ function filaLineaNomina(l, bloqueado) {
 
 function htmlNomina(d) {
   if (!d.calculo) {
-    return vacio('usuario', 'Aún no hay escenarios de nómina', d.error || 'Crea uno con tu sueldo base para calcular cuánto te llega cada mes.',
-      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Nomina_Escenarios">Crear un escenario</button>');
+    return vacio('usuario', d.configurada ? 'No se pudo calcular tu nómina' : 'Configura tu nómina', d.configurada ? d.error : 'Escribe tu sueldo base y Moni calcula cuánto te llega cada mes, con salud, pensión, prima y cesantías.',
+      '<button class="m-btn m-btn-primary" data-acc="nom-sueldo">' + (d.configurada ? 'Revisar mi sueldo' : 'Escribir mi sueldo') + '</button>');
   }
   const c = d.calculo;
   const bloqueado = !!d.pago; // con la nómina ya registrada, el estimado queda como se calculó
   let h = '';
-  if (d.comparacion.length > 1) {
-    h += '<div class="m-campo"><label class="m-label" for="nom-esc">Escenario</label><select class="m-input" id="nom-esc">' +
-      d.comparacion.map(e => '<option value="' + esc(e.ID_Nomina_Esc) + '"' + (e.ID_Nomina_Esc === c.escenario.ID_Nomina_Esc ? ' selected' : '') + '>' + esc(e.Nombre) + (e.Vigente ? ' (vigente)' : '') + ' — ' + dinero(e.neto) + '</option>').join('') + '</select></div>';
-  }
-
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado) · ' + esc(c.escenario.Nombre) + '</div>' +
+  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado)</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(c.totales.neto) + '</div>' +
     '<p class="m-ayuda">Devengado ' + dinero(c.totales.devengado) + ' − descuentos ' + dinero(c.totales.deducciones) + (c.totales.extras ? ' + prestaciones ' + dinero(c.totales.extras) : '') + '</p></div><div style="height:var(--m-space-4)"></div>';
 
   h += seccion('Tu sueldo',
-    fila({ titulo: 'Sueldo base', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>' }) +
+    fila({ titulo: 'Sueldo base', sub: bloqueado ? '' : 'Toca para cambiarlo', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>', chevron: !bloqueado, attrs: bloqueado ? '' : 'data-acc="nom-sueldo"' }) +
     fila({ titulo: 'Valor de un día' + '', sub: 'Sueldo y subsidios salariales entre ' + c.diasBase + ' días', final: '<span class="m-num">' + dinero(c.diaBase) + '</span>' }),
     'Marca o desmarca cada línea para ver cómo cambia lo que recibes. Los días sirven para un mes incompleto, la prima (15 = medio mes) o las vacaciones.');
   const L = g => c.lineas.filter(l => l.grupo === g);
@@ -2532,7 +2537,9 @@ function htmlNomina(d) {
     '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
     '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
-  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
+  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-adic-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar algo de este mes</button></div>' +
+    '<p class="m-ayuda" style="margin-top:calc(var(--m-space-3) * -1)">Horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa: solo para el pago de este mes.</p>' +
+    '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
 
   if (d.pago) {
     const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
@@ -2551,6 +2558,53 @@ function htmlNomina(d) {
 }
 
 /** Agregar o editar un descuento (libranza, medicina prepagada…) o un ingreso fijo (bono) del escenario. */
+/** Tu sueldo base: la primera vez crea tu nómina; después solo lo cambia. */
+async function abrirSueldoNomina() {
+  const d = App.nom.data;
+  const actual = d && d.calculo ? d.calculo.escenario.Sueldo_Base : '';
+  const campos = [{ k: 'Sueldo_Base', label: 'Sueldo base mensual', tipo: 'dinero', requerido: true, info: 'Tu sueldo antes de descuentos. Los descuentos de ley (salud, pensión) los calcula Moni; los demás los agregas como descuentos fijos.' }];
+  await abrirHoja({
+    titulo: 'Mi sueldo',
+    cuerpo: '<form novalidate data-form="sueldo-nomina">' + htmlCampo(campos[0], actual, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Sueldo_Base', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Sueldo_Base === '' || (typeof v.Sueldo_Base === 'number' && isNaN(v.Sueldo_Base)) || v.Sueldo_Base <= 0) throw new Error('Escribe tu sueldo base.');
+      const r = await api('saveMiNomina', v.Sueldo_Base, App.nom.mes || '', opcionesNomina());
+      App.nom.data = r.nomina;
+      await refrescarParcial({ tablas: ['Nomina_Escenarios'] });
+      render(); aviso('Sueldo guardado');
+    }
+  });
+}
+
+/** Algo que solo cuenta en el pago de este mes: horas extras, bono, cesantías, prima, un descuento de la empresa. */
+async function abrirAdicionalNomina() {
+  const campos = [
+    { k: 'Tipo', label: 'Es…', tipo: 'select', opciones: () => [['Devengo', 'Un ingreso (horas extras, bono, comisión)'], ['Extra', 'Una prestación (prima, cesantías)'], ['Deduccion', 'Un descuento (de la empresa)']],
+      info: 'Un ingreso suma a lo que recibes y cotiza si es parte del salario. Una prestación suma pero no cotiza. Un descuento resta.' },
+    { k: 'Concepto', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Horas extras', 'Bono', 'Comisión', 'Pago de cesantías', 'Prima', 'Descuento de la empresa'] },
+    { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true },
+    { k: 'Es_Salarial', label: 'Hace parte del salario', tipo: 'interruptor', visible: v => v.Tipo === 'Devengo', info: 'Si lo es (las horas extras sí), cuenta para salud y pensión. Un bono ocasional normalmente no lo es.' }
+  ];
+  await abrirHoja({
+    titulo: 'Agregar algo de este mes',
+    cuerpo: '<form novalidate data-form="adicional-nomina">' + campos.map(c => htmlCampo(c, c.k === 'Tipo' ? 'Devengo' : '', {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {}); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {})); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el nombre.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe el valor.');
+      const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+      await recalcularNomina(o => {
+        if (o.mesAdicionales !== mes) { o.adicionales = []; o.mesAdicionales = mes; }
+        o.adicionales = (o.adicionales || []).concat([{ Tipo: v.Tipo, Concepto: v.Concepto, Valor: v.Valor, Es_Salarial: v.Tipo === 'Devengo' && !!v.Es_Salarial }]);
+      });
+      aviso('Agregado a este mes');
+    }
+  });
+}
+
 async function abrirConceptoNomina(idConcepto) {
   const d = App.nom.data;
   if (!d || !d.calculo) return;
@@ -3217,10 +3271,11 @@ function htmlRendimientoEstimado(a) {
     return seccion('Rendimiento estimado', fila({ icono: 'pulso', titulo: 'Sin tasa de rendimiento', sub: 'Agrégala en el banco para estimar cuánto te rinde', chevron: true, attrs: 'data-acc="ir" data-ruta="ajustes/Bancos"' }));
   }
   const pct = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(e.ea * 100);
-  const porDia = a.Saldo * e.tasaDiaria;
+  const porDia = (e.saldoBase !== undefined ? e.saldoBase : a.Saldo) * e.tasaDiaria;
   return seccion('Rendimiento estimado',
     '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
       '<div><dt>Tasa</dt><dd>' + pct + ' % EA · se paga ' + (e.pago === 'Diario' ? 'cada día' : 'cada mes') + '</dd></div>' +
+      '<div><dt>Rinde sobre</dt><dd>' + (e.base === 'Bolsillos' ? 'Solo bolsillos · ' + dinero(e.saldoBase) : 'Todo el saldo') + '</dd></div>' +
       '<div><dt>Rinde por día (aprox.)</dt><dd class="m-num">' + dinero(porDia) + '</dd></div>' +
       '<div><dt>Acumulado este mes</dt><dd class="m-num m-positivo">' + dinero(e.acumuladoMes) + '</dd></div>' +
       '<div><dt><strong>Por registrar</strong></dt><dd class="m-num"><strong>' + dinero(e.pendiente) + '</strong></dd></div></dl></div>' +
@@ -4399,24 +4454,35 @@ const PASOS_ASIST = [
   { id: 'bolsillos', corto: 'Bolsillos', tabla: 'Bolsillos', uno: 'un bolsillo', otro: 'Guardar y agregar otro' },
   { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' },
   { id: 'nomina', corto: 'Nómina' },
-  { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true }
+  { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
+  { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un inmueble', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'tasa', corto: 'Dólar', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
 
 /** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
 const CAMPOS_ASIST = {
-  Bancos: ['Nombre', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'],
+  Bancos: ['Nombre', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base'],
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
-  Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo']
+  Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo'],
+  Suscripciones: ['Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta'],
+  Inmuebles: ['Nombre'],
+  Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
   bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
-  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos.' },
+  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Más → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
+  suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; Moni te recuerda cuándo se cobra.' },
+  hogar: { titulo: 'Tu hogar', sub: 'Es opcional. Agrega la casa o el apartamento cuyos servicios pagas (puedes tener varios). Después podrás guardar el código de pago de cada servicio.' },
+  servicios: { titulo: 'Servicios públicos de tu hogar', sub: 'Es opcional. Luz, agua, gas, internet… Guarda el código de pago para tenerlo a la mano. Si el valor cambia cada mes, créalo también como suscripción de tipo servicio.' },
+  tasa: { titulo: '¿Manejas dólares?', sub: 'Es opcional. Moni puede traer el dólar (TRM) de Google Finance para mostrarte cuánto equivale en pesos un saldo en dólares. Es solo informativo: tus saldos y conversiones usan lo que cobró tu banco.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas. Puedes agregar todas las que tengas.' }
 };
 
@@ -4446,6 +4512,7 @@ function pasoInicialAsist() {
 function aplicaPasoAsist(id) {
   if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
   if (id === 'ingresos') return activos('Bolsillos').length > 0; // el ingreso llega a un bolsillo
+  if (id === 'servicios') return activos('Inmuebles').length > 0; // un servicio es de un inmueble
   return true;
 }
 
@@ -4546,11 +4613,16 @@ function vPasoAsistente(id) {
       : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
         '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
-        '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-nom-nombre">Nombre</label>' + htmlInfo('Una situación de ingresos: “Actual”, “Con aumento”… Puedes crear otros después para comparar.') + '</div>' +
-        '<input class="m-input" id="asist-nom-nombre" maxlength="60" value="Actual" autocomplete="off"></div>' +
         htmlSubsidiosAsist() + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist('Nomina_Escenarios');
     if (!yaHay) continuar = 'Omitir por ahora';
+  } else if (id === 'tasa') {
+    const activa = esVerdad(cfg('Tasa_Auto'));
+    cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
+      '<div class="m-interruptor-fila"><span class="m-label-fila"><label for="asist-tasa">Traer el dólar de Google Finance</label>' + htmlInfo('Se crea una pestaña auxiliar en tu hoja (Tasas_Google) con una fórmula de Google Finance y la tasa se actualiza sola cada día. Puedes apagarlo cuando quieras en Ajustes → Divisas.') + '</span>' +
+      '<span class="m-interruptor"><input type="checkbox" role="switch" id="asist-tasa"' + (activa ? ' checked' : '') + '><i></i></span></div>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+    continuar = activa ? 'Continuar' : 'Continuar sin vincular';
   } else if (campos) {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
       campos.map(c => htmlCampo(c, valorInicialAsist(c), {})).join('') +
@@ -4637,7 +4709,7 @@ async function guardarNominaAsist(f) {
   });
   if (sueldo === '' ) { if (subs.length) throw new Error('Escribe tu sueldo base para guardar la nómina.'); return; }
   if (isNaN(sueldo) || sueldo <= 0) throw new Error('El sueldo debe ser un número mayor que cero.');
-  await api('saveNominaInicial', { Nombre: $('#asist-nom-nombre', f).value.trim() || 'Actual', Sueldo_Base: sueldo }, subs);
+  await api('saveNominaInicial', { Sueldo_Base: sueldo }, subs);
 }
 
 /** Filas de bolsillos dentro del paso de cuentas: nombre y cuánto hay hoy en cada uno. */
@@ -4754,11 +4826,14 @@ async function enviarPasoAsist(f, otro) {
       if (nombre !== cfg('Nombre_Usuario')) await api('saveConfigParam', 'Nombre_Usuario', nombre);
     } else if (paso === 'nomina') {
       await guardarNominaAsist(f);
+    } else if (paso === 'tasa') {
+      const quiere = !!($('#asist-tasa', f) && $('#asist-tasa', f).checked);
+      if (quiere !== esVerdad(cfg('Tasa_Auto'))) await api('saveTasaAuto', quiere);
     } else {
       await guardarCatalogoAsist(paso, f, otro);
     }
     // Solo se pide lo que ese paso cambió (el nombre toca un parámetro; una cuenta, sus tablas); la nómina cambia varias cosas.
-    if (paso === 'perfil') await refrescarParcial({ config: true });
+    if (paso === 'perfil' || paso === 'tasa') await refrescarParcial({ config: true });
     else if (paso === 'nomina') await refrescar();
     else await refrescarParcial({ tablas: [PASOS_ASIST.find(x => x.id === paso).tabla] });
     if (otro) {
@@ -4999,6 +5074,9 @@ const ACCIONES = {
   'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
   'registrar-nomina': () => abrirRegistrarNomina(),
   'nom-concepto-nuevo': () => abrirConceptoNomina(null),
+  'nom-sueldo': () => abrirSueldoNomina(),
+  'nom-adic-nuevo': () => abrirAdicionalNomina(),
+  'nom-adic-quitar': el => recalcularNomina(o => { o.adicionales = (o.adicionales || []).filter((x, i) => String(i) !== el.dataset.id); }),
   'nom-concepto-editar': el => abrirConceptoNomina(el.dataset.id),
   'anular-nomina': async () => {
     const ok = await confirmar({ titulo: 'Anular nómina', accion: 'Anular', mensaje: 'Se anula el ingreso de la nómina de este mes. Si ya la repartiste, esos traslados no se deshacen solos.' });
@@ -5105,7 +5183,6 @@ document.addEventListener('change', async ev => {
     return;
   }
   if (t.id === 'tar-mes') { App.tar.mes = t.value; App.tar.data = null; render(); return; }
-  if (t.id === 'nom-esc') { App.nom.idEsc = t.value; App.nom.opciones = null; App.nom.data = null; render(); return; }
   if (t.dataset.accCambio === 'anulados') {
     const st = t.dataset.vista === 'det' ? App.det : App.mov;
     st.anulados = t.checked; st.data = null;

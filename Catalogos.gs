@@ -169,9 +169,13 @@ const CATALOGOS = {
       }
       const pagoDado = item.Rendimiento_Pago !== undefined ? item.Rendimiento_Pago : actual && actual.Rendimiento_Pago;
       const pago = ea === '' || ea === 0 ? '' : opcion_(pagoDado, ['Diario', 'Mensual'], 'La forma de pago del rendimiento', 'Mensual');
+      // Sobre qué saldo rinde: todo lo de la cuenta, o solo lo que está en bolsillos (hay bancos que no pagan sobre el saldo disponible).
+      const baseDada = item.Rendimiento_Base !== undefined ? item.Rendimiento_Base : actual && actual.Rendimiento_Base;
+      const base = ea === '' || ea === 0 ? '' : opcion_(baseDada, ['Todo', 'Bolsillos'], 'Sobre qué saldo rinde', 'Todo');
       return {
         Rendimiento_EA: ea === 0 ? '' : ea,
         Rendimiento_Pago: pago,
+        Rendimiento_Base: base,
         Divisa: divisa,
         Nombre: nombre,
         Color: colorHex_(item.Color !== undefined ? item.Color : actual && actual.Color),
@@ -562,9 +566,11 @@ const CATALOGOS = {
   Nomina_Escenarios: {
     id: 'ID_Nomina_Esc', prefijo: 'nes', etiqueta: 'El escenario de nómina',
     normalizar: function (item, actual, filas) {
-      const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
+      // Ya no hay varios escenarios: es "tu nómina". Quien aún conserva más de uno puede seguir editándolos.
+      if (!actual && filas.some(estaActivo)) throw new Error('Ya tienes tu nómina configurada. Cambia el sueldo en lugar de crear otra.');
+      const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre || 'Mi nómina', 'El nombre');
       exigirNombreUnico_(filas, nombre, actual, 'ID_Nomina_Esc');
-      let vigente = actual ? esVerdadero(actual.Vigente) : false;
+      let vigente = actual ? esVerdadero(actual.Vigente) : true;
       if (item.Vigente !== undefined) vigente = esVerdadero(item.Vigente);
       if (actual && esVerdadero(actual.Vigente) && !vigente) {
         throw new Error('Debe haber un escenario vigente. Marca otro como vigente en lugar de quitarle la marca a este.');
@@ -752,7 +758,7 @@ function guardarNominaConSubsidios(esc, subsidios) {
   });
   numero_(esc.Sueldo_Base, 'El sueldo base', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const creados = lista.map(s => guardarCatalogo('Subsidios', { Nombre: s.Nombre, Valor: s.Valor, Es_Salarial: !!s.Es_Salarial }));
-  const creado = guardarCatalogo('Nomina_Escenarios', Object.assign({ Nombre: 'Actual' }, esc, { Vigente: true }), { subsidios: creados.map(c => c.ID_Subsidio) });
+  const creado = guardarCatalogo('Nomina_Escenarios', Object.assign({ Nombre: 'Mi nómina' }, esc, { Vigente: true }), { subsidios: creados.map(c => c.ID_Subsidio) });
   return { escenario: creado, subsidios: creados };
 }
 
@@ -869,8 +875,12 @@ function obtenerEstadoConfiguracion(verificacionPrevia) {
     { id: 'cuentas', titulo: 'Crea tus cuentas', hecho: cuentas.length > 0, opcional: false, pantalla: 'ajustes/Cuentas' },
     { id: 'bolsillos', titulo: 'Crea tus bolsillos con su saldo inicial', hecho: cuentas.length > 0 && (!hayCuentaConBolsillos || bolsillos.length > 0), opcional: cuentas.length > 0 && !hayCuentaConBolsillos, pantalla: 'ajustes/Bolsillos' },
     { id: 'tarjetas', titulo: 'Registra tus tarjetas de crédito', hecho: tarjetas.length > 0, opcional: true, pantalla: 'ajustes/Tarjetas' },
-    { id: 'nomina', titulo: 'Configura tu nómina', hecho: listarCatalogo('Nomina_Escenarios').length > 0, opcional: true, pantalla: 'ajustes/Nomina_Escenarios' },
-    { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' }
+    { id: 'nomina', titulo: 'Configura tu nómina', hecho: listarCatalogo('Nomina_Escenarios').length > 0, opcional: true, pantalla: 'nomina' },
+    { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' },
+    { id: 'suscripciones', titulo: 'Anota tus suscripciones y servicios', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
+    { id: 'hogar', titulo: 'Agrega tu hogar', hecho: listarCatalogo('Inmuebles').length > 0, opcional: true, pantalla: 'ajustes/Inmuebles' },
+    { id: 'servicios', titulo: 'Guarda los códigos de tus servicios públicos', hecho: listarCatalogo('Servicios_Publicos').length > 0, opcional: true, pantalla: 'ajustes/Servicios_Publicos' },
+    { id: 'tasa', titulo: 'Vincula el dólar de Google Finance', hecho: esVerdadero(config.Tasa_Auto), opcional: true, pantalla: 'ajustes/divisas' }
   ];
   const completo = pasos.filter(p => !p.opcional).every(p => p.hecho);
 

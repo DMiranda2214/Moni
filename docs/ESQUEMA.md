@@ -21,7 +21,7 @@ El script de instalación (`setupDatabase`, Fase 1) crea estas 28 tablas, una po
 **Config** — `Clave, Valor, Grupo, Tipo, Descripcion`
 Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad de nómina (por defecto `Mensual`), día de pago, SMMLV, aportes, método de tasa (`Excel`/`Exacta`), tema (`Claro`/`Oscuro`/`Automático`), color de acento, respaldos.
 
-**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago` (`Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
+**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago, Rendimiento_Base` (`Rendimiento_Base`: `Todo` o `Bolsillos`, sobre qué saldo rinde; `Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
 
 **Cuentas** — `ID_Cuenta, ID_Banco, Nombre, Tipo, Permite_Bolsillos, Fecha_Apertura, Saldo_Real, Fecha_Saldo_Real, Meta, Activo, Orden`
 - `Tipo`: `Billetera`, `Debito`, `Ahorro`, `Otra`.
@@ -88,7 +88,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 ## 3. Nómina (una vez al mes)
 
 **Subsidios** — `ID_Subsidio, Nombre, Valor, Es_Salarial, Vigente_Desde, Vigente_Hasta, Activo`
-**Nomina_Escenarios** — `ID_Nomina_Esc, Nombre, Sueldo_Base, Vigente, Activo`
+**Nomina_Escenarios** — `ID_Nomina_Esc, Nombre, Sueldo_Base, Vigente, Activo` (hoy solo hay una fila activa, "Mi nómina": la tabla se conserva para no perder los datos de quien ya tenía escenarios; la pantalla ya no los ofrece)
 **Nomina_Conceptos** — `ID_Concepto, ID_Nomina_Esc, Tipo, Concepto, Activo, Tipo_Calculo, Dias, Porcentaje, Valor_Fijo, ID_Subsidio`
 **Nomina_Pagos** — `ID_Nomina, Periodo, ID_Nomina_Esc, Estado, Devengado, Deducciones, Extras, Neto_Estimado, Neto_Real, Fecha_Pago, ID_Bolsillo_Destino, ID_Mov, Notas, Origen, Anulado`
 **Nomina_Pagos_Detalle** — `ID_Detalle, ID_Nomina, Tipo, Concepto, Valor`

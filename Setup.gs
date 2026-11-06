@@ -27,7 +27,7 @@ function tabla_(headers, anchos) {
 const SCHEMAS = {
   // ---- Configuración ----
   Config: tabla_(['Clave', 'Valor', 'Grupo', 'Tipo', 'Descripcion'], [200, 240, 110, 100, 360]),
-  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'], [170, 200, 90, 90, 70, 60, 80, 120, 130]),
+  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base'], [170, 200, 90, 90, 70, 60, 80, 120, 130, 130]),
   Cuentas: tabla_(
     ['ID_Cuenta', 'ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Fecha_Apertura', 'Saldo_Real', 'Fecha_Saldo_Real', 'Meta', 'Activo', 'Orden'],
     [170, 170, 200, 100, 130, 120, 120, 130, 110, 70, 60]),
@@ -98,7 +98,7 @@ const SCHEMAS = {
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
-  Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'] },
+  Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'], Rendimiento_Base: ['', 'Todo', 'Bolsillos'] },
   Ingresos_Recurrentes: { Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
@@ -267,7 +267,8 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Presupuesto_Mes', columna: 'ID_Tarjeta', valor: '' },
   { tabla: 'Suscripciones', columna: 'Renglon', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_EA', valor: '' },
-  { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' }
+  { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' },
+  { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' }
 ];
 
 function migrarColumnas_(ss) {

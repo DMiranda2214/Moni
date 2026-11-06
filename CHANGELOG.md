@@ -1,5 +1,10 @@
 # Cambios
 
+## Rendimientos, primeros pasos y nómina (6 nov)
+- **Rendimientos:** el pago diario o mensual sigue por banco; ahora también se elige **sobre qué saldo rinde** (todo, o solo el dinero en bolsillos, como en bancos que no pagan sobre el saldo suelto). Columna nueva `Bancos.Rendimiento_Base`, que se agrega sola al instalar.
+- **Primeros pasos:** nuevos pasos opcionales de **suscripciones**, **hogar**, **servicios públicos** y **dólar** (la persona decide si vincula la TRM de Google Finance).
+- **Nómina sin escenarios:** una sola nómina (sueldo, descuentos e ingresos fijos). Al registrar cada pago se pueden agregar conceptos solo de ese mes: horas extras, bono, pago de cesantías, prima, descuentos de la empresa. Los datos de quien ya tenía escenarios se conservan.
+
 ## Rendimiento (6 nov)
 - **Crear la hoja ya no se agota:** las 28 pestañas se preparan por partes (≈20 s por paso, con avance "n de 28" en el botón). Si se corta, *Reintentar* continúa donde quedó. Antes todo iba en una sola petición con cientos de llamadas a Google y chocaba con el tiempo límite.
 - **Menos llamadas a Google:** el libro se abre una vez por petición (antes 12–23), las columnas de texto se formatean en una llamada, y todas las tablas (no solo los catálogos) se guardan en caché en trozos y se invalidan al escribir. Cargar la app con caché pasó de ~44 lecturas de hoja a 4; guardar un nombre y recargar, de ~30 a ~10.

@@ -18,8 +18,11 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
    - **Bancos:** dónde tienes tu dinero (Nequi, Nu, tu banco…), con su rendimiento si es de ahorro.
    - **Cuentas y bolsillos:** cada cuenta y **cómo tienes repartido tu dinero** (casa, mercado, un viaje…), con lo que hay hoy en cada uno.
    - **Tarjetas de crédito** *(opcional)*: con su día de corte y de pago.
-   - **Nómina** *(opcional)*: tu sueldo, para estimar cuánto vas a recibir.
+   - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Más → Nómina**.
    - **Otros ingresos** *(opcional)*: otro trabajo, arriendo, ventas…
+   - **Suscripciones** *(opcional)*: streaming, música, internet, el celular…
+   - **Hogar y servicios** *(opcional)*: tu casa o apartamento y el código de pago de luz, agua, gas…
+   - **Dólar** *(opcional)*: tú decides si Moni trae la TRM de Google Finance (solo informativa).
 5. **Listo.** Desde **Inicio** ya puedes registrar tu primer gasto.
 
 > Tu dinero ya está repartido de alguna forma: no tienes que cambiarlo. Moni parte de lo que hay hoy y lo sigue a medida que registras movimientos.

@@ -622,6 +622,29 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(api.rendimientoEstimado.pago, 'Mensual');
   });
 
+  prueba('rendimiento estimado: si el banco solo paga sobre bolsillos, el saldo general no rinde', () => {
+    const e2 = E();
+    const banco = e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Digital', Rendimiento_EA: 0.1, Rendimiento_Pago: 'Mensual', Rendimiento_Base: 'Bolsillos' });
+    assert.strictEqual(banco.Rendimiento_Base, 'Bolsillos');
+    assert.strictEqual(e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Otro', Rendimiento_EA: 0.1 }).Rendimiento_Base, 'Todo', 'por defecto rinde todo');
+    assert.strictEqual(e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Sin' }).Rendimiento_Base, '', 'sin tasa no hay base');
+    assert.throws(e2.falla('guardarCatalogo', 'Bancos', { Nombre: 'Z', Rendimiento_EA: 0.1, Rendimiento_Base: 'Nada' }), /Sobre qué saldo/);
+    const suelta = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Suelta', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 500000 });
+    const conBols = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Con bolsillos', Tipo: 'Ahorro', Permite_Bolsillos: true });
+    e2.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: conBols.ID_Cuenta, Nombre: 'Meta', Rol: 'Fondo', Saldo_Apertura: 1000000 });
+    const est = (cta, b, hoy) => e2.llamar('estimarRendimiento_', cta, b, e2.llamar('getTableData', 'Bolsillos'), e2.llamar('getTableData', 'Movimientos'), hoy);
+    const td = Math.pow(1.1, 1 / 365) - 1;
+    const sin = est(suelta, banco, '2027-03-11');
+    assert.strictEqual(sin.base, 'Bolsillos');
+    assert.strictEqual(sin.saldoBase, 0, 'el saldo suelto de una cuenta sin bolsillos no rinde');
+    assert.strictEqual(sin.pendiente, 0);
+    const con = est(conBols, banco, '2027-03-11');
+    assert.strictEqual(con.saldoBase, 1000000);
+    assert.strictEqual(con.pendiente, Math.round(1000000 * td * 10 * 100) / 100);
+    const todo = est(suelta, Object.assign({}, banco, { Rendimiento_Base: 'Todo' }), '2027-03-11');
+    assert.strictEqual(todo.saldoBase, 500000, 'con "todo", ese mismo saldo sí rinde');
+  });
+
   // ============================================================ ingresos recurrentes
   prueba('ingresos recurrentes: concepto, monto y cuenta; recibir registra el ingreso y avanza el cobro; se deshace', () => {
     const { e, casa, saldo } = escenario();

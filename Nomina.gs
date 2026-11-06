@@ -50,7 +50,9 @@ function interesCesantiasTramo_(sueldo, dias, tasa) {
  * @param {number} sueldo sueldo base del escenario
  * @param {Array} subsidios [{ Nombre, Valor, Es_Salarial }]
  * @param {string} periodo AAAA-MM
- * @param {Object} [opc] { dias, diasPrima, diasVacaciones, incluir: { clave: bool }, otros: [{ ID, Tipo, Concepto, Valor, Es_Salarial }] }
+ * @param {Object} [opc] { dias, diasPrima, diasVacaciones, incluir: { clave: bool }, otros: [{ ID, Tipo: Devengo|Deduccion|Extra, Concepto, Valor, Es_Salarial, Adicional }] }
+ *   Los "otros" son los conceptos fijos de la nómina y los adicionales del mes (horas extras, un bono, el pago de cesantías,
+ *   un descuento de la empresa…). Un Extra es una prestación: suma al neto pero no cotiza.
  */
 function calcularNomina_(p, sueldo, subsidios, periodo, opc) {
   const o = opc || {};
@@ -82,8 +84,14 @@ function calcularNomina_(p, sueldo, subsidios, periodo, opc) {
     const v = Number(x.Valor) || 0;
     if (v <= 0) return;
     const sal = esVerdadero(x.Es_Salarial), clave = 'otro:' + x.ID;
-    agregar(clave, 'devengo', x.Concepto, v, true, { esSalarial: sal, propio: true });
+    agregar(clave, 'devengo', x.Concepto, v, true, { esSalarial: sal, propio: true, adicional: !!x.Adicional });
     if (sal && dec(clave, true)) salarialSubs += v;
+  });
+
+  // Prestaciones adicionales del mes (por ejemplo el pago de cesantías): suman al neto, no cotizan.
+  (o.otros || []).filter(x => x.Tipo === 'Extra').forEach(x => {
+    const v = Number(x.Valor) || 0;
+    if (v > 0) agregar('otro:' + x.ID, 'extra', x.Concepto, v, true, { propio: true, adicional: !!x.Adicional });
   });
 
   // Prima y vacaciones: días × día base (el día base incluye los subsidios salariales)
@@ -110,7 +118,7 @@ function calcularNomina_(p, sueldo, subsidios, periodo, opc) {
   if (ibc >= p.fspUmbral * p.smmlv) deduccion('fsp', 'Fondo de Solidaridad Pensional (1 %)', redondearPila_(ibc * 0.01, p.redondeo), true);
   (o.otros || []).filter(x => x.Tipo === 'Deduccion').forEach(x => {
     const v = Number(x.Valor) || 0;
-    if (v > 0) agregar('otro:' + x.ID, 'deduccion', x.Concepto, v, true, { propio: true });
+    if (v > 0) agregar('otro:' + x.ID, 'deduccion', x.Concepto, v, true, { propio: true, adicional: !!x.Adicional });
   });
 
   const activos = g => lineas.filter(l => l.grupo === g && l.incluido);
@@ -127,10 +135,13 @@ function calcularNomina_(p, sueldo, subsidios, periodo, opc) {
   };
 }
 
-/** Escenario de nómina elegido o, si no se indica, el vigente. */
+/**
+ * La nómina de la persona. Por dentro sigue siendo un "escenario" (así se conservan los datos de quien ya tenía uno),
+ * pero ahora solo hay uno: el vigente. `idEsc` solo se respeta si se pide uno concreto.
+ */
 function escenarioNomina_(idEsc) {
   const todos = leer_('Nomina_Escenarios').filter(e => estaActivo(e));
-  if (!todos.length) throw new Error('Aún no hay escenarios de nómina. Crea uno en Ajustes → Nómina.');
+  if (!todos.length) throw new Error('Aún no configuras tu nómina. Escribe tu sueldo en Más → Nómina.');
   const esc = idEsc ? todos.find(e => e.ID_Nomina_Esc === idEsc) : (todos.find(e => esVerdadero(e.Vigente)) || todos[0]);
   if (!esc) throw new Error('El escenario de nómina no existe o está desactivado.');
   return esc;
@@ -142,6 +153,25 @@ function conceptosFijosNomina_(idEsc) {
     .map(c => ({ ID: c.ID_Concepto, Tipo: c.Tipo, Concepto: c.Concepto, Valor: Number(c.Valor_Fijo) || 0, Es_Salarial: c.Tipo_Calculo === 'Fijo_Salarial' }));
 }
 
+/**
+ * Lo que la persona agrega solo para el pago de un mes (no se guarda como fijo): horas extras, un bono, la prima,
+ * el pago de cesantías, un descuento de la empresa…  [{ Tipo: Devengo|Deduccion|Extra, Concepto, Valor, Es_Salarial }]
+ */
+function adicionalesNomina_(lista) {
+  if (lista === undefined || lista === null || lista === '') return [];
+  if (!Array.isArray(lista)) throw new Error('Los conceptos adicionales no son válidos.');
+  if (lista.length > 30) throw new Error('Son demasiados conceptos adicionales (máximo 30).');
+  return lista.map((x, i) => {
+    const tipo = opcion_(x && x.Tipo, ['Devengo', 'Deduccion', 'Extra'], 'El tipo del concepto ' + (i + 1));
+    return {
+      ID: 'adic-' + i, Adicional: true, Tipo: tipo,
+      Concepto: textoRequerido_(x.Concepto, 'El nombre del concepto ' + (i + 1)).slice(0, 80),
+      Valor: numero_(x.Valor, 'El valor de "' + texto_(x.Concepto) + '"', { requerido: true, min: 0.01, max: VALOR_MAXIMO }),
+      Es_Salarial: tipo === 'Devengo' && esVerdadero(x.Es_Salarial)
+    };
+  });
+}
+
 /** Cálculo de un escenario para un mes, leyendo sus subsidios vigentes. */
 function calcularNominaEscenario_(esc, periodo, opciones) {
   const subsidios = leer_('Subsidios').filter(s => estaActivo(s));
@@ -149,7 +179,7 @@ function calcularNominaEscenario_(esc, periodo, opciones) {
   const hoy = periodo + '-28'; // un día cualquiera del mes para respetar la vigencia
   const aplicables = subsidios.filter(s => ids.indexOf(s.ID_Subsidio) !== -1 &&
     (!s.Vigente_Desde || s.Vigente_Desde <= hoy) && (!s.Vigente_Hasta || s.Vigente_Hasta >= periodo + '-01'));
-  const opc = Object.assign({}, opciones || {}, { otros: conceptosFijosNomina_(esc.ID_Nomina_Esc) });
+  const opc = Object.assign({}, opciones || {}, { otros: conceptosFijosNomina_(esc.ID_Nomina_Esc).concat(adicionalesNomina_(opciones && opciones.adicionales)) });
   const calculo = calcularNomina_(parametrosNomina_(), Number(esc.Sueldo_Base) || 0, aplicables, periodo, opc);
   calculo.escenario = { ID_Nomina_Esc: esc.ID_Nomina_Esc, Nombre: esc.Nombre, Sueldo_Base: Number(esc.Sueldo_Base) || 0, Vigente: esVerdadero(esc.Vigente) };
   return calculo;
@@ -174,19 +204,13 @@ function mesProximoPagoNomina_() {
  */
 function obtenerNominaMes(periodo, idEsc, opciones) {
   const p = mesValido_(periodo || mesProximoPagoNomina_());
-  const escenarios = leer_('Nomina_Escenarios').filter(e => estaActivo(e));
   const pago = leer_('Nomina_Pagos').find(n => n.Periodo === p && !esVerdadero(n.Anulado));
 
   let calculo = null, error = '';
   try { calculo = calcularNominaEscenario_(escenarioNomina_(idEsc), p, opciones); } catch (e) { error = e.message; }
 
-  const comparacion = escenarios.map(e => {
-    const c = calcularNominaEscenario_(e, p);
-    return { ID_Nomina_Esc: e.ID_Nomina_Esc, Nombre: e.Nombre, Vigente: esVerdadero(e.Vigente), Sueldo_Base: Number(e.Sueldo_Base) || 0, devengado: c.totales.devengado, deducciones: c.totales.deducciones, extras: c.totales.extras, neto: c.totales.neto };
-  });
-
   return {
-    periodo: p, calculo: calculo, error: error, comparacion: comparacion,
+    periodo: p, calculo: calculo, error: error, configurada: leer_('Nomina_Escenarios').some(estaActivo),
     conceptos: calculo ? conceptosFijosNomina_(calculo.escenario.ID_Nomina_Esc) : [],
     pago: pago ? { ID_Nomina: pago.ID_Nomina, Estado: pago.Estado, Neto_Estimado: Number(pago.Neto_Estimado) || 0, Neto_Real: Number(pago.Neto_Real) || 0, Fecha_Pago: pago.Fecha_Pago, ID_Bolsillo_Destino: pago.ID_Bolsillo_Destino, ID_Mov: pago.ID_Mov } : null
   };
@@ -274,4 +298,15 @@ function quitarConceptoNomina(idConcepto) {
   if (!c) throw new Error('El concepto no existe.');
   updateRow('Nomina_Conceptos', c._rowIndex, { Activo: false });
   return { ID_Nomina_Esc: c.ID_Nomina_Esc };
+}
+
+/**
+ * Tu sueldo base: crea tu nómina la primera vez y después solo cambia el sueldo (los descuentos e ingresos fijos se
+ * conservan). Es lo que reemplaza a los "escenarios" de nómina.
+ */
+function guardarMiNomina(sueldo) {
+  const valor = numero_(sueldo, 'El sueldo base', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  const actual = leer_('Nomina_Escenarios').filter(estaActivo).find(e => esVerdadero(e.Vigente)) || leer_('Nomina_Escenarios').find(estaActivo);
+  if (actual) return guardarCatalogo('Nomina_Escenarios', { ID_Nomina_Esc: actual.ID_Nomina_Esc, Sueldo_Base: valor });
+  return guardarCatalogo('Nomina_Escenarios', { Nombre: 'Mi nómina', Sueldo_Base: valor, Vigente: true });
 }
