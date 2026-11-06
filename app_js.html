@@ -241,6 +241,8 @@ const cat = tabla => (App.boot && App.boot.catalogos && App.boot.catalogos[tabla
 const activos = tabla => cat(tabla).filter(f => esVerdad(f.Activo) || f.Activo === '' || f.Activo === undefined);
 const esVerdad = v => v === true || String(v).toUpperCase() === 'TRUE';
 const porId = (tabla, idCol, id) => cat(tabla).find(f => f[idCol] === id);
+/** ¿Esta versión permite datos de demostración? Solo el entorno de desarrollo. En producción no hay nada de demo. */
+const demoOn = () => !!(App.boot && App.boot.demoHabilitado);
 const cfg = clave => (App.boot && App.boot.config && App.boot.config[clave]) || '';
 
 // Divisas: se elige en el banco; sus cuentas y bolsillos la heredan.
@@ -405,7 +407,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', cuenta: 'Mi cuenta', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -456,6 +458,8 @@ function render(enfocar) {
 
 function pantalla(ruta) {
   if (!App.boot) return { titulo: 'Moni', html: '<div class="m-cargando">Cargando…</div>', ocultarTitulo: true };
+  // Varias personas: antes de nada, cada una necesita su propia hoja.
+  if (App.boot.sinHoja) return vCrearHoja();
   if (!App.boot.instalado && ruta !== 'mas' && ruta.indexOf('ajustes') !== 0) return vInstalar();
 
   const partes = ruta.split('/');
@@ -485,6 +489,7 @@ function pantalla(ruta) {
       if (partes[1] === 'plantilla') return vPlantilla();
       if (partes[1] === 'respaldos') return vRespaldos();
       if (partes[1] === 'arranque') return vArranque();
+      if (partes[1] === 'cuenta') return vCuenta();
       if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'registro') return vRegistro();
       if (partes[1] === 'divisas') return vDivisas();
@@ -534,6 +539,60 @@ function vErrorCarga() {
   };
 }
 
+/** Primera vez en la versión para varias personas: cada una guarda sus finanzas en su propia hoja de Google. */
+function vCrearHoja() {
+  const c = App.boot.cuenta || {};
+  const dato = (icono, titulo, sub) => '<div class="m-row"><span class="m-row-icono">' + ico(icono, 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(titulo) + '</span><span class="m-row-sub" style="display:block;white-space:normal">' + esc(sub) + '</span></span></div>';
+  return {
+    titulo: 'Bienvenida', ocultarTitulo: true, asistente: true,
+    html: '<div class="m-asist m-asist-centro">' +
+      '<div class="m-asist-hero" aria-hidden="true">' + ico('capas') + '</div>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">Te damos la bienvenida a Moni</h1>' +
+      '<p class="m-subtitulo">Moni guarda tus finanzas en una hoja de cálculo de <strong>tu propio Google Drive</strong>. Es solo tuya.</p>' +
+      '<div class="m-group m-asist-lista">' +
+        dato('usuario', 'Tus datos son tuyos', 'Nadie más ve tu hoja, tampoco quien administra la aplicación.') +
+        dato('capas', 'Se crea en tu Drive', 'Puedes abrirla, copiarla o borrarla cuando quieras.') +
+        dato('check', 'Se actualiza sola', 'Cuando Moni mejora, tu hoja se pone al día sin perder nada.') + '</div>' +
+      '<div class="m-error-form" id="hoja-error" role="alert" hidden></div>' +
+      '<div class="m-asist-acciones">' +
+        '<button type="button" class="m-btn m-btn-primary" data-acc="crear-hoja">Crear mi hoja</button>' +
+        '<button type="button" class="m-btn m-btn-secondary" data-acc="vincular-hoja">Ya tengo una hoja de Moni</button></div>' +
+      (c.correo ? '<p class="m-ayuda">Entraste como ' + esc(c.correo) + '. La primera vez, Google te pedirá permiso para crear la hoja en tu Drive.</p>' : '') + '</div>'
+  };
+}
+
+/** Ajustes → Mi cuenta (solo en la versión para varias personas): de quién es la hoja y cómo cambiarla. */
+function vCuenta() {
+  const c = App.boot.cuenta || {};
+  const filas = fila({ icono: 'usuario', titulo: 'Cuenta de Google', sub: esc(c.correo || 'Sin identificar') }) +
+    (c.urlHoja ? '<a class="m-row" style="text-decoration:none;color:inherit" href="' + esc(c.urlHoja) + '" target="_blank" rel="noopener noreferrer"><span class="m-row-icono">' + ico('capas', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">Abrir mi hoja</span><span class="m-row-sub" style="display:block">' + esc(c.nombreHoja || '') + '</span></span>' + ico('der', 'm-icon-sm m-chevron') + '</a>' : '');
+  return {
+    titulo: 'Mi cuenta',
+    html: seccion('Tu hoja', filas, 'Tus finanzas viven en esta hoja de tu Drive. Solo tú (y quien tú invites) puede verla.') +
+      seccion('Cambiar de hoja', fila({ icono: 'capas', titulo: 'Usar otra hoja', sub: 'Suelta esta hoja (no se borra) y elige otra', chevron: true, attrs: 'data-acc="desvincular-hoja"' }),
+        'Sirve para usar una hoja compartida (por ejemplo, la de tu pareja) o empezar con otra. Apaga las copias automáticas y los recordatorios de la hoja actual.')
+  };
+}
+
+/** Pide el enlace de una hoja de Moni que ya se tiene y la vincula. */
+async function abrirVincularHoja() {
+  await abrirHoja({
+    titulo: 'Usar una hoja que ya tengo',
+    cuerpo: '<form novalidate data-form="vincular-hoja"><p class="m-hoja-mensaje">Pega el enlace de tu hoja de Moni (el de la barra del navegador). Necesitas permiso de edición sobre ella.</p>' +
+      '<div class="m-campo"><label class="m-label" for="f-enlace">Enlace de la hoja</label><input class="m-input" id="f-enlace" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…"></div>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    der: 'Usar',
+    alAbrir: raiz => { const i = $('#f-enlace', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const enlace = $('#f-enlace', raiz).value.trim();
+      if (!enlace) throw new Error('Pega el enlace de tu hoja.');
+      await api('linkMySheet', enlace);
+      await refrescar(); App.pila = ['inicio']; render(true);
+      aviso('Hoja vinculada');
+    }
+  });
+}
+
 function vInstalar() {
   return {
     titulo: 'Moni', ocultarTitulo: true,
@@ -563,7 +622,7 @@ async function refrescarProximos() {
 }
 
 function bannerDemo() {
-  if (!esVerdad(cfg('Datos_Demo'))) return '';
+  if (!demoOn() || !esVerdad(cfg('Datos_Demo'))) return '';
   return '<div class="m-banner" role="note">' + ico('prueba') + '<span>Estás viendo datos de demostración.</span>' +
     '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/demo">Gestionar</button></div>';
 }
@@ -593,7 +652,8 @@ function vInicio() {
       '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
   }
 
-  if (estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
+  // El arranque (pasar de la prueba al uso real) solo existe donde hay datos de prueba.
+  if (demoOn() && estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
     html += '<div class="m-banner" role="note">' + ico('check') + '<span>Falta cargar tus saldos reales y empezar.</span><button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/arranque">Arranque</button></div>';
   }
 
@@ -766,8 +826,12 @@ function vAjustes() {
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
-        irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
-        irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
+        (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
+        // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
+        (demoOn()
+          ? irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
+            irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' })
+          : '') +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
         irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
@@ -815,7 +879,12 @@ function vApariencia() {
   };
 }
 
+function vNoDisponible(titulo) {
+  return { titulo: titulo, html: vacio('alerta', 'No disponible en esta versión', 'Esta función solo existe en el entorno de pruebas de Moni.') };
+}
+
 function vDemo() {
+  if (!demoOn()) return vNoDisponible('Datos de demostración');
   const demo = esVerdad(cfg('Datos_Demo'));
   const hayReales = ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].some(t => cat(t).some(f => !String(f['ID_' + t.slice(0, -1)] || '').startsWith('demo-')));
   const iniciada = esVerdad(cfg('Arranque_Hecho'));
@@ -2333,10 +2402,18 @@ function vPlantilla() {
 
 // ---------- Nómina ----------
 
+/** El salario mínimo se actualiza cada enero: si el guardado es de un año anterior, se avisa (afecta al Fondo de Solidaridad). */
+function avisoSmmlv() {
+  const anio = Number(App.boot.hoy.slice(0, 4)), guardado = Number(cfg('SMMLV_Anio'));
+  if (!guardado || guardado >= anio) return '';
+  return '<div class="m-banner" role="note">' + ico('alerta') + '<span>El salario mínimo guardado es el de ' + guardado + '. Actualízalo al de ' + anio + ' para que el cálculo de tu nómina sea correcto.</span>' +
+    '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/parametros">Actualizar</button></div>';
+}
+
 function vNomina() {
   const n = App.nom;
   const mesMostrado = n.mes || (n.data && n.data.periodo) || App.boot.hoy.slice(0, 7);
-  let html = bannerDemo() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
+  let html = bannerDemo() + avisoSmmlv() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
   if (n.error) html += bloqueError(n.error, 'recargar-nom');
   else if (!n.data) html += esqueleto(5);
   else html += htmlNomina(n.data);
@@ -2532,7 +2609,7 @@ function vParametros() {
   };
   return {
     titulo: 'Parámetros de nómina',
-    html: '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + PARAMETROS_NOMINA.map(campo).join('') +
+    html: avisoSmmlv() + '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + PARAMETROS_NOMINA.map(campo).join('') +
       '<div id="param-error" class="m-error-form" role="alert" hidden></div><button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>'
   };
 }
@@ -3328,6 +3405,7 @@ function vRespaldos() {
 // ---------- Arranque y guía (Fase 6) ----------
 
 function vArranque() {
+  if (!demoOn()) return vNoDisponible('Arranque');
   const a = App.arr;
   let html = bannerDemo();
   if (a.error) html += bloqueError(a.error, 'recargar-arr');
@@ -3416,7 +3494,7 @@ function vGuia() {
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
         paso('Deshacer un pago', 'Los pagos de extractos y de cuotas se anulan desde su detalle; todo vuelve a como estaba.') +
         paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.')) +
-      seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' }))
+      (demoOn() ? seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' })) : '')
   };
 }
 
@@ -4404,7 +4482,7 @@ function vBienvenida() {
         dato('tarjetas', 'Tus tarjetas', 'Opcional') + '</div>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-empezar">Empezar</button>' +
-        '<button type="button" class="m-btn m-btn-secondary" data-acc="sembrar-demo">Explorar primero con datos de ejemplo</button>' +
+        (demoOn() ? '<button type="button" class="m-btn m-btn-secondary" data-acc="sembrar-demo">Explorar primero con datos de ejemplo</button>' : '') +
         '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Ahora no</button></div></div>'
   };
 }
@@ -4583,7 +4661,7 @@ function vFinAsistente() {
       '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
         dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) +
         dato('Nómina', activos('Nomina_Escenarios').length ? 'Lista' : '—') + dato('Otros ingresos', listaAsist('Ingresos_Recurrentes').length) + '</div>' +
-      '<p class="m-ayuda" style="text-align:left">Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.</p>' +
+      '<p class="m-ayuda" style="text-align:left">' + (demoOn() ? 'Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.' : 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.') + '</p>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button></div></div></div>'
@@ -4762,6 +4840,19 @@ const ACCIONES = {
   'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
   'asist-otro': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, true); },
   'asist-tarjeta': () => abrirFormulario('Tarjetas'),
+  'crear-hoja': async el => {
+    const caja = $('#hoja-error'); if (caja) caja.hidden = true;
+    el.disabled = true; el.textContent = 'Creando tu hoja…';
+    try { await api('createMySheet'); await refrescar(); App.pila = ['inicio']; render(true); }
+    catch (e) { el.disabled = false; el.textContent = 'Crear mi hoja'; if (caja) { caja.textContent = e.message; caja.hidden = false; } else aviso(e.message, true); }
+  },
+  'vincular-hoja': () => abrirVincularHoja(),
+  'desvincular-hoja': async () => {
+    const ok = await confirmar({ titulo: 'Usar otra hoja', accion: 'Soltar esta hoja', mensaje: 'La hoja actual no se borra: sigue en tu Drive. Moni dejará de usarla y apagará sus copias automáticas y recordatorios. Después podrás crear otra o vincular una existente.' });
+    if (!ok) return;
+    try { await api('unlinkMySheet'); await refrescar(); App.pila = ['inicio']; render(true); }
+    catch (e) { aviso(e.message, true); }
+  },
   'asist-sub-mas': () => {
     const caja = $('#asist-subs-filas'); if (!caja) return;
     caja.insertAdjacentHTML('beforeend', htmlFilaSubsidioAsist());

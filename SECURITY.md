@@ -3,6 +3,9 @@
 ## Dónde están los datos
 Todo vive en **un Google Sheet de la cuenta de la persona usuaria** y en su Google Drive (respaldos). Moni no envía datos a ningún servicio externo.
 
+## Varias personas
+En el modo multiusuario ([ver](docs/MULTIUSUARIO.md)) cada persona tiene su propia hoja en su Drive, y su caché, bloqueo y activadores son suyos. Quien administra la app **no puede ver** esas hojas. Las credenciales de `clasp` (`~/.clasprc.json`) son de tu cuenta de Google y se quedan en tu computador ([ver](docs/DESPLIEGUE.md)).
+
 ## Quién puede entrar
 - La web app se despliega con *"Ejecutar como: el usuario que accede"*. Cada persona usa **sus propios permisos**: quien no tenga acceso de edición al Sheet no puede leer ni escribir nada.
 - Capa extra opcional: en el editor de Apps Script → Configuración del proyecto → Propiedades de la secuencia de comandos, crea `USUARIOS_PERMITIDOS` con los correos autorizados separados por coma (por ejemplo `tucorreo@gmail.com`). Si no existe, no se restringe.

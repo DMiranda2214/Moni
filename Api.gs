@@ -50,7 +50,15 @@ function exigirCatalogo_(tabla) {
  */
 function getBootstrap() {
   return responder_(function () {
-    const verificacion = verificarEsquema(undefined, { usarCache: true });
+    // Varias personas: sin hoja propia todavía, solo se ofrece crearla o vincularla.
+    if (modoMultiusuario_() && !idHojaUsuario_()) {
+      return { instalado: false, sinHoja: true, cuenta: estadoMiCuenta() };
+    }
+    let verificacion = verificarEsquema(undefined, { usarCache: true });
+    // Varias personas: si una versión nueva trae tablas o columnas, la hoja se actualiza sola (sin borrar nada).
+    if (!verificacion.listo && modoMultiusuario_()) {
+      verificacion = setupDatabase().ok ? verificarEsquema() : verificacion;
+    }
     if (!verificacion.listo) {
       return { instalado: false, faltantes: verificacion.faltantes, diferencias: verificacion.diferencias };
     }
@@ -79,6 +87,8 @@ function getBootstrap() {
       ppto: (function () { const p = obtenerPresupuestoMes(mesActual); return { mes: p.mes, existe: p.existe, totales: p.totales }; })(),
       proximos: proximosPagos_(),
       porRecibir: proximosIngresos_(),
+      cuenta: estadoMiCuenta(),
+      demoHabilitado: demoHabilitado_(),
       enums: ENUMS,
       hoy: hoyIso_()
     };
@@ -608,7 +618,7 @@ function saveConfigParams(mapa) {
 
 function resetConfigParam(clave) {
   return responder_(function () {
-    const porDefecto = DEFAULT_CONFIG.find(item => item[0] === clave);
+    const porDefecto = configInicial_().find(item => item[0] === clave);
     if (!porDefecto) throw new Error('No hay valor predeterminado para "' + clave + '".');
     updateRowById('Config', 'Clave', clave, { Valor: porDefecto[1] });
     return { clave: clave, valor: porDefecto[1] };
@@ -709,3 +719,9 @@ function skipIngreso(id) {
     return Object.assign({ ingresos: obtenerIngresosRecurrentes() }, r);
   });
 }
+
+// ---- Mi cuenta (varias personas) ----
+function getMyAccount() { return responder_(function () { return estadoMiCuenta(); }); }
+function createMySheet() { return responder_(function () { return crearMiHoja(); }); }
+function linkMySheet(enlace) { return responder_(function () { return vincularMiHoja(enlace); }); }
+function unlinkMySheet() { return responder_(function () { return desvincularMiHoja(); }); }

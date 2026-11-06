@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Antes de cada `git push`: sintaxis, pruebas y contraste. Si algo falla, no se sube.
+# Se activa una vez por copia del repositorio con:  npm run hooks
+echo "Verificando antes de subir…"
+npm run --silent verificar || { echo "Hay pruebas que fallan: no se sube. Corrígelas o usa 'git push --no-verify' si es a propósito." >&2; exit 1; }

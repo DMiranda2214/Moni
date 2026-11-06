@@ -39,7 +39,7 @@ function crearRespaldo() {
   const carpeta = carpetaRespaldos_();
   const sello = Utilities.formatDate(new Date(), 'America/Bogota', 'yyyyMMdd_HHmmss');
   const copia = DriveApp.getFileById(ss.getId()).makeCopy(PREFIJO_RESPALDO + sello, carpeta);
-  const props = PropertiesService.getScriptProperties();
+  const props = propiedades_();
   props.setProperty('ULTIMO_RESPALDO_MS', String(Date.now()));
   props.setProperty('ULTIMO_RESPALDO', ahoraIso_());
   const eliminados = limpiarRespaldosViejos_(carpeta, numeroConfig_('Respaldo_Copias', 8));
@@ -53,7 +53,7 @@ function respaldoAutomatico() {
 
 function respaldoAutomatico_() {
   const dias = numeroConfig_('Respaldo_Frecuencia_Dias', 7);
-  const ultimo = Number(PropertiesService.getScriptProperties().getProperty('ULTIMO_RESPALDO_MS')) || 0;
+  const ultimo = Number(propiedades_().getProperty('ULTIMO_RESPALDO_MS')) || 0;
   if (ultimo && Date.now() - ultimo < dias * 86400000 - 3600000) return { omitido: true };
   return crearRespaldo();
 }
@@ -70,7 +70,7 @@ function configurarRespaldoAutomatico(activar) {
 }
 
 function estadoRespaldos() {
-  const props = PropertiesService.getScriptProperties();
+  const props = propiedades_();
   let copias = 0;
   try {
     const it = carpetaRespaldos_().getFiles();

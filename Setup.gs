@@ -228,7 +228,7 @@ function ahoraIso_() {
 function verificarEsquema(spreadsheet, opciones) {
   // Verificar son 26 lecturas de hoja. Con usarCache, un resultado correcto se recuerda 6 horas;
   // setupDatabase lo olvida. Solo se guardan los resultados "listo", nunca los fallos.
-  const cache = CacheService.getScriptCache();
+  const cache = cache_();
   if (opciones && opciones.usarCache && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
     return { faltantes: [], diferencias: [], listo: true, desdeCache: true };
   }
@@ -343,7 +343,7 @@ function setupDatabase(spreadsheet) {
   sembrarPorDefecto_(ss);
   completarConfig_(ss);
   invalidateCache();
-  CacheService.getScriptCache().remove('ESQUEMA_OK');
+  cache_().remove('ESQUEMA_OK');
 
   const verificacion = verificarEsquema(ss);
   return {
@@ -399,7 +399,7 @@ function completarConfig_(ss) {
   if (!sheet || sheet.getLastRow() < 2) return;
   const claves = {};
   sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().forEach(r => { claves[String(r[0]).trim()] = true; });
-  const faltan = DEFAULT_CONFIG.filter(c => !claves[c[0]]);
+  const faltan = configInicial_().filter(c => !claves[c[0]]);
   if (!faltan.length) return;
   const ahora = ahoraIso_();
   const filas = faltan.map(f => f.concat([ahora, ahora]));
@@ -408,6 +408,12 @@ function completarConfig_(ss) {
 }
 
 /** Siembra Config, Categorías y el escenario base cuando esas tablas están vacías. */
+/** Parámetros iniciales: el año activo es el actual (no uno fijo), para que cualquier persona empiece bien en cualquier fecha. */
+function configInicial_() {
+  const anio = String(Number(hoyIso_().slice(0, 4)));
+  return DEFAULT_CONFIG.map(c => c[0] === 'Anio_Activo' ? [c[0], anio].concat(c.slice(2)) : c);
+}
+
 function sembrarPorDefecto_(ss) {
   const ahora = ahoraIso_();
   const sembrar = (nombre, filas) => {
@@ -416,7 +422,7 @@ function sembrarPorDefecto_(ss) {
     const conAuditoria = filas.map(f => f.concat([ahora, ahora]));
     sheet.getRange(2, 1, conAuditoria.length, conAuditoria[0].length).setValues(conAuditoria);
   };
-  sembrar('Config', DEFAULT_CONFIG);
+  sembrar('Config', configInicial_());
   sembrar('Categorias', DEFAULT_CATEGORIAS);
   sembrar('Escenarios', DEFAULT_ESCENARIOS);
 }
@@ -431,7 +437,7 @@ function sembrarPorDefecto_(ss) {
 function vincularHojaMoni(idHoja) {
   const ss = idHoja ? SpreadsheetApp.openById(idHoja) : SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('No hay una hoja a la que vincular. Abre el proyecto desde la hoja (Extensiones → Apps Script) o pasa su ID.');
-  PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', ss.getId());
+  propiedades_().setProperty('SPREADSHEET_ID', ss.getId());
   Logger.log('Vinculado a: ' + ss.getName() + ' — ' + ss.getUrl());
   return { ok: true, nombre: ss.getName(), url: ss.getUrl() };
 }

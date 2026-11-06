@@ -3,7 +3,7 @@
 Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Reemplaza un Excel de finanzas personales con las mismas reglas (bolsillos, presupuesto, tarjetas, créditos de autopago, nómina colombiana) y una interfaz pensada para el celular y el computador. Entra en operación el **1 de enero de 2027**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
-- **Una sola persona:** el acceso se limita a tu cuenta de Google.
+- **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
 - **Todo es configurable:** bancos, cuentas, bolsillos, tarjetas, categorías, personas, escenarios y apariencia.
 
 ## Qué hace
@@ -27,9 +27,12 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 
 | Documento | Para quién |
 |---|---|
+| [**Empezar con Moni**](docs/EMPEZAR.md) | **Quien usa la app por primera vez**: qué es, cómo entrar y configurarla |
 | [Guía rápida](docs/GUIA_RAPIDA.md) | Quien usa la app: lo esencial en una página |
 | [Manual de usuario](docs/MANUAL_USUARIO.md) | Quien usa la app: todas las pantallas |
 | [Instalación y despliegue](docs/INSTALACION.md) | Quien publica la app por primera vez o la actualiza |
+| [Varias personas](docs/MULTIUSUARIO.md) | Una sola aplicación, cada persona con su hoja y sus datos |
+| [Despliegue](docs/DESPLIEGUE.md) | Desarrollo y producción con un comando, sin copiar código; producción sin datos de demostración |
 | [Operación y solución de problemas](docs/OPERACION.md) | Respaldos, recuperación, errores frecuentes |
 | [Reglas de negocio](docs/REGLAS_DE_NEGOCIO.md) | Cómo se calculan saldos, presupuesto, tarjetas, créditos y nómina |
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
@@ -63,6 +66,8 @@ docs/             Documentación
 ```
 
 ## Estado
+
+**Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue](docs/DESPLIEGUE.md)).
 
 Fases 0 a 7 (parte técnica) implementadas y probadas con un Sheets simulado. Falta la verificación en el Sheet real, las dos sesiones de prueba con la usuaria y la medición de rendimiento real. Detalle en [PLAN.md](PLAN.md).
 

@@ -1,6 +1,8 @@
 # Operación y solución de problemas
 
-## Arranque del 1 de enero
+## Arranque del 1 de enero (solo entorno de pruebas)
+> Esta parte existe **solo donde hay datos de demostración** (desarrollo). En producción cada persona entra directo con sus datos reales y no hay arranque.
+
 Hazlo en este orden (Ajustes → **Arranque** lo guía y valida):
 1. **Ajustes → Datos de demostración → Borrar.** Solo borra lo ficticio.
 2. Crea tus **bancos, cuentas, bolsillos y tarjetas** reales.

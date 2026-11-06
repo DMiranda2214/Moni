@@ -2,15 +2,17 @@
  * Pruebas de la Fase 4: compras y extractos de tarjetas, y créditos de autopago
  * (amortización francesa, pagos, abonos con recálculo de plazo, anulaciones).
  */
+const { bogota } = require('./fecha');
+
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const hoy = () => new Date().toISOString().slice(0, 10);
+  const hoy = () => bogota();
   const mesDe = f => f.slice(0, 7);
-  const hace = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const hace = n => bogota(-n * 86400000);
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');

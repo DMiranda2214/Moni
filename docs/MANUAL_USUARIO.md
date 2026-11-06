@@ -5,7 +5,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 ## 1. Primer uso
 1. Abre el enlace de la app (guárdalo como favorito o *Agregar a pantalla de inicio*).
 2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
-4. ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
+4. *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
 
 ## 2. Inicio
 - **Accesos rápidos:** Gasto, Ingreso, Mover dinero, Pagar servicios, Tarjetas, Presupuesto.
@@ -127,7 +127,8 @@ Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar
 - Al terminar vuelves a ver la bienvenida.
 - Nada se borra de golpe: se **desactiva** y se puede **reactivar**. Si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 
-## 14. Arranque (1 de enero)
+## 14. Arranque (solo entorno de pruebas)
+> En producción no existe: cada persona empieza directo con sus datos reales.
 **Ajustes → Arranque** te da una lista: demo borrado, saldos de apertura, pruebas archivadas. Al pulsar **Empezar a usar Moni** se crea un respaldo, se activan las copias automáticas y los saldos de apertura quedan fijos. Detalle en [Operación](OPERACION.md#arranque-del-1-de-enero).
 
 ## 15. Respaldos

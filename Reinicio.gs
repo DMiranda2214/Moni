@@ -54,7 +54,7 @@ function borrarTodosLosDatos(confirmacion, opciones) {
   configurarRespaldoAutomatico(false);
   disparadoresRecordatorios_().forEach(t => ScriptApp.deleteTrigger(t));
   disparadoresTasas_().forEach(t => ScriptApp.deleteTrigger(t));
-  const props = PropertiesService.getScriptProperties();
+  const props = propiedades_();
   props.deleteProperty('ULTIMO_RESPALDO');
   props.deleteProperty('ULTIMO_RESPALDO_MS');
 

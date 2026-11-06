@@ -33,9 +33,13 @@ function estaActivo(fila) {
  */
 function getSpreadsheet() {
   // La propiedad tiene prioridad: en una web app getActiveSpreadsheet() puede devolver null.
-  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  const id = idHojaUsuario_();
   if (id) {
     return SpreadsheetApp.openById(id);
+  }
+  // En modo multiusuario cada persona tiene su propia hoja: no se usa la hoja a la que está unido el script.
+  if (modoMultiusuario_()) {
+    throw new Error('Todavía no tienes tu hoja de Moni. Crea una desde la pantalla de bienvenida.');
   }
 
   try {
@@ -47,12 +51,50 @@ function getSpreadsheet() {
 }
 
 /**
- * Toma el bloqueo del script (un solo escritor a la vez).
- * Es por script y no por usuario: protege contra dos pestañas o dispositivos de la misma persona.
+ * ¿Se pueden crear datos de demostración en este despliegue? Solo si la propiedad de script DEMO_HABILITADO = TRUE,
+ * que se pone en el proyecto de DESARROLLO y en ningún otro. Además, el paquete de producción ni siquiera incluye
+ * el generador (scripts/publicar.sh lo reemplaza por un archivo vacío): son dos candados.
+ */
+function demoHabilitado_() {
+  return PropertiesService.getScriptProperties().getProperty('DEMO_HABILITADO') === 'TRUE';
+}
+
+// ---------------------------------------------------------------------------
+// Modo de uso: una sola hoja (una persona o una pareja) o una hoja por usuario (varias personas)
+// ---------------------------------------------------------------------------
+
+/**
+ * Con MODO_MULTIUSUARIO = TRUE en las propiedades del script, la misma aplicación la usan varias personas y
+ * cada una tiene su propia hoja, su propia caché, su propio bloqueo y sus propios activadores. Sin la
+ * propiedad, todo es del script (una sola hoja, la compartida), como siempre.
+ */
+function modoMultiusuario_() {
+  return PropertiesService.getScriptProperties().getProperty('MODO_MULTIUSUARIO') === 'TRUE';
+}
+
+/** Propiedades donde se guarda el ID de la hoja y las marcas de respaldo: de la persona o del script. */
+function propiedades_() {
+  return modoMultiusuario_() ? PropertiesService.getUserProperties() : PropertiesService.getScriptProperties();
+}
+
+/** Caché: en modo multiusuario es de la persona (nunca se mezclan datos de dos personas). */
+function cache_() {
+  return modoMultiusuario_() ? CacheService.getUserCache() : CacheService.getScriptCache();
+}
+
+/** El ID de la hoja de esta persona (o del script), o '' si todavía no hay. */
+function idHojaUsuario_() {
+  return propiedades_().getProperty('SPREADSHEET_ID') || '';
+}
+
+/**
+ * Toma el bloqueo (un solo escritor a la vez).
+ * Una hoja: es del script y protege también de dos personas que comparten la hoja.
+ * Varias hojas: es de la persona, para que unas no esperen a otras.
  * No es reentrante: ninguna función que lo tenga puede llamar a otra que también lo tome.
  */
 function tomarBloqueo(ms) {
-  const lock = LockService.getScriptLock();
+  const lock = modoMultiusuario_() ? LockService.getUserLock() : LockService.getScriptLock();
   lock.waitLock(ms || 10000);
   return lock;
 }
@@ -73,7 +115,7 @@ function reiniciarMemoria_() {
  * Invalida la caché de una o todas las tablas.
  */
 function invalidateCache(sheetName) {
-  const cache = CacheService.getScriptCache();
+  const cache = cache_();
   if (sheetName) {
     cache.remove('TABLE_' + sheetName);
     delete MEMO_TABLAS[sheetName];
@@ -89,7 +131,7 @@ function invalidateCache(sheetName) {
  */
 function leerTabla_(sheetName, forzar) {
   const isCacheable = TABLAS_CACHEABLES.includes(sheetName);
-  const cache = CacheService.getScriptCache();
+  const cache = cache_();
   const cacheKey = 'TABLE_' + sheetName;
 
   if (isCacheable && !forzar) {

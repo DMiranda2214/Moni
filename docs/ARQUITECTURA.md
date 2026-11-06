@@ -50,6 +50,7 @@
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |
+| `Multiusuario.gs` | Una hoja por persona: crear o vincular la hoja, desvincular, modo multiusuario |
 | `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
 | `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta |
 | `TasasGoogle.gs` | Tasa de referencia desde Google Finance (hoja auxiliar `Tasas_Google`) |

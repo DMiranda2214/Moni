@@ -2,13 +2,15 @@
  * Pruebas de la Fase 1: instalación del esquema, catálogos personalizables, saldos,
  * datos de demostración y API.
  */
+const { bogota } = require('./fecha');
+
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
 
   /** Entorno con el esquema ya instalado. */
   function E(instalar) {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     if (instalar !== false) e.llamar('setupDatabase');
@@ -47,7 +49,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const e = E(false);
     e.hojas.Bancos = new (e.hojas.constructor === Object ? Object : Object)();
     delete e.hojas.Bancos;
-    e.ctx.SpreadsheetApp.openById().insertSheet('Bancos').filas.push(['Otro', 'Esquema'], ['dato', 'x']);
+    e.ctx.SpreadsheetApp.openById('id-falso').insertSheet('Bancos').filas.push(['Otro', 'Esquema'], ['dato', 'x']);
     const r = e.llamar('setupDatabase');
     assert.strictEqual(r.ok, false);
     assert.strictEqual(r.diferencias.length, 1);
@@ -405,7 +407,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios']
       .forEach(t => assert.ok(Array.isArray(d.catalogos[t]), t));
     assert.ok(d.saldos && d.estado && d.enums.Cuentas.Tipo);
-    assert.strictEqual(d.config.Anio_Activo, '2027');
+    assert.strictEqual(d.config.Anio_Activo, bogota().slice(0, 4), 'el año activo es el actual, no uno fijo');
   });
 
   prueba('saveConfigParam valida tema, color de acento y claves inexistentes', () => {

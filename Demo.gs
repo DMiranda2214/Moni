@@ -33,6 +33,7 @@ function fechaRelativa_(diasAtras) {
 
 /** Siembra el conjunto de demostración. Rechaza si ya hay demo o si ya empezó la operación real. */
 function sembrarDatosDemo() {
+  if (!demoHabilitado_()) throw new Error('Los datos de demostración no están disponibles en esta versión de Moni.');
   const verificacion = verificarEsquema();
   if (!verificacion.listo) throw new Error('Primero instala la base de datos.');
 
