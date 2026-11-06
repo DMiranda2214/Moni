@@ -17,7 +17,7 @@ Un **entorno** es un proyecto de Apps Script (con su implementación y, si aplic
 | **desarrollo** | Probar cada cambio con calma | Datos de demostración |
 | **producción** | La app que usa la gente | Reales |
 
-Cada uno tiene su `scriptId` y su implementación. La URL `/exec` de producción **no cambia** al desplegar.
+Cada uno tiene su `scriptId` y su implementación. (Con `clasp` 3.x, `-P` exige una **ruta absoluta** al archivo; los scripts `npm run push:dev` y `push:prod` ya la usan.) La URL `/exec` de producción **no cambia** al desplegar.
 
 ## Preparación (una sola vez)
 1. **Crea los dos proyectos** en <https://script.google.com> → *Nuevo proyecto* (uno "Moni dev", otro "Moni"). Copia el **ID de la secuencia de comandos** de cada uno (Configuración del proyecto). No uses `clasp create`: sobrescribe el manifiesto.
@@ -32,7 +32,8 @@ Cada uno tiene su `scriptId` y su implementación. La URL `/exec` de producción
    En cada editor: *Implementar → Nueva implementación → Aplicación web* (se toma la configuración de `appsscript.json`). Para varias personas, ejecuta antes `activarModoMultiusuario` en producción ([ver](MULTIUSUARIO.md)).
 4. **Anota el ID de cada implementación**:
    ```bash
-   npx @google/clasp -P .clasp.prod.json deployments
+   npm run deployments:prod
+   npm run deployments:dev
    ```
 5. **Credenciales de clasp** (de la cuenta dueña): tras `npm run login`, el contenido de `~/.clasprc.json` es el secreto `CLASPRC_JSON`.
 6. En GitHub → **Settings → Environments** crea **`desarrollo`** y **`produccion`**. En cada uno:
@@ -53,8 +54,8 @@ Al fusionar a `main`: se verifica otra vez, se despliega a **desarrollo** solo, 
 ## Volver atrás
 Cada despliegue crea una **versión** inmutable en Apps Script (la descripción es el hash del commit). Para volver a una anterior:
 ```bash
-npx @google/clasp -P .clasp.prod.json versions
-npx @google/clasp -P .clasp.prod.json redeploy <ID_DE_LA_IMPLEMENTACION> -V <NUMERO_DE_VERSION>
+npx @google/clasp -P "$PWD/.clasp.prod.json" list-versions
+npx @google/clasp -P "$PWD/.clasp.prod.json" redeploy <ID_DE_LA_IMPLEMENTACION> -V <NUMERO_DE_VERSION>
 ```
 O en el editor: *Implementar → Administrar implementaciones → ✏️ → Versión*.
 

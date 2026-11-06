@@ -13,8 +13,10 @@
     "contraste": "node tests/contraste.js",
     "verificar": "node tests/sintaxis.js && node tests/run.js && node tests/contraste.js",
     "vista": "node tests/dev_server.js",
-    "push:dev": "npx --yes @google/clasp@3.4.1 -P .clasp.dev.json push --force",
-    "push:prod": "npx --yes @google/clasp@3.4.1 -P .clasp.prod.json push --force",
-    "vista:multi": "node tests/dev_server.js --multi"
+    "push:dev": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.dev.json\" push --force",
+    "push:prod": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.prod.json\" push --force",
+    "vista:multi": "node tests/dev_server.js --multi",
+    "deployments:dev": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.dev.json\" list-deployments",
+    "deployments:prod": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.prod.json\" list-deployments"
   }
 }
