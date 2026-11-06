@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema (v1)
 
-Base de datos: Google Sheet **Moni 2027 - Base de datos**.
-El script de instalación (`setupDatabase`, Fase 1) crea estas 28 tablas, una por pestaña, con los encabezados exactos de abajo.
+Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
+El script de instalación (`setupDatabase`) crea estas 28 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 

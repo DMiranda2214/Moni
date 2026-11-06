@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.0.0 — Primera versión (6 nov 2026)
+Moni queda lista para que **cualquier persona** la use como su app de finanzas personales (una hoja de Google por persona).
+- **Para quién y cómo:** se entra con la cuenta de Google, se crea la hoja y un asistente de primeros pasos deja todo configurado: nombre, bancos (con su rendimiento), cuentas y bolsillos con sus saldos iniciales, tarjetas, nómina, otros ingresos, suscripciones, hogar y servicios, y el dólar de Google Finance si se quiere.
+- **Dos entornos:** desarrollo (con datos de demostración) y producción (sin ellos: el paquete ni siquiera los incluye). Despliegue con un comando, sin CI/CD ([guía](docs/DESPLIEGUE.md)); lista de lanzamiento en [docs/LANZAMIENTO.md](docs/LANZAMIENTO.md).
+- **Rendimiento:** creación de la hoja por partes (sin timeouts), libro abierto una vez por petición, caché de todas las tablas y refrescos livianos al guardar.
+- **Funciones:** bolsillos y cuentas, presupuesto con suscripciones y servicios, nómina colombiana (una sola nómina, conceptos del mes), tarjetas y créditos de autopago, ahorro con rendimientos (diario o mensual, sobre todo el saldo o solo bolsillos), ingresos recurrentes, regalos, vista anual, respaldos y recordatorios en Google Calendar.
+- El detalle de cada cambio está en las secciones siguientes.
+
 ## Sin pantalla de Arranque (6 nov)
 - **Se quitó "Arranque"** (cargar saldos de apertura, fecha de inicio, archivar pruebas, empezar a operar): los saldos iniciales ya se escriben al crear cada cuenta y bolsillo en los primeros pasos. Desaparecen la pantalla, el aviso de Inicio, las funciones `getArranque`, `setFechaArranque`, `saveAperturas`, `archiveTests`, `startOperation` y los parámetros nuevos `Fecha_Arranque` y `Arranque_Hecho` (en hojas ya creadas quedan inertes).
 
