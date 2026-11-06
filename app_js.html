@@ -220,6 +220,70 @@ if (window.matchMedia) {
 }
 
 // ---------------------------------------------------------------------------
+// Campos de fecha en AAAA/MM/DD
+// ---------------------------------------------------------------------------
+
+function esFechaReal(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const d = new Date(iso + 'T00:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+}
+
+/**
+ * Convierte cada campo de fecha del navegador en un campo de texto AAAA/MM/DD (con botón de calendario). El campo original
+ * queda oculto y conserva su valor: el resto del código lo sigue leyendo igual (AAAA-MM-DD, o lo escrito si está incompleto,
+ * para que el servidor avise en vez de usar otra fecha).
+ */
+function mejorarCamposFecha(raiz) {
+  $$('input[type="date"]:not([data-mejorado])', raiz || document).forEach(orig => {
+    orig.dataset.mejorado = '1';
+    const natural = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    let incompleto = '';
+    const caja = document.createElement('div');
+    caja.className = 'm-fecha-campo';
+    const txt = document.createElement('input');
+    txt.type = 'text'; txt.className = orig.className; txt.inputMode = 'numeric'; txt.maxLength = 10; txt.autocomplete = 'off';
+    txt.placeholder = 'AAAA/MM/DD'; txt.id = orig.id ? orig.id + '-txt' : '';
+    const boton = document.createElement('button');
+    boton.type = 'button'; boton.className = 'm-btn-texto m-fecha-boton'; boton.setAttribute('aria-label', 'Elegir en el calendario');
+    boton.innerHTML = ico('calendario', 'm-icon-sm');
+    orig.parentNode.insertBefore(caja, orig);
+    caja.appendChild(txt); caja.appendChild(boton); caja.appendChild(orig);
+    orig.classList.add('m-fecha-oculto'); orig.tabIndex = -1; orig.setAttribute('aria-hidden', 'true');
+    if (orig.id) { const lb = document.querySelector('label[for="' + orig.id + '"]'); if (lb) lb.setAttribute('for', txt.id); }
+
+    const mostrar = () => { txt.value = natural.get.call(orig) ? fechaTxt(natural.get.call(orig)) : incompleto; };
+    Object.defineProperty(orig, 'value', {
+      configurable: true,
+      get() { return incompleto || natural.get.call(orig); },
+      set(v) { incompleto = ''; natural.set.call(orig, v); mostrar(); }
+    });
+    mostrar();
+
+    txt.addEventListener('input', () => {
+      const d = txt.value.replace(/\D/g, '').slice(0, 8);
+      let f = d;
+      if (d.length > 4) f = d.slice(0, 4) + '/' + d.slice(4);
+      if (d.length > 6) f = d.slice(0, 4) + '/' + d.slice(4, 6) + '/' + d.slice(6);
+      txt.value = f;
+      const iso = d.length === 8 ? d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6) : '';
+      const valida = iso && esFechaReal(iso) && (!orig.max || iso <= orig.max) && (!orig.min || iso >= orig.min);
+      txt.classList.toggle('m-invalido', d.length === 8 && !valida);
+      if (valida) { incompleto = ''; natural.set.call(orig, iso); }
+      else { natural.set.call(orig, ''); incompleto = f; }
+      orig.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // Elegida en el calendario nativo
+    orig.addEventListener('change', ev => { if (ev.isTrusted) { incompleto = ''; mostrar(); txt.classList.remove('m-invalido'); } });
+    boton.addEventListener('click', () => { try { if (orig.showPicker) orig.showPicker(); else orig.focus(); } catch (e) { orig.focus(); } });
+  });
+}
+
+new MutationObserver(muts => {
+  muts.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) mejorarCamposFecha(n); }));
+}).observe(document.documentElement, { childList: true, subtree: true });
+
+// ---------------------------------------------------------------------------
 // Datos
 // ---------------------------------------------------------------------------
 
@@ -255,7 +319,10 @@ async function refrescarParcial(opc) {
   if (r.config) App.boot.config = r.config;
   Object.keys(r.catalogos || {}).forEach(t => { App.boot.catalogos[t] = r.catalogos[t]; });
   if (r.saldos) App.boot.saldos = r.saldos;
+  if (r.invertido) App.boot.invertido = r.invertido;
+  if ((opc.tablas || []).indexOf('CDTs') !== -1) { App.cdt.data = null; App.proximosViejos = true; }
   if (r.estado) App.boot.estado = r.estado;
+  if (r.avisos) App.boot.avisos = r.avisos;
   const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos', 'Servicios_Publicos'].indexOf(t) !== -1);
   if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
   // Una suscripción nueva o editada entra al presupuesto de este mes: se vuelve a pedir para que Registrar y Presupuesto la vean.
@@ -326,13 +393,17 @@ function mesTexto(mes) {
 function isoDe(fecha) {
   return fecha.getFullYear() + '-' + String(fecha.getMonth() + 1).padStart(2, '0') + '-' + String(fecha.getDate()).padStart(2, '0');
 }
+/** Las fechas se muestran como AAAA/MM/DD. */
+function fechaTxt(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? m[1] + '/' + m[2] + '/' + m[3] : String(iso || '');
+}
 function etiquetaDia(iso) {
   const hoy = App.boot.hoy;
   if (iso === hoy) return 'Hoy';
   const h = hoy.split('-').map(Number);
   if (iso === isoDe(new Date(h[0], h[1] - 1, h[2] - 1))) return 'Ayer';
-  const p = iso.split('-').map(Number);
-  return capitalizar(new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }));
+  return fechaTxt(iso);
 }
 
 function aplicarSaldos(s) {
@@ -368,6 +439,7 @@ function aplicarEscritura(res) {
   pedirSyncRecordatorios();
   aplicarSaldos(res.saldos);
   if (res.ultimos) App.boot.ultimos = res.ultimos;
+  if (res.invertido) App.boot.invertido = res.invertido;
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
@@ -440,6 +512,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
   if (partes[0] === 'ingresos') return 'Otros ingresos';
+  if (partes[0] === 'cdt') return 'CDT';
   if (partes[0] === 'ahorro') return partes.length === 1 ? 'Ahorro' : (App.ahoC.data && App.ahoC.id === partes[1] ? App.ahoC.data.cuenta.Nombre : 'Ahorro');
   if (partes[0] === 'tarjeta') return App.tar.data && App.tar.id === partes[1] ? App.tar.data.tarjeta.Nombre : 'Tarjeta';
   if (partes[0] === 'credito') return App.cre.data && App.cre.id === partes[1] ? App.cre.data.credito.Nombre : 'Crédito';
@@ -513,6 +586,7 @@ function pantalla(ruta) {
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
     case 'ingresos': return vIngresos();
+    case 'cdt': return vCdts();
     case 'ahorro': return partes.length === 1 ? vAhorro() : vCuentaAhorro(partes[1]);
     case 'bolsillo': return vBolsillo(partes[1]);
     case 'movimientos': return vMovimientos();
@@ -673,6 +747,26 @@ function bannerDemo() {
     '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/demo">Gestionar</button></div>';
 }
 
+/**
+ * "Para tener en cuenta": lo que falta configurar o está desactualizado (lo calcula el servidor desde el estado de la hoja,
+ * así que cada aviso desaparece solo cuando se resuelve). Importante: no se oculta. Sugerencia y novedad: "Ahora no".
+ */
+App.avisosTodos = false;
+function htmlAvisos() {
+  const todos = App.boot.avisos || [];
+  if (!todos.length) return '';
+  const limite = App.avisosTodos ? todos.length : 3;
+  const icono = a => a.nivel === 'importante' ? 'alerta' : (a.nivel === 'novedad' ? 'prueba' : 'check');
+  return '<section class="m-seccion m-tablero-ancho" aria-label="Para tener en cuenta"><h2 class="m-seccion-titulo">Para tener en cuenta' + (todos.length > 1 ? ' · ' + todos.length : '') + '</h2>' +
+    todos.slice(0, limite).map(a =>
+      '<div class="m-banner m-aviso m-aviso-' + esc(a.nivel) + '" role="note">' + ico(icono(a)) +
+      '<span class="m-aviso-texto"><strong>' + esc(a.titulo) + '</strong> ' + esc(a.detalle) + '</span>' +
+      '<span class="m-aviso-acciones"><button type="button" class="m-btn-texto" data-acc="aviso-ir" data-ruta="' + esc(a.pantalla) + '">' + (a.nivel === 'novedad' ? 'Verlo' : 'Resolver') + '</button>' +
+      (a.ocultable ? '<button type="button" class="m-btn-texto m-btn-suave" data-acc="aviso-ocultar" data-id="' + esc(a.id) + '">Ahora no</button>' : '') + '</span></div>').join('') +
+    (todos.length > 3 ? '<button type="button" class="m-btn-texto" data-acc="avisos-todos">' + (App.avisosTodos ? 'Ver menos' : 'Ver los otros ' + (todos.length - 3)) + '</button>' : '') +
+    '</section>';
+}
+
 function vInicio() {
   if (asistenteVisible()) return vAsistente();
   const nombre = cfg('Nombre_Usuario');
@@ -698,6 +792,8 @@ function vInicio() {
       '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
   }
 
+  if (!(estado.pasos && !estado.completo)) html += htmlAvisos(); // con los primeros pasos sin terminar, esos pasos ya son el aviso
+
   if (hayBolsillos()) {
     const rap = (icono, texto, attrs) => '<button class="m-rapido" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
     html += '<section class="m-seccion m-tablero-ancho" aria-label="Accesos rápidos"><div class="m-rapidos">' +
@@ -714,7 +810,12 @@ function vInicio() {
     html += '<section class="m-seccion" aria-label="Resumen"><h2 class="m-seccion-titulo">Resumen</h2><div class="m-group m-resumen">' +
       '<div class="m-resumen-etiqueta">Total</div><div class="m-resumen-cifra m-num ' + claseSaldo(s.total) + '">' + dinero(s.total) + '</div>' +
       '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Disponible</div><strong class="m-num ' + claseSaldo(s.disponible) + '">' + dinero(s.disponible) + '</strong></div>' +
-      '<div><div class="m-resumen-etiqueta">Ahorro</div><strong class="m-num">' + dinero(s.ahorro) + '</strong></div></div></div></section>';
+      '<div><div class="m-resumen-etiqueta">Ahorro</div><strong class="m-num">' + dinero(s.ahorro) + '</strong></div>' +
+      (App.boot.invertido && App.boot.invertido.cantidad ? '<div><div class="m-resumen-etiqueta">Invertido</div><strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong></div>' : '') + '</div></div></section>';
+    if (App.boot.invertido && App.boot.invertido.cantidad) {
+      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + App.boot.invertido.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (App.boot.invertido.proximoVencimiento ? ' · próximo vence ' + fechaTxt(App.boot.invertido.proximoVencimiento) : ''),
+        final: '<strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt"' }));
+    }
 
     html += seccion('Cuentas', s.cuentas.map(c => fila({
       icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
@@ -769,9 +870,9 @@ function vInicio() {
   const porRecibir = App.boot.porRecibir || [];
   if (porRecibir.length) {
     html += seccion('Por recibir', porRecibir.map(p => fila({
-      icono: 'usuario', titulo: esc(p.titulo), sub: esc(textoPlazo(p.dias).replace('Vence', 'Llega')) + ' · ' + esc(p.detalle),
+      icono: p.tipo === 'CDT' ? 'capas' : 'usuario', titulo: esc(p.titulo), sub: esc(textoPlazo(p.dias).replace('Vence', 'Llega')) + ' · ' + esc(p.detalle),
       final: '<strong class="m-num m-positivo">' + dinero(p.valor) + '</strong>', chevron: true,
-      attrs: p.ingreso ? 'data-acc="ingreso" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="nomina"'
+      attrs: p.ingreso ? 'data-acc="ingreso" data-id="' + esc(p.id) + '"' : (p.tipo === 'CDT' ? 'data-acc="cdt" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="nomina"')
     })).join('') + fila({ titulo: 'Ver otros ingresos', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos"' }));
   }
 
@@ -837,6 +938,7 @@ function vMas() {
       irA('movimientos', { icono: 'presupuesto', titulo: 'Movimientos', sub: 'Todo lo que has registrado, por mes' }) +
       irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte' }) +
       irA('ingresos', { icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…' }) +
+      irA('cdt', { icono: 'capas', titulo: 'CDT', sub: (App.boot.invertido && App.boot.invertido.cantidad) ? 'Invertido: ' + dinero(App.boot.invertido.total) : 'Dinero invertido a plazo fijo' }) +
       irA('ahorro', { icono: 'bolsillos', titulo: 'Ahorro', sub: 'Saldos, rendimientos y lo que le debes' }) +
       irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
       irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
@@ -869,6 +971,7 @@ function vAjustes() {
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
+        fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +
         fila({ icono: 'pulso', titulo: 'Actualizar desde la hoja', sub: 'Si editaste la hoja a mano, vuelve a leerla', chevron: true, attrs: 'data-acc="actualizar-datos"' }) +
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
@@ -1112,11 +1215,32 @@ const CAT = {
     fila: i => ({ titulo: esc(i.Nombre), sub: (n => n + (n === 1 ? ' servicio' : ' servicios'))(activos('Servicios_Publicos').filter(s => s.ID_Inmueble === i.ID_Inmueble).length) }),
     campos: [{ k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }]
   },
+  CDTs: {
+    plural: 'CDT', singular: 'CDT', icono: 'capas', id: 'ID_CDT',
+    vacio: 'Un CDT es dinero que entregas a un banco por un plazo fijo, a una tasa pactada. Mientras está vigente no cuenta como dinero disponible: aparece como "Invertido".',
+    requiere: () => activos('Bancos').some(b => (b.Divisa || 'COP') === 'COP') ? '' : 'Primero agrega un banco en pesos.',
+    fila: x => ({ titulo: esc(x.Nombre), sub: esc(textoPlazo(diasHasta(x.Fecha_Vencimiento))) + ' · ' + esc(fechaTxt(x.Fecha_Vencimiento)), final: '<span class="m-num">' + dinero(x.Capital) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['CDT Bancolombia', 'CDT Davivienda', 'CDT Nu'] },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: () => activos('Bancos').filter(b => (b.Divisa || 'COP') === 'COP').map(b => [b.ID_Banco, b.Nombre]) },
+      { k: 'Capital', label: 'Cuánto invertiste', tipo: 'dinero', requerido: true },
+      { k: 'Tasa_EA', label: 'Tasa (% EA)', tipo: 'porcentaje', requerido: true, ayuda: 'La tasa efectiva anual del CDT, por ejemplo 11,5.' },
+      { k: 'Fecha_Inicio', label: 'Fecha de inicio', tipo: 'fecha', requerido: true, ayuda: 'Si ya lo tenías antes de usar Moni, pon la fecha en que lo abriste.' },
+      { k: 'Plazo_Dias', label: 'Plazo (días)', tipo: 'entero', requerido: true, min: 1, max: 3650, ayuda: 'Por ejemplo 90, 180 o 360 días.' },
+      { k: 'Pago_Intereses', label: 'Paga los intereses', tipo: 'select', defecto: 'Vencimiento', opciones: () => [['Vencimiento', 'Al vencimiento'], ['Mensual', 'Cada mes'], ['Trimestral', 'Cada trimestre']] },
+      { k: 'Retencion_Pct', label: 'Retención en la fuente (%)', tipo: 'porcentaje', ayuda: 'El porcentaje que el banco retiene de los intereses. Déjalo vacío si no te retienen.' },
+      { k: 'ID_Bolsillo_Destino', label: 'Al cobrar, el dinero llega a (opcional)', tipo: 'select', opciones: () => opcionesDestino(true) },
+      { k: 'descontar', label: 'Descontar el capital de un bolsillo', tipo: 'interruptor', soloAlCrear: true,
+        ayuda: 'Actívalo si el dinero sale hoy de uno de tus bolsillos. Si el CDT ya existía antes de usar Moni, déjalo apagado.' },
+      { k: 'ID_Bolsillo_Origen', label: 'Sale del bolsillo', tipo: 'select', soloAlCrear: true, visible: v => !!v.descontar, opciones: () => opcionesDestino(false) },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
   Ingresos_Recurrentes: {
     plural: 'Ingresos recurrentes', singular: 'ingreso', icono: 'usuario', id: 'ID_Ingreso',
     vacio: 'Anota lo que recibes además de tu nómina: otro trabajo, un arriendo, ventas, servicios…',
     requiere: () => activos('Bolsillos').length ? '' : 'Primero crea una cuenta con un bolsillo.',
-    fila: i => ({ titulo: esc(i.Nombre), sub: esc(etiqueta('PeriodoCobro', i.Periodicidad)) + ' · próximo ' + esc(i.Proximo_Cobro), final: '<span class="m-num">' + dinero(i.Valor) + '</span>' }),
+    fila: i => ({ titulo: esc(i.Nombre), sub: esc(etiqueta('PeriodoCobro', i.Periodicidad)) + ' · próximo ' + esc(fechaTxt(i.Proximo_Cobro)), final: '<span class="m-num">' + dinero(i.Valor) + '</span>' }),
     campos: [
       { k: 'Nombre', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Otro trabajo', 'Servicios', 'Venta de productos', 'Arriendo', 'Honorarios'] },
       { k: 'Valor', label: 'Cuánto recibes', tipo: 'dinero', requerido: true },
@@ -1130,10 +1254,12 @@ const CAT = {
   Suscripciones: {
     plural: 'Servicios y suscripciones', singular: 'cobro', icono: 'tarjetas', id: 'ID_Suscripcion',
     vacio: 'Agrega lo que pagas cada cierto tiempo: streaming, música, internet, luz, agua…',
-    fila: s => ({ titulo: esc(s.Nombre), sub: esc(etiqueta('PeriodoCobro', s.Periodicidad)) + ' · próximo ' + esc(s.Proximo_Cobro), final: '<span class="m-num">' + dinero(s.Valor) + '</span>' }),
+    fila: s => { const h = s.ID_Inmueble ? porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble) : null; return { titulo: esc(s.Nombre), sub: esc(etiqueta('PeriodoCobro', s.Periodicidad)) + ' · próximo ' + esc(fechaTxt(s.Proximo_Cobro)) + (h ? ' · ' + esc(h.Nombre) : ''), final: '<span class="m-num">' + dinero(s.Valor) + '</span>' }; },
     campos: [
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Streaming', 'Música', 'Internet', 'Luz', 'Agua', 'Gas', 'Celular'] },
       { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Suscripcion', opciones: () => [['Suscripcion', 'Suscripción (valor fijo)'], ['Servicio', 'Servicio (el valor cambia)']] },
+      { k: 'ID_Inmueble', label: 'Hogar (opcional)', tipo: 'select', visible: () => activos('Inmuebles').length > 0,
+        opciones: () => [['', 'Ninguno']].concat(activos('Inmuebles').map(i => [i.ID_Inmueble, i.Nombre])), ayuda: 'Si lo pagas en más de una casa (por ejemplo, el mismo Netflix en la tuya y en la de tu mamá), elige a cuál pertenece.' },
       { k: 'Valor', label: 'Cuánto cuesta', tipo: 'dinero', requerido: true, ayuda: 'En un servicio es un estimado: al pagar lo ajustas y queda el último valor.' },
       { k: 'Periodicidad', label: 'Cada cuánto', tipo: 'select', defecto: 'Mensual', opciones: () => Object.keys(ETIQUETAS.PeriodoCobro).map(k => [k, ETIQUETAS.PeriodoCobro[k]]) },
       { k: 'Proximo_Cobro', label: 'Próximo cobro', tipo: 'fecha', requerido: true, ayuda: 'El día de este cobro se repite cada período.' },
@@ -1276,6 +1402,7 @@ const INFO_CAMPOS = {
     ID_Tarjeta: 'Si lo cobran a una tarjeta de crédito, la compra queda en su extracto.',
     ID_Categoria: 'Para que el gasto salga en los gráficos por categoría.',
     ID_Servicio: 'Trae el código de pago y el enlace del servicio público que ya guardaste.',
+    ID_Inmueble: 'La casa o apartamento al que pertenece este cobro. Te deja separar el mismo servicio o suscripción por hogar.',
     Renglon: 'Escribe el nombre de un renglón de tu presupuesto (por ejemplo, “Suscripciones”). Al pagar, el gasto cuenta en ese renglón del mes.',
     URL_Pago: 'La página donde se paga. Aparece como “Ir a pagar” en el cobro.',
     Notas: 'Lo que quieras recordar de este cobro.'
@@ -1312,6 +1439,15 @@ const INFO_CAMPOS = {
     Es_Salarial: 'Si hace parte del salario, suma al ingreso base de cotización y cambia salud y pensión.',
     Vigente_Desde: 'Desde cuándo lo recibes. Déjalo vacío si ya lo tienes.',
     Vigente_Hasta: 'Hasta cuándo lo recibes. Déjalo vacío si no tiene fecha de fin.'
+  },
+  CDTs: {
+    Capital: 'El dinero que entregaste al banco. Mientras el CDT está vigente se muestra como "Invertido", no como disponible.',
+    Tasa_EA: 'La tasa efectiva anual pactada. Moni estima los intereses como capital × ((1 + tasa)^(días/365) − 1).',
+    Plazo_Dias: 'Cuántos días dura el CDT. El vencimiento se calcula desde la fecha de inicio.',
+    Pago_Intereses: 'Al vencimiento: recibes todo al final. Cada mes o trimestre: el banco te paga los intereses por periodos y tú los registras.',
+    Retencion_Pct: 'La retención en la fuente sobre los intereses. Depende de tu producto y de la norma vigente: escribe la que te aplica el banco.',
+    ID_Bolsillo_Destino: 'El bolsillo donde llegan los intereses y el capital al cobrar. Puedes elegirlo después, al cobrar.',
+    descontar: 'Si el dinero sale hoy de un bolsillo, Moni lo resta de ahí y lo muestra como invertido. Si ya lo tenías antes de usar Moni, déjalo apagado.'
   },
   Nomina_Escenarios: {
     Nombre: 'Una situación de ingresos: “Actual”, “Con aumento”…',
@@ -1547,6 +1683,7 @@ async function abrirFormulario(tabla, id, defaults) {
       return c.tipo === 'interruptor' ? esVerdad(item[c.k]) : item[c.k];
     }
     if (c.k === 'reserva' && !existente) return activos('Bolsillos').some(b => b.Rol === 'Reserva_Tarjeta') ? '' : '__nueva';
+    if (c.tipo === 'fecha' && c.requerido && !existente) return App.boot.hoy; // una fecha obligatoria nace con la de hoy
     return c.defecto !== undefined ? c.defecto : '';
   };
 
@@ -1607,6 +1744,7 @@ async function abrirFormulario(tabla, id, defaults) {
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
+      if (tabla === 'CDTs') { opciones.descontar = !!v.descontar; opciones.ID_Bolsillo_Origen = v.ID_Bolsillo_Origen || ''; delete envio.descontar; delete envio.ID_Bolsillo_Origen; }
       if (tabla === 'Cuentas') {
         // Un valor vacío de saldo real/meta significa "quitar".
         ['Saldo_Real', 'Meta'].forEach(k => { if (v[k] === '' && existente && existente[k] !== '' && existente[k] !== undefined) envio[k] = ''; });
@@ -2105,7 +2243,7 @@ async function abrirDetalleMov(id) {
   const filas = [];
   filas.push(['Tipo', '<strong>' + esc(tipoMovimientoTexto(it)) + '</strong>']);
   filas.push(['Valor', '<strong class="m-num ' + (m.clase === 'm-entra' ? 'm-positivo' : '') + '">' + esc(m.texto) + '</strong>']);
-  filas.push(['Fecha', esc(etiquetaDia(it.Fecha) + ' · ' + it.Fecha)]);
+  filas.push(['Fecha', esc(etiquetaDia(it.Fecha) === fechaTxt(it.Fecha) ? fechaTxt(it.Fecha) : etiquetaDia(it.Fecha) + ' · ' + fechaTxt(it.Fecha))]);
   if (it.esTransferencia) {
     // En la lista general el traslado viene con Origen y Destino; en la de un bolsillo, como una pata con su contraparte.
     const entra = it.Origen === undefined && it.Valor > 0;
@@ -2559,7 +2697,7 @@ function htmlNomina(d) {
     const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
     h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
       '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
-      '<div><dt>Fecha</dt><dd>' + esc(d.pago.Fecha_Pago) + '</dd></div>' +
+      '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
       '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>' +
       (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
       '</dl></div></section>' +
@@ -2575,7 +2713,8 @@ function htmlNomina(d) {
 /** Tu sueldo base: la primera vez crea tu nómina; después solo lo cambia. */
 async function abrirSueldoNomina() {
   const d = App.nom.data;
-  const actual = d && d.calculo ? d.calculo.escenario.Sueldo_Base : '';
+  const guardada = activos('Nomina_Escenarios')[0];
+  const actual = d && d.calculo ? d.calculo.escenario.Sueldo_Base : (guardada ? guardada.Sueldo_Base : '');
   const campos = [{ k: 'Sueldo_Base', label: 'Sueldo base mensual', tipo: 'dinero', requerido: true, info: 'Tu sueldo antes de descuentos. Los descuentos de ley (salud, pensión) los calcula Moni; los demás los agregas como descuentos fijos.' }];
   await abrirHoja({
     titulo: 'Mi sueldo',
@@ -2737,11 +2876,7 @@ const FUENTES = [
 ];
 const etiquetaFuente = f => (FUENTES.find(x => x[0] === f) || [f, f])[1];
 
-function fechaCorta(iso) {
-  if (!iso) return '';
-  const p = iso.split('-').map(Number);
-  return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-}
+function fechaCorta(iso) { return iso ? fechaTxt(iso) : ''; }
 
 /** Mes (AAAA-MM) del extracto al que entra una compra con esta fecha, según el día de corte. */
 function mesExtractoDe(fecha, diaCorte) {
@@ -2966,7 +3101,7 @@ async function abrirDetalleCompra(id) {
   const td = App.tar.data;
   const c = td && td.compras.find(x => x.ID_Compra === id);
   if (!c) return;
-  const filas = [['Valor', dinero(c.Valor)], ['Fecha', esc(c.Fecha)], ['Fuente', esc(etiquetaFuente(c.Fuente)) + (c.ApartoDinero ? ' · dinero apartado' : '')]];
+  const filas = [['Valor', dinero(c.Valor)], ['Fecha', esc(fechaTxt(c.Fecha))], ['Fuente', esc(etiquetaFuente(c.Fuente)) + (c.ApartoDinero ? ' · dinero apartado' : '')]];
   if (c.Categoria) filas.push(['Categoría', esc(c.Categoria)]);
   if (c.Notas) filas.push(['Notas', esc(c.Notas)]);
   if (c.Pagado) filas.push(['Estado', 'En un extracto pagado']);
@@ -3293,7 +3428,7 @@ function htmlRendimientoEstimado(a) {
       '<div><dt>Acumulado este mes</dt><dd class="m-num m-positivo">' + dinero(e.acumuladoMes) + '</dd></div>' +
       '<div><dt><strong>Por registrar</strong></dt><dd class="m-num"><strong>' + dinero(e.pendiente) + '</strong></dd></div></dl></div>' +
     (e.pendiente > 0 ? '<div class="m-row"><button class="m-btn m-btn-secondary" style="width:100%" data-acc="rend-estimado">Registrar este rendimiento</button></div>' : ''),
-    e.dias > 0 ? 'Calculado desde el ' + esc(e.desde) + ' hasta el ' + esc(e.hasta) + ' (' + e.dias + (e.dias === 1 ? ' día' : ' días') + '), sobre tu saldo de cada día. Es una estimación: tu banco puede redondear distinto.' : 'Todavía no ha terminado ningún día desde el último rendimiento.');
+    e.dias > 0 ? 'Calculado desde el ' + esc(fechaTxt(e.desde)) + ' hasta el ' + esc(fechaTxt(e.hasta)) + ' (' + e.dias + (e.dias === 1 ? ' día' : ' días') + '), sobre tu saldo de cada día. Es una estimación: tu banco puede redondear distinto.' : 'Todavía no ha terminado ningún día desde el último rendimiento.');
 }
 
 function htmlCuentaAhorro(d) {
@@ -3532,6 +3667,159 @@ function vGuia() {
   };
 }
 
+// ---------- CDT ----------
+
+App.cdt = { data: null, cargando: false, error: null };
+
+/** Días desde hoy hasta una fecha (negativo si ya pasó). */
+function diasHasta(iso) {
+  const a = App.boot.hoy.split('-').map(Number), b = String(iso).split('-').map(Number);
+  return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+}
+
+function filaCdt(x) {
+  return fila({
+    icono: 'capas', titulo: esc(x.Nombre),
+    sub: esc(x.Banco) + ' · ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(x.Tasa_EA * 100) + ' % EA · ' + esc(textoPlazo(x.dias)) + (x.estado === 'vencido' ? ' · por cobrar' : ''),
+    final: '<span class="m-num">' + dinero(x.Capital) + '</span><span class="m-row-sub" style="display:block">' + esc(fechaTxt(x.Fecha_Vencimiento)) + '</span>',
+    chevron: true, attrs: 'data-acc="cdt" data-id="' + esc(x.ID_CDT) + '"'
+  });
+}
+
+function htmlCdts(d) {
+  const t = d.totales;
+  if (!d.vigentes.length && !d.cerrados.length) {
+    return vacio('capas', 'Aún no tienes CDT', 'Registra tus CDT para ver cuánto tienes invertido, cuánto vas a ganar y cuándo vencen. Los que ya tenías antes de usar Moni también se pueden registrar.',
+      '<button class="m-btn m-btn-primary" data-acc="nuevo" data-tabla="CDTs">Agregar un CDT</button>');
+  }
+  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Invertido</div><div class="m-resumen-cifra m-num">' + dinero(t.invertido) + '</div>' +
+    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganarás (neto)</div><strong class="m-num m-positivo">' + dinero(t.netoEsperado) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Próximo vence</div><strong class="m-num">' + (t.proximoVencimiento ? esc(fechaTxt(t.proximoVencimiento)) : '—') + '</strong></div></div>' +
+    '<p class="m-ayuda">' + t.cantidad + (t.cantidad === 1 ? ' CDT vigente' : ' CDT vigentes') + ' · este dinero no cuenta como disponible.</p></div>';
+  if (d.vigentes.length) h += '<div style="height:var(--m-space-4)"></div>' + seccion('Vigentes', d.vigentes.map(filaCdt).join(''));
+  if (d.cerrados.length) h += seccion('Cerrados', d.cerrados.map(x => fila({
+    icono: 'check', titulo: esc(x.Nombre), sub: esc(x.Banco) + ' · cerrado el ' + esc(fechaTxt(x.Fecha_Cierre)), final: '<span class="m-num">' + dinero(x.Capital) + '</span>',
+    clase: 'm-hecho', chevron: true, attrs: 'data-acc="cdt" data-id="' + esc(x.ID_CDT) + '"'
+  })).join(''));
+  return h;
+}
+
+function vCdts() {
+  const s = App.cdt;
+  let html = bannerDemo();
+  if (s.error) html += bloqueError(s.error, 'recargar-cdt');
+  else if (!s.data) html += esqueleto(4);
+  else html += htmlCdts(s.data);
+  return {
+    titulo: 'CDT', html: html,
+    acciones: '<button class="m-btn-texto" data-acc="nuevo" data-tabla="CDTs" aria-label="Agregar un CDT">' + ico('plus') + '</button>',
+    despues: () => { if (!s.data && !s.cargando && !s.error) cargarEn(s, 'cdt', 'getCdts', []); }
+  };
+}
+
+async function abrirDetalleCdt(id) {
+  if (!App.cdt.data) { try { App.cdt.data = await api('getCdts'); } catch (e) { aviso(e.message, true); return; } }
+  const x = App.cdt.data.vigentes.concat(App.cdt.data.cerrados).find(c => c.ID_CDT === id);
+  if (!x) return;
+  const vigente = x.Estado === 'Vigente';
+  const pct = v => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(v * 100) + ' %';
+  const filas = [
+    ['Banco', esc(x.Banco)], ['Capital', '<strong class="m-num">' + dinero(x.Capital) + '</strong>'], ['Tasa', pct(x.Tasa_EA) + ' EA'],
+    ['Inicio', esc(fechaTxt(x.Fecha_Inicio))], ['Vence', esc(fechaTxt(x.Fecha_Vencimiento)) + ' · ' + x.Plazo_Dias + ' días'],
+    ['Paga los intereses', esc({ Vencimiento: 'Al vencimiento', Mensual: 'Cada mes', Trimestral: 'Cada trimestre' }[x.Pago_Intereses])],
+    ['Intereses estimados', '<span class="m-num">' + dinero(x.interesTotal) + '</span>'],
+    ['Retención (' + pct(x.Retencion_Pct) + ')', '<span class="m-num">−' + dinero(x.retencionTotal) + '</span>'],
+    ['Recibirías (neto)', '<strong class="m-num m-positivo">' + dinero(x.netoTotal) + '</strong>']
+  ];
+  if (x.cobrados) filas.push(['Intereses ya cobrados', '<span class="m-num">' + dinero(x.cobrados) + '</span>']);
+  if (!vigente) filas.push(['Estado', 'Cerrado el ' + esc(fechaTxt(x.Fecha_Cierre))]);
+  const avance = Math.round(x.avance * 100);
+  const cuerpo = '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">' + esc(vigente ? textoPlazo(x.dias) : 'Cerrado') + '</div>' +
+    '<div class="m-resumen-cifra m-num">' + dinero(x.Capital) + '</div>' +
+    (vigente ? '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Avance del plazo"><span style="width:' + avance + '%"></span></div><p class="m-ayuda">' + avance + ' % del plazo' + '</p>' : '') + '</div>' +
+    '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
+    (vigente
+      ? (x.proximoPago && !x.proximoPago.esFinal ? '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="intereses">Registrar intereses (' + esc(fechaTxt(x.proximoPago.fecha)) + ')</button>' : '') +
+        '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="cobrar">' + (x.dias > 0 ? 'Cancelar antes de tiempo' : 'Cobrar este CDT') + '</button>' +
+        '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="editar">Editar</button>' +
+        (!x.cobrados ? '<button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular este CDT</button>' : '')
+      : '');
+  let siguiente = null;
+  await abrirHoja({
+    titulo: x.Nombre, izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    extra: {
+      intereses: () => { siguiente = () => abrirInteresesCdt(x); return Promise.resolve(); },
+      cobrar: () => { siguiente = () => abrirCierreCdt(x); return Promise.resolve(); },
+      editar: () => { siguiente = () => abrirFormulario('CDTs', x.ID_CDT); return Promise.resolve(); },
+      anular: () => api('voidCdt', x.ID_CDT).then(res => { aplicarEscritura(res); render(); aviso('CDT anulado'); })
+    }
+  });
+  if (siguiente) siguiente();
+}
+
+function aplicarCdt(res) {
+  aplicarEscritura(res);
+  if (res.cdts) App.cdt.data = res.cdts;
+}
+
+/** Los pagos de intereses (CDT que pagan cada mes o trimestre). */
+async function abrirInteresesCdt(x) {
+  const p = x.proximoPago;
+  const campos = [
+    { k: 'Interes', label: 'Intereses recibidos', tipo: 'dinero', requerido: true },
+    { k: 'Retencion', label: 'Retención', tipo: 'dinero' },
+    { k: 'Bolsillo', label: 'Llegaron a', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) }
+  ];
+  const preferido = x.ID_Bolsillo_Destino || ultimoBolsillo();
+  await abrirHoja({
+    titulo: 'Intereses de ' + x.Nombre,
+    cuerpo: '<form novalidate data-form="intereses-cdt">' + htmlCampo(campos[0], p ? p.valor : '', {}) + htmlCampo(campos[1], p ? Math.round(p.valor * x.Retencion_Pct * 100) / 100 : '', {}) + htmlCampo(campos[2], preferido, {}) +
+      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+      '<p class="m-ayuda">Moni calcula lo que debería pagarte el banco. Escribe lo que realmente recibiste.</p>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => activarEcoDinero(raiz),
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Interes === '' || (typeof v.Interes === 'number' && isNaN(v.Interes))) throw new Error('Escribe los intereses recibidos.');
+      if (!v.Bolsillo) throw new Error('Elige el bolsillo al que llegaron.');
+      const res = await api('collectCdtInteres', x.ID_CDT, { Interes: v.Interes, Retencion: v.Retencion === '' ? 0 : v.Retencion, ID_Bolsillo: v.Bolsillo, Fecha: $('#f-Fecha', raiz).value });
+      recordarBolsillo(v.Bolsillo); aplicarCdt(res); render(); aviso('Intereses registrados');
+    }
+  });
+}
+
+/** Cobrar al vencimiento, o cancelar antes de tiempo; con la opción de renovar. */
+async function abrirCierreCdt(x) {
+  const campos = [
+    { k: 'Capital', label: 'Capital que te devolvieron', tipo: 'dinero', requerido: true },
+    { k: 'Interes', label: 'Intereses (brutos)', tipo: 'dinero', requerido: true },
+    { k: 'Retencion', label: 'Retención', tipo: 'dinero' },
+    { k: 'Bolsillo', label: 'Llegó a', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) },
+    { k: 'Renovar', label: 'Renovarlo con el mismo capital', tipo: 'interruptor', info: 'El capital sigue invertido: se crea otro CDT con las mismas condiciones desde hoy y solo te llegan los intereses.' }
+  ];
+  const preferido = x.ID_Bolsillo_Destino || ultimoBolsillo();
+  const anticipado = x.dias > 0;
+  await abrirHoja({
+    titulo: anticipado ? 'Cancelar ' + x.Nombre : 'Cobrar ' + x.Nombre,
+    cuerpo: '<form novalidate data-form="cierre-cdt">' +
+      (anticipado ? '<p class="m-hoja-mensaje">Faltan ' + x.dias + ' días para el vencimiento. Escribe lo que el banco realmente te devolvió; los intereses sugeridos son solo lo causado hasta hoy.</p>' : '') +
+      htmlCampo(campos[0], x.Capital, {}) + htmlCampo(campos[1], x.sugerencia.interes, {}) + htmlCampo(campos[2], x.sugerencia.retencion, {}) + htmlCampo(campos[3], preferido, {}) +
+      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+      htmlCampo(campos[4], x.Renovar && !anticipado, {}) +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => activarEcoDinero(raiz),
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Capital === '' || (typeof v.Capital === 'number' && isNaN(v.Capital))) throw new Error('Escribe el capital devuelto.');
+      if (v.Interes === '' || (typeof v.Interes === 'number' && isNaN(v.Interes))) throw new Error('Escribe los intereses (puede ser 0).');
+      if (!v.Bolsillo) throw new Error('Elige el bolsillo al que llegó el dinero.');
+      const res = await api('closeCdt', x.ID_CDT, { Capital: v.Capital, Interes: v.Interes, Retencion: v.Retencion === '' ? 0 : v.Retencion, ID_Bolsillo: v.Bolsillo, Fecha: $('#f-Fecha', raiz).value, Renovar: !!v.Renovar });
+      recordarBolsillo(v.Bolsillo); aplicarCdt(res); await refrescarParcial({ tablas: ['CDTs'] }); render();
+      aviso(res.renovado ? 'CDT cobrado y renovado' : 'CDT cobrado');
+    }
+  });
+}
+
 // ---------- Ingresos recurrentes ----------
 
 App.ing = { data: null, cargando: false, error: null };
@@ -3640,7 +3928,7 @@ function filaCobro(s) {
   return fila({
     icono: s.Tipo === 'Servicio' ? 'pulso' : 'tarjetas',
     titulo: esc(s.Nombre),
-    sub: esc(textoCobro(s)) + (s.medio ? ' · ' + esc(s.medio) : ''),
+    sub: esc(textoCobro(s)) + (s.Hogar ? ' · ' + esc(s.Hogar) : '') + (s.medio ? ' · ' + esc(s.medio) : ''),
     final: '<span class="m-num' + (s.estado === 'vencida' ? ' m-negativo' : '') + '">' + dinero(s.Valor) + '</span><span class="m-row-sub" style="display:block">' + esc(etiqueta('PeriodoCobro', s.Periodicidad).toLowerCase()) + '</span>',
     chevron: true, attrs: 'data-acc="susc" data-id="' + esc(s.ID_Suscripcion) + '"'
   });
@@ -3706,7 +3994,7 @@ async function abrirDetalleCobro(id) {
   const cuerpo = '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">' + esc(textoCobro(s)) + ' · ' + esc(etiqueta('PeriodoCobro', s.Periodicidad).toLowerCase()) + '</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(s.Valor) + '</div>' +
     (s.Tipo === 'Servicio' ? '<p class="m-ayuda">Valor estimado: el último que pagaste.</p>' : '') +
-    '<p class="m-ayuda">' + (s.medio ? 'Se paga con ' + esc(s.medio) : 'Sin medio de pago: lo eliges al pagar.') + (s.Ultimo_Pago ? ' · último pago ' + esc(s.Ultimo_Pago) : '') + '</p></div>' +
+    '<p class="m-ayuda">' + (s.medio ? 'Se paga con ' + esc(s.medio) : 'Sin medio de pago: lo eliges al pagar.') + (s.Ultimo_Pago ? ' · último pago ' + esc(fechaTxt(s.Ultimo_Pago)) : '') + '</p></div>' +
     '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)">' +
     '<button type="button" class="m-btn m-btn-primary" data-hoja-acc="pagar">Registrar el pago</button>' +
     (s.url ? enlaceExterno(s.url, 'Ir a pagar') : '') +
@@ -4395,9 +4683,10 @@ const PASOS_ASIST = [
   { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' },
   { id: 'nomina', corto: 'Nómina' },
   { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true },
-  { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
-  { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un inmueble', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'cdt', corto: 'CDT', tabla: 'CDTs', uno: 'un CDT', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un hogar', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', clave: 'Tipo', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
   { id: 'tasa', corto: 'Dólar', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
@@ -4408,9 +4697,10 @@ const CAMPOS_ASIST = {
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
   Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo'],
-  Suscripciones: ['Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta'],
+  Suscripciones: ['Nombre', 'Tipo', 'ID_Inmueble', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'URL_Pago'],
+  CDTs: ['Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Pago_Intereses', 'Retencion_Pct'],
   Inmuebles: ['Nombre'],
-  Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago']
+  Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
@@ -4419,9 +4709,10 @@ const TEXTOS_ASIST = {
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
   nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Más → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
-  suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; Moni te recuerda cuándo se cobra.' },
-  hogar: { titulo: 'Tu hogar', sub: 'Es opcional. Agrega la casa o el apartamento cuyos servicios pagas (puedes tener varios). Después podrás guardar el código de pago de cada servicio.' },
-  servicios: { titulo: 'Servicios públicos de tu hogar', sub: 'Es opcional. Luz, agua, gas, internet… Guarda el código de pago para tenerlo a la mano. Si el valor cambia cada mes, créalo también como suscripción de tipo servicio.' },
+  cdt: { titulo: '¿Tienes CDT?', sub: 'Es opcional. Un CDT es dinero que tienes a plazo fijo en un banco. Regístralo con su capital, tasa y plazo: Moni lo muestra como "Invertido" (no como disponible), calcula lo que ganarás y te avisa cuando vence. Los que ya tenías no descuentan nada de tus bolsillos.' },
+  suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; si lo pagas en más de un hogar, elige a cuál pertenece. Moni te recuerda cuándo se cobra.' },
+  hogar: { titulo: 'Tu hogar', sub: 'Es opcional. Agrega la casa o el apartamento cuyos servicios pagas (puedes tener varios, por ejemplo el tuyo y el de tu mamá). Los servicios y las suscripciones se vinculan a un hogar.' },
+  servicios: { titulo: 'Servicios públicos de tu hogar', sub: 'Es opcional. Luz, agua, gas, internet… Cada servicio va en un hogar: guarda su código de pago y, si quieres, el enlace para pagar. Si el valor cambia cada mes, créalo también como suscripción de tipo servicio.' },
   tasa: { titulo: '¿Manejas dólares?', sub: 'Es opcional. Moni puede traer el dólar (TRM) de Google Finance para mostrarte cuánto equivale en pesos un saldo en dólares. Es solo informativo: tus saldos y conversiones usan lo que cobró tu banco.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas. Puedes agregar todas las que tengas.' }
 };
@@ -4453,6 +4744,7 @@ function aplicaPasoAsist(id) {
   if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
   if (id === 'ingresos') return activos('Bolsillos').length > 0; // el ingreso llega a un bolsillo
   if (id === 'servicios') return activos('Inmuebles').length > 0; // un servicio es de un inmueble
+  if (id === 'cdt') return activos('Bancos').some(b => (b.Divisa || 'COP') === 'COP'); // un CDT es de un banco en pesos
   return true;
 }
 
@@ -4474,7 +4766,7 @@ const camposAsist = tabla => CAT[tabla].campos.filter(c => CAMPOS_ASIST[tabla].i
 const listaAsist = tabla => activos(tabla).filter(f => !esVerdad(f.Es_Interno));
 
 function valorInicialAsist(c) {
-  if (c.k === 'Proximo_Cobro') return App.boot.hoy;
+  if (c.k === 'Proximo_Cobro' || c.k === 'Fecha_Inicio') return App.boot.hoy;
   const preseleccion = (lista, idCol, recordado) => lista.some(f => f[idCol] === recordado) ? recordado : (lista.length === 1 ? lista[0][idCol] : '');
   if (c.k === 'ID_Banco') return preseleccion(activos('Bancos'), 'ID_Banco', App.asist.ultimo.ID_Banco);
   if (c.k === 'ID_Cuenta') return preseleccion(activos('Cuentas').filter(x => esVerdad(x.Permite_Bolsillos)), 'ID_Cuenta', App.asist.ultimo.ID_Cuenta);
@@ -4501,8 +4793,10 @@ function htmlHechosAsist(tabla) {
   return '<section class="m-seccion" aria-label="Ya agregaste"><h2 class="m-seccion-titulo">Ya agregaste</h2><div class="m-group">' +
     lista.map(f => {
       const x = def.fila(f);
-      return '<div class="m-row m-hecho"><span class="m-row-icono">' + ico('check', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + x.titulo + '</span>' +
-        (x.sub ? '<span class="m-row-sub" style="display:block">' + x.sub + '</span>' : '') + '</span>' + (x.final ? '<span class="m-row-final">' + x.final + '</span>' : '') + '</div>';
+      // Lo ya agregado se puede corregir aquí mismo: al tocarlo se abre su formulario.
+      return '<button type="button" class="m-row m-hecho" style="width:100%;text-align:left" data-acc="asist-editar" data-tabla="' + esc(tabla) + '" data-id="' + esc(f[def.id]) + '" aria-label="Editar ' + esc(f.Nombre || f.Tipo || '') + '">' +
+        '<span class="m-row-icono">' + ico('check', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + x.titulo + '</span>' +
+        (x.sub ? '<span class="m-row-sub" style="display:block">' + x.sub + '</span>' : '') + '</span>' + (x.final ? '<span class="m-row-final">' + x.final + '</span>' : '') + '<span class="m-btn-texto" aria-hidden="true">Editar</span></button>';
     }).join('') + '</div></section>';
 }
 
@@ -4549,7 +4843,7 @@ function vPasoAsistente(id) {
   } else if (id === 'nomina') {
     const yaHay = activos('Nomina_Escenarios').length > 0;
     cuerpo = yaHay
-      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina. Puedes ajustarla cuando quieras en Más → Nómina.</p></div>'
+      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina (sueldo base ' + dinero(activos('Nomina_Escenarios')[0].Sueldo_Base) + '). Puedes ajustarla cuando quieras en Más → Nómina.</p><button type="button" class="m-btn m-btn-secondary" data-acc="asist-sueldo">Cambiar mi sueldo</button></div>'
       : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
         '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
@@ -4827,7 +5121,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing, App.cdt].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -4902,6 +5196,8 @@ const ACCIONES = {
   'asist-atras': () => moverAsist(-1),
   'asist-omitir': () => terminarAsistente(true),
   'asist-saltar': () => moverAsist(1),
+  'asist-editar': el => abrirFormulario(el.dataset.tabla, el.dataset.id),
+  'asist-sueldo': () => abrirSueldoNomina(),
   'asist-fin': () => terminarAsistente(false),
   'asist-reanudar': () => { App.asist.omitido = false; recordarAsistenteOmitido(false); App.asist.activo = false; App.asist.paso = null; render(true); },
   'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
@@ -5014,6 +5310,15 @@ const ACCIONES = {
   'registrar-nomina': () => abrirRegistrarNomina(),
   'nom-concepto-nuevo': () => abrirConceptoNomina(null),
   'nom-sueldo': () => abrirSueldoNomina(),
+  'aviso-ir': el => navegar(el.dataset.ruta),
+  'avisos-todos': () => { App.avisosTodos = !App.avisosTodos; render(); },
+  'aviso-ocultar': async el => {
+    try { App.boot.avisos = await api('dismissAviso', el.dataset.id); render(); aviso('Listo. Lo puedes volver a ver en Ajustes → Avisos.', { deshacer: async () => { try { App.boot.avisos = await api('restoreAvisos'); render(); } catch (e) { aviso(e.message, true); } } }); }
+    catch (e) { aviso(e.message, true); }
+  },
+  'avisos-restaurar': async () => { try { App.boot.avisos = await api('restoreAvisos'); render(); aviso('Los avisos vuelven a mostrarse'); } catch (e) { aviso(e.message, true); } },
+  cdt: el => abrirDetalleCdt(el.dataset.id),
+  'recargar-cdt': () => { App.cdt.error = null; App.cdt.data = null; render(); },
   'nom-adic-nuevo': () => abrirAdicionalNomina(),
   'nom-adic-quitar': el => recalcularNomina(o => { o.adicionales = (o.adicionales || []).filter((x, i) => String(i) !== el.dataset.id); }),
   'nom-concepto-editar': el => abrirConceptoNomina(el.dataset.id),

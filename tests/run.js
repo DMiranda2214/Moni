@@ -128,6 +128,8 @@ require('./test_movimientos')(prueba, assert, crearEntorno);
 require('./test_presupuesto')(prueba, assert, crearEntorno);
 require('./test_deudas')(prueba, assert, crearEntorno);
 require('./test_extras')(prueba, assert, crearEntorno);
+require('./test_cdt')(prueba, assert, crearEntorno);
+require('./test_avisos')(prueba, assert, crearEntorno);
 require('./test_reinicio')(prueba, assert, crearEntorno);
 require('./test_logs')(prueba, assert, crearEntorno);
 require('./test_divisas')(prueba, assert, crearEntorno);

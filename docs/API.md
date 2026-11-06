@@ -134,3 +134,16 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `saveConfigParams` | `mapa` |
 | `resetConfigParam` | `clave` |
 
+## CDT y avisos
+
+| Función | Parámetros |
+|---|---|
+| `getCdts` | — |
+| `collectCdtInteres` | `id`, `{ Interes, Retencion, ID_Bolsillo, Fecha }` |
+| `closeCdt` | `id`, `{ Capital, Interes, Retencion, ID_Bolsillo, Fecha, Renovar }` |
+| `voidCdt` | `id` |
+| `dismissAviso` | `id` |
+| `restoreAvisos` | — |
+| `getRefresco` | `{ tablas, config }` — devuelve solo lo que cambió (catálogos, saldos, lo invertido, estado y avisos) |
+
+Crear o editar un CDT va por `saveCatalogo('CDTs', item, { descontar, ID_Bolsillo_Origen })`. `getBootstrap` trae `invertido` y `avisos`.

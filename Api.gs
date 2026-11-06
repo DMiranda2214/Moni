@@ -94,6 +94,8 @@ function getBootstrap() {
       ppto: (function () { const p = obtenerPresupuestoMes(mesActual); return { mes: p.mes, existe: p.existe, totales: p.totales }; })(),
       // Próximos pagos e ingresos por recibir se piden aparte (getProximos / getProximosIngresos) al pintar Inicio.
       proximosPendientes: true,
+      invertido: resumenInvertido_(),
+      avisos: obtenerAvisos_(),
       cuenta: estadoMiCuenta(),
       demoHabilitado: demoHabilitado_(),
       enums: ENUMS,
@@ -103,7 +105,7 @@ function getBootstrap() {
 }
 
 /** Tablas que cambian cuando se guarda una de estas (una cuenta crea su bolsillo interno, etc.). */
-const RELACIONADAS_ = { Bancos: ['Bancos', 'Cuentas', 'Bolsillos'], Cuentas: ['Bancos', 'Cuentas', 'Bolsillos'], Bolsillos: ['Bancos', 'Cuentas', 'Bolsillos'] };
+const RELACIONADAS_ = { CDTs: ['CDTs'], Bancos: ['Bancos', 'Cuentas', 'Bolsillos'], Cuentas: ['Bancos', 'Cuentas', 'Bolsillos'], Bolsillos: ['Bancos', 'Cuentas', 'Bolsillos'] };
 
 /**
  * Refresco liviano después de guardar: en vez de recargar toda la app, devuelve solo lo que cambió.
@@ -125,10 +127,18 @@ function getRefresco(opc) {
       if (t === 'Nomina_Escenarios') out.catalogos[t].forEach(e => { e.subsidios = subsidiosDeEscenario_(e.ID_Nomina_Esc); });
     });
     if (tablas.some(t => RELACIONADAS_[t])) out.saldos = obtenerSaldos();
+    if (tablas.indexOf('CDTs') !== -1) out.invertido = resumenInvertido_(); // un CDT nuevo cambia lo invertido
     out.estado = obtenerEstadoConfiguracion();
+    out.avisos = obtenerAvisos_();
     return out;
   });
 }
+
+/** "Ahora no" en un aviso de Inicio. */
+function dismissAviso(id) { return responder_(function () { return ocultarAviso(texto_(id)); }); }
+
+/** Volver a mostrar los avisos ocultos. */
+function restoreAvisos() { return responder_(function () { return mostrarAvisosOcultos(); }); }
 
 /** "Actualizar desde la hoja": olvida lo memorizado para releer todo (por si se editó la hoja a mano). */
 function refreshCache() {
@@ -171,6 +181,27 @@ function saveMiNomina(sueldo, periodo, opciones) {
     const esc = guardarMiNomina(sueldo);
     return { escenario: esc, nomina: obtenerNominaMes(periodo, '', opciones) };
   });
+}
+
+/** Pantalla de CDT: vigentes, cerrados y totales. */
+function getCdts() { return responder_(function () { return obtenerCdts(); }); }
+
+function resultadoCdt_(ids, extra) {
+  return Object.assign(resultadoEscritura_(ids || [], undefined, { cdts: obtenerCdts(), invertido: resumenInvertido_() }), extra || {});
+}
+
+/** Intereses de un CDT que los paga cada mes o trimestre. */
+function collectCdtInteres(id, d) {
+  return responder_(function () { const r = cobrarInteresesCdt(id, d); return resultadoCdt_(r.ids, { interes: r.interes, retencion: r.retencion }); });
+}
+
+/** Cobrar un CDT (o cancelarlo antes), con o sin renovación. */
+function closeCdt(id, d) {
+  return responder_(function () { const r = cerrarCdt(id, d); return resultadoCdt_(r.ids, { interes: r.interes, retencion: r.retencion, renovado: r.renovado }); });
+}
+
+function voidCdt(id) {
+  return responder_(function () { const r = anularCdt(id); return resultadoCdt_(r.ids); });
 }
 
 function disableCatalogo(tabla, id) {
@@ -648,7 +679,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave === 'Avisos_Ocultos' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 

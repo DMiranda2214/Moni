@@ -171,6 +171,12 @@ function renglonDeSuscripcion_(s, items) {
   return items.find(i => i.ID_Suscripcion === s.ID_Suscripcion) || (nombre ? items.find(i => texto_(i.Concepto).toLowerCase() === nombre) : null) || null;
 }
 
+/** Cómo se llama el renglón de una suscripción: con el hogar cuando hay varios (Netflix · Casa de mamá). */
+function conceptoSuscripcion_(s, inmuebles) {
+  const hogar = s.ID_Inmueble ? buscarPorId_(inmuebles, 'ID_Inmueble', s.ID_Inmueble) : null;
+  return hogar && inmuebles.filter(estaActivo).length > 1 ? s.Nombre + ' · ' + hogar.Nombre : s.Nombre;
+}
+
 /** Cuántas suscripciones o servicios de ese mes todavía no están en el presupuesto. */
 function suscripcionesFaltantes_(m, items) {
   return getTableData('Suscripciones').filter(s => cobroEnMes_(s, m) && !renglonDeSuscripcion_(s, items));
@@ -189,8 +195,10 @@ function agregarSuscripcionesAlMes(mes) {
   let actualizados = 0;
   const usados = {};
   items.forEach(i => { usados[texto_(i.Concepto).toLowerCase()] = true; });
+  const inmuebles = leer_('Inmuebles');
   leer_('Suscripciones').filter(s => cobroEnMes_(s, m)).forEach(s => {
     const r = renglonDeSuscripcion_(s, items);
+    const nombreRenglon = conceptoSuscripcion_(s, inmuebles);
     const valor = Number(s.Valor) || 0;
     if (r) {
       // Solo los renglones que la app creó para esa suscripción se mantienen al día, y mientras no estén pagados.
@@ -199,13 +207,13 @@ function agregarSuscripcionesAlMes(mes) {
         if (Number(r.Plan) !== valor) cambios.Plan = valor;
         if ((r.ID_Tarjeta || '') !== (s.ID_Tarjeta || '')) cambios.ID_Tarjeta = s.ID_Tarjeta || '';
         if ((r.ID_Bolsillo_Destino || '') !== (s.ID_Bolsillo || '')) cambios.ID_Bolsillo_Destino = s.ID_Bolsillo || '';
-        if (r.Concepto !== s.Nombre && !usados[texto_(s.Nombre).toLowerCase()]) cambios.Concepto = s.Nombre;
+        if (r.Concepto !== nombreRenglon && !usados[texto_(nombreRenglon).toLowerCase()]) cambios.Concepto = nombreRenglon;
         if (Object.keys(cambios).length) { updateRow('Presupuesto_Mes', r._rowIndex, cambios); actualizados++; }
       }
       return;
     }
-    let concepto = s.Nombre;
-    if (usados[concepto.toLowerCase()]) concepto = s.Nombre + ' (' + (s.Tipo === 'Servicio' ? 'servicio' : 'suscripción') + ')';
+    let concepto = nombreRenglon;
+    if (usados[concepto.toLowerCase()]) concepto = nombreRenglon + ' (' + (s.Tipo === 'Servicio' ? 'servicio' : 'suscripción') + ')';
     usados[concepto.toLowerCase()] = true;
     nuevos.push({
       ID_Item: nuevoId_('itm'), Mes: m, ID_Escenario: items[0].ID_Escenario, ID_Plantilla: '',

@@ -44,8 +44,11 @@ const SCHEMAS = {
     ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
     [170, 170, 110, 180, 150, 260, 200, 70]),
   Suscripciones: tabla_(
-    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
+    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
+  CDTs: tabla_(
+    ['ID_CDT', 'Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Fecha_Vencimiento', 'Pago_Intereses', 'Retencion_Pct', 'Estado', 'ID_Bolsillo_Origen', 'ID_Bolsillo_Destino', 'Renovar', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Intereses_Cobrados', 'ID_Mov_Apertura', 'Fecha_Cierre', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 170, 130, 90, 110, 90, 120, 120, 100, 90, 170, 170, 80, 120, 120, 130, 170, 110, 220, 70, 60]),
   Ingresos_Recurrentes: tabla_(
     ['ID_Ingreso', 'Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Categoria', 'Ultimo_Cobro', 'Notas', 'Activo', 'Orden'],
     [170, 220, 120, 110, 120, 80, 170, 170, 120, 220, 70, 60]),
@@ -99,6 +102,7 @@ const SCHEMAS = {
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
   Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'], Rendimiento_Base: ['', 'Todo', 'Bolsillos'] },
+  CDTs: { Pago_Intereses: ['Vencimiento', 'Mensual', 'Trimestral'], Estado: ['Vigente', 'Cerrado'] },
   Ingresos_Recurrentes: { Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
@@ -106,7 +110,7 @@ const ENUMS = {
   Personas: { Rol: ['Titular', 'Familiar', 'Otro'] },
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
-    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision'],
+    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -133,6 +137,7 @@ const COLUMNAS_TEXTO = {
   Servicios_Publicos: ['Codigo_Pago'],
   Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago'],
   Ingresos_Recurrentes: ['Proximo_Cobro', 'Ultimo_Cobro'],
+  CDTs: ['Fecha_Inicio', 'Fecha_Vencimiento', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Fecha_Cierre'],
   Movimientos: ['Fecha'],
   Compras_TC: ['Fecha', 'Mes_Extracto'],
   Extractos: ['Mes', 'Fecha_Pago'],
@@ -153,6 +158,7 @@ const DEFAULT_CONFIG = [
   ['Moneda', 'COP', 'General', 'texto', 'Código de moneda (ISO 4217)'],
   ['Tema', 'Automatico', 'Apariencia', 'seleccion', 'Claro, Oscuro o Automatico (sigue al dispositivo)'],
   ['Color_Acento', 'rosa', 'Apariencia', 'seleccion', 'Color de acento de la interfaz'],
+  ['Avisos_Ocultos', '', 'Sistema', 'texto', 'Avisos de Inicio que la persona decidió ocultar (separados por coma)'],
   ['Datos_Demo', 'FALSE', 'Sistema', 'booleano', 'TRUE mientras existan datos de demostración'],
   ['Carpeta_PDF', 'Moni/Extractos', 'General', 'texto', 'Ruta de Google Drive para extractos en PDF'],
   ['Respaldo_Frecuencia_Dias', '7', 'Respaldos', 'numero', 'Frecuencia de copia en días'],
@@ -267,7 +273,8 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Bancos', columna: 'Rendimiento_EA', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' },
-  { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' }
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' },
+  { tabla: 'Suscripciones', columna: 'ID_Inmueble', valor: '' }
 ];
 
 function migrarColumnas_(ss) {

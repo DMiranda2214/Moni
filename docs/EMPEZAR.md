@@ -20,8 +20,10 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
    - **Tarjetas de crédito** *(opcional)*: con su día de corte y de pago.
    - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Más → Nómina**.
    - **Otros ingresos** *(opcional)*: otro trabajo, arriendo, ventas…
-   - **Suscripciones** *(opcional)*: streaming, música, internet, el celular…
-   - **Hogar y servicios** *(opcional)*: tu casa o apartamento y el código de pago de luz, agua, gas…
+   - **CDT** *(opcional)*: los que tengas a plazo fijo; aparecen como "Invertido".
+   - **Hogar** *(opcional)*: tu casa o apartamento (puedes agregar varios, por ejemplo el de tu mamá).
+   - **Servicios** *(opcional)*: el código y el enlace de pago de luz, agua, gas… de cada hogar.
+   - **Suscripciones** *(opcional)*: streaming, música, internet, el celular… (también por hogar).
    - **Dólar** *(opcional)*: tú decides si Moni trae la TRM de Google Finance (solo informativa).
 5. **Listo.** Desde **Inicio** ya puedes registrar tu primer gasto.
 

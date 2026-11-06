@@ -1,6 +1,7 @@
-# Lanzamiento de la versión 1.0.0
+# Lanzamiento
 
-Lista para pasar a producción y compartir la app. Marca cada paso.
+Lista para pasar a producción y compartir la app. La versión 1.0.0 ya se publicó; esta lista sirve para cada versión nueva (la 1.1.0 agrega CDT, hogares y avisos).
+
 
 ## 1. Antes de publicar (en tu computador)
 - [ ] `git checkout main && git pull` (con la versión 1.0.0 ya fusionada).
@@ -15,6 +16,14 @@ Lista para pasar a producción y compartir la app. Marca cada paso.
 - [ ] Generar el presupuesto del mes: aparecen las suscripciones y los servicios.
 - [ ] Nómina: sueldo, "Agregar algo de este mes" y registrar el pago.
 - [ ] Ahorro: banco con rendimiento diario y otro "solo bolsillos".
+
+## 2 bis. Qué probar de la 1.1.0 en desarrollo
+- [ ] Una hoja de la 1.0 recibe sola la tabla `CDTs` y la columna de hogar al abrir la app.
+- [ ] CDT: crear uno que ya existía (no cambia saldos) y uno nuevo descontando el capital; ver "Invertido" en Inicio; cobrarlo, cancelarlo y renovarlo.
+- [ ] Hogares: Netflix en dos hogares; el presupuesto muestra *Netflix · Hogar*.
+- [ ] Fechas: escribir `2026/11/06` en un gasto y elegir otra con el calendario.
+- [ ] Avisos: "Para tener en cuenta" en Inicio; "Ahora no" oculta y *Ajustes → Avisos de Inicio* los devuelve.
+- [ ] Primeros pasos: tocar lo ya agregado lo abre para editarlo.
 
 ## 3. Producción
 - [ ] En el editor del proyecto de **producción**: ejecutar una vez `activarModoMultiusuario` y aceptar los permisos.

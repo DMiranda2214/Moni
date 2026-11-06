@@ -31,19 +31,20 @@ function resumenSuscripcion_(s, hoy, ctx) {
   const srv = s.ID_Servicio ? buscarPorId_(ctx.servicios, 'ID_Servicio', s.ID_Servicio) : null;
   const tar = s.ID_Tarjeta ? buscarPorId_(ctx.tarjetas, 'ID_Tarjeta', s.ID_Tarjeta) : null;
   const bol = s.ID_Bolsillo ? buscarPorId_(ctx.bolsillos, 'ID_Bolsillo', s.ID_Bolsillo) : null;
+  const hog = s.ID_Inmueble ? buscarPorId_(ctx.inmuebles, 'ID_Inmueble', s.ID_Inmueble) : null;
   const valor = Number(s.Valor) || 0;
   return {
     ID_Suscripcion: s.ID_Suscripcion, Nombre: s.Nombre, Tipo: s.Tipo || 'Suscripcion', Valor: valor, Periodicidad: s.Periodicidad || 'Mensual',
     Proximo_Cobro: s.Proximo_Cobro, dias: dias, estado: dias < 0 ? 'vencida' : (dias <= DIAS_PRONTO ? 'pronto' : 'ok'),
     mensual: costoMensual_(valor, s.Periodicidad), anual: redondear2_(valor * 12 / (MESES_PERIODO[s.Periodicidad] || 1)),
     ID_Bolsillo: s.ID_Bolsillo || '', ID_Tarjeta: s.ID_Tarjeta || '', medio: tar ? tar.Nombre : (bol ? bol.Nombre : ''),
-    ID_Servicio: s.ID_Servicio || '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || '' : ''),
+    ID_Servicio: s.ID_Servicio || '', ID_Inmueble: s.ID_Inmueble || '', Hogar: hog ? hog.Nombre : '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || '' : ''),
     Ultimo_Pago: s.Ultimo_Pago || '', Notas: s.Notas || ''
   };
 }
 
 function contextoSuscripciones_() {
-  return { servicios: getTableData('Servicios_Publicos'), tarjetas: getTableData('Tarjetas'), bolsillos: getTableData('Bolsillos') };
+  return { servicios: getTableData('Servicios_Publicos'), tarjetas: getTableData('Tarjetas'), bolsillos: getTableData('Bolsillos'), inmuebles: getTableData('Inmuebles') };
 }
 
 /** Pantalla de suscripciones y servicios, en una sola llamada. */

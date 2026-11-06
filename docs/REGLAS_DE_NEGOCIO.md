@@ -14,6 +14,7 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 ## 2. Presupuesto
 - **Plantilla** por escenario (uno es el base). **Generar** crea los renglones del mes; si el mes ya existe, reemplazarlo solo se permite si ningún renglón tiene movimientos.
 - **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma; y una **compra con tarjeta** enlazada suma el día de la compra (las de fuente *Del presupuesto* ya cuentan por su traslado a la reserva, así que no se cuentan dos veces; las *De otra persona* no cuentan).
+- Una suscripción o servicio puede pertenecer a un **hogar** (`ID_Inmueble`): el mismo nombre se puede repetir en hogares distintos y, cuando hay varios hogares, el renglón se llama *Nombre · Hogar*.
 - **Suscripciones y servicios dentro del presupuesto:** al generar un mes, cada suscripción o servicio que toca ese mes (según su periodicidad, contada desde su próximo cobro) entra como renglón de gasto, con su valor, su bolsillo o su tarjeta (`Presupuesto_Mes.ID_Suscripcion` los enlaza). Si el presupuesto del mes ya existe, la suscripción nueva o editada entra o se actualiza sola (mientras el renglón no esté pagado); el botón *Agregar* de Presupuesto cubre las que falten. Pagar la suscripción cuenta como lo real del renglón y lo deja pagado; deshacer el pago lo devuelve a pendiente. Un renglón de la plantilla con el mismo nombre que el *Renglón* de la suscripción cuenta como el suyo (no se duplica).
 - Cada renglón puede recordar **con qué se paga** (`ID_Tarjeta`: su bolsillo, o una tarjeta). Al registrar un gasto de ese renglón, Moni propone ese medio.
 - **Ahorro** de un renglón = Plan − Real, **solo si está pagado**. Resto (restante) = Plan − Real.
@@ -69,6 +70,21 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - Si el cobro tiene un **renglón del presupuesto** (`Renglon`, por nombre), el pago se enlaza al renglón del mes en que se paga; con tarjeta, además aparta el dinero del bolsillo del renglón. Sin renglón, con tarjeta no aparta nada.
 - *Pronto* = vence en 7 días o menos; *vencida* = fecha pasada. Los próximos pagos de Inicio muestran los de 14 días.
 - En un **servicio**, el valor pasa a ser el último pagado.
+
+## 7 bis. CDT
+- Un CDT es capital entregado a un banco (en pesos) por un **plazo** en días a una **tasa efectiva anual**. El vencimiento es la fecha de inicio más el plazo. El interés estimado es `capital × ((1 + EA)^(días/365) − 1)`; la **retención** es el porcentaje que la persona indica en cada CDT (no se fija en el código porque depende del producto y de la norma).
+- Mientras está vigente, el capital **no es dinero disponible**: se muestra como **Invertido** (en Inicio y en la pantalla de CDT) y no suma al disponible ni al ahorro.
+- **Uno que ya se tenía** antes de usar Moni no toca los saldos (ese dinero nunca estuvo en los bolsillos). **Uno nuevo** puede *descontar el capital* de un bolsillo: un ajuste `CDT_Apertura` negativo, anulable.
+- **Cobrar** (o cancelar antes): el capital vuelve a un bolsillo (ajuste `CDT_Retorno`), los intereses entran como ingreso (`Interes`) y la retención sale como gasto (`Retencion`). Antes del vencimiento se sugiere solo el interés causado hasta ese día, y todo se puede corregir con lo que realmente entregó el banco. **Renovar** deja el capital invertido y crea otro CDT con las mismas condiciones desde esa fecha; solo llegan los intereses.
+- Los que pagan **cada mes o cada trimestre** tienen un próximo pago: se registra con *Registrar intereses* y el siguiente se calcula solo (el último coincide con el vencimiento).
+- Con cifras ya usadas (apertura descontada, intereses cobrados o cerrado) no se cambian capital, tasa, plazo, fechas ni banco: se anula y se crea de nuevo. Anular solo se puede sin intereses cobrados.
+- Los vencimientos y pagos de intereses salen en *Por recibir* de Inicio y en los recordatorios de Google Calendar.
+
+## 7 ter. Avisos de Inicio
+- *Para tener en cuenta* lista lo que falta o está desactualizado, calculado desde el estado de la hoja (desaparece solo al resolverse). **Importantes** (salario mínimo de un año anterior, CDT vencidos, suscripciones que faltan en el presupuesto) no se ocultan. **Sugerencias** (nómina, suscripciones, recordatorios, tasa del dólar, rendimiento de las cuentas de ahorro) y **novedades** (CDT, hogares) se pueden ocultar con *Ahora no*; *Ajustes → Avisos de Inicio* las vuelve a mostrar.
+
+## 7 quater. Fechas
+- Las fechas se muestran y se escriben como **AAAA/MM/DD**. Por dentro se guardan como texto AAAA-MM-DD; el servidor acepta las dos formas de separar.
 
 ## 8. Saldos iniciales
 - Cada cuenta y bolsillo se crea con su **saldo inicial** (el punto de partida) en el asistente de primeros pasos; no hay un paso aparte de arranque. Después el saldo se calcula con los movimientos.
