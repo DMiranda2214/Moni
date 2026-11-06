@@ -229,7 +229,7 @@ function verificarEsquema(spreadsheet, opciones) {
   // Verificar son 26 lecturas de hoja. Con usarCache, un resultado correcto se recuerda 6 horas;
   // setupDatabase lo olvida. Solo se guardan los resultados "listo", nunca los fallos.
   const cache = cache_();
-  if (opciones && opciones.usarCache && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
+  if (opciones && opciones.usarCache && !(opciones.solo) && cache.get('ESQUEMA_OK') === ESQUEMA_VERSION) {
     return { faltantes: [], diferencias: [], listo: true, desdeCache: true };
   }
 
@@ -237,7 +237,9 @@ function verificarEsquema(spreadsheet, opciones) {
   const faltantes = [];
   const diferencias = [];
 
+  const solo = opciones && opciones.solo; // revisar solo estas tablas (las demás se acaban de crear con su encabezado exacto)
   Object.keys(SCHEMAS).forEach(nombre => {
+    if (solo && solo.indexOf(nombre) === -1) return;
     const sheet = ss.getSheetByName(nombre);
     if (!sheet) { faltantes.push(nombre); return; }
     const esperado = SCHEMAS[nombre].headers;
@@ -250,7 +252,7 @@ function verificarEsquema(spreadsheet, opciones) {
   });
 
   const listo = faltantes.length === 0 && diferencias.length === 0;
-  if (listo) { try { cache.put('ESQUEMA_OK', ESQUEMA_VERSION, 21600); } catch (e) {} }
+  if (listo && !solo) { try { cache.put('ESQUEMA_OK', ESQUEMA_VERSION, 21600); } catch (e) {} }
   return { faltantes: faltantes, diferencias: diferencias, listo: listo };
 }
 
@@ -309,27 +311,43 @@ function migrarColumnas_(ss) {
  * Instala la base de datos. Idempotente: crea lo que falta y nunca borra ni sobrescribe datos.
  * Si una pestaña existe con encabezados distintos, no la toca y la reporta en `diferencias`.
  */
-function setupDatabase(spreadsheet) {
+function setupDatabase(spreadsheet, opciones) {
   const ss = spreadsheet || getSpreadsheet();
   const creadas = [];
   const existentes = [];
+  // Con presupuestoMs, si se acaba el tiempo se detiene y devuelve { parcial: true }: quien llama repite
+  // la llamada y continúa donde quedó (cada pestaña terminada se reconoce por su encabezado). Así una
+  // instalación larga nunca choca con el límite de tiempo de Apps Script ni con la espera de la pantalla.
+  const limite = opciones && opciones.presupuestoMs ? Date.now() + opciones.presupuestoMs : 0;
+  const nombres = Object.keys(SCHEMAS);
 
   // La hoja y la app deben hablar la misma zona horaria.
   try { ss.setSpreadsheetTimeZone('America/Bogota'); } catch (e) {}
 
-  Object.keys(SCHEMAS).forEach(nombre => {
+  let pendientes = 0;
+  let trabajadas = 0; // siempre se avanza al menos una pestaña por llamada, aunque el tiempo sea muy corto
+  nombres.forEach(nombre => {
+    if (limite && trabajadas > 0 && Date.now() > limite) { // sin tiempo: se cuentan las que faltan por revisar
+      const s = ss.getSheetByName(nombre);
+      if (!s || s.getLastRow() === 0) pendientes++;
+      return;
+    }
     const config = SCHEMAS[nombre];
     let sheet = ss.getSheetByName(nombre);
-    const esNueva = !sheet;
-    if (esNueva) sheet = ss.insertSheet(nombre);
+    if (!sheet) sheet = ss.insertSheet(nombre);
 
     if (sheet.getLastRow() === 0) {
       prepararHoja_(sheet, nombre, config);
       creadas.push(nombre);
+      trabajadas++;
     } else {
       existentes.push(nombre);
     }
   });
+
+  if (pendientes > 0) {
+    return { ok: false, parcial: true, tablas: nombres.length, hechas: nombres.length - pendientes, creadas: creadas, url: ss.getUrl() };
+  }
 
   // Quitar la hoja vacía que Google crea por defecto
   ['Hoja 1', 'Hoja1', 'Sheet1'].forEach(nombre => {
@@ -345,10 +363,13 @@ function setupDatabase(spreadsheet) {
   invalidateCache();
   cache_().remove('ESQUEMA_OK');
 
-  const verificacion = verificarEsquema(ss);
+  // Lo recién creado ya tiene su encabezado exacto: solo se revisa lo que ya existía.
+  const verificacion = verificarEsquema(ss, existentes.length < nombres.length ? { solo: existentes } : undefined);
   return {
     ok: verificacion.listo,
-    tablas: Object.keys(SCHEMAS).length,
+    parcial: false,
+    tablas: nombres.length,
+    hechas: nombres.length,
     creadas: creadas,
     existentes: existentes,
     migradas: migradas,
@@ -360,37 +381,38 @@ function setupDatabase(spreadsheet) {
 /** Encabezado, anchos, listas desplegables, casillas y aviso al editar a mano. */
 function prepararHoja_(sheet, nombre, config) {
   const headers = config.headers;
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  const enc = sheet.getRange(1, 1, 1, headers.length);
-  enc.setFontWeight('bold');
-  enc.setBackground('#1C1C1E');
-  enc.setFontColor('#FFFFFF');
-  enc.setHorizontalAlignment('center');
+  // El encabezado se escribe AL FINAL: una pestaña sin encabezado cuenta como "sin terminar" y se rehace
+  // si la instalación se interrumpió a medias.
   sheet.setFrozenRows(1);
   config.widths.forEach((w, i) => sheet.setColumnWidth(i + 1, w));
 
   const filas = 1000;
+  // Todas las columnas de texto en una sola llamada (RangeList), en vez de una por columna.
+  const colsTexto = headers.map((h, i) => ((COLUMNAS_TEXTO[nombre] || []).indexOf(h) !== -1 || COL_AUDITORIA.indexOf(h) !== -1) ? i + 1 : 0).filter(Boolean);
+  if (colsTexto.length) {
+    const a1 = colsTexto.map(c => sheet.getRange(2, c, filas, 1).getA1Notation());
+    sheet.getRangeList(a1).setNumberFormat('@');
+  }
+  // No se precargan casillas de verificación: las celdas "FALSE" cuentan como contenido,
+  // getLastRow() devolvería 1001 y los registros nuevos se agregarían al final de la hoja.
   headers.forEach((h, i) => {
-    const col = i + 1;
-    if ((COLUMNAS_TEXTO[nombre] || []).indexOf(h) !== -1 || COL_AUDITORIA.indexOf(h) !== -1) {
-      sheet.getRange(2, col, filas, 1).setNumberFormat('@');
-    }
-    // No se precargan casillas de verificación: las celdas "FALSE" cuentan como contenido,
-    // getLastRow() devolvería 1001 y los registros nuevos se agregarían al final de la hoja.
     if (ENUMS[nombre] && ENUMS[nombre][h]) {
       try {
         const regla = SpreadsheetApp.newDataValidation()
           .requireValueInList(ENUMS[nombre][h].filter(Boolean), true)
           .setAllowInvalid(true)
           .build();
-        sheet.getRange(2, col, filas, 1).setDataValidation(regla);
+        sheet.getRange(2, i + 1, filas, 1).setDataValidation(regla);
       } catch (e) {}
     }
   });
 
   // Los datos los escribe la app: editar a mano muestra una advertencia, pero no se bloquea.
   try { sheet.protect().setDescription('Tabla gestionada por Moni').setWarningOnly(true); } catch (e) {}
+
+  const enc = sheet.getRange(1, 1, 1, headers.length);
+  enc.setValues([headers]);
+  enc.setFontWeight('bold').setBackground('#1C1C1E').setFontColor('#FFFFFF').setHorizontalAlignment('center');
 }
 
 /** Añade los parámetros que una base ya instalada todavía no tiene (los valores existentes no se tocan). */

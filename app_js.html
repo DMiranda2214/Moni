@@ -229,6 +229,17 @@ async function cargar() {
   render();
 }
 
+/** Instala las tablas por partes (cada llamada hace lo que alcanza en ~20 s) y muestra el avance en el botón. */
+async function completarInstalacion(boton, hechas, tablas) {
+  if (boton) boton.textContent = 'Preparando tus tablas…' + (tablas ? ' ' + hechas + ' de ' + tablas : '');
+  for (let i = 0; i < 30; i++) {
+    const r = await api('instalarBaseDatos');
+    if (!r.parcial) return r;
+    if (boton) boton.textContent = 'Preparando tus tablas… ' + r.hechas + ' de ' + r.tablas;
+  }
+  throw new Error('La instalación sigue en curso. Vuelve a intentarlo: continúa donde quedó.');
+}
+
 async function refrescar() {
   App.boot = await api('getBootstrap');
   App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = false;
@@ -597,8 +608,8 @@ function vInstalar() {
   return {
     titulo: 'Moni', ocultarTitulo: true,
     html: vacio('capas', 'Falta instalar o actualizar la base de datos',
-      'Moni va a crear las tablas que necesita en tu hoja de cálculo. No borra ni modifica nada de lo que ya exista.',
-      '<button class="m-btn m-btn-primary" data-acc="instalar">Instalar</button>')
+      (App.boot.instalando ? 'Tu hoja se está preparando (' + App.boot.hechas + ' de ' + App.boot.tablas + ' tablas). Pulsa continuar; retoma donde quedó.' : 'Moni va a crear las tablas que necesita en tu hoja de cálculo. No borra ni modifica nada de lo que ya exista.'),
+      '<button class="m-btn m-btn-primary" data-acc="instalar">' + (App.boot.instalando ? 'Continuar' : 'Instalar') + '</button>')
   };
 }
 
@@ -4843,8 +4854,12 @@ const ACCIONES = {
   'crear-hoja': async el => {
     const caja = $('#hoja-error'); if (caja) caja.hidden = true;
     el.disabled = true; el.textContent = 'Creando tu hoja…';
-    try { await api('createMySheet'); await refrescar(); App.pila = ['inicio']; render(true); }
-    catch (e) { el.disabled = false; el.textContent = 'Crear mi hoja'; if (caja) { caja.textContent = e.message; caja.hidden = false; } else aviso(e.message, true); }
+    try {
+      const c = await api('createMySheet');
+      if (c.parcial) await completarInstalacion(el, c.hechas, c.tablas);
+      await refrescar(); App.pila = ['inicio']; render(true);
+    }
+    catch (e) { el.disabled = false; el.textContent = 'Reintentar (continúa donde quedó)'; if (caja) { caja.textContent = e.message; caja.hidden = false; } else aviso(e.message, true); }
   },
   'vincular-hoja': () => abrirVincularHoja(),
   'desvincular-hoja': async () => {
@@ -4981,7 +4996,7 @@ const ACCIONES = {
   instalar: async el => {
     el.disabled = true;
     try {
-      const r = await api('instalarBaseDatos');
+      const r = await completarInstalacion(el, 0, 0);
       await refrescar(); render();
       aviso(r.ok ? 'Base de datos lista' : 'Hay tablas con encabezados distintos; revisa el diagnóstico', !r.ok);
     } catch (e) { aviso(e.message, true); el.disabled = false; }

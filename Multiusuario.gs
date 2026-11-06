@@ -55,20 +55,24 @@ function pareceHojaMoni_(ss) {
 }
 
 /** Guarda la hoja de esta persona y deja sus tablas al día. */
+/** Tiempo máximo de cada paso de instalación: la pantalla espera ~45 s por llamada y Apps Script corta a los 6 min. */
+const PRESUPUESTO_INSTALACION_MS = 20000;
+
 function adoptarHoja_(ss) {
   propiedades_().setProperty('SPREADSHEET_ID', ss.getId());
   invalidateCache();
-  const r = setupDatabase(ss);
-  registrarLog('Info', 'adoptarHoja_', 'Hoja vinculada', ss.getName());
-  return { id: ss.getId(), url: ss.getUrl(), nombre: ss.getName(), instalada: r.ok };
+  // Por partes: si no alcanza el tiempo, la pantalla pide continuar (ver instalarBaseDatos) en vez de morir por timeout.
+  const r = setupDatabase(ss, { presupuestoMs: PRESUPUESTO_INSTALACION_MS });
+  if (!r.parcial) registrarLog('Info', 'adoptarHoja_', 'Hoja vinculada', ss.getName());
+  return { id: ss.getId(), url: ss.getUrl(), nombre: ss.getName(), instalada: r.ok, parcial: !!r.parcial, hechas: r.hechas, tablas: r.tablas };
 }
 
 /** Crea la hoja de Moni de esta persona en su Drive y la prepara. Si ya tiene una, devuelve esa. */
 function crearMiHoja() {
   if (idHojaUsuario_()) return Object.assign(estadoMiCuenta(), { yaExistia: true });
   const ss = SpreadsheetApp.create('Moni — mis finanzas');
-  adoptarHoja_(ss);
-  return Object.assign(estadoMiCuenta(), { yaExistia: false });
+  const r = adoptarHoja_(ss);
+  return Object.assign(estadoMiCuenta(), { yaExistia: false, parcial: r.parcial, hechas: r.hechas, tablas: r.tablas });
 }
 
 /**

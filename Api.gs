@@ -57,7 +57,9 @@ function getBootstrap() {
     let verificacion = verificarEsquema(undefined, { usarCache: true });
     // Varias personas: si una versión nueva trae tablas o columnas, la hoja se actualiza sola (sin borrar nada).
     if (!verificacion.listo && modoMultiusuario_()) {
-      verificacion = setupDatabase().ok ? verificarEsquema() : verificacion;
+      const inst = setupDatabase(undefined, { presupuestoMs: PRESUPUESTO_INSTALACION_MS });
+      if (inst.parcial) return { instalado: false, instalando: true, hechas: inst.hechas, tablas: inst.tablas };
+      verificacion = inst.ok ? verificarEsquema() : verificacion;
     }
     if (!verificacion.listo) {
       return { instalado: false, faltantes: verificacion.faltantes, diferencias: verificacion.diferencias };
@@ -96,7 +98,7 @@ function getBootstrap() {
 }
 
 function instalarBaseDatos() {
-  return responder_(function () { return setupDatabase(); });
+  return responder_(function () { return setupDatabase(undefined, { presupuestoMs: PRESUPUESTO_INSTALACION_MS }); });
 }
 
 // ==========================================================================

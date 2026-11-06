@@ -62,10 +62,15 @@ class HojaFalsa {
           if (f) for (let c = 0; c < nCols; c++) if (col - 1 + c < f.length) f[col - 1 + c] = '';
         }
       },
-      setNumberFormat(f) { hoja.formatos[col] = f; }
+      setNumberFormat(f) { hoja.formatos[col] = f; },
+      getA1Notation() { return 'R' + fila + 'C' + col; }
     };
     // Cualquier otro método (estilos, validación) no hace nada.
     return new Proxy(real, { get: (t, p) => (p in t ? t[p] : inerte()) });
+  }
+  getRangeList(lista) {
+    const hoja = this;
+    return { setNumberFormat(f) { lista.forEach(a => { const m = /^R\d+C(\d+)$/.exec(a); if (m) hoja.formatos[Number(m[1])] = f; }); return this; } };
   }
   appendRow(valores) { this.filas.splice(this.getLastRow(), 0, valores.slice()); }
   deleteRow(n) { this.filas.splice(n - 1, 1); }
@@ -91,7 +96,7 @@ function formatearFecha(d, patron, zona) {
 function crearEntorno(hojasIniciales, opciones) {
   const opc = opciones || {};
   const memoria = {};
-  const cacheReal = { get: k => (k in memoria ? memoria[k] : null), put: (k, v) => { memoria[k] = v; }, remove: k => { delete memoria[k]; } };
+  const cacheReal = { get: k => (k in memoria ? memoria[k] : null), put: (k, v) => { memoria[k] = v; }, remove: k => { delete memoria[k]; }, getAll: ks => { const o = {}; ks.forEach(k => { if (k in memoria) o[k] = memoria[k]; }); return o; }, putAll: o => { Object.assign(memoria, o); } };
   const hojas = {};
   Object.keys(hojasIniciales || {}).forEach(n => {
     hojas[n] = new HojaFalsa(n, hojasIniciales[n].map(f => f.slice()));
@@ -180,11 +185,11 @@ function crearEntorno(hojasIniciales, opciones) {
       formatDate: (d, tz, patron) => formatearFecha(d, patron, tz)
     },
     CacheService: {
-      getScriptCache: () => (opc.cache ? cacheReal : { get: () => null, put() {}, remove() {} }),
+      getScriptCache: () => (opc.cache ? cacheReal : { get: () => null, put() {}, remove() {}, getAll: () => ({}), putAll() {} }),
       getUserCache: () => {
-        if (!opc.cache) return { get: () => null, put() {}, remove() {} };
+        if (!opc.cache) return { get: () => null, put() {}, remove() {}, getAll: () => ({}), putAll() {} };
         const m = cachesUsuario[usuarioActual] || (cachesUsuario[usuarioActual] = {});
-        return { get: k => (k in m ? m[k] : null), put: (k, v) => { m[k] = v; }, remove: k => { delete m[k]; } };
+        return { get: k => (k in m ? m[k] : null), put: (k, v) => { m[k] = v; }, remove: k => { delete m[k]; }, getAll: ks => { const o = {}; ks.forEach(k => { if (k in m) o[k] = m[k]; }); return o; }, putAll: o => { Object.assign(m, o); } };
       }
     },
     PropertiesService: {
