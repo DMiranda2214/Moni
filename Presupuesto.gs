@@ -76,7 +76,7 @@ function obtenerPresupuestoMes(mes) {
       Ahorro: pagado ? redondear2_(p - r) : 0,
       Restante: redondear2_(p - r),
       ID_Bolsillo_Destino: i.ID_Bolsillo_Destino || '', Bolsillo: b ? b.Nombre : '', ID_Credito: i.ID_Credito || '', ID_Tarjeta: i.ID_Tarjeta || '',
-      Notas: i.Notas || ''
+      ID_Suscripcion: i.ID_Suscripcion || '', Notas: i.Notas || ''
     };
   });
 
@@ -94,6 +94,8 @@ function obtenerPresupuestoMes(mes) {
     existe: items.length > 0,
     escenario: esc ? { ID_Escenario: esc.ID_Escenario, Nombre: esc.Nombre } : null,
     items: lista,
+    // Suscripciones y servicios que tocan este mes y todavía no están en el presupuesto
+    faltanSuscripciones: items.length ? suscripcionesFaltantes_(m, items).length : 0,
     totales: {
       plan: redondear2_(plan), real: redondear2_(gastado), ahorro: redondear2_(ahorro),
       ingresos: ingresos, saldo: saldo, porcentajeAhorro: ingresos > 0 ? Math.round(saldo / ingresos * 1000) / 1000 : null,
@@ -141,7 +143,78 @@ function generarPresupuestoMes(mes, idEscenario, reemplazar) {
     Concepto: p.Concepto, Tipo: p.Tipo || 'Gasto', Plan: Number(p.Monto_Plan) || 0, Pagado: false,
     ID_Bolsillo_Destino: p.ID_Bolsillo_Destino || '', ID_Credito: p.ID_Credito || '', ID_Tarjeta: p.ID_Tarjeta || '', Notas: ''
   })));
-  return { mes: m, creados: plantilla.length, escenario: esc.Nombre };
+  const susc = agregarSuscripcionesAlMes(m);
+  return { mes: m, creados: plantilla.length + susc.agregados, escenario: esc.Nombre, suscripciones: susc.agregados };
+}
+
+// ---------------------------------------------------------------------------
+// Suscripciones y servicios dentro del presupuesto
+// ---------------------------------------------------------------------------
+
+/** Meses entre dos meses AAAA-MM (b − a). */
+function mesesEntre_(a, b) { return (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7)); }
+
+/** ¿Hay que pagar esta suscripción o servicio en el mes `m`? Según su periodicidad, contada desde su próximo cobro. */
+function cobroEnMes_(s, m) {
+  if (!estaActivo(s) || !s.Proximo_Cobro) return false;
+  const periodo = MESES_PERIODO[s.Periodicidad] || 1;
+  const mesProximo = String(s.Proximo_Cobro).slice(0, 7);
+  const desde = String(s.Creado_En || s.Proximo_Cobro).slice(0, 7);
+  if (m < desde && m < mesProximo) return false; // no se reescribe el pasado anterior a la suscripción
+  const resto = ((mesesEntre_(mesProximo, m) % periodo) + periodo) % periodo;
+  return resto === 0;
+}
+
+/** El renglón de un mes al que pertenece una suscripción (por su ID, o por el nombre de renglón que se le puso a mano). */
+function renglonDeSuscripcion_(s, items) {
+  const nombre = texto_(s.Renglon).toLowerCase();
+  return items.find(i => i.ID_Suscripcion === s.ID_Suscripcion) || (nombre ? items.find(i => texto_(i.Concepto).toLowerCase() === nombre) : null) || null;
+}
+
+/** Cuántas suscripciones o servicios de ese mes todavía no están en el presupuesto. */
+function suscripcionesFaltantes_(m, items) {
+  return getTableData('Suscripciones').filter(s => cobroEnMes_(s, m) && !renglonDeSuscripcion_(s, items));
+}
+
+/**
+ * Agrega al presupuesto de un mes (que ya debe existir) un renglón por cada suscripción o servicio que toca pagar ese mes,
+ * y pone al día el valor, la tarjeta y el bolsillo de los que aún no se han pagado. Se puede repetir sin duplicar nada.
+ */
+function agregarSuscripcionesAlMes(mes) {
+  const m = mesValido_(mes);
+  const items = leer_('Presupuesto_Mes').filter(i => i.Mes === m);
+  if (!items.length) return { agregados: 0, actualizados: 0 };
+
+  const nuevos = [];
+  let actualizados = 0;
+  const usados = {};
+  items.forEach(i => { usados[texto_(i.Concepto).toLowerCase()] = true; });
+  leer_('Suscripciones').filter(s => cobroEnMes_(s, m)).forEach(s => {
+    const r = renglonDeSuscripcion_(s, items);
+    const valor = Number(s.Valor) || 0;
+    if (r) {
+      // Solo los renglones que la app creó para esa suscripción se mantienen al día, y mientras no estén pagados.
+      if (r.ID_Suscripcion === s.ID_Suscripcion && !esVerdadero(r.Pagado)) {
+        const cambios = {};
+        if (Number(r.Plan) !== valor) cambios.Plan = valor;
+        if ((r.ID_Tarjeta || '') !== (s.ID_Tarjeta || '')) cambios.ID_Tarjeta = s.ID_Tarjeta || '';
+        if ((r.ID_Bolsillo_Destino || '') !== (s.ID_Bolsillo || '')) cambios.ID_Bolsillo_Destino = s.ID_Bolsillo || '';
+        if (r.Concepto !== s.Nombre && !usados[texto_(s.Nombre).toLowerCase()]) cambios.Concepto = s.Nombre;
+        if (Object.keys(cambios).length) { updateRow('Presupuesto_Mes', r._rowIndex, cambios); actualizados++; }
+      }
+      return;
+    }
+    let concepto = s.Nombre;
+    if (usados[concepto.toLowerCase()]) concepto = s.Nombre + ' (' + (s.Tipo === 'Servicio' ? 'servicio' : 'suscripción') + ')';
+    usados[concepto.toLowerCase()] = true;
+    nuevos.push({
+      ID_Item: nuevoId_('itm'), Mes: m, ID_Escenario: items[0].ID_Escenario, ID_Plantilla: '',
+      Concepto: concepto, Tipo: 'Gasto', Plan: valor, Pagado: false,
+      ID_Bolsillo_Destino: s.ID_Bolsillo || '', ID_Credito: '', ID_Tarjeta: s.ID_Tarjeta || '', Notas: '', ID_Suscripcion: s.ID_Suscripcion
+    });
+  });
+  if (nuevos.length) insertRows('Presupuesto_Mes', nuevos);
+  return { agregados: nuevos.length, actualizados: actualizados };
 }
 
 /** Agrega o edita un renglón de un mes (por ejemplo, un gasto que no estaba previsto). */

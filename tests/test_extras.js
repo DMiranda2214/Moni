@@ -10,7 +10,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -273,59 +273,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.throws(() => e.llamar('rangoColumna_', 'Movimientos', 'Nada'));
   });
 
-  // ============================================================ arranque
-  prueba('arranque: lista de verificación, aperturas en bloque y archivo de movimientos de prueba', () => {
-    const { e, c1, casa, regalos } = escenario();
-    e.llamar('saveConfigParam', 'Nombre_Usuario', 'Ana');
-    let a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.fecha, '2027-01-01');
-    assert.strictEqual(a.hecho, false);
-    assert.strictEqual(a.checks.find(c => c.id === 'demo').hecho, true);
-    assert.strictEqual(a.checks.find(c => c.id === 'previos').hecho, true, 'sin movimientos todavía');
-
-    // Una prueba anterior al arranque bloquea el inicio hasta archivarla.
-    e.llamar('registrarMovimiento', { Tipo_Mov: 'Gasto', Valor: 50000, Fecha: hoy(), ID_Bolsillo: casa.ID_Bolsillo, Concepto: 'Prueba' });
-    a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.previos.movimientos, 1);
-    assert.strictEqual(a.listo, false);
-    assert.throws(e.falla('iniciarOperacion'), /Todavía falta/);
-
-    assert.strictEqual(e.llamar('archivarPruebas').archivados, 1);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 800000, 'el saldo vuelve a la apertura');
-
-    // Aperturas: todo o nada.
-    assert.throws(e.falla('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 1 }, { ID_Bolsillo: 'no-existe', Saldo_Apertura: 2 }]), /no existe/);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 800000);
-    a = e.llamar('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 1250000 }, { ID_Bolsillo: regalos.ID_Bolsillo, Saldo_Apertura: 0 }]);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 1250000);
-    assert.throws(e.falla('guardarFechaArranque', '2027/01/01'), /AAAA-MM-DD/);
-    assert.strictEqual(e.llamar('guardarFechaArranque', '2027-02-01').fecha, '2027-02-01');
-    e.llamar('guardarFechaArranque', '2027-01-01');
-  });
-
-  prueba('arranque: iniciar deja respaldo, activa copias y congela las aperturas', () => {
-    const { e, casa } = escenario();
-    e.llamar('saveConfigParam', 'Nombre_Usuario', 'Ana');
-    const r = e.llamar('iniciarOperacion');
-    assert.strictEqual(r.hecho, true);
-    assert.ok(r.respaldo);
-    assert.strictEqual(e.llamar('estadoRespaldos').automatico, true);
-    assert.strictEqual(e.llamar('estadoRespaldos').copiasActuales, 1);
-    assert.throws(e.falla('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 5 }]), /ya empezó/);
-    assert.throws(e.falla('iniciarOperacion'), /ya empezó/);
-    assert.strictEqual(e.llamar('saveConfigParam', 'Arranque_Hecho', 'FALSE').ok, false, 'no se reabre desde Parámetros');
-  });
-
-  prueba('arranque: con datos de demostración no se puede iniciar', () => {
-    const e = E();
-    e.llamar('sembrarDatosDemo');
-    const a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.checks.find(c => c.id === 'demo').hecho, false);
-    assert.throws(e.falla('iniciarOperacion'), /Todavía falta/);
-    e.llamar('limpiarDatosDemo');
-    assert.strictEqual(e.llamar('obtenerArranque').checks.find(c => c.id === 'demo').hecho, true);
-  });
-
   // ============================================================ fase 7
   prueba('recordatorios: días entre fechas y próximos pagos ordenados dentro de la ventana', () => {
     const e = E();
@@ -336,7 +283,8 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(lista.length > 0, 'el demo tiene tarjetas con compras por pagar');
     assert.ok(lista.every(p => p.dias <= 14 && ['Tarjeta', 'Credito', 'Suscripcion', 'Servicio'].includes(p.tipo)));
     for (let i = 1; i < lista.length; i++) assert.ok(lista[i - 1].dias <= lista[i].dias, 'ordenados por cercanía');
-    assert.deepStrictEqual(e.llamar('getBootstrap').data.proximos, lista, 'viajan en el arranque');
+    assert.deepStrictEqual(e.llamar('getProximos').data, lista, 'se piden aparte del arranque');
+    assert.strictEqual(e.llamar('getBootstrap').data.proximosPendientes, true);
   });
 
   prueba('respuestas de la API traen el tiempo del servidor', () => {
@@ -621,6 +569,71 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(api.rendimientoEstimado.pago, 'Mensual');
   });
 
+  prueba('rendimiento estimado: si el banco solo paga sobre bolsillos, el saldo general no rinde', () => {
+    const e2 = E();
+    const banco = e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Digital', Rendimiento_EA: 0.1, Rendimiento_Pago: 'Mensual', Rendimiento_Base: 'Bolsillos' });
+    assert.strictEqual(banco.Rendimiento_Base, 'Bolsillos');
+    assert.strictEqual(e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Otro', Rendimiento_EA: 0.1 }).Rendimiento_Base, 'Todo', 'por defecto rinde todo');
+    assert.strictEqual(e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Sin' }).Rendimiento_Base, '', 'sin tasa no hay base');
+    assert.throws(e2.falla('guardarCatalogo', 'Bancos', { Nombre: 'Z', Rendimiento_EA: 0.1, Rendimiento_Base: 'Nada' }), /Sobre qué saldo/);
+    const suelta = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Suelta', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 500000 });
+    const conBols = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Con bolsillos', Tipo: 'Ahorro', Permite_Bolsillos: true });
+    e2.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: conBols.ID_Cuenta, Nombre: 'Meta', Rol: 'Fondo', Saldo_Apertura: 1000000 });
+    const est = (cta, b, hoy) => e2.llamar('estimarRendimiento_', cta, b, e2.llamar('getTableData', 'Bolsillos'), e2.llamar('getTableData', 'Movimientos'), hoy);
+    const td = Math.pow(1.1, 1 / 365) - 1;
+    const sin = est(suelta, banco, '2027-03-11');
+    assert.strictEqual(sin.base, 'Bolsillos');
+    assert.strictEqual(sin.saldoBase, 0, 'el saldo suelto de una cuenta sin bolsillos no rinde');
+    assert.strictEqual(sin.pendiente, 0);
+    const con = est(conBols, banco, '2027-03-11');
+    assert.strictEqual(con.saldoBase, 1000000);
+    assert.strictEqual(con.pendiente, Math.round(1000000 * td * 10 * 100) / 100);
+    const todo = est(suelta, Object.assign({}, banco, { Rendimiento_Base: 'Todo' }), '2027-03-11');
+    assert.strictEqual(todo.saldoBase, 500000, 'con "todo", ese mismo saldo sí rinde');
+  });
+
+  prueba('suscripciones: entran solas al presupuesto del mes según su periodicidad, y pagarlas marca el renglón', () => {
+    const { e, t, personal, m, item } = escenarioTC();
+    const mensual = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Netflix', Valor: 40000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    const luz = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Luz', Tipo: 'Servicio', Valor: 90000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Tarjeta: t.ID_Tarjeta });
+    // Un cobro anual que no cae este mes no entra
+    const anual = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Seguro', Valor: 600000, Periodicidad: 'Anual', Proximo_Cobro: e.llamar('sumarMeses_', hoy(), 5, 0), ID_Bolsillo: personal.ID_Bolsillo });
+    let p = e.llamar('obtenerPresupuestoMes', m);
+    const rn = p.items.find(i => i.Concepto === 'Netflix'), rl = p.items.find(i => i.Concepto === 'Luz');
+    assert.ok(rn && rl, 'al guardar la suscripción, entra al presupuesto que ya existe');
+    assert.strictEqual(rn.Plan, 40000); assert.strictEqual(rn.ID_Bolsillo_Destino, personal.ID_Bolsillo); assert.strictEqual(rn.ID_Suscripcion, mensual.ID_Suscripcion);
+    assert.strictEqual(rl.ID_Tarjeta, t.ID_Tarjeta, 'el servicio con tarjeta queda con su tarjeta');
+    assert.ok(!p.items.some(i => i.Concepto === 'Seguro'), 'el anual de otro mes no entra');
+    assert.strictEqual(p.faltanSuscripciones, 0);
+    assert.strictEqual(e.llamar('agregarSuscripcionesAlMes', m).agregados, 0, 'se puede repetir sin duplicar');
+
+    // Editar el valor actualiza el renglón mientras no esté pagado
+    e.llamar('guardarCatalogo', 'Suscripciones', { ID_Suscripcion: mensual.ID_Suscripcion, Valor: 45000 });
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', m).items.find(i => i.Concepto === 'Netflix').Plan, 45000);
+
+    // Pagarla cuenta como real y deja el renglón pagado; deshacer lo devuelve
+    const r = e.llamar('paySuscripcion', mensual.ID_Suscripcion, {});
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    p = e.llamar('obtenerPresupuestoMes', m);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Real, 45000);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Pagado, true);
+    e.llamar('undoPagoSuscripcion', mensual.ID_Suscripcion, r.data.anterior, r.data.idMov, '');
+    p = e.llamar('obtenerPresupuestoMes', m);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Real, 0);
+    assert.strictEqual(p.items.find(i => i.Concepto === 'Netflix').Pagado, false);
+
+    // Un mes nuevo se genera ya con sus suscripciones (el bimestral solo en los meses que toca)
+    const esc = e.llamar('listarCatalogo', 'Escenarios')[0];
+    const bim = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Agua', Valor: 70000, Periodicidad: 'Bimestral', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    const m1 = e.llamar('sumarMeses_', hoy(), 1, 0).slice(0, 7), m2 = e.llamar('sumarMeses_', hoy(), 2, 0).slice(0, 7);
+    e.llamar('generarPresupuestoMes', m1, esc.ID_Escenario);
+    e.llamar('generarPresupuestoMes', m2, esc.ID_Escenario);
+    assert.ok(!e.llamar('obtenerPresupuestoMes', m1).items.some(i => i.Concepto === 'Agua'), 'el bimestral no toca el mes siguiente');
+    assert.ok(e.llamar('obtenerPresupuestoMes', m2).items.some(i => i.Concepto === 'Agua'), 'sí toca dos meses después');
+    assert.ok(e.llamar('obtenerPresupuestoMes', m1).items.some(i => i.Concepto === 'Netflix'));
+    assert.ok(anual && bim && item);
+  });
+
   // ============================================================ ingresos recurrentes
   prueba('ingresos recurrentes: concepto, monto y cuenta; recibir registra el ingreso y avanza el cobro; se deshace', () => {
     const { e, casa, saldo } = escenario();
@@ -665,7 +678,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(nom, 'sale cuando el pago cae en los próximos 14 días');
     assert.strictEqual(nom.valor, 3000000 - 240000);
     assert.strictEqual(nom.dias, 0);
-    assert.deepStrictEqual(e.llamar('getBootstrap').data.porRecibir, lista);
+    assert.deepStrictEqual(e.llamar('getProximosIngresos').data, lista);
   });
 
   prueba('primeros pasos: la nómina nace con sus subsidios (todo o nada) y los estados del asistente incluyen nómina e ingresos', () => {

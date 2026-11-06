@@ -5,7 +5,8 @@
  * mediante LockService y optimización de rendimiento con CacheService.
  */
 
-const CACHE_TTL_SECONDS = 300; // 5 minutos para catálogos
+const CACHE_TTL_SECONDS = 3600; // catálogos: 1 h (toda escritura de la app los invalida; "Actualizar desde la hoja" fuerza la relectura)
+const CACHE_TTL_MOVIMIENTOS = 600; // tablas de movimientos: 10 min
 
 /** Catálogos pequeños que cambian poco: se guardan en caché. Toda escritura la invalida. */
 const TABLAS_CACHEABLES = ['Config', 'Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios', 'Subsidios'];
@@ -195,13 +196,46 @@ function leerDeCache_(cache, tabla) {
   try { return JSON.parse(texto); } catch (e) { return null; }
 }
 
+/**
+ * Trae de la caché, en DOS llamadas en total (una por los sellos y otra por todos los trozos), las tablas pedidas
+ * y las deja en la memoria de la petición. Las que no estén en caché se leen de la hoja cuando se necesiten.
+ */
+function precargarTablas_(nombres) {
+  const cache = cache_();
+  const pendientes = nombres.filter(t => !MEMO_TABLAS[t] && SCHEMAS[t]);
+  if (!pendientes.length) return;
+  const metas = cache.getAll(pendientes.map(t => 'TABLE_' + t));
+  const claves = [];
+  const plan = {};
+  pendientes.forEach(t => {
+    const m = metas['TABLE_' + t];
+    if (!m) return;
+    const p = String(m).split('|');
+    const n = Number(p[1]);
+    if (p.length !== 2 || !isFinite(n) || n < 1) return;
+    plan[t] = [];
+    for (let i = 0; i < n; i++) { const k = 'TABLE_' + t + '_' + p[0] + '_' + i; plan[t].push(k); claves.push(k); }
+  });
+  if (!claves.length) return;
+  const trozos = cache.getAll(claves);
+  Object.keys(plan).forEach(t => {
+    let texto = '';
+    for (let i = 0; i < plan[t].length; i++) {
+      const x = trozos[plan[t][i]];
+      if (x === undefined || x === null) return;
+      texto += x;
+    }
+    try { MEMO_TABLAS[t] = { filas: JSON.parse(texto), fresco: false }; } catch (e) {}
+  });
+}
+
 function guardarEnCache_(cache, tabla, filas) {
   try {
     const texto = JSON.stringify(filas);
     const sello = Utilities.getUuid().slice(0, 8);
     const n = Math.max(1, Math.ceil(texto.length / TROZO_CACHE));
     if (n > 20) return; // una tabla enorme se lee siempre de la hoja
-    const ttl = TABLAS_CACHEABLES.includes(tabla) ? CACHE_TTL_SECONDS : 120;
+    const ttl = TABLAS_CACHEABLES.includes(tabla) ? CACHE_TTL_SECONDS : CACHE_TTL_MOVIMIENTOS;
     const valores = {};
     for (let i = 0; i < n; i++) valores['TABLE_' + tabla + '_' + sello + '_' + i] = texto.slice(i * TROZO_CACHE, (i + 1) * TROZO_CACHE);
     cache.putAll(valores, ttl);

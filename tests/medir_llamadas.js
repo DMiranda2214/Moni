@@ -41,3 +41,17 @@ fila('getBootstrap (1.ª)', llamar('getBootstrap'));
 fila('getBootstrap (con caché)', llamar('getBootstrap'));
 fila('saveCatalogo Personas (nombre)', llamar('saveCatalogo', 'Personas', { Nombre: 'Ana' }));
 fila('getBootstrap tras guardar', llamar('getBootstrap'));
+// ---- Con datos de ejemplo (un año de uso aprox.) ----
+fila('seedDemo', llamar('seedDemo'));
+e.ctx.__args = [];
+const boot = JSON.parse(JSON.stringify(e.ejecutar('getBootstrap()'))).data;
+const cuenta = boot.catalogos.Cuentas.find(c => c.Activo !== false);
+const bols = boot.catalogos.Bolsillos.find(b => b.ID_Cuenta === cuenta.ID_Cuenta);
+fila('getBootstrap (con datos)', llamar('getBootstrap'));
+fila('getBootstrap (2.ª, caché)', llamar('getBootstrap'));
+fila('addMovimiento', llamar('addMovimiento', { Tipo: 'Gasto', Fecha: boot.hoy, Monto: 1000, ID_Bolsillo_Origen: bols.ID_Bolsillo, Descripcion: 'x' }));
+fila('getMovimientos', llamar('getMovimientos', {}));
+fila('getPresupuesto', llamar('getPresupuesto', boot.hoy.slice(0, 7)));
+fila('getGraficos', llamar('getGraficos', {}));
+fila('getAnual', llamar('getAnual', Number(boot.hoy.slice(0, 4))));
+fila('getSaldos', llamar('getSaldos'));

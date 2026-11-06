@@ -12,7 +12,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -528,5 +528,14 @@ module.exports = function (prueba, assert, crearEntorno) {
       assert.strictEqual(e.hojas[tab].filas.slice(1).filter(f => f.some(c => c !== '' && c !== undefined)).length, 0, tab + ' debe quedar vacía: ' + JSON.stringify(r.eliminadas));
     });
     assert.deepStrictEqual(e.llamar('listarCatalogo', 'Bancos').map(b => b.Nombre), ['Banco real']);
+  });
+
+  prueba('compra con tarjeta: un renglón sin bolsillo no apartar dinero ni da error, pero cuenta en el renglón', () => {
+    const x = escenario();
+    const item = x.e.llamar('guardarRenglonMes', { Mes: mesDe(hoy()), Concepto: 'Mercado', Plan: 500000, Tipo: 'Gasto', ID_Tarjeta: x.t.ID_Tarjeta });
+    const c = compra(x, { Concepto: 'Mercado', ID_Item_Ppto: item.ID_Item });
+    assert.strictEqual(c.Fuente, 'Personal');
+    assert.strictEqual(c.ID_Item_Ppto, item.ID_Item, 'sigue contando como real del renglón');
+    assert.strictEqual(c.ID_Mov_Reserva, '', 'no aparta dinero');
   });
 };

@@ -27,7 +27,7 @@ function tabla_(headers, anchos) {
 const SCHEMAS = {
   // ---- Configuración ----
   Config: tabla_(['Clave', 'Valor', 'Grupo', 'Tipo', 'Descripcion'], [200, 240, 110, 100, 360]),
-  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'], [170, 200, 90, 90, 70, 60, 80, 120, 130]),
+  Bancos: tabla_(['ID_Banco', 'Nombre', 'Color', 'Icono', 'Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base'], [170, 200, 90, 90, 70, 60, 80, 120, 130, 130]),
   Cuentas: tabla_(
     ['ID_Cuenta', 'ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Fecha_Apertura', 'Saldo_Real', 'Fecha_Saldo_Real', 'Meta', 'Activo', 'Orden'],
     [170, 170, 200, 100, 130, 120, 120, 130, 110, 70, 60]),
@@ -65,8 +65,8 @@ const SCHEMAS = {
     ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'Activo', 'Orden'],
     [170, 170, 240, 120, 90, 170, 170, 170, 170, 70, 60]),
   Presupuesto_Mes: tabla_(
-    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas'],
-    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220]),
+    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas', 'ID_Suscripcion'],
+    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220, 170]),
 
   // ---- Nómina (una vez al mes) ----
   Subsidios: tabla_(['ID_Subsidio', 'Nombre', 'Valor', 'Es_Salarial', 'Vigente_Desde', 'Vigente_Hasta', 'Activo'], [170, 260, 120, 100, 120, 120, 70]),
@@ -98,7 +98,7 @@ const SCHEMAS = {
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
-  Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'] },
+  Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'], Rendimiento_Base: ['', 'Todo', 'Bolsillos'] },
   Ingresos_Recurrentes: { Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
@@ -154,8 +154,6 @@ const DEFAULT_CONFIG = [
   ['Tema', 'Automatico', 'Apariencia', 'seleccion', 'Claro, Oscuro o Automatico (sigue al dispositivo)'],
   ['Color_Acento', 'rosa', 'Apariencia', 'seleccion', 'Color de acento de la interfaz'],
   ['Datos_Demo', 'FALSE', 'Sistema', 'booleano', 'TRUE mientras existan datos de demostración'],
-  ['Fecha_Arranque', '2027-01-01', 'Sistema', 'texto', 'Primer día de operación real; antes de esa fecha todo es prueba'],
-  ['Arranque_Hecho', 'FALSE', 'Sistema', 'booleano', 'TRUE cuando ya empezó la operación real'],
   ['Carpeta_PDF', 'Moni/Extractos', 'General', 'texto', 'Ruta de Google Drive para extractos en PDF'],
   ['Respaldo_Frecuencia_Dias', '7', 'Respaldos', 'numero', 'Frecuencia de copia en días'],
   ['Respaldo_Copias', '8', 'Respaldos', 'numero', 'Número de copias retenidas'],
@@ -267,7 +265,9 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Presupuesto_Mes', columna: 'ID_Tarjeta', valor: '' },
   { tabla: 'Suscripciones', columna: 'Renglon', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_EA', valor: '' },
-  { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' }
+  { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' },
+  { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' },
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' }
 ];
 
 function migrarColumnas_(ss) {
@@ -434,6 +434,19 @@ function completarConfig_(ss) {
 function configInicial_() {
   const anio = String(Number(hoyIso_().slice(0, 4)));
   return DEFAULT_CONFIG.map(c => c[0] === 'Anio_Activo' ? [c[0], anio].concat(c.slice(2)) : c);
+}
+
+/** Crea la fila de Config si todavía no existe (las bases ya instaladas no tienen las claves nuevas). */
+function asegurarConfig_(clave) {
+  if (getTableData('Config').some(c => c.Clave === clave)) return;
+  const d = configInicial_().find(item => item[0] === clave);
+  if (!d) throw new Error('No hay parámetro "' + clave + '".');
+  insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
+}
+
+function guardarConfig_(clave, valor) {
+  asegurarConfig_(clave);
+  updateRowById('Config', 'Clave', clave, { Valor: String(valor) });
 }
 
 function sembrarPorDefecto_(ss) {

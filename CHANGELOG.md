@@ -1,8 +1,38 @@
 # Cambios
 
+## 1.0.0 — Primera versión (6 nov 2026)
+Moni queda lista para que **cualquier persona** la use como su app de finanzas personales (una hoja de Google por persona).
+- **Para quién y cómo:** se entra con la cuenta de Google, se crea la hoja y un asistente de primeros pasos deja todo configurado: nombre, bancos (con su rendimiento), cuentas y bolsillos con sus saldos iniciales, tarjetas, nómina, otros ingresos, suscripciones, hogar y servicios, y el dólar de Google Finance si se quiere.
+- **Dos entornos:** desarrollo (con datos de demostración) y producción (sin ellos: el paquete ni siquiera los incluye). Despliegue con un comando, sin CI/CD ([guía](docs/DESPLIEGUE.md)); lista de lanzamiento en [docs/LANZAMIENTO.md](docs/LANZAMIENTO.md).
+- **Rendimiento:** creación de la hoja por partes (sin timeouts), libro abierto una vez por petición, caché de todas las tablas y refrescos livianos al guardar.
+- **Funciones:** bolsillos y cuentas, presupuesto con suscripciones y servicios, nómina colombiana (una sola nómina, conceptos del mes), tarjetas y créditos de autopago, ahorro con rendimientos (diario o mensual, sobre todo el saldo o solo bolsillos), ingresos recurrentes, regalos, vista anual, respaldos y recordatorios en Google Calendar.
+- El detalle de cada cambio está en las secciones siguientes.
+
+## Sin pantalla de Arranque (6 nov)
+- **Se quitó "Arranque"** (cargar saldos de apertura, fecha de inicio, archivar pruebas, empezar a operar): los saldos iniciales ya se escriben al crear cada cuenta y bolsillo en los primeros pasos. Desaparecen la pantalla, el aviso de Inicio, las funciones `getArranque`, `setFechaArranque`, `saveAperturas`, `archiveTests`, `startOperation` y los parámetros nuevos `Fecha_Arranque` y `Arranque_Hecho` (en hojas ya creadas quedan inertes).
+
+## Suscripciones en el presupuesto y detalle de movimientos (6 nov)
+- **Suscripciones y servicios dentro del presupuesto:** cada mes el presupuesto incluye lo que toca pagar (según su periodicidad), con su valor y su medio de pago. Las nuevas o editadas entran solas al mes ya generado; un aviso con *Agregar* cubre las que falten. Pagarlas cuenta como lo real y deja el renglón pagado. Columna nueva `Presupuesto_Mes.ID_Suscripcion`.
+- **Detalle de un movimiento:** ahora dice primero **qué es** (gasto, ingreso, movimiento de dinero entre bolsillos, ajuste, conversión).
+- **Editar un movimiento desde su detalle:** corregida una carrera al cerrar el diálogo que podía cerrar también el formulario de edición recién abierto.
+- **Gasto con tarjeta en un renglón sin bolsillo:** ya no da error ("Elige de qué bolsillo sale el dinero"); cuenta en el renglón y no aparta dinero, como ya decía la pantalla.
+
+## Ajustes de diseño del asistente (6 nov)
+- **Barra de pasos legible:** con 11 pasos solo se muestran los puntos; el nombre del paso actual va en el texto de abajo ("Paso 10 de 11 · Servicios · opcional").
+- **Botones claros:** el principal dice lo que hace (*Guardar y continuar* si escribiste algo, *Continuar* si no) y ya no existe "Omitir por ahora". En pasos opcionales el enlace es **Saltar este paso**; en los obligatorios, **Seguir más tarde**. En el paso del dólar el botón cambia con el interruptor (*Vincular y continuar* / *Continuar sin vincular*), que empieza apagado.
+- **Corregido:** el paso de servicios públicos no guardaba nada (buscaba un "Nombre" que ese catálogo no tiene).
+- **Cuentas:** *Saldo según tu banco* solo aparece al editar (al crear la cuenta es lo mismo que el saldo inicial) y las ayudas explican la diferencia.
+- **Decimales:** siempre se guardaron (hasta 2); ahora los pesos también se *muestran* con centavos cuando el valor los tiene.
+
+## Rendimientos, primeros pasos y nómina (6 nov)
+- **Rendimientos:** el pago diario o mensual sigue por banco; ahora también se elige **sobre qué saldo rinde** (todo, o solo el dinero en bolsillos, como en bancos que no pagan sobre el saldo suelto). Columna nueva `Bancos.Rendimiento_Base`, que se agrega sola al instalar.
+- **Primeros pasos:** nuevos pasos opcionales de **suscripciones**, **hogar**, **servicios públicos** y **dólar** (la persona decide si vincula la TRM de Google Finance).
+- **Nómina sin escenarios:** una sola nómina (sueldo, descuentos e ingresos fijos). Al registrar cada pago se pueden agregar conceptos solo de ese mes: horas extras, bono, pago de cesantías, prima, descuentos de la empresa. Los datos de quien ya tenía escenarios se conservan.
+
 ## Rendimiento (6 nov)
 - **Crear la hoja ya no se agota:** las 28 pestañas se preparan por partes (≈20 s por paso, con avance "n de 28" en el botón). Si se corta, *Reintentar* continúa donde quedó. Antes todo iba en una sola petición con cientos de llamadas a Google y chocaba con el tiempo límite.
 - **Menos llamadas a Google:** el libro se abre una vez por petición (antes 12–23), las columnas de texto se formatean en una llamada, y todas las tablas (no solo los catálogos) se guardan en caché en trozos y se invalidan al escribir. Cargar la app con caché pasó de ~44 lecturas de hoja a 4; guardar un nombre y recargar, de ~30 a ~10.
+- **Guardar ya no recarga toda la app:** guardar un nombre, un catálogo, activar o desactivar piden solo lo que cambió (`getRefresco`). El arranque no incluye próximos pagos ni ingresos por recibir: se piden aparte, ya pintada la pantalla. Las tablas en caché se traen en 2 llamadas (antes ~49), y la caché de catálogos dura 1 h (movimientos, 10 min). *Ajustes → Actualizar desde la hoja* fuerza la relectura si editas la hoja a mano.
 - `node tests/medir_llamadas.js` cuenta las llamadas por operación.
 
 ## Listo para cualquier persona (6 nov)

@@ -10,7 +10,7 @@ module.exports = function (prueba, assert, crearEntorno) {
   /** Entorno con el esquema ya instalado. */
   function E(instalar) {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     if (instalar !== false) e.llamar('setupDatabase');
@@ -336,10 +336,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     e2.llamar('limpiarDatosDemo');
     assert.deepStrictEqual(e2.llamar('listarCatalogo', 'Bancos').map(b => b.ID_Banco), [banco.ID_Banco]);
     assert.strictEqual(e2.llamar('listarCatalogo', 'Nomina_Escenarios').length, 1);
-
-    const e3 = E();
-    e3.ejecutar("guardarConfig_('Arranque_Hecho', 'TRUE')");
-    assert.throws(e3.falla('sembrarDatosDemo'), /ya empezó/);
   });
 
   prueba('demo: limpiar borra solo lo demo y deja intacto lo real', () => {

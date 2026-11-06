@@ -5,7 +5,7 @@ const { bogota } = require('./fecha');
 
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
+  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
   const hoy = () => bogota();
 
   function equipar(e) {
@@ -54,11 +54,11 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.cargar(...CARGA);
     assert.strictEqual(e.llamar('verificarEsquema').diferencias.some(d => d.tabla === 'Bancos'), true, 'antes de migrar hay diferencias');
     const r = e.llamar('setupDatabase');
-    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa', 'Bancos.Rendimiento_EA', 'Bancos.Rendimiento_Pago']);
+    assert.deepStrictEqual(r.migradas, ['Bancos.Divisa', 'Bancos.Rendimiento_EA', 'Bancos.Rendimiento_Pago', 'Bancos.Rendimiento_Base']);
     assert.strictEqual(r.ok, true);
     const fila = e.hojas.Bancos.filas;
-    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Creado_En', 'Actualizado_En']);
-    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '', '', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
+    assert.deepStrictEqual(fila[0].slice(4), ['Activo', 'Orden', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'Creado_En', 'Actualizado_En']);
+    assert.deepStrictEqual(fila[1], ['ban-1', 'Nequi', '#fff', '', true, 1, 'COP', '', '', '', '2026-01-01T00:00:00', '2026-01-02T00:00:00']);
     assert.strictEqual(e.llamar('setupDatabase').migradas.length, 0, 'es idempotente');
     assert.strictEqual(e.llamar('listarCatalogo', 'Bancos')[0].Divisa, 'COP');
   });
@@ -246,14 +246,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     const { e, dolares } = escenario();
     assert.strictEqual(e.llamar('obtenerAhorro').cuentas.length, 0);
     assert.throws(e.falla('registrarRendimiento', { ID_Cuenta: dolares.ID_Cuenta, Tipo: 'Interes', Valor: 5 }), /solo se usan cuentas en COP/);
-  });
-
-  prueba('arranque: el total de apertura es en pesos y cada saldo lleva su divisa', () => {
-    const { e, casa } = escenario();
-    const a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.totalApertura, 2000000);
-    assert.ok(a.aperturas.some(x => x.Divisa === 'USD' && x.Saldo_Apertura === 1000));
-    assert.ok(a.aperturas.some(x => x.Divisa === 'COP' && x.ID_Bolsillo === casa.ID_Bolsillo));
   });
 
   prueba('tasa de Google Finance: crea la hoja con fórmulas, guarda lo que Google devuelve y marca la fuente', () => {

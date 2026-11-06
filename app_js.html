@@ -52,11 +52,16 @@ const _formatos = {};
 /** Monto con su moneda: sin decimales en pesos, con dos en las demás. Sin `divisa`, la moneda base de la app. */
 function dinero(n, divisa) {
   const d = divisa || (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
-  if (!_formatos[d]) {
-    const dec = d === 'COP' ? 0 : 2;
-    _formatos[d] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const v = Number(n) || 0;
+  // En pesos no se muestran centavos... salvo cuando el valor los tiene (un rendimiento, un saldo del banco): así lo que se ve
+  // es lo que se guardó y las sumas cuadran. Las demás monedas siempre llevan dos decimales.
+  const conCentavos = d !== 'COP' || Math.abs(v - Math.round(v)) >= 0.005;
+  const llave = d + (conCentavos ? '2' : '0');
+  if (!_formatos[llave]) {
+    const dec = conCentavos ? 2 : 0;
+    _formatos[llave] = new Intl.NumberFormat('es-CO', { style: 'currency', currency: d, minimumFractionDigits: dec, maximumFractionDigits: dec });
   }
-  return _formatos[d].format(Number(n) || 0).replace(/ /g, ' ');
+  return _formatos[llave].format(v).replace(/ /g, ' ');
 }
 
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
@@ -221,6 +226,7 @@ if (window.matchMedia) {
 async function cargar() {
   try {
     App.boot = await api('getBootstrap');
+    App.proximosViejos = !!App.boot.proximosPendientes; // los próximos pagos se piden aparte, ya pintada la pantalla
     App.error = null;
   } catch (e) {
     App.error = e.message;
@@ -240,9 +246,31 @@ async function completarInstalacion(boton, hechas, tablas) {
   throw new Error('La instalación sigue en curso. Vuelve a intentarlo: continúa donde quedó.');
 }
 
+/**
+ * Refresco liviano tras guardar: pide solo lo que cambió (tablas y/o parámetros) en vez de recargar toda la app.
+ * opc = { tablas: ['Personas'], config: true }.
+ */
+async function refrescarParcial(opc) {
+  const r = await api('getRefresco', opc);
+  if (r.config) App.boot.config = r.config;
+  Object.keys(r.catalogos || {}).forEach(t => { App.boot.catalogos[t] = r.catalogos[t]; });
+  if (r.saldos) App.boot.saldos = r.saldos;
+  if (r.estado) App.boot.estado = r.estado;
+  const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos', 'Servicios_Publicos'].indexOf(t) !== -1);
+  if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
+  // Una suscripción nueva o editada entra al presupuesto de este mes: se vuelve a pedir para que Registrar y Presupuesto la vean.
+  if ((opc.tablas || []).indexOf('Suscripciones') !== -1) {
+    App.ppto.data = null;
+    try { aplicarPresupuesto(await api('getPresupuesto', App.boot.hoy.slice(0, 7))); } catch (e) { /* se pedirá al abrir el presupuesto */ }
+  }
+  if (opc.config) aplicarApariencia();
+  App.graf.data = null; App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
+  return r;
+}
+
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = false;
+  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
@@ -343,7 +371,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
-  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -418,7 +446,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', cuenta: 'Mi cuenta', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', cuenta: 'Mi cuenta', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -499,7 +527,6 @@ function pantalla(ruta) {
       if (partes[1] === 'demo') return vDemo();
       if (partes[1] === 'plantilla') return vPlantilla();
       if (partes[1] === 'respaldos') return vRespaldos();
-      if (partes[1] === 'arranque') return vArranque();
       if (partes[1] === 'cuenta') return vCuenta();
       if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'registro') return vRegistro();
@@ -558,18 +585,26 @@ function vCrearHoja() {
     titulo: 'Bienvenida', ocultarTitulo: true, asistente: true,
     html: '<div class="m-asist m-asist-centro">' +
       '<div class="m-asist-hero" aria-hidden="true">' + ico('capas') + '</div>' +
-      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">Te damos la bienvenida a Moni</h1>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + (App.boot.hojaPerdida ? 'Falta tu hoja de Moni' : 'Te damos la bienvenida a Moni') + '</h1>' +
       '<p class="m-subtitulo">Moni guarda tus finanzas en una hoja de cálculo de <strong>tu propio Google Drive</strong>. Es solo tuya.</p>' +
       '<div class="m-group m-asist-lista">' +
         dato('usuario', 'Tus datos son tuyos', 'Nadie más ve tu hoja, tampoco quien administra la aplicación.') +
         dato('capas', 'Se crea en tu Drive', 'Puedes abrirla, copiarla o borrarla cuando quieras.') +
         dato('check', 'Se actualiza sola', 'Cuando Moni mejora, tu hoja se pone al día sin perder nada.') + '</div>' +
+      (App.boot.hojaPerdida ? '<div class="m-banner" role="note">' + ico('prueba') + '<span>No se encontró la hoja que tenías vinculada (se borró o ya no tienes acceso). Crea una nueva o vincula otra; la anterior no se toca.</span></div>' : '') +
       '<div class="m-error-form" id="hoja-error" role="alert" hidden></div>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="crear-hoja">Crear mi hoja</button>' +
         '<button type="button" class="m-btn m-btn-secondary" data-acc="vincular-hoja">Ya tengo una hoja de Moni</button></div>' +
       (c.correo ? '<p class="m-ayuda">Entraste como ' + esc(c.correo) + '. La primera vez, Google te pedirá permiso para crear la hoja en tu Drive.</p>' : '') + '</div>'
   };
+}
+
+/** Fila que abre la hoja de cálculo donde Moni guarda todo (siempre visible en Ajustes). */
+function enlaceHoja() {
+  const c = (App.boot && App.boot.cuenta) || {};
+  if (!c.urlHoja) return '';
+  return '<a class="m-row" style="text-decoration:none;color:inherit" href="' + esc(c.urlHoja) + '" target="_blank" rel="noopener noreferrer"><span class="m-row-icono">' + ico('capas', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">Abrir mi hoja de cálculo</span><span class="m-row-sub" style="display:block">' + esc(c.nombreHoja || 'Donde Moni guarda tus datos') + '</span></span>' + ico('der', 'm-icon-sm m-chevron') + '</a>';
 }
 
 /** Ajustes → Mi cuenta (solo en la versión para varias personas): de quién es la hoja y cómo cambiarla. */
@@ -626,7 +661,7 @@ function textoPlazo(dias) {
 
 async function refrescarProximos() {
   App.proximosCargando = true;
-  try { App.boot.proximos = await api('getProximos'); App.boot.porRecibir = await api('getProximosIngresos'); App.proximosViejos = false; }
+  try { const [a, b] = await Promise.all([api('getProximos'), api('getProximosIngresos')]); App.boot.proximos = a; App.boot.porRecibir = b; App.proximosViejos = false; }
   catch (e) { /* queda la lista anterior; no es crítico */ }
   App.proximosCargando = false;
   if (rutaActual() === 'inicio') render();
@@ -661,11 +696,6 @@ function vInicio() {
           clase: p.hecho ? 'm-hecho' : ''
         })).join('') + '</div>' +
       '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
-  }
-
-  // El arranque (pasar de la prueba al uso real) solo existe donde hay datos de prueba.
-  if (demoOn() && estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
-    html += '<div class="m-banner" role="note">' + ico('check') + '<span>Falta cargar tus saldos reales y empezar.</span><button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/arranque">Arranque</button></div>';
   }
 
   if (hayBolsillos()) {
@@ -831,18 +861,19 @@ function vAjustes() {
         irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' })) +
       seccion('Presupuesto y nómina',
         irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
-        ['Escenarios', 'Nomina_Escenarios', 'Subsidios'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        irA('ajustes/Escenarios', { icono: CAT.Escenarios.icono, titulo: CAT.Escenarios.plural, final: n('Escenarios') }) +
+        irA('nomina', { icono: 'usuario', titulo: 'Mi nómina', sub: 'Tu sueldo y tus descuentos fijos' }) +
+        (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
+        enlaceHoja() +
+        fila({ icono: 'pulso', titulo: 'Actualizar desde la hoja', sub: 'Si editaste la hoja a mano, vuelve a leerla', chevron: true, attrs: 'data-acc="actualizar-datos"' }) +
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
-        // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
-        (demoOn()
-          ? irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
-            irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' })
-          : '') +
+        // Los datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
+        (demoOn() ? irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) : '') +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
         irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
@@ -898,13 +929,10 @@ function vDemo() {
   if (!demoOn()) return vNoDisponible('Datos de demostración');
   const demo = esVerdad(cfg('Datos_Demo'));
   const hayReales = ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].some(t => cat(t).some(f => !String(f['ID_' + t.slice(0, -1)] || '').startsWith('demo-')));
-  const iniciada = esVerdad(cfg('Arranque_Hecho'));
   let cuerpo;
   if (demo) {
     cuerpo = '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Hay datos ficticios cargados para probar la app. Borrarlos no afecta nada de lo que hayas registrado de verdad.</p>' +
       '<button class="m-btn m-btn-primary" style="width:100%;background:var(--m-danger);color:#fff" data-acc="limpiar-demo">Borrar datos de demostración</button>';
-  } else if (iniciada) {
-    cuerpo = '<p class="m-subtitulo" style="padding:0;margin:0">La operación real ya empezó, así que no se crean datos de demostración.</p>';
   } else {
     cuerpo = (hayReales ? '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0"><strong>Ya tienes datos reales.</strong> Los de demostración se suman a ellos mientras los miras: los totales del Inicio incluirán ambos. Al borrarlos, lo tuyo queda intacto. Antes de empezar a operar hay que borrarlos.</p>' : '') +
       '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Crea bancos, cuentas, bolsillos, tarjetas y algunos movimientos <strong>ficticios</strong> para explorar la app sin usar tus saldos reales. Se pueden borrar en un toque.</p>' +
@@ -973,7 +1001,9 @@ const CAT = {
       { k: 'Rendimiento_EA', label: 'Rendimiento de las cuentas de ahorro (% EA)', tipo: 'porcentaje',
         ayuda: 'Opcional. La tasa efectiva anual que te da este banco en sus cuentas de ahorro, por ejemplo 9,5.' },
       { k: 'Rendimiento_Pago', label: 'El banco paga el rendimiento', tipo: 'select', defecto: 'Mensual', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
-        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] }
+        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] },
+      { k: 'Rendimiento_Base', label: 'El rendimiento se paga sobre', tipo: 'select', defecto: 'Todo', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
+        opciones: () => [['Todo', 'Todo el saldo de la cuenta'], ['Bolsillos', 'Solo el dinero en bolsillos (no el saldo suelto de una cuenta)']] }
     ]
   },
   Cuentas: {
@@ -1003,7 +1033,7 @@ const CAT = {
         visible: (v, x) => !!x.existente && esVerdad(x.existente.Permite_Bolsillos) && !v.Permite_Bolsillos && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1,
         opciones: x => x.existente ? bolsillosActivosDe(x.existente.ID_Cuenta).map(b => [b.ID_Bolsillo, b.Nombre]) : [] },
       { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', visible: (v, x) => !v.Permite_Bolsillos && !(x.existente && esVerdad(x.existente.Permite_Bolsillos) && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1), ayuda: 'Cuánto dinero hay hoy en esta cuenta.' },
-      { k: 'Saldo_Real', label: 'Saldo según tu banco (opcional)', tipo: 'dinero', ayuda: 'Sirve para cuadrar: la app compara este valor con la suma de tus bolsillos.' },
+      { k: 'Saldo_Real', label: 'Saldo que muestra tu banco (para cuadrar)', tipo: 'dinero', soloAlEditar: true, ayuda: 'Opcional. Cuando quieras comprobar que todo cuadra, escribe aquí lo que dice la app de tu banco: Moni lo compara con su propio saldo.' },
       { k: 'Meta', label: 'Meta de ahorro (opcional)', tipo: 'dinero', visible: v => v.Tipo === 'Ahorro' }
     ]
   },
@@ -1197,6 +1227,7 @@ const INFO_CAMPOS = {
   Bancos: {
     Rendimiento_EA: 'La tasa efectiva anual que te paga este banco en sus cuentas de ahorro. Moni la usa para estimar cuánto te rinde. Déjala vacía si no rinde.',
     Rendimiento_Pago: 'Cada día: el banco suma lo ganado a tu saldo a diario (interés compuesto). Cada mes: lo suma al cerrar el mes.',
+    Rendimiento_Base: 'Algunos bancos (por ejemplo, con "bolsillos" o "cajitas") solo pagan sobre el dinero que guardas en ellos, no sobre el saldo disponible. Elige "Solo bolsillos" y Moni ignora el saldo general de la cuenta.',
     Nombre: 'El banco o la billetera donde tienes dinero, por ejemplo Nequi, Nu o tu banco de siempre.',
     Divisa: 'La moneda en la que está el dinero de este banco. Si ahorras en dólares, crea otro banco en dólares. No se puede cambiar cuando ya tiene cuentas.'
   },
@@ -1206,8 +1237,8 @@ const INFO_CAMPOS = {
     Tipo: 'Billetera: el dinero del día a día. Débito: una cuenta de banco. Ahorro: dinero que guardas, con meta y rendimientos. Otra: lo demás.',
     Permite_Bolsillos: 'Con bolsillos repartes el dinero de la cuenta por propósito (casa, mercado, un viaje). Sin bolsillos, la cuenta es un solo saldo.',
     fusionarEn: 'Al quitar los bolsillos, el dinero de todos se junta en este, con un traslado que queda en el historial.',
-    Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: después el saldo se calcula con tus movimientos.',
-    Saldo_Real: 'Lo que dice tu banco hoy. Moni lo compara con su cálculo para avisarte si algo no cuadra.',
+    Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: desde aquí Moni suma y resta cada movimiento que registres.',
+    Saldo_Real: 'No es el saldo inicial. Es lo que dice la app de tu banco hoy: Moni lo compara con el saldo que ella calcula con tus movimientos y te avisa si hay diferencia. Al crear la cuenta no hace falta.',
     Meta: 'Cuánto quieres ahorrar en esta cuenta. Moni muestra qué tanto llevas.'
   },
   Bolsillos: {
@@ -1508,7 +1539,7 @@ async function abrirFormulario(tabla, id, defaults) {
   const def = CAT[tabla];
   const existente = id ? cat(tabla).find(f => f[def.id] === id) : null;
   const item = existente ? (def.alEditar ? def.alEditar(existente) : existente) : {};
-  const campos = def.campos.filter(c => !(c.soloAlCrear && existente));
+  const campos = def.campos.filter(c => !(c.soloAlCrear && existente) && !(c.soloAlEditar && !existente));
   const ctx = { existente: existente };
 
   const valorInicial = c => {
@@ -1572,7 +1603,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -1581,15 +1612,15 @@ async function abrirFormulario(tabla, id, defaults) {
         ['Saldo_Real', 'Meta'].forEach(k => { if (v[k] === '' && existente && existente[k] !== '' && existente[k] !== undefined) envio[k] = ''; });
       }
       await api('saveCatalogo', tabla, envio, opciones);
-      await refrescar();
+      await refrescarParcial({ tablas: [tabla] });
       render();
       aviso(existente ? 'Cambios guardados' : 'Se agregó ' + def.singular);
     },
     extra: {
       'pedir-desactivar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = true; $('[data-hoja-acc="desactivar"]', raiz).focus(); },
       'cancelar-desactivar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = false; },
-      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescar(); render(); aviso('Desactivado'); return true; },
-      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescar(); render(); aviso('Reactivado'); return true; }
+      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Desactivado'); return true; },
+      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Reactivado'); return true; }
     }
   });
 }
@@ -2056,11 +2087,23 @@ async function restaurarYAvisar(id) {
 
 // ---------- Detalle de un movimiento ----------
 
+/** Qué es un movimiento, dicho en palabras: ingreso, gasto, movimiento de dinero (traslado)… */
+function tipoMovimientoTexto(it) {
+  const sub = it.Subtipo ? ' · ' + it.Subtipo.replace(/_/g, ' ').toLowerCase() : '';
+  if (it.Subtipo === 'Conversion') return 'Conversión de divisas';
+  if (it.esTransferencia || it.Tipo_Mov === 'Transferencia') return 'Movimiento de dinero (entre bolsillos)' + (it.Subtipo ? sub : '');
+  if (it.Tipo_Mov === 'Ingreso') return 'Ingreso' + sub;
+  if (it.Tipo_Mov === 'Gasto') return 'Gasto' + sub;
+  if (it.Tipo_Mov === 'Ajuste') return 'Ajuste de saldo';
+  return it.Tipo_Mov || 'Movimiento';
+}
+
 async function abrirDetalleMov(id) {
   const it = buscarMov(id);
   if (!it) return;
   const m = montoMov(it, false);
   const filas = [];
+  filas.push(['Tipo', '<strong>' + esc(tipoMovimientoTexto(it)) + '</strong>']);
   filas.push(['Valor', '<strong class="m-num ' + (m.clase === 'm-entra' ? 'm-positivo' : '') + '">' + esc(m.texto) + '</strong>']);
   filas.push(['Fecha', esc(etiquetaDia(it.Fecha) + ' · ' + it.Fecha)]);
   if (it.esTransferencia) {
@@ -2231,8 +2274,12 @@ function filaRenglon(i) {
 
 function htmlPresupuesto(d) {
   const t = d.totales;
+  const faltan = d.faltanSuscripciones
+    ? '<div class="m-banner" role="note">' + ico('tarjetas') + '<span>' + (d.faltanSuscripciones === 1 ? 'Hay 1 suscripción o servicio de este mes que no está en el presupuesto.' : 'Hay ' + d.faltanSuscripciones + ' suscripciones o servicios de este mes que no están en el presupuesto.') + '</span>' +
+      '<button class="m-btn-texto" data-acc="ppto-susc">Agregar</button></div>'
+    : '';
   const avance = t.plan > 0 ? Math.min(100, Math.round(t.real / t.plan * 100)) : 0;
-  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Te queda</div>' +
+  let h = faltan + '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Te queda</div>' +
     '<div class="m-resumen-cifra m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</div>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Gastado</div><strong class="m-num">' + dinero(t.real) + '</strong></div>' +
@@ -2434,7 +2481,10 @@ function vNomina() {
 /** Lo que el usuario ajustó en el estimado (casillas y días), listo para mandarlo al servidor. */
 function opcionesNomina() {
   const o = App.nom.opciones || {};
-  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {} };
+  const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+  // Lo que se agrega "solo este mes" vale para el mes en que se agregó: al cambiar de mes se descarta.
+  const adicionales = o.mesAdicionales === mes ? (o.adicionales || []) : [];
+  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {}, adicionales: adicionales };
 }
 
 async function cargarNomina() {
@@ -2470,7 +2520,9 @@ function seccionNomina(titulo, lineas, clase) {
 function filaLineaNomina(l, bloqueado) {
   const dias = l.dias !== undefined && ['ordinario', 'prima', 'vacaciones'].indexOf(l.clave) !== -1
     ? '<span class="m-row-sub" style="display:flex;align-items:center;gap:var(--m-space-2)">Días <input class="m-input m-dias" type="number" inputmode="numeric" min="0" max="' + (l.clave === 'ordinario' ? 30 : 360) + '" value="' + esc(l.dias) + '" data-acc-cambio="nom-dias" data-que="' + l.clave + '" aria-label="Días de ' + esc(l.concepto) + '"' + (bloqueado ? ' disabled' : '') + '></span>' : '';
-  const quitar = l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '';
+  const quitar = l.adicional
+    ? '<button class="m-btn-texto" data-acc="nom-adic-quitar" data-id="' + esc(l.clave.slice(10)) + '" aria-label="Quitar ' + esc(l.concepto) + '">Quitar</button>'
+    : (l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '');
   return '<div class="m-row m-renglon' + (l.incluido ? '' : ' m-hecho') + '">' +
     '<label class="m-check"><input type="checkbox" data-acc-cambio="nom-incl" data-clave="' + esc(l.clave) + '"' + (l.incluido ? ' checked' : '') + (bloqueado ? ' disabled' : '') + ' aria-label="Incluir ' + esc(l.concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
     '<div class="m-row-main" style="cursor:default"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(l.concepto) + '</span>' + dias + '</span>' +
@@ -2479,23 +2531,18 @@ function filaLineaNomina(l, bloqueado) {
 
 function htmlNomina(d) {
   if (!d.calculo) {
-    return vacio('usuario', 'Aún no hay escenarios de nómina', d.error || 'Crea uno con tu sueldo base para calcular cuánto te llega cada mes.',
-      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Nomina_Escenarios">Crear un escenario</button>');
+    return vacio('usuario', d.configurada ? 'No se pudo calcular tu nómina' : 'Configura tu nómina', d.configurada ? d.error : 'Escribe tu sueldo base y Moni calcula cuánto te llega cada mes, con salud, pensión, prima y cesantías.',
+      '<button class="m-btn m-btn-primary" data-acc="nom-sueldo">' + (d.configurada ? 'Revisar mi sueldo' : 'Escribir mi sueldo') + '</button>');
   }
   const c = d.calculo;
   const bloqueado = !!d.pago; // con la nómina ya registrada, el estimado queda como se calculó
   let h = '';
-  if (d.comparacion.length > 1) {
-    h += '<div class="m-campo"><label class="m-label" for="nom-esc">Escenario</label><select class="m-input" id="nom-esc">' +
-      d.comparacion.map(e => '<option value="' + esc(e.ID_Nomina_Esc) + '"' + (e.ID_Nomina_Esc === c.escenario.ID_Nomina_Esc ? ' selected' : '') + '>' + esc(e.Nombre) + (e.Vigente ? ' (vigente)' : '') + ' — ' + dinero(e.neto) + '</option>').join('') + '</select></div>';
-  }
-
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado) · ' + esc(c.escenario.Nombre) + '</div>' +
+  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado)</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(c.totales.neto) + '</div>' +
     '<p class="m-ayuda">Devengado ' + dinero(c.totales.devengado) + ' − descuentos ' + dinero(c.totales.deducciones) + (c.totales.extras ? ' + prestaciones ' + dinero(c.totales.extras) : '') + '</p></div><div style="height:var(--m-space-4)"></div>';
 
   h += seccion('Tu sueldo',
-    fila({ titulo: 'Sueldo base', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>' }) +
+    fila({ titulo: 'Sueldo base', sub: bloqueado ? '' : 'Toca para cambiarlo', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>', chevron: !bloqueado, attrs: bloqueado ? '' : 'data-acc="nom-sueldo"' }) +
     fila({ titulo: 'Valor de un día' + '', sub: 'Sueldo y subsidios salariales entre ' + c.diasBase + ' días', final: '<span class="m-num">' + dinero(c.diaBase) + '</span>' }),
     'Marca o desmarca cada línea para ver cómo cambia lo que recibes. Los días sirven para un mes incompleto, la prima (15 = medio mes) o las vacaciones.');
   const L = g => c.lineas.filter(l => l.grupo === g);
@@ -2504,7 +2551,9 @@ function htmlNomina(d) {
     '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
     '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
-  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
+  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-adic-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar algo de este mes</button></div>' +
+    '<p class="m-ayuda" style="margin-top:calc(var(--m-space-3) * -1)">Horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa: solo para el pago de este mes.</p>' +
+    '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
 
   if (d.pago) {
     const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
@@ -2523,6 +2572,53 @@ function htmlNomina(d) {
 }
 
 /** Agregar o editar un descuento (libranza, medicina prepagada…) o un ingreso fijo (bono) del escenario. */
+/** Tu sueldo base: la primera vez crea tu nómina; después solo lo cambia. */
+async function abrirSueldoNomina() {
+  const d = App.nom.data;
+  const actual = d && d.calculo ? d.calculo.escenario.Sueldo_Base : '';
+  const campos = [{ k: 'Sueldo_Base', label: 'Sueldo base mensual', tipo: 'dinero', requerido: true, info: 'Tu sueldo antes de descuentos. Los descuentos de ley (salud, pensión) los calcula Moni; los demás los agregas como descuentos fijos.' }];
+  await abrirHoja({
+    titulo: 'Mi sueldo',
+    cuerpo: '<form novalidate data-form="sueldo-nomina">' + htmlCampo(campos[0], actual, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Sueldo_Base', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Sueldo_Base === '' || (typeof v.Sueldo_Base === 'number' && isNaN(v.Sueldo_Base)) || v.Sueldo_Base <= 0) throw new Error('Escribe tu sueldo base.');
+      const r = await api('saveMiNomina', v.Sueldo_Base, App.nom.mes || '', opcionesNomina());
+      App.nom.data = r.nomina;
+      await refrescarParcial({ tablas: ['Nomina_Escenarios'] });
+      render(); aviso('Sueldo guardado');
+    }
+  });
+}
+
+/** Algo que solo cuenta en el pago de este mes: horas extras, bono, cesantías, prima, un descuento de la empresa. */
+async function abrirAdicionalNomina() {
+  const campos = [
+    { k: 'Tipo', label: 'Es…', tipo: 'select', opciones: () => [['Devengo', 'Un ingreso (horas extras, bono, comisión)'], ['Extra', 'Una prestación (prima, cesantías)'], ['Deduccion', 'Un descuento (de la empresa)']],
+      info: 'Un ingreso suma a lo que recibes y cotiza si es parte del salario. Una prestación suma pero no cotiza. Un descuento resta.' },
+    { k: 'Concepto', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Horas extras', 'Bono', 'Comisión', 'Pago de cesantías', 'Prima', 'Descuento de la empresa'] },
+    { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true },
+    { k: 'Es_Salarial', label: 'Hace parte del salario', tipo: 'interruptor', visible: v => v.Tipo === 'Devengo', info: 'Si lo es (las horas extras sí), cuenta para salud y pensión. Un bono ocasional normalmente no lo es.' }
+  ];
+  await abrirHoja({
+    titulo: 'Agregar algo de este mes',
+    cuerpo: '<form novalidate data-form="adicional-nomina">' + campos.map(c => htmlCampo(c, c.k === 'Tipo' ? 'Devengo' : '', {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {}); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {})); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el nombre.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe el valor.');
+      const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+      await recalcularNomina(o => {
+        if (o.mesAdicionales !== mes) { o.adicionales = []; o.mesAdicionales = mes; }
+        o.adicionales = (o.adicionales || []).concat([{ Tipo: v.Tipo, Concepto: v.Concepto, Valor: v.Valor, Es_Salarial: v.Tipo === 'Devengo' && !!v.Es_Salarial }]);
+      });
+      aviso('Agregado a este mes');
+    }
+  });
+}
+
 async function abrirConceptoNomina(idConcepto) {
   const d = App.nom.data;
   if (!d || !d.calculo) return;
@@ -3130,7 +3226,6 @@ App.ahoC = { id: null, mes: null, data: null, cargando: false, error: null };
 App.reg = { anio: null, data: null, cargando: false, error: null };
 App.anual = { anio: null, data: null, cargando: false, error: null };
 App.resp = { data: null, cargando: false, error: null };
-App.arr = { data: null, cargando: false, error: null };
 App.pag = { data: null, cargando: false, error: null };
 
 /** Carga genérica: pide `fn`, guarda en `st.data` y vuelve a pintar si se sigue en `ruta`. */
@@ -3189,10 +3284,11 @@ function htmlRendimientoEstimado(a) {
     return seccion('Rendimiento estimado', fila({ icono: 'pulso', titulo: 'Sin tasa de rendimiento', sub: 'Agrégala en el banco para estimar cuánto te rinde', chevron: true, attrs: 'data-acc="ir" data-ruta="ajustes/Bancos"' }));
   }
   const pct = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(e.ea * 100);
-  const porDia = a.Saldo * e.tasaDiaria;
+  const porDia = (e.saldoBase !== undefined ? e.saldoBase : a.Saldo) * e.tasaDiaria;
   return seccion('Rendimiento estimado',
     '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
       '<div><dt>Tasa</dt><dd>' + pct + ' % EA · se paga ' + (e.pago === 'Diario' ? 'cada día' : 'cada mes') + '</dd></div>' +
+      '<div><dt>Rinde sobre</dt><dd>' + (e.base === 'Bolsillos' ? 'Solo bolsillos · ' + dinero(e.saldoBase) : 'Todo el saldo') + '</dd></div>' +
       '<div><dt>Rinde por día (aprox.)</dt><dd class="m-num">' + dinero(porDia) + '</dd></div>' +
       '<div><dt>Acumulado este mes</dt><dd class="m-num m-positivo">' + dinero(e.acumuladoMes) + '</dd></div>' +
       '<div><dt><strong>Por registrar</strong></dt><dd class="m-num"><strong>' + dinero(e.pendiente) + '</strong></dd></div></dl></div>' +
@@ -3413,79 +3509,7 @@ function vRespaldos() {
   return { titulo: 'Respaldos', html: html, despues: () => { if (!r.data && !r.cargando && !r.error) cargarEn(r, 'ajustes/respaldos', 'getRespaldos', []); } };
 }
 
-// ---------- Arranque y guía (Fase 6) ----------
-
-function vArranque() {
-  if (!demoOn()) return vNoDisponible('Arranque');
-  const a = App.arr;
-  let html = bannerDemo();
-  if (a.error) html += bloqueError(a.error, 'recargar-arr');
-  else if (!a.data) html += esqueleto(4);
-  else {
-    const d = a.data;
-    if (d.hecho) {
-      html += '<div class="m-group" style="padding:var(--m-space-4)"><p><strong>La operación real empezó el ' + esc(d.fecha) + '.</strong></p>' +
-        '<p class="m-ayuda">Los saldos de apertura quedan fijos. Si el banco y Moni no coinciden, usa “Cuadrar” en la cuenta: deja un ajuste con fecha.</p></div>';
-    } else {
-      html += seccion('Antes de empezar',
-        d.checks.map(c => fila({
-          icono: c.hecho ? 'check' : 'plus', titulo: esc(c.titulo),
-          sub: esc(c.detalle || (c.opcional ? 'Opcional' : '')), chevron: true,
-          attrs: 'data-acc="ir" data-ruta="' + esc(c.pantalla) + '"', clase: c.hecho ? 'm-hecho' : ''
-        })).join(''),
-        d.listo ? 'Todo lo necesario está listo.' : 'Completa lo que falta para poder iniciar.') +
-        seccion('Fecha de arranque', fila({ icono: 'capas', titulo: 'Primer día real', final: esc(d.fecha), chevron: true, attrs: 'data-acc="fecha-arranque"' }),
-          'Lo anterior a esta fecha es prueba. Los saldos de apertura son los del día anterior.');
-    }
-    const filas = d.aperturas.map(x => fila({
-      titulo: esc(x.Bolsillo || x.Cuenta), sub: x.Bolsillo ? esc(x.Cuenta) : esc(x.Banco),
-      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura, x.Divisa) + '</span>'
-    })).join('');
-    html += seccion('Saldos de apertura · ' + dinero(d.totalApertura), filas || '<p class="m-ayuda" style="padding:var(--m-space-4)">Aún no hay bolsillos.</p>');
-    if (!d.hecho) {
-      html += '<div class="m-acciones-fila" style="flex-direction:column;gap:var(--m-space-3);margin-top:var(--m-space-4)">' +
-        (d.aperturas.length ? '<button class="m-btn m-btn-secondary" data-acc="editar-aperturas">Cargar saldos de apertura</button>' : '') +
-        (d.previos.movimientos ? '<button class="m-btn m-btn-secondary" data-acc="archivar-pruebas">Archivar ' + d.previos.movimientos + ' movimiento(s) de prueba</button>' : '') +
-        '<button class="m-btn m-btn-primary" data-acc="iniciar-operacion"' + (d.listo ? '' : ' disabled') + '>Empezar a usar Moni</button></div>';
-      (d.avisos || []).forEach(t => { html += '<p class="m-ayuda">' + esc(t) + '</p>'; });
-    }
-  }
-  return { titulo: 'Arranque', html: html, despues: () => { if (!a.data && !a.cargando && !a.error) cargarEn(a, 'ajustes/arranque', 'getArranque', []); } };
-}
-
-async function abrirAperturas() {
-  const d = App.arr.data;
-  if (!d) return;
-  const cuerpo = '<form novalidate data-form="aperturas"><p class="m-hoja-mensaje">Escribe cuánto dinero hay en cada lugar al cierre del día anterior al arranque (' + esc(d.fecha) + '). Puede ser negativo.</p>' +
-    d.aperturas.map((x, i) => '<div class="m-campo"><label class="m-label" for="ap-' + i + '">' + esc(x.Bolsillo ? x.Cuenta + ' · ' + x.Bolsillo : x.Cuenta) + '</label>' +
-      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" data-divisa="' + esc(x.Divisa) + '" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
-    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-  await abrirHoja({
-    titulo: 'Saldos de apertura', cuerpo: cuerpo, alAbrir: raiz => activarEcoDinero(raiz),
-    alGuardar: async raiz => {
-      const lista = d.aperturas.map((x, i) => {
-        const v = leerDinero($('#ap-' + i, raiz).value);
-        if (v !== '' && isNaN(v)) throw new Error('Revisa el saldo de “' + (x.Bolsillo || x.Cuenta) + '”.');
-        return { ID_Bolsillo: x.ID_Bolsillo, Saldo_Apertura: v === '' ? 0 : v };
-      });
-      App.arr.data = await api('saveAperturas', lista);
-      await refrescar(); render(); aviso('Saldos de apertura guardados');
-    }
-  });
-}
-
-async function abrirFechaArranque() {
-  const d = App.arr.data;
-  if (!d) return;
-  await abrirHoja({
-    titulo: 'Fecha de arranque',
-    cuerpo: '<form novalidate><div class="m-campo"><label class="m-label" for="f-arr">Primer día real</label><input class="m-input" id="f-arr" type="date" value="' + esc(d.fecha) + '"><p class="m-ayuda">Por defecto, 1 de enero de 2027.</p></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alGuardar: async raiz => {
-      App.arr.data = await api('setFechaArranque', $('#f-arr', raiz).value);
-      render(); aviso('Fecha guardada');
-    }
-  });
-}
+// ---------- Guía de uso ----------
 
 function vGuia() {
   const paso = (t, x) => '<div class="m-row" style="align-items:flex-start"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + t + '</span><span class="m-row-sub" style="display:block;white-space:normal">' + x + '</span></span></div>';
@@ -3504,8 +3528,7 @@ function vGuia() {
       seccion('Cuando algo no cuadra',
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
         paso('Deshacer un pago', 'Los pagos de extractos y de cuotas se anulan desde su detalle; todo vuelve a como estaba.') +
-        paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.')) +
-      (demoOn() ? seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' })) : '')
+        paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.'))
   };
 }
 
@@ -4371,24 +4394,35 @@ const PASOS_ASIST = [
   { id: 'bolsillos', corto: 'Bolsillos', tabla: 'Bolsillos', uno: 'un bolsillo', otro: 'Guardar y agregar otro' },
   { id: 'tarjetas', corto: 'Tarjetas', tabla: 'Tarjetas' },
   { id: 'nomina', corto: 'Nómina' },
-  { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true }
+  { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
+  { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un inmueble', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', clave: 'Tipo', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
+  { id: 'tasa', corto: 'Dólar', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
 
 /** Qué campos de cada catálogo se piden en el asistente (el resto se completa después en Ajustes). */
 const CAMPOS_ASIST = {
-  Bancos: ['Nombre', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago'],
+  Bancos: ['Nombre', 'Divisa', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base'],
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
-  Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo']
+  Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo'],
+  Suscripciones: ['Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta'],
+  Inmuebles: ['Nombre'],
+  Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
   bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
-  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos.' },
+  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Más → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
+  suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; Moni te recuerda cuándo se cobra.' },
+  hogar: { titulo: 'Tu hogar', sub: 'Es opcional. Agrega la casa o el apartamento cuyos servicios pagas (puedes tener varios). Después podrás guardar el código de pago de cada servicio.' },
+  servicios: { titulo: 'Servicios públicos de tu hogar', sub: 'Es opcional. Luz, agua, gas, internet… Guarda el código de pago para tenerlo a la mano. Si el valor cambia cada mes, créalo también como suscripción de tipo servicio.' },
+  tasa: { titulo: '¿Manejas dólares?', sub: 'Es opcional. Moni puede traer el dólar (TRM) de Google Finance para mostrarte cuánto equivale en pesos un saldo en dólares. Es solo informativo: tus saldos y conversiones usan lo que cobró tu banco.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas. Puedes agregar todas las que tengas.' }
 };
 
@@ -4402,7 +4436,7 @@ App.asist = { activo: false, paso: null, omitido: asistenteOmitido(), ultimo: {}
 function asistenteVisible() {
   const e = App.boot && App.boot.estado;
   if (!e || !e.instalado || !e.pasos) return false;
-  if (App.asist.omitido || esVerdad(cfg('Datos_Demo')) || esVerdad(cfg('Arranque_Hecho'))) return false;
+  if (App.asist.omitido || esVerdad(cfg('Datos_Demo'))) return false;
   if (!App.asist.activo && !e.completo) App.asist.activo = true;
   return App.asist.activo;
 }
@@ -4418,6 +4452,7 @@ function pasoInicialAsist() {
 function aplicaPasoAsist(id) {
   if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
   if (id === 'ingresos') return activos('Bolsillos').length > 0; // el ingreso llega a un bolsillo
+  if (id === 'servicios') return activos('Inmuebles').length > 0; // un servicio es de un inmueble
   return true;
 }
 
@@ -4502,7 +4537,7 @@ function vPasoAsistente(id) {
   const p = PASOS_ASIST.find(x => x.id === id);
   const t = TEXTOS_ASIST[id];
   const campos = p.tabla && CAMPOS_ASIST[p.tabla] ? camposAsist(p.tabla) : null;
-  let cuerpo, hechos = '', continuar = 'Continuar';
+  let cuerpo, hechos = '', continuar = (p.tabla && CAMPOS_ASIST[p.tabla]) || id === 'nomina' ? 'Guardar y continuar' : 'Continuar';
 
   if (id === 'perfil') {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
@@ -4518,18 +4553,21 @@ function vPasoAsistente(id) {
       : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
         '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
-        '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-nom-nombre">Nombre</label>' + htmlInfo('Una situación de ingresos: “Actual”, “Con aumento”… Puedes crear otros después para comparar.') + '</div>' +
-        '<input class="m-input" id="asist-nom-nombre" maxlength="60" value="Actual" autocomplete="off"></div>' +
         htmlSubsidiosAsist() + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist('Nomina_Escenarios');
-    if (!yaHay) continuar = 'Omitir por ahora';
+  } else if (id === 'tasa') {
+    const activa = esVerdad(cfg('Tasa_Auto')); // por defecto apagado: la persona decide
+    cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
+      '<div class="m-interruptor-fila"><span class="m-label-fila"><label for="asist-tasa">Traer el dólar de Google Finance</label>' + htmlInfo('Se crea una pestaña auxiliar en tu hoja (Tasas_Google) con una fórmula de Google Finance y la tasa se actualiza sola cada día. Puedes apagarlo cuando quieras en Ajustes → Divisas.') + '</span>' +
+      '<span class="m-interruptor"><input type="checkbox" role="switch" id="asist-tasa"' + (activa ? ' checked' : '') + '><i></i></span></div>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+    continuar = activa ? 'Guardar y continuar' : 'Continuar sin vincular';
   } else if (campos) {
     cuerpo = '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
       campos.map(c => htmlCampo(c, valorInicialAsist(c), {})).join('') +
       (id === 'cuentas' ? htmlBolsillosAsist() : '') +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
     hechos = htmlHechosAsist(p.tabla);
-    if (p.opcional && !listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
   } else {
     // Tarjetas: se abre el mismo formulario de Ajustes. La reserva puede ir en cualquier cuenta en pesos:
     // si esa cuenta era de un solo saldo, pasa a usar bolsillos sin perder nada.
@@ -4538,24 +4576,35 @@ function vPasoAsistente(id) {
         '<p class="m-ayuda">Cada tarjeta aparta lo que vas a pagar en una “reserva”, un bolsillo dentro de la cuenta que elijas.</p>'
       : '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Primero crea al menos una cuenta (paso anterior): ahí se guarda la reserva de la tarjeta.</p></div>';
     hechos = htmlHechosAsist(p.tabla);
-    if (!listaAsist(p.tabla).length) continuar = 'Omitir por ahora';
   }
 
   return {
     titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true,
     html: '<div class="m-asist">' + htmlPasosAsist(id) +
-      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + '</p>' +
+      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + ' · ' + esc(p.corto) + (p.opcional ? ' · opcional' : '') + '</p>' +
       '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(t.titulo) + '</h1>' +
       '<p class="m-subtitulo">' + esc(t.sub) + '</p>' +
       '<div class="m-error-form" id="asist-error" role="alert" hidden></div>' + cuerpo +
       '<div class="m-asist-acciones">' +
-        '<button type="button" class="m-btn m-btn-primary" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
+        '<button type="button" class="m-btn m-btn-primary" id="asist-principal" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
         (p.otro && campos ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-otro">' + esc(p.otro) + '</button>' : '') +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
-        '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button></div></div>' +
+        (p.opcional
+          ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar este paso</button>'
+          : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button>') + '</div></div>' +
       hechos + '</div>',
     despues: () => {
       const f = $('#asist-form');
+      const principal = $('#asist-principal');
+      // El botón principal dice lo que va a pasar: guarda lo escrito, o solo continúa si no hay nada nuevo.
+      const etiquetar = () => {
+        if (!principal || !f) return;
+        if (id === 'tasa') { const sw = $('#asist-tasa', f); principal.textContent = sw && sw.checked ? 'Vincular y continuar' : 'Continuar sin vincular'; return; }
+        const clave = id === 'nomina' ? $('#asist-sueldo', f) : $('#' + idCampo(p.clave || 'Nombre'), f);
+        const escrito = !!(clave && String(clave.value).trim());
+        principal.textContent = escrito || (!p.opcional && !listaAsist(p.tabla || '').length && id !== 'nomina') ? 'Guardar y continuar' : 'Continuar';
+      };
+      if (f && ['tasa', 'nomina'].indexOf(id) !== -1 || (f && campos)) { f.addEventListener('input', etiquetar); f.addEventListener('change', etiquetar); etiquetar(); }
       if (f && id === 'nomina') { activarEcoDinero(f); return; }
       if (!f || !campos) return;
       activarEcoDinero(f);
@@ -4609,7 +4658,7 @@ async function guardarNominaAsist(f) {
   });
   if (sueldo === '' ) { if (subs.length) throw new Error('Escribe tu sueldo base para guardar la nómina.'); return; }
   if (isNaN(sueldo) || sueldo <= 0) throw new Error('El sueldo debe ser un número mayor que cero.');
-  await api('saveNominaInicial', { Nombre: $('#asist-nom-nombre', f).value.trim() || 'Actual', Sueldo_Base: sueldo }, subs);
+  await api('saveNominaInicial', { Sueldo_Base: sueldo }, subs);
 }
 
 /** Filas de bolsillos dentro del paso de cuentas: nombre y cuánto hay hoy en cada uno. */
@@ -4672,7 +4721,7 @@ function vFinAsistente() {
       '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
         dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) +
         dato('Nómina', activos('Nomina_Escenarios').length ? 'Lista' : '—') + dato('Otros ingresos', listaAsist('Ingresos_Recurrentes').length) + '</div>' +
-      '<p class="m-ayuda" style="text-align:left">' + (demoOn() ? 'Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.' : 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.') + '</p>' +
+      '<p class="m-ayuda" style="text-align:left">' + 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.' + '</p>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button></div></div></div>'
@@ -4687,8 +4736,8 @@ async function guardarCatalogoAsist(paso, f, otro) {
   const p = PASOS_ASIST.find(x => x.id === paso);
   const campos = camposAsist(p.tabla);
   const v = leerFormulario(f, campos);
-  if (!v.Nombre) {
-    if (otro) throw new Error('Escribe el nombre para agregar ' + p.uno + ' más.');
+  if (!v[p.clave || 'Nombre']) { // sin el dato principal no hay nada que guardar (en un paso opcional, simplemente se continúa)
+    if (otro) throw new Error('Completa los datos para agregar ' + p.uno + ' más.');
     if (!p.opcional && !listaAsist(p.tabla).length) throw new Error('Agrega al menos ' + p.uno + ' para continuar.');
     return false;
   }
@@ -4726,10 +4775,16 @@ async function enviarPasoAsist(f, otro) {
       if (nombre !== cfg('Nombre_Usuario')) await api('saveConfigParam', 'Nombre_Usuario', nombre);
     } else if (paso === 'nomina') {
       await guardarNominaAsist(f);
+    } else if (paso === 'tasa') {
+      const quiere = !!($('#asist-tasa', f) && $('#asist-tasa', f).checked);
+      if (quiere !== esVerdad(cfg('Tasa_Auto'))) await api('saveTasaAuto', quiere);
     } else {
       await guardarCatalogoAsist(paso, f, otro);
     }
-    await refrescar();
+    // Solo se pide lo que ese paso cambió (el nombre toca un parámetro; una cuenta, sus tablas); la nómina cambia varias cosas.
+    if (paso === 'perfil' || paso === 'tasa') await refrescarParcial({ config: true });
+    else if (paso === 'nomina') await refrescar();
+    else await refrescarParcial({ tablas: [PASOS_ASIST.find(x => x.id === paso).tabla] });
     if (otro) {
       render();
       aviso('Se agregó ' + CAT[PASOS_ASIST.find(x => x.id === paso).tabla].singular);
@@ -4772,7 +4827,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec, App.ing].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -4846,6 +4901,7 @@ const ACCIONES = {
   'asist-empezar': () => moverAsist(1),
   'asist-atras': () => moverAsist(-1),
   'asist-omitir': () => terminarAsistente(true),
+  'asist-saltar': () => moverAsist(1),
   'asist-fin': () => terminarAsistente(false),
   'asist-reanudar': () => { App.asist.omitido = false; recordarAsistenteOmitido(false); App.asist.activo = false; App.asist.paso = null; render(true); },
   'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
@@ -4892,21 +4948,6 @@ const ACCIONES = {
   susc: el => abrirDetalleCobro(el.dataset.id),
   codigo: el => abrirCodigoServicio(el.dataset.id),
   rapido: el => abrirRegistrar({ tipo: el.dataset.tipo }),
-  'recargar-arr': () => { App.arr.error = null; App.arr.data = null; render(); },
-  'editar-aperturas': () => abrirAperturas(),
-  'fecha-arranque': () => abrirFechaArranque(),
-  'archivar-pruebas': async () => {
-    const ok = await confirmar({ titulo: 'Archivar pruebas', accion: 'Archivar', mensaje: 'Se anularán los movimientos anteriores a la fecha de arranque. No se borran: puedes restaurarlos uno a uno.' });
-    if (!ok) return;
-    try { const r = await api('archiveTests'); App.arr.data = r; await refrescar(); render(); aviso(r.archivados + ' movimiento(s) archivados'); }
-    catch (e) { aviso(e.message, true); }
-  },
-  'iniciar-operacion': async () => {
-    const ok = await confirmar({ titulo: 'Empezar a usar Moni', accion: 'Empezar', mensaje: 'Se guarda un respaldo, se activan las copias automáticas y los saldos de apertura quedan fijos. ¿Todo está como en tu banco?' });
-    if (!ok) return;
-    try { App.arr.data = await api('startOperation'); await refrescar(); render(); aviso('¡Listo! Moni empezó a operar'); }
-    catch (e) { aviso(e.message, true); }
-  },
   'recargar-aho': () => { App.aho.error = null; App.aho.data = null; render(); },
   'recargar-ahoc': () => { App.ahoC.error = null; App.ahoC.data = null; render(); },
   'recargar-reg': () => { App.reg.error = null; App.reg.data = null; render(); },
@@ -4964,10 +5005,17 @@ const ACCIONES = {
   },
   renglon: el => abrirRenglon(el.dataset.id),
   'nuevo-renglon': () => abrirRenglonMes(null),
+  'ppto-susc': async () => {
+    try { const r = await api('addSuscripcionesPpto', App.ppto.mes); aplicarPresupuesto(r.presupuesto); render(); aviso(r.agregados ? 'Se agregaron ' + r.agregados + (r.agregados === 1 ? ' renglón' : ' renglones') + ' al presupuesto' : 'Todo al día'); }
+    catch (e) { aviso(e.message, true); }
+  },
   distribuir: () => abrirDistribucion(App.ppto.mes),
   'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
   'registrar-nomina': () => abrirRegistrarNomina(),
   'nom-concepto-nuevo': () => abrirConceptoNomina(null),
+  'nom-sueldo': () => abrirSueldoNomina(),
+  'nom-adic-nuevo': () => abrirAdicionalNomina(),
+  'nom-adic-quitar': el => recalcularNomina(o => { o.adicionales = (o.adicionales || []).filter((x, i) => String(i) !== el.dataset.id); }),
   'nom-concepto-editar': el => abrirConceptoNomina(el.dataset.id),
   'anular-nomina': async () => {
     const ok = await confirmar({ titulo: 'Anular nómina', accion: 'Anular', mensaje: 'Se anula el ingreso de la nómina de este mes. Si ya la repartiste, esos traslados no se deshacen solos.' });
@@ -4990,6 +5038,9 @@ const ACCIONES = {
   tab: el => navegar(el.dataset.ruta),
   ir: el => navegar(el.dataset.ruta),
   volver: () => volver(),
+  'actualizar-datos': async () => {
+    try { await api('refreshCache'); await refrescar(); render(); aviso('Datos actualizados desde la hoja'); } catch (e) { aviso(e.message, true); }
+  },
   recargar: () => { App.error = null; $('#vista').innerHTML = '<div class="m-cargando">Cargando…</div>'; cargar(); },
   nuevo: el => abrirFormulario(el.dataset.tabla),
   editar: el => abrirFormulario(el.dataset.tabla, el.dataset.id),
@@ -5018,7 +5069,9 @@ const ACCIONES = {
   const dlg = $('#hoja');
   dlg.addEventListener('click', ev => { if (hojaActual) hojaActual.alClic(ev); });
   dlg.addEventListener('submit', ev => { if (hojaActual) hojaActual.alEnviar(ev); });
-  dlg.addEventListener('close', () => { if (hojaActual) hojaActual.finalizar(); }); // Esc o cierre nativo
+  // Esc o cierre nativo. El evento llega un instante DESPUÉS de cerrar: si mientras tanto se abrió otra hoja (Editar desde el
+  // detalle), no hay que cerrarla.
+  dlg.addEventListener('close', () => { if (hojaActual && !dlg.open) hojaActual.finalizar(); });
 })();
 
 document.addEventListener('click', ev => {
@@ -5071,7 +5124,6 @@ document.addEventListener('change', async ev => {
     return;
   }
   if (t.id === 'tar-mes') { App.tar.mes = t.value; App.tar.data = null; render(); return; }
-  if (t.id === 'nom-esc') { App.nom.idEsc = t.value; App.nom.opciones = null; App.nom.data = null; render(); return; }
   if (t.dataset.accCambio === 'anulados') {
     const st = t.dataset.vista === 'det' ? App.det : App.mov;
     st.anulados = t.checked; st.data = null;
@@ -5152,7 +5204,7 @@ document.addEventListener('submit', async ev => {
   boton.disabled = true;
   try {
     await api('saveConfigParam', 'Nombre_Usuario', $('#f-nombre', f).value);
-    await refrescar();
+    await refrescarParcial({ config: true });
     aviso('Guardado');
     render();
   } catch (e) { aviso(e.message, true); }

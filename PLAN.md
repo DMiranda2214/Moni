@@ -1,3 +1,5 @@
+> **Documento histórico.** Es el plan con el que se construyó Moni (antes de la versión 1.0, pensada entonces para arrancar el 1 de enero de 2027). Lo vigente está en el [README](README.md), el [Manual](docs/MANUAL_USUARIO.md) y el [CHANGELOG](CHANGELOG.md); algunas decisiones de aquí cambiaron (por ejemplo, ya no existen el "Arranque" ni los escenarios de nómina).
+
 # Moni — Plan de desarrollo 2027
 
 > Documento vivo. Última actualización: 2026-10-28 (Fases 1 a 4 listas en código).

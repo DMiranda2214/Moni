@@ -36,4 +36,3 @@
 | **Suscripción** | Cobro fijo que se repite (streaming, música) |
 | **Servicio** | Cobro recurrente de valor variable (luz, agua, internet) |
 | **Datos de demostración** | Información ficticia para explorar la app; se borra sin tocar lo real |
-| **Arranque** | El paso de la prueba al uso real: saldos de apertura, fecha de inicio |

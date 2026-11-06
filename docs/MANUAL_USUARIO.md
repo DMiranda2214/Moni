@@ -4,7 +4,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 
 ## 1. Primer uso
 1. Abre el enlace de la app (guárdalo como favorito o *Agregar a pantalla de inicio*).
-2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
+2. Moni te da la **bienvenida** y te guía en un **asistente paso a paso**, con una barra de progreso arriba: tu nombre (y color), tus bancos, tus cuentas, tus bolsillos con su saldo inicial y, si quieres, tus tarjetas, tu nómina, otros ingresos, suscripciones, hogar y servicios, y si vinculas el dólar de Google Finance. En los bancos, cuentas y bolsillos puedes usar **Guardar y agregar otro**. Si lo cierras con **Seguir más tarde** (o **Ahora no**), en Inicio queda la lista de **Primeros pasos** con una fila **Continuar con el asistente**.
 4. *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**. Verás información ficticia; se borra con un toque y no toca lo tuyo. *Mientras estén activos, los totales suman ambos.*
 
 ## 2. Inicio
@@ -46,7 +46,7 @@ Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimiento
 **Más → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
 
 **Más → Nómina** (detalle anterior):
-**Más → Nómina.** Elige el escenario (tu sueldo y subsidios), mira el cálculo (devengos, salud, pensión, FSP, prima de junio/diciembre, intereses de cesantías) y **Registrar** lo que realmente te llegó, indicando el bolsillo. Se paga **una vez al mes**. Los parámetros (SMMLV, porcentajes) están en Ajustes → Parámetros de nómina; **actualiza el SMMLV cada enero**.
+**Más → Nómina.** Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descuentos o ingresos fijos (libranza, medicina prepagada, un auxilio). Mira el cálculo (devengos, salud, pensión, FSP, prima de junio/diciembre, intereses de cesantías) y, con **Agregar algo de este mes**, suma lo que solo cuenta en ese pago: horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa. Después **Registra** lo que realmente te llegó, indicando el bolsillo. Ya no hay escenarios: es una sola nómina. Se paga **una vez al mes**. Los parámetros (SMMLV, porcentajes) están en Ajustes → Parámetros de nómina; **actualiza el SMMLV cada enero**.
 
 ## 7. Deudas
 ### Tarjetas de crédito
@@ -106,9 +106,9 @@ También hay gráficos dentro de cada módulo:
 ## 13. Ajustes
 - **Perfil** y **Apariencia** (claro/oscuro/automático y color).
 - **Dinero:** bancos, cuentas, bolsillos y tarjetas. Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito).
-- **Presupuesto y nómina:** plantilla, escenarios, nómina, subsidios y parámetros.
+- **Presupuesto y nómina:** plantilla, escenarios del presupuesto, mi nómina y parámetros.
 - **Organización:** categorías, personas, inmuebles, servicios públicos.
-- **Mantenimiento:** arranque, datos de demostración, respaldos, diagnóstico.
+- **Mantenimiento:** tu hoja, recordatorios, respaldos, registro de errores y diagnóstico (y, en desarrollo, los datos de demostración).
 - **Recordatorios:** avisos de tus pagos en Google Calendar (ver abajo).
 - **Privacidad → Borrar todos mis datos:** deja Moni como recién instalada (ver abajo).
 
@@ -127,9 +127,8 @@ Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar
 - Al terminar vuelves a ver la bienvenida.
 - Nada se borra de golpe: se **desactiva** y se puede **reactivar**. Si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 
-## 14. Arranque (solo entorno de pruebas)
-> En producción no existe: cada persona empieza directo con sus datos reales.
-**Ajustes → Arranque** te da una lista: demo borrado, saldos de apertura, pruebas archivadas. Al pulsar **Empezar a usar Moni** se crea un respaldo, se activan las copias automáticas y los saldos de apertura quedan fijos. Detalle en [Operación](OPERACION.md#arranque-del-1-de-enero).
+## 14. Saldos iniciales
+Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o en Ajustes). Si algo no cuadra con tu banco, usa **Cuadrar** en la cuenta.
 
 ## 15. Respaldos
 **Ajustes → Respaldos:** crea una copia ahora o activa copias automáticas (cada N días, conservando las últimas N). Quedan en tu Drive, carpeta **Moni Respaldos**.

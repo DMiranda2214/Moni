@@ -193,4 +193,43 @@ module.exports = function (prueba, assert, crearEntorno) {
     const b = plano(e.ejecutar('getBootstrap()'));
     assert.ok(b.data.catalogos.Personas.some(p => p.Nombre === 'Ana'));
   });
+
+  prueba('si la hoja guardada se borró, se ofrece crear otra y se crea desde cero', () => {
+    const e = app();
+    e.como(ANA);
+    assert.strictEqual(e.llamar('createMySheet').ok, true);
+    const vieja = e.propsUsuario[ANA].SPREADSHEET_ID;
+    delete e.libros[vieja]; // la borró de su Drive
+    const b = e.llamar('getBootstrap');
+    assert.strictEqual(b.ok, true);
+    assert.strictEqual(b.data.sinHoja, true);
+    assert.strictEqual(b.data.hojaPerdida, true);
+    const c = e.llamar('createMySheet');
+    assert.strictEqual(c.ok, true, c.error && c.error.message);
+    assert.notStrictEqual(e.propsUsuario[ANA].SPREADSHEET_ID, vieja);
+    assert.strictEqual(e.llamar('getBootstrap').data.instalado, true);
+  });
+
+  prueba('refresco liviano: guardar un nombre o un catálogo devuelve solo lo que cambió', () => {
+    const e = crearEntorno({}, { cache: true });
+    e.cargar(...archivos);
+    e.propiedades.MODO_MULTIUSUARIO = 'TRUE'; delete e.propiedades.SPREADSHEET_ID;
+    e.como(ANA);
+    e.ctx.__args = [];
+    e.ejecutar('createMySheet()');
+    const plano2 = x => JSON.parse(JSON.stringify(x));
+    const ll = (fn, ...a) => { e.ctx.__args = a; return plano2(e.ejecutar(fn + '(...__args)')); };
+    assert.strictEqual(ll('saveConfigParam', 'Nombre_Usuario', 'Ana').ok, true);
+    const r = ll('getRefresco', { config: true });
+    assert.strictEqual(r.data.config.Nombre_Usuario, 'Ana');
+    assert.deepStrictEqual(Object.keys(r.data.catalogos), [], 'no trae catálogos que no cambiaron');
+    assert.strictEqual(r.data.saldos, undefined);
+    assert.ok(r.data.estado.pasos.length > 0);
+    ll('saveCatalogo', 'Bancos', { Nombre: 'Nu', Tipo: 'Banco' });
+    const b = ll('getRefresco', { tablas: ['Bancos'] }).data;
+    assert.ok(b.catalogos.Bancos.some(x => x.Nombre === 'Nu'));
+    assert.ok(b.catalogos.Cuentas && b.catalogos.Bolsillos && b.saldos, 'un banco puede mover cuentas, bolsillos y saldos');
+    assert.strictEqual(ll('getRefresco', { tablas: ['NoExiste'] }).ok, false, 'solo catálogos');
+    assert.strictEqual(ll('refreshCache').ok, true);
+  });
 };

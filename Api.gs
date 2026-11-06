@@ -41,7 +41,7 @@ function exigirCatalogo_(tabla) {
 }
 
 // ==========================================================================
-// Arranque
+// Carga inicial
 // ==========================================================================
 
 /**
@@ -54,6 +54,10 @@ function getBootstrap() {
     if (modoMultiusuario_() && !idHojaUsuario_()) {
       return { instalado: false, sinHoja: true, cuenta: estadoMiCuenta() };
     }
+    // La hoja guardada ya no existe o no se puede abrir: se ofrece crear una nueva o vincular otra, sin borrar nada.
+    if (idHojaUsuario_() && !hojaAccesible_()) {
+      return { instalado: false, sinHoja: true, hojaPerdida: true, cuenta: estadoMiCuenta() };
+    }
     let verificacion = verificarEsquema(undefined, { usarCache: true });
     // Varias personas: si una versión nueva trae tablas o columnas, la hoja se actualiza sola (sin borrar nada).
     if (!verificacion.listo && modoMultiusuario_()) {
@@ -65,6 +69,7 @@ function getBootstrap() {
       return { instalado: false, faltantes: verificacion.faltantes, diferencias: verificacion.diferencias };
     }
 
+    precargarTablas_(Object.keys(SCHEMAS)); // todo lo que esté en caché, en 2 llamadas
     const config = {};
     getTableData('Config').forEach(c => { config[c.Clave] = c.Valor; });
 
@@ -87,14 +92,47 @@ function getBootstrap() {
       renglones: renglones,
       creditos: getTableData('Creditos').filter(c => c.Estado === 'Activo').map(c => ({ ID_Credito: c.ID_Credito, Nombre: c.Nombre })),
       ppto: (function () { const p = obtenerPresupuestoMes(mesActual); return { mes: p.mes, existe: p.existe, totales: p.totales }; })(),
-      proximos: proximosPagos_(),
-      porRecibir: proximosIngresos_(),
+      // Próximos pagos e ingresos por recibir se piden aparte (getProximos / getProximosIngresos) al pintar Inicio.
+      proximosPendientes: true,
       cuenta: estadoMiCuenta(),
       demoHabilitado: demoHabilitado_(),
       enums: ENUMS,
       hoy: hoyIso_()
     };
   });
+}
+
+/** Tablas que cambian cuando se guarda una de estas (una cuenta crea su bolsillo interno, etc.). */
+const RELACIONADAS_ = { Bancos: ['Bancos', 'Cuentas', 'Bolsillos'], Cuentas: ['Bancos', 'Cuentas', 'Bolsillos'], Bolsillos: ['Bancos', 'Cuentas', 'Bolsillos'] };
+
+/**
+ * Refresco liviano después de guardar: en vez de recargar toda la app, devuelve solo lo que cambió.
+ * opc = { tablas: ['Personas'], config: true }. Siempre trae el estado del asistente (usa catálogos en caché).
+ */
+function getRefresco(opc) {
+  return responder_(function () {
+    const o = opc || {};
+    const out = { catalogos: {} };
+    let tablas = [];
+    (o.tablas || []).forEach(t => { exigirCatalogo_(t); (RELACIONADAS_[t] || [t]).forEach(x => { if (tablas.indexOf(x) === -1) tablas.push(x); }); });
+    if (o.config) {
+      const config = {};
+      getTableData('Config').forEach(c => { config[c.Clave] = c.Valor; });
+      out.config = config;
+    }
+    tablas.forEach(t => {
+      out.catalogos[t] = listarCatalogo(t, { incluirInactivos: true });
+      if (t === 'Nomina_Escenarios') out.catalogos[t].forEach(e => { e.subsidios = subsidiosDeEscenario_(e.ID_Nomina_Esc); });
+    });
+    if (tablas.some(t => RELACIONADAS_[t])) out.saldos = obtenerSaldos();
+    out.estado = obtenerEstadoConfiguracion();
+    return out;
+  });
+}
+
+/** "Actualizar desde la hoja": olvida lo memorizado para releer todo (por si se editó la hoja a mano). */
+function refreshCache() {
+  return responder_(function () { invalidateCache(); return { ok: true }; });
 }
 
 function instalarBaseDatos() {
@@ -125,6 +163,14 @@ function saveCuentaCompleta(cuenta, bolsillos) {
 /** La nómina y sus subsidios de una sola vez (asistente de primeros pasos). */
 function saveNominaInicial(esc, subsidios) {
   return responder_(function () { return guardarNominaConSubsidios(esc, subsidios); });
+}
+
+/** Tu sueldo base (crea tu nómina la primera vez). Devuelve la nómina del mes para repintar la pantalla. */
+function saveMiNomina(sueldo, periodo, opciones) {
+  return responder_(function () {
+    const esc = guardarMiNomina(sueldo);
+    return { escenario: esc, nomina: obtenerNominaMes(periodo, '', opciones) };
+  });
 }
 
 function disableCatalogo(tabla, id) {
@@ -280,6 +326,14 @@ function saveRenglonMes(item) {
   return responder_(function () {
     const r = guardarRenglonMes(item);
     return obtenerPresupuestoMes(r.Mes);
+  });
+}
+
+/** Agrega al presupuesto de un mes las suscripciones y servicios que toca pagar y todavía no están. */
+function addSuscripcionesPpto(mes) {
+  return responder_(function () {
+    const r = agregarSuscripcionesAlMes(mes);
+    return Object.assign({ presupuesto: obtenerPresupuestoMes(mes) }, r);
   });
 }
 
@@ -594,7 +648,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 
@@ -662,12 +716,6 @@ function clearLogs() { return responder_(function () { return limpiarLogs(); });
 /** El navegador reporta sus errores aquí; no pasa por responder_ para no registrar un fallo del propio registro. */
 function logClientError(mensaje, detalle) { return registrarErrorCliente(mensaje, detalle); }
 
-// ---- Arranque (Fase 6) ----
-function getArranque() { return responder_(function () { return obtenerArranque(); }); }
-function setFechaArranque(fecha) { return responder_(function () { return guardarFechaArranque(fecha); }); }
-function saveAperturas(lista) { return responder_(function () { return guardarAperturas(lista); }); }
-function archiveTests() { return responder_(function () { return archivarPruebas(); }); }
-function startOperation() { return responder_(function () { return iniciarOperacion(); }); }
 
 /** Próximos pagos (liviano), para refrescar Inicio sin recargar todo. */
 function getProximos() { return responder_(function () { return proximosPagos_(); }); }

@@ -14,6 +14,7 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 ## 2. Presupuesto
 - **Plantilla** por escenario (uno es el base). **Generar** crea los renglones del mes; si el mes ya existe, reemplazarlo solo se permite si ningún renglón tiene movimientos.
 - **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma; y una **compra con tarjeta** enlazada suma el día de la compra (las de fuente *Del presupuesto* ya cuentan por su traslado a la reserva, así que no se cuentan dos veces; las *De otra persona* no cuentan).
+- **Suscripciones y servicios dentro del presupuesto:** al generar un mes, cada suscripción o servicio que toca ese mes (según su periodicidad, contada desde su próximo cobro) entra como renglón de gasto, con su valor, su bolsillo o su tarjeta (`Presupuesto_Mes.ID_Suscripcion` los enlaza). Si el presupuesto del mes ya existe, la suscripción nueva o editada entra o se actualiza sola (mientras el renglón no esté pagado); el botón *Agregar* de Presupuesto cubre las que falten. Pagar la suscripción cuenta como lo real del renglón y lo deja pagado; deshacer el pago lo devuelve a pendiente. Un renglón de la plantilla con el mismo nombre que el *Renglón* de la suscripción cuenta como el suyo (no se duplica).
 - Cada renglón puede recordar **con qué se paga** (`ID_Tarjeta`: su bolsillo, o una tarjeta). Al registrar un gasto de ese renglón, Moni propone ese medio.
 - **Ahorro** de un renglón = Plan − Real, **solo si está pagado**. Resto (restante) = Plan − Real.
 - **Ingresos del mes** = ingresos registrados en el mes; **Saldo** = ingresos − real.
@@ -26,6 +27,7 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - **Día base** = (sueldo + subsidios salariales) / 30. **IBC** (lo que cotiza) = sueldo del período + subsidios salariales + vacaciones. La prima y las cesantías no cotizan.
 - **Intereses de cesantías:** por tramos del año, cada uno = (sueldo × días / 360) × días × 12 % / 360. Con un solo sueldo todo el año da sueldo × 12 %. Si el sueldo cambió, `Cesantias_Dias_Actual` y `Cesantias_Sueldo_Anterior` (Parámetros de nómina) parten el año en dos tramos.
 - **Mes que se muestra al abrir:** el del próximo pago: este mes si aún no se registró y no pasó `Nomina_Dia_Pago`; si no, el siguiente.
+- Hay una sola nómina por persona: sueldo base más descuentos o ingresos fijos. Para cada pago se pueden sumar **conceptos adicionales solo de ese mes** (horas extras y bonos: ingresos, cotizan si son salariales; pago de cesantías o prima extra: prestaciones, no cotizan; descuentos de la empresa). No se guardan como fijos.
 - Al registrar la nómina se guarda lo estimado con las casillas que dejaste, y el neto real puede ser distinto.
 - Devengos: sueldo base y subsidios (salariales o no). Salud y pensión: 4 % del IBC cada una, con aporte redondeado a la centena superior (PILA).
 - **FSP** (Fondo de Solidaridad Pensional): 1 % del IBC cuando el IBC llega a 4 SMMLV (`FSP_Umbral_SMMLV`).
@@ -49,7 +51,7 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - Cifras de control: 2.400.000 a 48 quincenas con tasa 0,4067404 % → 55.140,90; 1.000.000 a 12 cuotas con 0,8333333 % → 87.915,89; 500.000 a 10 cuotas con 1 % → 52.791,04.
 
 ## 6. Ahorro
-- **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro.
+- **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro. Además `Rendimiento_Base` indica sobre qué saldo se paga: `Todo` (por defecto) o `Bolsillos` (hay bancos que solo pagan sobre el dinero guardado en bolsillos; el saldo suelto de una cuenta sin bolsillos no rinde).
 - **Estimación:** rinde cada día sobre el saldo con que empezó, a la tasa diaria (1 + EA)^(1/365) − 1. Si el banco paga a diario, lo ganado se suma al saldo día a día; si paga cada mes, se suma al cerrar el mes. Se calcula desde el último rendimiento registrado (o el inicio del mes) hasta ayer; "Registrar este rendimiento" lo anota (se puede corregir con el valor del banco). La retención y el GMF se siguen registrando a mano.
 - Subtipos de movimiento: *Interes* (+), *Retencion* (−), *GMF* (−), *Para_Gastos* (retiro), *Reposicion*.
 - **Deuda con el ahorro** = máx(0, Para_Gastos − Reposicion) + saldo de los créditos activos. El desembolso de un crédito no cuenta dos veces.
@@ -68,9 +70,9 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - *Pronto* = vence en 7 días o menos; *vencida* = fecha pasada. Los próximos pagos de Inicio muestran los de 14 días.
 - En un **servicio**, el valor pasa a ser el último pagado.
 
-## 8. Arranque
-- Los saldos de apertura se pueden cambiar mientras `Arranque_Hecho` sea falso. **Empezar** exige: base creada, sin datos de demostración, aperturas cargadas y sin movimientos anteriores a la fecha de arranque.
-- Archivar pruebas **anula** los movimientos anteriores a esa fecha.
+## 8. Saldos iniciales
+- Cada cuenta y bolsillo se crea con su **saldo inicial** (el punto de partida) en el asistente de primeros pasos; no hay un paso aparte de arranque. Después el saldo se calcula con los movimientos.
+- Si Moni y el banco difieren, se corrige con el **cuadre** de la cuenta: deja un ajuste con fecha.
 
 ## 9. Datos de demostración
-- Todos sus IDs empiezan por `demo-`. Borrarlos elimina **solo** esas filas (y el detalle de nómina huérfano). Se pueden crear sobre datos reales mientras no haya empezado la operación.
+- Todos sus IDs empiezan por `demo-`. Borrarlos elimina **solo** esas filas (y el detalle de nómina huérfano). Solo existen en desarrollo.

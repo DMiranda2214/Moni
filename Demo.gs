@@ -43,7 +43,6 @@ function sembrarDatosDemo() {
 
   // Se puede crear sobre datos reales (para ver cómo luce la app): todo lo demo lleva el prefijo "demo-" y se borra aparte.
   // Una vez que empezó la operación real, no: ahí ya no se mezcla nada.
-  if (esVerdadero(cfg.Arranque_Hecho)) throw new Error('La operación real ya empezó: no se crean datos de demostración.');
   const nominaRealVigente = getTableData('Nomina_Escenarios', { forceRefresh: true }).some(n => esVerdadero(n.Vigente) && estaActivo(n));
 
   const bancos = [

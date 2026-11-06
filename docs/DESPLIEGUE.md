@@ -38,12 +38,12 @@ Solo subir sin publicar versión: `npm run push:dev` / `push:prod` (útil para p
 ## Producción no lleva datos de demostración
 Hay **dos candados**:
 1. **El paquete:** `scripts/publicar.sh produccion` arma el paquete y **reemplaza `Demo.gs`** (el generador de datos de ejemplo) por un archivo vacío (`scripts/stubs/Demo.gs`) que solo falla con un mensaje claro. Si algo del generador siguiera en el paquete, el script **no lo sube**.
-2. **La propiedad:** aun con el generador, `sembrarDatosDemo` exige `DEMO_HABILITADO = TRUE`, que solo existe en desarrollo. En producción desaparecen de la app *Datos de demostración*, *Arranque* y el botón "Explorar con datos de ejemplo", y el servidor rechaza esas operaciones.
+2. **La propiedad:** aun con el generador, `sembrarDatosDemo` exige `DEMO_HABILITADO = TRUE`, que solo existe en desarrollo. En producción desaparecen de la app *Datos de demostración* y el botón "Explorar con datos de ejemplo", y el servidor rechaza esas operaciones.
 
 Las pruebas (`tests/test_produccion.js`) arman el paquete de producción y comprueban todo esto. Para revisarlo tú:
 ```bash
 npm run paquete:prod          # arma el paquete y escribe su carpeta
-npm run vista -- --prod       # la app como en producción (sin demo ni arranque)
+npm run vista -- --prod       # la app como en producción (sin datos de demostración)
 ```
 
 ## Volver atrás

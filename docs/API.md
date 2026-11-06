@@ -14,7 +14,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 - **Una pantalla, una llamada:** las lecturas devuelven todo lo que la pantalla necesita.
 - **Las escrituras devuelven lo que cambió:** `items` (movimientos afectados, listos para mostrar), `ultimos`, `saldos` y, si afectan un renglón, `presupuesto`. Algunas añaden más (`suscripciones`, `anterior`, `idMov`…).
 - Los catálogos solo se exponen si están declarados en `CATALOGOS` (`exigirCatalogo_`).
-- Los parámetros gestionados por la app (`Datos_Demo`, `Fecha_Arranque`, `Arranque_Hecho`) no se editan desde `saveConfigParam`.
+- Los parámetros gestionados por la app (`Datos_Demo`) no se editan desde `saveConfigParam`.
 
 ## Arranque de la app
 
@@ -133,14 +133,4 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `saveConfigParam` | `clave, valor` |
 | `saveConfigParams` | `mapa` |
 | `resetConfigParam` | `clave` |
-
-## Arranque (1 de enero)
-
-| Función | Parámetros |
-|---|---|
-| `getArranque` | — |
-| `setFechaArranque` | `fecha` |
-| `saveAperturas` | `lista` |
-| `archiveTests` | — |
-| `startOperation` | — |
 

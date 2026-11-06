@@ -32,11 +32,18 @@ function correoActual_() {
 /** Datos de la cuenta de quien entra, para la pantalla de bienvenida y Ajustes → Mi cuenta. */
 function estadoMiCuenta() {
   const id = idHojaUsuario_();
-  let url = '', nombre = '';
-  if (id) {
-    try { const ss = SpreadsheetApp.openById(id); url = ss.getUrl(); nombre = ss.getName(); } catch (e) { /* sin acceso: se avisa abajo */ }
+  let url = '', nombre = '', hay = !!id;
+  // Una sola hoja: también puede ser la hoja a la que está unido el script (sin SPREADSHEET_ID).
+  if (id || !modoMultiusuario_()) {
+    try { const ss = getSpreadsheet(); url = ss.getUrl(); nombre = ss.getName(); hay = true; } catch (e) { /* sin acceso: se avisa abajo */ }
   }
-  return { multiusuario: modoMultiusuario_(), correo: correoActual_(), tieneHoja: !!id, urlHoja: url, nombreHoja: nombre };
+  return { multiusuario: modoMultiusuario_(), correo: correoActual_(), tieneHoja: hay, urlHoja: url, nombreHoja: nombre };
+}
+
+/** ¿Se puede abrir la hoja guardada? Falso si se borró o ya no se tiene acceso (entonces se ofrece crear otra). */
+function hojaAccesible_() {
+  if (!idHojaUsuario_()) return false;
+  try { getSpreadsheet(); return true; } catch (e) { return false; }
 }
 
 /** Un ID de hoja a partir de lo que pegue la persona: el ID solo o el enlace completo. */
@@ -69,7 +76,7 @@ function adoptarHoja_(ss) {
 
 /** Crea la hoja de Moni de esta persona en su Drive y la prepara. Si ya tiene una, devuelve esa. */
 function crearMiHoja() {
-  if (idHojaUsuario_()) return Object.assign(estadoMiCuenta(), { yaExistia: true });
+  if (hojaAccesible_()) return Object.assign(estadoMiCuenta(), { yaExistia: true });
   const ss = SpreadsheetApp.create('Moni — mis finanzas');
   const r = adoptarHoja_(ss);
   return Object.assign(estadoMiCuenta(), { yaExistia: false, parcial: r.parcial, hechas: r.hechas, tablas: r.tablas });
