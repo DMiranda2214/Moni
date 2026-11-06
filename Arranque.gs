@@ -13,7 +13,7 @@ const FECHA_ARRANQUE_DEFECTO = '2027-01-01';
 /** Crea la fila de Config si todavía no existe (las bases ya instaladas no tienen las claves nuevas). */
 function asegurarConfig_(clave) {
   if (getTableData('Config').some(c => c.Clave === clave)) return;
-  const d = DEFAULT_CONFIG.find(item => item[0] === clave);
+  const d = configInicial_().find(item => item[0] === clave);
   if (!d) throw new Error('No hay parámetro "' + clave + '".');
   insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
 }
@@ -27,7 +27,13 @@ function fechaArranque_() {
   return cfgValor_('Fecha_Arranque') || FECHA_ARRANQUE_DEFECTO;
 }
 
+/** El arranque (pasar de datos de prueba a reales) solo existe donde hay datos de prueba: en producción no se usa. */
+function exigirEntornoPruebas_() {
+  if (!demoHabilitado_()) throw new Error('El arranque solo se usa en el entorno de pruebas de Moni.');
+}
+
 function exigirSinArranque_() {
+  exigirEntornoPruebas_();
   if (esVerdadero(cfgValor_('Arranque_Hecho'))) {
     throw new Error('La operación ya empezó. Para corregir un saldo usa el cuadre de la cuenta: deja un ajuste con fecha.');
   }

@@ -66,6 +66,18 @@ O en el editor: *Implementar → Administrar implementaciones → ✏️ → Ver
 - Con producción protegida por aprobación, ni un commit malicioso llega a producción sin que alguien lo mire.
 - El repositorio es público: no subas IDs de hojas, `.clasp*.json` ni respaldos (ya están en `.gitignore`).
 
+## Producción no lleva datos de demostración
+Hay **dos candados**, para que nadie pueda crear datos de ejemplo en producción:
+1. **El paquete:** `scripts/publicar.sh produccion` arma el paquete y **reemplaza `Demo.gs`** (el generador de datos de ejemplo) por un archivo vacío (`scripts/stubs/Demo.gs`) que solo falla con un mensaje claro. Si algo del generador siguiera en el paquete, el script **no lo sube**. Lo mismo hace el CI.
+2. **La propiedad:** aun con el generador, `sembrarDatosDemo` exige la propiedad de script `DEMO_HABILITADO = TRUE`. **Solo ponla en el proyecto de desarrollo** (Configuración del proyecto → Propiedades de la secuencia de comandos). En producción no existe, y en la app desaparecen *Datos de demostración*, *Arranque* y el botón "Explorar con datos de ejemplo".
+
+Las pruebas (`tests/test_produccion.js`) arman el paquete de producción y comprueban que no trae datos de ejemplo, que no se puede sembrar nada y que el arranque (que anula movimientos) tampoco corre. Para revisarlo tú:
+```bash
+npm run paquete:prod          # arma el paquete y escribe su carpeta
+npm run vista -- --prod       # la app como en producción (sin demo ni arranque)
+```
+Los comandos `npm run push:dev` y `npm run push:prod` usan este mismo armado. (`npm run push`, a secas, sube todo al proyecto original, el de tu hoja personal.)
+
 ## Qué pasa con los datos al desplegar
 Desplegar **solo cambia el código**. Los datos viven en las hojas:
 - **Varias personas:** la hoja de cada una se actualiza sola al entrar si la versión trae tablas o columnas nuevas.

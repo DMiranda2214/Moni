@@ -6,6 +6,7 @@
  *   npm run vista            → base instalada y vacía
  *   npm run vista -- --demo  → con datos de demostración
  *   npm run vista -- --sin-instalar
+ *   npm run vista -- --prod    → como producción: sin datos de demostración ni arranque (DEMO_HABILITADO apagado)
  *   npm run vista -- --multi   → modo varias personas: empieza sin hoja (pantalla de bienvenida)
  */
 const http = require('http');
@@ -20,6 +21,7 @@ const args = process.argv.slice(2);
 function nuevoEntorno() {
   const e = crearEntorno({});
   e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+  if (args.includes('--prod')) delete e.propiedades.DEMO_HABILITADO;
   if (args.includes('--multi')) { e.propiedades.MODO_MULTIUSUARIO = 'TRUE'; delete e.propiedades.SPREADSHEET_ID; return e; }
   if (!args.includes('--sin-instalar')) e.ejecutar('setupDatabase()');
   if (args.includes('--demo')) e.ejecutar('sembrarDatosDemo()');

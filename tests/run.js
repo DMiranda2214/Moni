@@ -134,6 +134,7 @@ require('./test_divisas')(prueba, assert, crearEntorno);
 require('./test_graficos')(prueba, assert, crearEntorno);
 require('./test_recordatorios')(prueba, assert, crearEntorno);
 require('./test_multiusuario')(prueba, assert, crearEntorno);
+require('./test_produccion')(prueba, assert, crearEntorno);
 
 let fallos = 0;
 pruebas.forEach(p => {

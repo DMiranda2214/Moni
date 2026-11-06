@@ -27,6 +27,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 
 | Documento | Para quién |
 |---|---|
+| [**Empezar con Moni**](docs/EMPEZAR.md) | **Quien usa la app por primera vez**: qué es, cómo entrar y configurarla |
 | [Guía rápida](docs/GUIA_RAPIDA.md) | Quien usa la app: lo esencial en una página |
 | [Manual de usuario](docs/MANUAL_USUARIO.md) | Quien usa la app: todas las pantallas |
 | [Instalación y despliegue](docs/INSTALACION.md) | Quien publica la app por primera vez o la actualiza |
@@ -65,6 +66,8 @@ docs/             Documentación
 ```
 
 ## Estado
+
+**Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue automático](docs/DESPLIEGUE_CI.md)).
 
 Fases 0 a 7 (parte técnica) implementadas y probadas con un Sheets simulado. Falta la verificación en el Sheet real, las dos sesiones de prueba con la usuaria y la medición de rendimiento real. Detalle en [PLAN.md](PLAN.md).
 

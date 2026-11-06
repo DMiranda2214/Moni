@@ -98,7 +98,7 @@ function crearEntorno(hojasIniciales, opciones) {
   });
 
   const registro = { bloqueos: [], escrituras: 0 };
-  const propiedades = { SPREADSHEET_ID: 'id-falso' };
+  const propiedades = { SPREADSHEET_ID: 'id-falso', DEMO_HABILITADO: 'TRUE' }; // como el proyecto de desarrollo
   let uuid = 0;
 
   // Varias personas: cada una con sus propiedades, su caché y sus hojas (solo las que creó o le compartieron).

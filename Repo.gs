@@ -50,6 +50,15 @@ function getSpreadsheet() {
   throw new Error("No se ha configurado la hoja de cálculo. Por favor ejecute vincularHojaMoni() o configure SPREADSHEET_ID en las propiedades del proyecto.");
 }
 
+/**
+ * ¿Se pueden crear datos de demostración en este despliegue? Solo si la propiedad de script DEMO_HABILITADO = TRUE,
+ * que se pone en el proyecto de DESARROLLO y en ningún otro. Además, el paquete de producción ni siquiera incluye
+ * el generador (scripts/publicar.sh lo reemplaza por un archivo vacío): son dos candados.
+ */
+function demoHabilitado_() {
+  return PropertiesService.getScriptProperties().getProperty('DEMO_HABILITADO') === 'TRUE';
+}
+
 // ---------------------------------------------------------------------------
 // Modo de uso: una sola hoja (una persona o una pareja) o una hoja por usuario (varias personas)
 // ---------------------------------------------------------------------------

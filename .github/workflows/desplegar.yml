@@ -42,6 +42,7 @@ jobs:
           node-version: 20
       - name: Subir y publicar en desarrollo
         env:
+          ENTORNO: desarrollo
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ vars.SCRIPT_ID }}
           DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
@@ -60,6 +61,7 @@ jobs:
           node-version: 20
       - name: Subir y publicar en producción
         env:
+          ENTORNO: produccion
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ vars.SCRIPT_ID }}
           DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}

@@ -2,6 +2,8 @@
  * Pruebas de la Fase 1: instalación del esquema, catálogos personalizables, saldos,
  * datos de demostración y API.
  */
+const { bogota } = require('./fecha');
+
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
 
@@ -405,7 +407,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios']
       .forEach(t => assert.ok(Array.isArray(d.catalogos[t]), t));
     assert.ok(d.saldos && d.estado && d.enums.Cuentas.Tipo);
-    assert.strictEqual(d.config.Anio_Activo, '2027');
+    assert.strictEqual(d.config.Anio_Activo, bogota().slice(0, 4), 'el año activo es el actual, no uno fijo');
   });
 
   prueba('saveConfigParam valida tema, color de acento y claves inexistentes', () => {

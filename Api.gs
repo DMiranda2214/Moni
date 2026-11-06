@@ -88,6 +88,7 @@ function getBootstrap() {
       proximos: proximosPagos_(),
       porRecibir: proximosIngresos_(),
       cuenta: estadoMiCuenta(),
+      demoHabilitado: demoHabilitado_(),
       enums: ENUMS,
       hoy: hoyIso_()
     };
@@ -617,7 +618,7 @@ function saveConfigParams(mapa) {
 
 function resetConfigParam(clave) {
   return responder_(function () {
-    const porDefecto = DEFAULT_CONFIG.find(item => item[0] === clave);
+    const porDefecto = configInicial_().find(item => item[0] === clave);
     if (!porDefecto) throw new Error('No hay valor predeterminado para "' + clave + '".');
     updateRowById('Config', 'Clave', clave, { Valor: porDefecto[1] });
     return { clave: clave, valor: porDefecto[1] };

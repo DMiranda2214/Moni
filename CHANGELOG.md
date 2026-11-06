@@ -1,5 +1,12 @@
 # Cambios
 
+## Listo para cualquier persona (6 nov)
+- **Producción sin datos de demostración:** el paquete de producción reemplaza el generador (`Demo.gs`) por un archivo vacío y el script se niega a subirlo si queda algo; además `sembrarDatosDemo` exige la propiedad `DEMO_HABILITADO`, que solo existe en desarrollo. *Datos de demostración*, *Arranque* y "Explorar con datos de ejemplo" desaparecen de la app y el servidor rechaza esas operaciones.
+- **El arranque** (anular pruebas, fijar saldos) solo corre en el entorno de pruebas: en producción habría anulado movimientos reales.
+- **Valores iniciales para cualquiera:** el año activo es el actual (antes fijo en 2027); aviso cuando el salario mínimo guardado es de un año anterior.
+- **Guía para nuevas personas:** [Empezar con Moni](docs/EMPEZAR.md).
+- `scripts/publicar.sh` arma y sube el paquete de cada entorno (lo usan `npm run push:dev/prod` y el CI). `npm run vista -- --prod` muestra la app como producción.
+
 ## Varias personas y despliegue automático (5 nov)
 - **Modo multiusuario:** una sola aplicación, cada persona con su hoja (se crea en su Drive o vincula una existente), su caché, su bloqueo y sus activadores. La hoja se actualiza sola cuando una versión trae tablas o columnas nuevas. Pantalla de bienvenida y *Ajustes → Mi cuenta*. Se activa con `activarModoMultiusuario` ([guía](docs/MULTIUSUARIO.md)).
 - **CI/CD con GitHub Actions:** verificar en cada pull request; al entrar a `main`, desarrollo automático y producción con aprobación; `clasp push` + `deploy` sin copiar código ([guía](docs/DESPLIEGUE_CI.md)).

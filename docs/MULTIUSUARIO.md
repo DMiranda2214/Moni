@@ -21,6 +21,9 @@ Dos personas que quieren ver lo mismo: una crea su hoja, la **comparte** con la 
 
 Para volver al modo de una sola hoja: `desactivarModoMultiusuario`.
 
+## Producción sin datos de demostración
+El paquete de producción no incluye el generador de datos de ejemplo y la propiedad `DEMO_HABILITADO` solo existe en desarrollo. Detalle en [Despliegue automático](DESPLIEGUE_CI.md).
+
 ## Lo que ve cada persona
 - **Bienvenida:** *Crear mi hoja* o *Ya tengo una hoja de Moni*. Google le pedirá permiso la primera vez (crear archivos en su Drive).
 - **Ajustes → Mi cuenta:** su correo, un enlace a su hoja y *Usar otra hoja* (suelta la actual sin borrarla y apaga sus copias automáticas y recordatorios).

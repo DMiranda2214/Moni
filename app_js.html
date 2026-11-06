@@ -241,6 +241,8 @@ const cat = tabla => (App.boot && App.boot.catalogos && App.boot.catalogos[tabla
 const activos = tabla => cat(tabla).filter(f => esVerdad(f.Activo) || f.Activo === '' || f.Activo === undefined);
 const esVerdad = v => v === true || String(v).toUpperCase() === 'TRUE';
 const porId = (tabla, idCol, id) => cat(tabla).find(f => f[idCol] === id);
+/** ¿Esta versión permite datos de demostración? Solo el entorno de desarrollo. En producción no hay nada de demo. */
+const demoOn = () => !!(App.boot && App.boot.demoHabilitado);
 const cfg = clave => (App.boot && App.boot.config && App.boot.config[clave]) || '';
 
 // Divisas: se elige en el banco; sus cuentas y bolsillos la heredan.
@@ -620,7 +622,7 @@ async function refrescarProximos() {
 }
 
 function bannerDemo() {
-  if (!esVerdad(cfg('Datos_Demo'))) return '';
+  if (!demoOn() || !esVerdad(cfg('Datos_Demo'))) return '';
   return '<div class="m-banner" role="note">' + ico('prueba') + '<span>Estás viendo datos de demostración.</span>' +
     '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/demo">Gestionar</button></div>';
 }
@@ -650,7 +652,8 @@ function vInicio() {
       '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
   }
 
-  if (estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
+  // El arranque (pasar de la prueba al uso real) solo existe donde hay datos de prueba.
+  if (demoOn() && estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
     html += '<div class="m-banner" role="note">' + ico('check') + '<span>Falta cargar tus saldos reales y empezar.</span><button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/arranque">Arranque</button></div>';
   }
 
@@ -824,8 +827,11 @@ function vAjustes() {
       seccion('Mantenimiento',
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
-        irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
-        irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) +
+        // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
+        (demoOn()
+          ? irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
+            irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' })
+          : '') +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
         irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
@@ -873,7 +879,12 @@ function vApariencia() {
   };
 }
 
+function vNoDisponible(titulo) {
+  return { titulo: titulo, html: vacio('alerta', 'No disponible en esta versión', 'Esta función solo existe en el entorno de pruebas de Moni.') };
+}
+
 function vDemo() {
+  if (!demoOn()) return vNoDisponible('Datos de demostración');
   const demo = esVerdad(cfg('Datos_Demo'));
   const hayReales = ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].some(t => cat(t).some(f => !String(f['ID_' + t.slice(0, -1)] || '').startsWith('demo-')));
   const iniciada = esVerdad(cfg('Arranque_Hecho'));
@@ -2391,10 +2402,18 @@ function vPlantilla() {
 
 // ---------- Nómina ----------
 
+/** El salario mínimo se actualiza cada enero: si el guardado es de un año anterior, se avisa (afecta al Fondo de Solidaridad). */
+function avisoSmmlv() {
+  const anio = Number(App.boot.hoy.slice(0, 4)), guardado = Number(cfg('SMMLV_Anio'));
+  if (!guardado || guardado >= anio) return '';
+  return '<div class="m-banner" role="note">' + ico('alerta') + '<span>El salario mínimo guardado es el de ' + guardado + '. Actualízalo al de ' + anio + ' para que el cálculo de tu nómina sea correcto.</span>' +
+    '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/parametros">Actualizar</button></div>';
+}
+
 function vNomina() {
   const n = App.nom;
   const mesMostrado = n.mes || (n.data && n.data.periodo) || App.boot.hoy.slice(0, 7);
-  let html = bannerDemo() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
+  let html = bannerDemo() + avisoSmmlv() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
   if (n.error) html += bloqueError(n.error, 'recargar-nom');
   else if (!n.data) html += esqueleto(5);
   else html += htmlNomina(n.data);
@@ -2590,7 +2609,7 @@ function vParametros() {
   };
   return {
     titulo: 'Parámetros de nómina',
-    html: '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + PARAMETROS_NOMINA.map(campo).join('') +
+    html: avisoSmmlv() + '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + PARAMETROS_NOMINA.map(campo).join('') +
       '<div id="param-error" class="m-error-form" role="alert" hidden></div><button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>'
   };
 }
@@ -3386,6 +3405,7 @@ function vRespaldos() {
 // ---------- Arranque y guía (Fase 6) ----------
 
 function vArranque() {
+  if (!demoOn()) return vNoDisponible('Arranque');
   const a = App.arr;
   let html = bannerDemo();
   if (a.error) html += bloqueError(a.error, 'recargar-arr');
@@ -3474,7 +3494,7 @@ function vGuia() {
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
         paso('Deshacer un pago', 'Los pagos de extractos y de cuotas se anulan desde su detalle; todo vuelve a como estaba.') +
         paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.')) +
-      seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' }))
+      (demoOn() ? seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' })) : '')
   };
 }
 
@@ -4462,7 +4482,7 @@ function vBienvenida() {
         dato('tarjetas', 'Tus tarjetas', 'Opcional') + '</div>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-empezar">Empezar</button>' +
-        '<button type="button" class="m-btn m-btn-secondary" data-acc="sembrar-demo">Explorar primero con datos de ejemplo</button>' +
+        (demoOn() ? '<button type="button" class="m-btn m-btn-secondary" data-acc="sembrar-demo">Explorar primero con datos de ejemplo</button>' : '') +
         '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Ahora no</button></div></div>'
   };
 }
@@ -4641,7 +4661,7 @@ function vFinAsistente() {
       '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
         dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) +
         dato('Nómina', activos('Nomina_Escenarios').length ? 'Lista' : '—') + dato('Otros ingresos', listaAsist('Ingresos_Recurrentes').length) + '</div>' +
-      '<p class="m-ayuda" style="text-align:left">Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.</p>' +
+      '<p class="m-ayuda" style="text-align:left">' + (demoOn() ? 'Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.' : 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.') + '</p>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button></div></div></div>'
