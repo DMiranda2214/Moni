@@ -10,7 +10,7 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   function E() {
     const e = crearEntorno({});
-    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
+    e.cargar('Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs');
     e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
     e.falla = (fn, ...args) => { e.ctx.__args = args; return () => e.ejecutar(fn + '(...__args)'); };
     e.llamar('setupDatabase');
@@ -271,59 +271,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('rangoColumna_', 'Movimientos', 'Anulado'), 'Movimientos!$M$2:$M');
     assert.strictEqual(e.llamar('letraColumna_', 27), 'AA');
     assert.throws(() => e.llamar('rangoColumna_', 'Movimientos', 'Nada'));
-  });
-
-  // ============================================================ arranque
-  prueba('arranque: lista de verificación, aperturas en bloque y archivo de movimientos de prueba', () => {
-    const { e, c1, casa, regalos } = escenario();
-    e.llamar('saveConfigParam', 'Nombre_Usuario', 'Ana');
-    let a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.fecha, '2027-01-01');
-    assert.strictEqual(a.hecho, false);
-    assert.strictEqual(a.checks.find(c => c.id === 'demo').hecho, true);
-    assert.strictEqual(a.checks.find(c => c.id === 'previos').hecho, true, 'sin movimientos todavía');
-
-    // Una prueba anterior al arranque bloquea el inicio hasta archivarla.
-    e.llamar('registrarMovimiento', { Tipo_Mov: 'Gasto', Valor: 50000, Fecha: hoy(), ID_Bolsillo: casa.ID_Bolsillo, Concepto: 'Prueba' });
-    a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.previos.movimientos, 1);
-    assert.strictEqual(a.listo, false);
-    assert.throws(e.falla('iniciarOperacion'), /Todavía falta/);
-
-    assert.strictEqual(e.llamar('archivarPruebas').archivados, 1);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 800000, 'el saldo vuelve a la apertura');
-
-    // Aperturas: todo o nada.
-    assert.throws(e.falla('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 1 }, { ID_Bolsillo: 'no-existe', Saldo_Apertura: 2 }]), /no existe/);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 800000);
-    a = e.llamar('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 1250000 }, { ID_Bolsillo: regalos.ID_Bolsillo, Saldo_Apertura: 0 }]);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 1250000);
-    assert.throws(e.falla('guardarFechaArranque', '2027/01/01'), /AAAA-MM-DD/);
-    assert.strictEqual(e.llamar('guardarFechaArranque', '2027-02-01').fecha, '2027-02-01');
-    e.llamar('guardarFechaArranque', '2027-01-01');
-  });
-
-  prueba('arranque: iniciar deja respaldo, activa copias y congela las aperturas', () => {
-    const { e, casa } = escenario();
-    e.llamar('saveConfigParam', 'Nombre_Usuario', 'Ana');
-    const r = e.llamar('iniciarOperacion');
-    assert.strictEqual(r.hecho, true);
-    assert.ok(r.respaldo);
-    assert.strictEqual(e.llamar('estadoRespaldos').automatico, true);
-    assert.strictEqual(e.llamar('estadoRespaldos').copiasActuales, 1);
-    assert.throws(e.falla('guardarAperturas', [{ ID_Bolsillo: casa.ID_Bolsillo, Saldo_Apertura: 5 }]), /ya empezó/);
-    assert.throws(e.falla('iniciarOperacion'), /ya empezó/);
-    assert.strictEqual(e.llamar('saveConfigParam', 'Arranque_Hecho', 'FALSE').ok, false, 'no se reabre desde Parámetros');
-  });
-
-  prueba('arranque: con datos de demostración no se puede iniciar', () => {
-    const e = E();
-    e.llamar('sembrarDatosDemo');
-    const a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.checks.find(c => c.id === 'demo').hecho, false);
-    assert.throws(e.falla('iniciarOperacion'), /Todavía falta/);
-    e.llamar('limpiarDatosDemo');
-    assert.strictEqual(e.llamar('obtenerArranque').checks.find(c => c.id === 'demo').hecho, true);
   });
 
   // ============================================================ fase 7

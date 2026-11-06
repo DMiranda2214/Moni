@@ -70,9 +70,9 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - *Pronto* = vence en 7 días o menos; *vencida* = fecha pasada. Los próximos pagos de Inicio muestran los de 14 días.
 - En un **servicio**, el valor pasa a ser el último pagado.
 
-## 8. Arranque
-- Los saldos de apertura se pueden cambiar mientras `Arranque_Hecho` sea falso. **Empezar** exige: base creada, sin datos de demostración, aperturas cargadas y sin movimientos anteriores a la fecha de arranque.
-- Archivar pruebas **anula** los movimientos anteriores a esa fecha.
+## 8. Saldos iniciales
+- Cada cuenta y bolsillo se crea con su **saldo inicial** (el punto de partida) en el asistente de primeros pasos; no hay un paso aparte de arranque. Después el saldo se calcula con los movimientos.
+- Si Moni y el banco difieren, se corrige con el **cuadre** de la cuenta: deja un ajuste con fecha.
 
 ## 9. Datos de demostración
-- Todos sus IDs empiezan por `demo-`. Borrarlos elimina **solo** esas filas (y el detalle de nómina huérfano). Se pueden crear sobre datos reales mientras no haya empezado la operación.
+- Todos sus IDs empiezan por `demo-`. Borrarlos elimina **solo** esas filas (y el detalle de nómina huérfano). Solo existen en desarrollo.

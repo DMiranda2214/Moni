@@ -108,7 +108,7 @@ También hay gráficos dentro de cada módulo:
 - **Dinero:** bancos, cuentas, bolsillos y tarjetas. Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito).
 - **Presupuesto y nómina:** plantilla, escenarios del presupuesto, mi nómina y parámetros.
 - **Organización:** categorías, personas, inmuebles, servicios públicos.
-- **Mantenimiento:** arranque, datos de demostración, respaldos, diagnóstico.
+- **Mantenimiento:** tu hoja, recordatorios, respaldos, registro de errores y diagnóstico (y, en desarrollo, los datos de demostración).
 - **Recordatorios:** avisos de tus pagos en Google Calendar (ver abajo).
 - **Privacidad → Borrar todos mis datos:** deja Moni como recién instalada (ver abajo).
 
@@ -127,9 +127,8 @@ Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar
 - Al terminar vuelves a ver la bienvenida.
 - Nada se borra de golpe: se **desactiva** y se puede **reactivar**. Si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 
-## 14. Arranque (solo entorno de pruebas)
-> En producción no existe: cada persona empieza directo con sus datos reales.
-**Ajustes → Arranque** te da una lista: demo borrado, saldos de apertura, pruebas archivadas. Al pulsar **Empezar a usar Moni** se crea un respaldo, se activan las copias automáticas y los saldos de apertura quedan fijos. Detalle en [Operación](OPERACION.md#arranque-del-1-de-enero).
+## 14. Saldos iniciales
+Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o en Ajustes). Si algo no cuadra con tu banco, usa **Cuadrar** en la cuenta.
 
 ## 15. Respaldos
 **Ajustes → Respaldos:** crea una copia ahora o activa copias automáticas (cada N días, conservando las últimas N). Quedan en tu Drive, carpeta **Moni Respaldos**.

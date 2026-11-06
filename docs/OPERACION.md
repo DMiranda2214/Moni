@@ -1,16 +1,9 @@
 # Operación y solución de problemas
 
-## Arranque del 1 de enero (solo entorno de pruebas)
-> Esta parte existe **solo donde hay datos de demostración** (desarrollo). En producción cada persona entra directo con sus datos reales y no hay arranque.
+## Empezar con datos reales
+No hay un paso de "arranque": los saldos iniciales se escriben en el **asistente de primeros pasos** (cada cuenta y cada bolsillo con lo que hay hoy). Si tenías datos de demostración (solo en desarrollo), bórralos en Ajustes → Datos de demostración → Borrar; no afecta lo real.
 
-Hazlo en este orden (Ajustes → **Arranque** lo guía y valida):
-1. **Ajustes → Datos de demostración → Borrar.** Solo borra lo ficticio.
-2. Crea tus **bancos, cuentas, bolsillos y tarjetas** reales.
-3. **Arranque → Cargar saldos de apertura:** lo que hay en cada lugar al cierre del 31/12.
-4. **Archivar pruebas:** anula (no borra) los movimientos anteriores a la fecha de arranque. Se pueden restaurar.
-5. **Empezar a usar Moni:** crea un respaldo, activa las copias automáticas y **fija** los saldos de apertura.
-
-Desde ahí, si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: deja un ajuste con fecha y motivo.
+Si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: deja un ajuste con fecha y motivo.
 
 ## Respaldos
 - **Ajustes → Respaldos:** crear ahora, activar copias automáticas, frecuencia (días) y cuántas conservar.

@@ -41,7 +41,7 @@ function exigirCatalogo_(tabla) {
 }
 
 // ==========================================================================
-// Arranque
+// Carga inicial
 // ==========================================================================
 
 /**
@@ -648,7 +648,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
-  if (clave === 'Datos_Demo' || clave === 'Fecha_Arranque' || clave === 'Arranque_Hecho' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
+  if (clave === 'Datos_Demo' || clave.indexOf('Tasa_') === 0 || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
 
@@ -716,12 +716,6 @@ function clearLogs() { return responder_(function () { return limpiarLogs(); });
 /** El navegador reporta sus errores aquí; no pasa por responder_ para no registrar un fallo del propio registro. */
 function logClientError(mensaje, detalle) { return registrarErrorCliente(mensaje, detalle); }
 
-// ---- Arranque (Fase 6) ----
-function getArranque() { return responder_(function () { return obtenerArranque(); }); }
-function setFechaArranque(fecha) { return responder_(function () { return guardarFechaArranque(fecha); }); }
-function saveAperturas(lista) { return responder_(function () { return guardarAperturas(lista); }); }
-function archiveTests() { return responder_(function () { return archivarPruebas(); }); }
-function startOperation() { return responder_(function () { return iniciarOperacion(); }); }
 
 /** Próximos pagos (liviano), para refrescar Inicio sin recargar todo. */
 function getProximos() { return responder_(function () { return proximosPagos_(); }); }

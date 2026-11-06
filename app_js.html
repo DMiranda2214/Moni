@@ -371,7 +371,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
-  App.arr.data = null; App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -446,7 +446,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'bolsillo') { const inf = App.boot && infoBolsillo(partes[1]); return inf ? inf.b.Nombre : 'Bolsillo'; }
   const s = partes[1];
   if (CAT[s]) return CAT[s].plural;
-  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', arranque: 'Arranque', cuenta: 'Mi cuenta', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
+  return { perfil: 'Perfil', apariencia: 'Apariencia', demo: 'Datos de demostración', diagnostico: 'Diagnóstico', plantilla: 'Plantilla del presupuesto', parametros: 'Parámetros de nómina', respaldos: 'Respaldos', cuenta: 'Mi cuenta', borrar: 'Borrar mis datos', registro: 'Registro de errores', divisas: 'Divisas', recordatorios: 'Recordatorios' }[s] || 'Atrás';
 }
 
 function render(enfocar) {
@@ -527,7 +527,6 @@ function pantalla(ruta) {
       if (partes[1] === 'demo') return vDemo();
       if (partes[1] === 'plantilla') return vPlantilla();
       if (partes[1] === 'respaldos') return vRespaldos();
-      if (partes[1] === 'arranque') return vArranque();
       if (partes[1] === 'cuenta') return vCuenta();
       if (partes[1] === 'borrar') return vBorrar();
       if (partes[1] === 'registro') return vRegistro();
@@ -697,11 +696,6 @@ function vInicio() {
           clase: p.hecho ? 'm-hecho' : ''
         })).join('') + '</div>' +
       '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
-  }
-
-  // El arranque (pasar de la prueba al uso real) solo existe donde hay datos de prueba.
-  if (demoOn() && estado.completo && !esVerdad(cfg('Datos_Demo')) && !esVerdad(cfg('Arranque_Hecho'))) {
-    html += '<div class="m-banner" role="note">' + ico('check') + '<span>Falta cargar tus saldos reales y empezar.</span><button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/arranque">Arranque</button></div>';
   }
 
   if (hayBolsillos()) {
@@ -878,11 +872,8 @@ function vAjustes() {
         fila({ icono: 'pulso', titulo: 'Actualizar desde la hoja', sub: 'Si editaste la hoja a mano, vuelve a leerla', chevron: true, attrs: 'data-acc="actualizar-datos"' }) +
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
-        // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
-        (demoOn()
-          ? irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: esVerdad(cfg('Arranque_Hecho')) ? 'Operación iniciada' : 'Saldos reales y fecha de inicio' }) +
-            irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' })
-          : '') +
+        // Los datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
+        (demoOn() ? irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) : '') +
         irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
         irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
         irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
@@ -938,13 +929,10 @@ function vDemo() {
   if (!demoOn()) return vNoDisponible('Datos de demostración');
   const demo = esVerdad(cfg('Datos_Demo'));
   const hayReales = ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].some(t => cat(t).some(f => !String(f['ID_' + t.slice(0, -1)] || '').startsWith('demo-')));
-  const iniciada = esVerdad(cfg('Arranque_Hecho'));
   let cuerpo;
   if (demo) {
     cuerpo = '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Hay datos ficticios cargados para probar la app. Borrarlos no afecta nada de lo que hayas registrado de verdad.</p>' +
       '<button class="m-btn m-btn-primary" style="width:100%;background:var(--m-danger);color:#fff" data-acc="limpiar-demo">Borrar datos de demostración</button>';
-  } else if (iniciada) {
-    cuerpo = '<p class="m-subtitulo" style="padding:0;margin:0">La operación real ya empezó, así que no se crean datos de demostración.</p>';
   } else {
     cuerpo = (hayReales ? '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0"><strong>Ya tienes datos reales.</strong> Los de demostración se suman a ellos mientras los miras: los totales del Inicio incluirán ambos. Al borrarlos, lo tuyo queda intacto. Antes de empezar a operar hay que borrarlos.</p>' : '') +
       '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Crea bancos, cuentas, bolsillos, tarjetas y algunos movimientos <strong>ficticios</strong> para explorar la app sin usar tus saldos reales. Se pueden borrar en un toque.</p>' +
@@ -3238,7 +3226,6 @@ App.ahoC = { id: null, mes: null, data: null, cargando: false, error: null };
 App.reg = { anio: null, data: null, cargando: false, error: null };
 App.anual = { anio: null, data: null, cargando: false, error: null };
 App.resp = { data: null, cargando: false, error: null };
-App.arr = { data: null, cargando: false, error: null };
 App.pag = { data: null, cargando: false, error: null };
 
 /** Carga genérica: pide `fn`, guarda en `st.data` y vuelve a pintar si se sigue en `ruta`. */
@@ -3522,79 +3509,7 @@ function vRespaldos() {
   return { titulo: 'Respaldos', html: html, despues: () => { if (!r.data && !r.cargando && !r.error) cargarEn(r, 'ajustes/respaldos', 'getRespaldos', []); } };
 }
 
-// ---------- Arranque y guía (Fase 6) ----------
-
-function vArranque() {
-  if (!demoOn()) return vNoDisponible('Arranque');
-  const a = App.arr;
-  let html = bannerDemo();
-  if (a.error) html += bloqueError(a.error, 'recargar-arr');
-  else if (!a.data) html += esqueleto(4);
-  else {
-    const d = a.data;
-    if (d.hecho) {
-      html += '<div class="m-group" style="padding:var(--m-space-4)"><p><strong>La operación real empezó el ' + esc(d.fecha) + '.</strong></p>' +
-        '<p class="m-ayuda">Los saldos de apertura quedan fijos. Si el banco y Moni no coinciden, usa “Cuadrar” en la cuenta: deja un ajuste con fecha.</p></div>';
-    } else {
-      html += seccion('Antes de empezar',
-        d.checks.map(c => fila({
-          icono: c.hecho ? 'check' : 'plus', titulo: esc(c.titulo),
-          sub: esc(c.detalle || (c.opcional ? 'Opcional' : '')), chevron: true,
-          attrs: 'data-acc="ir" data-ruta="' + esc(c.pantalla) + '"', clase: c.hecho ? 'm-hecho' : ''
-        })).join(''),
-        d.listo ? 'Todo lo necesario está listo.' : 'Completa lo que falta para poder iniciar.') +
-        seccion('Fecha de arranque', fila({ icono: 'capas', titulo: 'Primer día real', final: esc(d.fecha), chevron: true, attrs: 'data-acc="fecha-arranque"' }),
-          'Lo anterior a esta fecha es prueba. Los saldos de apertura son los del día anterior.');
-    }
-    const filas = d.aperturas.map(x => fila({
-      titulo: esc(x.Bolsillo || x.Cuenta), sub: x.Bolsillo ? esc(x.Cuenta) : esc(x.Banco),
-      final: '<span class="m-num ' + claseSaldo(x.Saldo_Apertura) + '">' + dinero(x.Saldo_Apertura, x.Divisa) + '</span>'
-    })).join('');
-    html += seccion('Saldos de apertura · ' + dinero(d.totalApertura), filas || '<p class="m-ayuda" style="padding:var(--m-space-4)">Aún no hay bolsillos.</p>');
-    if (!d.hecho) {
-      html += '<div class="m-acciones-fila" style="flex-direction:column;gap:var(--m-space-3);margin-top:var(--m-space-4)">' +
-        (d.aperturas.length ? '<button class="m-btn m-btn-secondary" data-acc="editar-aperturas">Cargar saldos de apertura</button>' : '') +
-        (d.previos.movimientos ? '<button class="m-btn m-btn-secondary" data-acc="archivar-pruebas">Archivar ' + d.previos.movimientos + ' movimiento(s) de prueba</button>' : '') +
-        '<button class="m-btn m-btn-primary" data-acc="iniciar-operacion"' + (d.listo ? '' : ' disabled') + '>Empezar a usar Moni</button></div>';
-      (d.avisos || []).forEach(t => { html += '<p class="m-ayuda">' + esc(t) + '</p>'; });
-    }
-  }
-  return { titulo: 'Arranque', html: html, despues: () => { if (!a.data && !a.cargando && !a.error) cargarEn(a, 'ajustes/arranque', 'getArranque', []); } };
-}
-
-async function abrirAperturas() {
-  const d = App.arr.data;
-  if (!d) return;
-  const cuerpo = '<form novalidate data-form="aperturas"><p class="m-hoja-mensaje">Escribe cuánto dinero hay en cada lugar al cierre del día anterior al arranque (' + esc(d.fecha) + '). Puede ser negativo.</p>' +
-    d.aperturas.map((x, i) => '<div class="m-campo"><label class="m-label" for="ap-' + i + '">' + esc(x.Bolsillo ? x.Cuenta + ' · ' + x.Bolsillo : x.Cuenta) + '</label>' +
-      '<input class="m-input m-num" id="ap-' + i + '" data-tipo="dinero" data-divisa="' + esc(x.Divisa) + '" inputmode="decimal" autocomplete="off" value="' + (x.Saldo_Apertura ? esc(String(x.Saldo_Apertura).replace('.', ',')) : '') + '"><p class="m-ayuda" data-eco="ap-' + i + '"></p></div>').join('') +
-    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-  await abrirHoja({
-    titulo: 'Saldos de apertura', cuerpo: cuerpo, alAbrir: raiz => activarEcoDinero(raiz),
-    alGuardar: async raiz => {
-      const lista = d.aperturas.map((x, i) => {
-        const v = leerDinero($('#ap-' + i, raiz).value);
-        if (v !== '' && isNaN(v)) throw new Error('Revisa el saldo de “' + (x.Bolsillo || x.Cuenta) + '”.');
-        return { ID_Bolsillo: x.ID_Bolsillo, Saldo_Apertura: v === '' ? 0 : v };
-      });
-      App.arr.data = await api('saveAperturas', lista);
-      await refrescar(); render(); aviso('Saldos de apertura guardados');
-    }
-  });
-}
-
-async function abrirFechaArranque() {
-  const d = App.arr.data;
-  if (!d) return;
-  await abrirHoja({
-    titulo: 'Fecha de arranque',
-    cuerpo: '<form novalidate><div class="m-campo"><label class="m-label" for="f-arr">Primer día real</label><input class="m-input" id="f-arr" type="date" value="' + esc(d.fecha) + '"><p class="m-ayuda">Por defecto, 1 de enero de 2027.</p></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alGuardar: async raiz => {
-      App.arr.data = await api('setFechaArranque', $('#f-arr', raiz).value);
-      render(); aviso('Fecha guardada');
-    }
-  });
-}
+// ---------- Guía de uso ----------
 
 function vGuia() {
   const paso = (t, x) => '<div class="m-row" style="align-items:flex-start"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + t + '</span><span class="m-row-sub" style="display:block;white-space:normal">' + x + '</span></span></div>';
@@ -3613,8 +3528,7 @@ function vGuia() {
       seccion('Cuando algo no cuadra',
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
         paso('Deshacer un pago', 'Los pagos de extractos y de cuotas se anulan desde su detalle; todo vuelve a como estaba.') +
-        paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.')) +
-      (demoOn() ? seccion('Empezar de verdad', irA('ajustes/arranque', { icono: 'check', titulo: 'Arranque', sub: 'Saldos de apertura y fecha de inicio' })) : '')
+        paso('Respaldos', 'En Ajustes → Respaldos puedes hacer una copia ahora o dejarlas automáticas.'))
   };
 }
 
@@ -4522,7 +4436,7 @@ App.asist = { activo: false, paso: null, omitido: asistenteOmitido(), ultimo: {}
 function asistenteVisible() {
   const e = App.boot && App.boot.estado;
   if (!e || !e.instalado || !e.pasos) return false;
-  if (App.asist.omitido || esVerdad(cfg('Datos_Demo')) || esVerdad(cfg('Arranque_Hecho'))) return false;
+  if (App.asist.omitido || esVerdad(cfg('Datos_Demo'))) return false;
   if (!App.asist.activo && !e.completo) App.asist.activo = true;
   return App.asist.activo;
 }
@@ -4807,7 +4721,7 @@ function vFinAsistente() {
       '<div class="m-group m-asist-lista">' + dato('Bancos', listaAsist('Bancos').length) + dato('Cuentas', listaAsist('Cuentas').length) +
         dato('Bolsillos', listaAsist('Bolsillos').length) + dato('Tarjetas', listaAsist('Tarjetas').length) +
         dato('Nómina', activos('Nomina_Escenarios').length ? 'Lista' : '—') + dato('Otros ingresos', listaAsist('Ingresos_Recurrentes').length) + '</div>' +
-      '<p class="m-ayuda" style="text-align:left">' + (demoOn() ? 'Cuando tengas a mano los saldos reales de tus cuentas, entra a Ajustes → Arranque para empezar a operar.' : 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.') + '</p>' +
+      '<p class="m-ayuda" style="text-align:left">' + 'Ya puedes empezar: usa el botón Registrar para anotar un gasto o un ingreso. Si algo cambia (una cuenta, un bolsillo), lo ajustas en Ajustes.' + '</p>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="asist-fin">Ir al inicio</button>' +
         '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button></div></div></div>'
@@ -4913,7 +4827,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.arr, App.pag, App.graf, App.rec, App.ing].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -5034,21 +4948,6 @@ const ACCIONES = {
   susc: el => abrirDetalleCobro(el.dataset.id),
   codigo: el => abrirCodigoServicio(el.dataset.id),
   rapido: el => abrirRegistrar({ tipo: el.dataset.tipo }),
-  'recargar-arr': () => { App.arr.error = null; App.arr.data = null; render(); },
-  'editar-aperturas': () => abrirAperturas(),
-  'fecha-arranque': () => abrirFechaArranque(),
-  'archivar-pruebas': async () => {
-    const ok = await confirmar({ titulo: 'Archivar pruebas', accion: 'Archivar', mensaje: 'Se anularán los movimientos anteriores a la fecha de arranque. No se borran: puedes restaurarlos uno a uno.' });
-    if (!ok) return;
-    try { const r = await api('archiveTests'); App.arr.data = r; await refrescar(); render(); aviso(r.archivados + ' movimiento(s) archivados'); }
-    catch (e) { aviso(e.message, true); }
-  },
-  'iniciar-operacion': async () => {
-    const ok = await confirmar({ titulo: 'Empezar a usar Moni', accion: 'Empezar', mensaje: 'Se guarda un respaldo, se activan las copias automáticas y los saldos de apertura quedan fijos. ¿Todo está como en tu banco?' });
-    if (!ok) return;
-    try { App.arr.data = await api('startOperation'); await refrescar(); render(); aviso('¡Listo! Moni empezó a operar'); }
-    catch (e) { aviso(e.message, true); }
-  },
   'recargar-aho': () => { App.aho.error = null; App.aho.data = null; render(); },
   'recargar-ahoc': () => { App.ahoC.error = null; App.ahoC.data = null; render(); },
   'recargar-reg': () => { App.reg.error = null; App.reg.data = null; render(); },

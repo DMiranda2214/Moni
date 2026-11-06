@@ -5,7 +5,7 @@ const { bogota } = require('./fecha');
 
 module.exports = function (prueba, assert, crearEntorno) {
   const plano = x => JSON.parse(JSON.stringify(x));
-  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Arranque.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
+  const CARGA = ['Setup.gs', 'Repo.gs', 'Catalogos.gs', 'Saldos.gs', 'Movimientos.gs', 'Presupuesto.gs', 'Nomina.gs', 'Tarjetas.gs', 'Creditos.gs', 'Ahorro.gs', 'Regalos.gs', 'Anual.gs', 'Respaldos.gs', 'Vistas.gs', 'Recordatorios.gs', 'Suscripciones.gs', 'Ingresos.gs', 'Multiusuario.gs', 'Demo.gs', 'Reinicio.gs', 'Logs.gs', 'Graficos.gs', 'TasasGoogle.gs', 'Api.gs'];
   const hoy = () => bogota();
 
   function equipar(e) {
@@ -246,14 +246,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     const { e, dolares } = escenario();
     assert.strictEqual(e.llamar('obtenerAhorro').cuentas.length, 0);
     assert.throws(e.falla('registrarRendimiento', { ID_Cuenta: dolares.ID_Cuenta, Tipo: 'Interes', Valor: 5 }), /solo se usan cuentas en COP/);
-  });
-
-  prueba('arranque: el total de apertura es en pesos y cada saldo lleva su divisa', () => {
-    const { e, casa } = escenario();
-    const a = e.llamar('obtenerArranque');
-    assert.strictEqual(a.totalApertura, 2000000);
-    assert.ok(a.aperturas.some(x => x.Divisa === 'USD' && x.Saldo_Apertura === 1000));
-    assert.ok(a.aperturas.some(x => x.Divisa === 'COP' && x.ID_Bolsillo === casa.ID_Bolsillo));
   });
 
   prueba('tasa de Google Finance: crea la hoja con fórmulas, guarda lo que Google devuelve y marca la fuente', () => {

@@ -154,8 +154,6 @@ const DEFAULT_CONFIG = [
   ['Tema', 'Automatico', 'Apariencia', 'seleccion', 'Claro, Oscuro o Automatico (sigue al dispositivo)'],
   ['Color_Acento', 'rosa', 'Apariencia', 'seleccion', 'Color de acento de la interfaz'],
   ['Datos_Demo', 'FALSE', 'Sistema', 'booleano', 'TRUE mientras existan datos de demostración'],
-  ['Fecha_Arranque', '2027-01-01', 'Sistema', 'texto', 'Primer día de operación real; antes de esa fecha todo es prueba'],
-  ['Arranque_Hecho', 'FALSE', 'Sistema', 'booleano', 'TRUE cuando ya empezó la operación real'],
   ['Carpeta_PDF', 'Moni/Extractos', 'General', 'texto', 'Ruta de Google Drive para extractos en PDF'],
   ['Respaldo_Frecuencia_Dias', '7', 'Respaldos', 'numero', 'Frecuencia de copia en días'],
   ['Respaldo_Copias', '8', 'Respaldos', 'numero', 'Número de copias retenidas'],
@@ -436,6 +434,19 @@ function completarConfig_(ss) {
 function configInicial_() {
   const anio = String(Number(hoyIso_().slice(0, 4)));
   return DEFAULT_CONFIG.map(c => c[0] === 'Anio_Activo' ? [c[0], anio].concat(c.slice(2)) : c);
+}
+
+/** Crea la fila de Config si todavía no existe (las bases ya instaladas no tienen las claves nuevas). */
+function asegurarConfig_(clave) {
+  if (getTableData('Config').some(c => c.Clave === clave)) return;
+  const d = configInicial_().find(item => item[0] === clave);
+  if (!d) throw new Error('No hay parámetro "' + clave + '".');
+  insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
+}
+
+function guardarConfig_(clave, valor) {
+  asegurarConfig_(clave);
+  updateRowById('Config', 'Clave', clave, { Valor: String(valor) });
 }
 
 function sembrarPorDefecto_(ss) {

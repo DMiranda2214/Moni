@@ -60,4 +60,4 @@ Al abrir el Sheet aparece el menú **Moni** con: instalar o verificar la base, l
 - [ ] Probado desde el celular y desde el computador.
 
 ## Puesta en marcha real (22 – 31 de diciembre)
-Ver [Operación → Arranque](OPERACION.md#arranque-del-1-de-enero).
+Ver [Operación → Empezar con datos reales](OPERACION.md#empezar-con-datos-reales).

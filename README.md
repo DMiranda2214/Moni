@@ -20,7 +20,6 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
 | **Regalos** | Lista por año con estimado y gasto real |
 | **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
-| **Arranque** | Saldos de apertura reales, archivo de pruebas e inicio de la operación |
 | **Respaldos** | Copias en tu Drive, manuales o automáticas |
 
 ## Documentación

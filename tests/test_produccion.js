@@ -64,21 +64,6 @@ module.exports = function (prueba, assert, crearEntorno) {
     } finally { fs.rmSync(carpeta, { recursive: true, force: true }); }
   });
 
-  prueba('producción: el arranque (anular pruebas, fijar saldos) tampoco corre: borraría movimientos reales', () => {
-    const e = crearEntorno({});
-    e.cargar(...fs.readdirSync(raiz).filter(f => f.endsWith('.gs')).sort());
-    e.llamar = (fn, ...args) => { e.ctx.__args = args; return plano(e.ejecutar(fn + '(...__args)')); };
-    e.llamar('setupDatabase');
-    delete e.propiedades.DEMO_HABILITADO;
-    ['archiveTests', 'startOperation'].forEach(fn => {
-      const r = e.llamar(fn);
-      assert.strictEqual(r.ok, false, fn);
-      assert.ok(/entorno de pruebas/.test(r.error.message));
-    });
-    assert.strictEqual(e.llamar('saveAperturas', [{ ID_Bolsillo: 'x', Saldo_Apertura: 1 }]).ok, false);
-    assert.strictEqual(e.llamar('setFechaArranque', '2027-01-01').ok, false);
-  });
-
   prueba('una persona nueva: el año activo es el actual y no hay nada de otra persona', () => {
     const e = crearEntorno({});
     e.cargar(...fs.readdirSync(raiz).filter(f => f.endsWith('.gs')).sort());

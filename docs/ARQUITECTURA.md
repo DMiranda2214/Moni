@@ -10,7 +10,7 @@
         │
         ▼
    Dominio: Movimientos · Presupuesto · Nomina · Tarjetas · Creditos · Ahorro · Regalos ·
-            Suscripciones · Anual · Arranque · Recordatorios · Respaldos · Vistas · Demo
+            Suscripciones · Anual · Recordatorios · Respaldos · Vistas · Demo
         │
         ▼
    Catalogos.gs (CRUD configurable) · Saldos.gs
@@ -46,7 +46,6 @@
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
 | `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |
-| `Arranque.gs` | Aperturas, archivo de pruebas, inicio de operación |
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`) |

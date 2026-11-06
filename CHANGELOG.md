@@ -1,5 +1,8 @@
 # Cambios
 
+## Sin pantalla de Arranque (6 nov)
+- **Se quitó "Arranque"** (cargar saldos de apertura, fecha de inicio, archivar pruebas, empezar a operar): los saldos iniciales ya se escriben al crear cada cuenta y bolsillo en los primeros pasos. Desaparecen la pantalla, el aviso de Inicio, las funciones `getArranque`, `setFechaArranque`, `saveAperturas`, `archiveTests`, `startOperation` y los parámetros nuevos `Fecha_Arranque` y `Arranque_Hecho` (en hojas ya creadas quedan inertes).
+
 ## Suscripciones en el presupuesto y detalle de movimientos (6 nov)
 - **Suscripciones y servicios dentro del presupuesto:** cada mes el presupuesto incluye lo que toca pagar (según su periodicidad), con su valor y su medio de pago. Las nuevas o editadas entran solas al mes ya generado; un aviso con *Agregar* cubre las que falten. Pagarlas cuenta como lo real y deja el renglón pagado. Columna nueva `Presupuesto_Mes.ID_Suscripcion`.
 - **Detalle de un movimiento:** ahora dice primero **qué es** (gasto, ingreso, movimiento de dinero entre bolsillos, ajuste, conversión).
