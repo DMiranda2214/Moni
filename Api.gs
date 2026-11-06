@@ -54,6 +54,10 @@ function getBootstrap() {
     if (modoMultiusuario_() && !idHojaUsuario_()) {
       return { instalado: false, sinHoja: true, cuenta: estadoMiCuenta() };
     }
+    // La hoja guardada ya no existe o no se puede abrir: se ofrece crear una nueva o vincular otra, sin borrar nada.
+    if (idHojaUsuario_() && !hojaAccesible_()) {
+      return { instalado: false, sinHoja: true, hojaPerdida: true, cuenta: estadoMiCuenta() };
+    }
     let verificacion = verificarEsquema(undefined, { usarCache: true });
     // Varias personas: si una versión nueva trae tablas o columnas, la hoja se actualiza sola (sin borrar nada).
     if (!verificacion.listo && modoMultiusuario_()) {

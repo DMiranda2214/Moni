@@ -111,6 +111,7 @@ function crearEntorno(hojasIniciales, opciones) {
   const propsUsuario = {};
   const cachesUsuario = {};
   const libros = {};
+  let contadorLibros = 0;
   const crearLibro = (id, nombre, hojasLibro, editores) => {
     const obj = {
       getSheetByName: (n) => hojasLibro[n] || null,
@@ -206,7 +207,7 @@ function crearEntorno(hojasIniciales, opciones) {
         if (!l || (l.editores && l.editores.indexOf(usuarioActual) === -1)) throw new Error('Exception: No se pudo abrir la hoja ' + id);
         return l.obj;
       },
-      create: (nombre) => crearLibro('libro-' + String(Object.keys(libros).length).padStart(30, '0'), nombre, {}, [usuarioActual]),
+      create: (nombre) => crearLibro('libro-' + String(++contadorLibros).padStart(30, '0'), nombre, {}, [usuarioActual]),
       getActiveSpreadsheet: () => null,
       newDataValidation: () => inerte(),
       flush() {}

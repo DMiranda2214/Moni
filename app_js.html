@@ -558,12 +558,13 @@ function vCrearHoja() {
     titulo: 'Bienvenida', ocultarTitulo: true, asistente: true,
     html: '<div class="m-asist m-asist-centro">' +
       '<div class="m-asist-hero" aria-hidden="true">' + ico('capas') + '</div>' +
-      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">Te damos la bienvenida a Moni</h1>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + (App.boot.hojaPerdida ? 'Falta tu hoja de Moni' : 'Te damos la bienvenida a Moni') + '</h1>' +
       '<p class="m-subtitulo">Moni guarda tus finanzas en una hoja de cálculo de <strong>tu propio Google Drive</strong>. Es solo tuya.</p>' +
       '<div class="m-group m-asist-lista">' +
         dato('usuario', 'Tus datos son tuyos', 'Nadie más ve tu hoja, tampoco quien administra la aplicación.') +
         dato('capas', 'Se crea en tu Drive', 'Puedes abrirla, copiarla o borrarla cuando quieras.') +
         dato('check', 'Se actualiza sola', 'Cuando Moni mejora, tu hoja se pone al día sin perder nada.') + '</div>' +
+      (App.boot.hojaPerdida ? '<div class="m-banner" role="note">' + ico('prueba') + '<span>No se encontró la hoja que tenías vinculada (se borró o ya no tienes acceso). Crea una nueva o vincula otra; la anterior no se toca.</span></div>' : '') +
       '<div class="m-error-form" id="hoja-error" role="alert" hidden></div>' +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" data-acc="crear-hoja">Crear mi hoja</button>' +

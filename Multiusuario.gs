@@ -40,6 +40,12 @@ function estadoMiCuenta() {
   return { multiusuario: modoMultiusuario_(), correo: correoActual_(), tieneHoja: hay, urlHoja: url, nombreHoja: nombre };
 }
 
+/** ¿Se puede abrir la hoja guardada? Falso si se borró o ya no se tiene acceso (entonces se ofrece crear otra). */
+function hojaAccesible_() {
+  if (!idHojaUsuario_()) return false;
+  try { getSpreadsheet(); return true; } catch (e) { return false; }
+}
+
 /** Un ID de hoja a partir de lo que pegue la persona: el ID solo o el enlace completo. */
 function idDesdeEnlace_(texto) {
   const t = String(texto || '').trim();
@@ -70,7 +76,7 @@ function adoptarHoja_(ss) {
 
 /** Crea la hoja de Moni de esta persona en su Drive y la prepara. Si ya tiene una, devuelve esa. */
 function crearMiHoja() {
-  if (idHojaUsuario_()) return Object.assign(estadoMiCuenta(), { yaExistia: true });
+  if (hojaAccesible_()) return Object.assign(estadoMiCuenta(), { yaExistia: true });
   const ss = SpreadsheetApp.create('Moni — mis finanzas');
   const r = adoptarHoja_(ss);
   return Object.assign(estadoMiCuenta(), { yaExistia: false, parcial: r.parcial, hechas: r.hechas, tablas: r.tablas });

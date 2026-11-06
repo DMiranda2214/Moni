@@ -193,4 +193,20 @@ module.exports = function (prueba, assert, crearEntorno) {
     const b = plano(e.ejecutar('getBootstrap()'));
     assert.ok(b.data.catalogos.Personas.some(p => p.Nombre === 'Ana'));
   });
+
+  prueba('si la hoja guardada se borró, se ofrece crear otra y se crea desde cero', () => {
+    const e = app();
+    e.como(ANA);
+    assert.strictEqual(e.llamar('createMySheet').ok, true);
+    const vieja = e.propsUsuario[ANA].SPREADSHEET_ID;
+    delete e.libros[vieja]; // la borró de su Drive
+    const b = e.llamar('getBootstrap');
+    assert.strictEqual(b.ok, true);
+    assert.strictEqual(b.data.sinHoja, true);
+    assert.strictEqual(b.data.hojaPerdida, true);
+    const c = e.llamar('createMySheet');
+    assert.strictEqual(c.ok, true, c.error && c.error.message);
+    assert.notStrictEqual(e.propsUsuario[ANA].SPREADSHEET_ID, vieja);
+    assert.strictEqual(e.llamar('getBootstrap').data.instalado, true);
+  });
 };
