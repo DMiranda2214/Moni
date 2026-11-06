@@ -1,6 +1,6 @@
 # Instalación y despliegue
 
-> Para **varias personas** con datos separados, o para **desplegar sin copiar código**, mira [Varias personas](MULTIUSUARIO.md) y [Despliegue automático](DESPLIEGUE_CI.md). Esta guía es el camino manual para una sola hoja.
+> Para **varias personas** con datos separados, o para **desplegar sin copiar código**, mira [Varias personas](MULTIUSUARIO.md) y [Despliegue](DESPLIEGUE.md). Esta guía es el camino manual para una sola hoja.
 
 Hay dos caminos. El **A** es el más corto y no requiere instalar nada; el **B** (con `clasp`) es el cómodo para actualizar.
 

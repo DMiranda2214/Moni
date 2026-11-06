@@ -13,7 +13,7 @@ Una aplicación desplegada **una sola vez** que usan muchas personas, **cada una
 Dos personas que quieren ver lo mismo: una crea su hoja, la **comparte** con la otra (permiso de edición) y la otra elige **"Ya tengo una hoja de Moni"** y pega el enlace. Las dos usan la misma hoja con su propia cuenta. El bloqueo es por persona, así que si escriben **exactamente a la vez** podrían pisarse; es poco probable en finanzas personales.
 
 ## Activarlo (administración)
-1. Despliega la aplicación (ver [Instalación](INSTALACION.md) o [Despliegue automático](DESPLIEGUE_CI.md)). Para varias personas conviene un **proyecto de Apps Script independiente**, no unido a una hoja.
+1. Despliega la aplicación (ver [Instalación](INSTALACION.md) o [Despliegue](DESPLIEGUE.md)). Para varias personas conviene un **proyecto de Apps Script independiente**, no unido a una hoja.
 2. En el editor de Apps Script, ejecuta **una vez** la función `activarModoMultiusuario` (la lista de funciones está en la barra superior). Es lo único que cambia el comportamiento: sin esa propiedad, la app funciona como siempre, con una sola hoja.
 3. Despliega como **aplicación web** con *Ejecutar como: el usuario que accede* y *Quién tiene acceso: cualquier persona con cuenta de Google* (es lo que trae `appsscript.json`).
 4. Comparte solo la **URL** `/exec`.
@@ -22,7 +22,7 @@ Dos personas que quieren ver lo mismo: una crea su hoja, la **comparte** con la 
 Para volver al modo de una sola hoja: `desactivarModoMultiusuario`.
 
 ## Producción sin datos de demostración
-El paquete de producción no incluye el generador de datos de ejemplo y la propiedad `DEMO_HABILITADO` solo existe en desarrollo. Detalle en [Despliegue automático](DESPLIEGUE_CI.md).
+El paquete de producción no incluye el generador de datos de ejemplo y la propiedad `DEMO_HABILITADO` solo existe en desarrollo. Detalle en [Despliegue](DESPLIEGUE.md).
 
 ## Lo que ve cada persona
 - **Bienvenida:** *Crear mi hoja* o *Ya tengo una hoja de Moni*. Google le pedirá permiso la primera vez (crear archivos en su Drive).

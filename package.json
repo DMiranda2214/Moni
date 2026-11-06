@@ -18,6 +18,9 @@
     "vista:multi": "node tests/dev_server.js --multi",
     "deployments:dev": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.dev.json\" list-deployments",
     "deployments:prod": "npx --yes @google/clasp@3.4.1 -P \"$PWD/.clasp.prod.json\" list-deployments",
-    "paquete:prod": "bash scripts/publicar.sh produccion --armar"
+    "paquete:prod": "bash scripts/publicar.sh produccion --armar",
+    "desplegar:dev": "bash scripts/publicar.sh desarrollo --desplegar",
+    "desplegar:prod": "bash scripts/publicar.sh produccion --desplegar",
+    "hooks": "git config core.hooksPath .githooks"
   }
 }

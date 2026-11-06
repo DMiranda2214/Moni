@@ -4,9 +4,10 @@
 #   scripts/publicar.sh desarrollo           sube todo, con el generador de datos de demostración
 #   scripts/publicar.sh produccion           sube todo MENOS el generador de demostración (se reemplaza por un archivo vacío)
 #   scripts/publicar.sh produccion --armar   solo arma el paquete y escribe su carpeta (para revisarlo o probarlo)
+#   scripts/publicar.sh produccion --desplegar   sube y además publica una versión nueva en la implementación (la URL /exec no cambia)
 #
-# El ID del proyecto sale de la variable SCRIPT_ID (CI) o, en tu computador, de .clasp.dev.json / .clasp.prod.json.
-# Con CLASP_AUTH apuntando a una carpeta con .clasprc.json se usan esas credenciales (CI).
+# El ID del proyecto sale de .clasp.dev.json / .clasp.prod.json (o de la variable SCRIPT_ID).
+# La implementación a actualizar sale de DEPLOYMENT_ID o, si no se indica, de la única implementación con versión del proyecto.
 set -euo pipefail
 
 ENTORNO="${1:-}"
@@ -42,4 +43,23 @@ else echo "Falta SCRIPT_ID o el archivo $ARCHIVO" >&2; exit 1; fi
 
 printf '{"scriptId":"%s","rootDir":"."}' "$ID" > "$PAQUETE/.clasp.json"
 cd "$PAQUETE"
-if [ -n "${CLASP_AUTH:-}" ]; then $CLASP --auth "$CLASP_AUTH" push --force; else $CLASP push --force; fi
+if [ -n "${CLASP_AUTH:-}" ]; then CLASP="$CLASP --auth $CLASP_AUTH"; fi
+
+echo "Subiendo el paquete de $ENTORNO…"
+$CLASP push --force
+
+if [ "$MODO" = "--desplegar" ]; then
+  DESPLIEGUE="${DEPLOYMENT_ID:-}"
+  if [ -z "$DESPLIEGUE" ]; then
+    # Las implementaciones con versión aparecen como "- <ID> @<versión> - <descripción>"; la automática es "@HEAD".
+    LISTA="$($CLASP list-deployments | grep -E '^- [A-Za-z0-9_-]+ @[0-9]+' | awk '{print $2}')"
+    CUANTAS="$(printf '%s\n' "$LISTA" | grep -c . || true)"
+    if [ "$CUANTAS" -ne 1 ]; then
+      echo "ERROR: hay $CUANTAS implementaciones con versión; indica cuál con DEPLOYMENT_ID=<id> (ver: npm run deployments:${ENTORNO:0:4})." >&2; exit 1
+    fi
+    DESPLIEGUE="$LISTA"
+  fi
+  echo "Publicando una versión nueva en la implementación…"
+  $CLASP deploy --deploymentId "$DESPLIEGUE" --description "$(date -u +%Y-%m-%dT%H:%MZ) ${DESCRIPCION:-manual}"
+fi
+echo "Listo."

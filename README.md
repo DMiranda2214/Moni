@@ -32,7 +32,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [Manual de usuario](docs/MANUAL_USUARIO.md) | Quien usa la app: todas las pantallas |
 | [Instalación y despliegue](docs/INSTALACION.md) | Quien publica la app por primera vez o la actualiza |
 | [Varias personas](docs/MULTIUSUARIO.md) | Una sola aplicación, cada persona con su hoja y sus datos |
-| [Despliegue automático (CI/CD)](docs/DESPLIEGUE_CI.md) | GitHub Actions: verificar, desarrollo y producción sin copiar código |
+| [Despliegue](docs/DESPLIEGUE.md) | Desarrollo y producción con un comando, sin copiar código; producción sin datos de demostración |
 | [Operación y solución de problemas](docs/OPERACION.md) | Respaldos, recuperación, errores frecuentes |
 | [Reglas de negocio](docs/REGLAS_DE_NEGOCIO.md) | Cómo se calculan saldos, presupuesto, tarjetas, créditos y nómina |
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
@@ -67,7 +67,7 @@ docs/             Documentación
 
 ## Estado
 
-**Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue automático](docs/DESPLIEGUE_CI.md)).
+**Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue](docs/DESPLIEGUE.md)).
 
 Fases 0 a 7 (parte técnica) implementadas y probadas con un Sheets simulado. Falta la verificación en el Sheet real, las dos sesiones de prueba con la usuaria y la medición de rendimiento real. Detalle en [PLAN.md](PLAN.md).
 
