@@ -572,6 +572,13 @@ function vCrearHoja() {
   };
 }
 
+/** Fila que abre la hoja de cálculo donde Moni guarda todo (siempre visible en Ajustes). */
+function enlaceHoja() {
+  const c = (App.boot && App.boot.cuenta) || {};
+  if (!c.urlHoja) return '';
+  return '<a class="m-row" style="text-decoration:none;color:inherit" href="' + esc(c.urlHoja) + '" target="_blank" rel="noopener noreferrer"><span class="m-row-icono">' + ico('capas', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">Abrir mi hoja de cálculo</span><span class="m-row-sub" style="display:block">' + esc(c.nombreHoja || 'Donde Moni guarda tus datos') + '</span></span>' + ico('der', 'm-icon-sm m-chevron') + '</a>';
+}
+
 /** Ajustes → Mi cuenta (solo en la versión para varias personas): de quién es la hoja y cómo cambiarla. */
 function vCuenta() {
   const c = App.boot.cuenta || {};
@@ -836,6 +843,7 @@ function vAjustes() {
       seccion('Organización',
         ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
+        enlaceHoja() +
         irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
         (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
         // Arranque y datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.

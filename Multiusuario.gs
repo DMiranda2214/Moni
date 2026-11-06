@@ -32,11 +32,12 @@ function correoActual_() {
 /** Datos de la cuenta de quien entra, para la pantalla de bienvenida y Ajustes → Mi cuenta. */
 function estadoMiCuenta() {
   const id = idHojaUsuario_();
-  let url = '', nombre = '';
-  if (id) {
-    try { const ss = SpreadsheetApp.openById(id); url = ss.getUrl(); nombre = ss.getName(); } catch (e) { /* sin acceso: se avisa abajo */ }
+  let url = '', nombre = '', hay = !!id;
+  // Una sola hoja: también puede ser la hoja a la que está unido el script (sin SPREADSHEET_ID).
+  if (id || !modoMultiusuario_()) {
+    try { const ss = getSpreadsheet(); url = ss.getUrl(); nombre = ss.getName(); hay = true; } catch (e) { /* sin acceso: se avisa abajo */ }
   }
-  return { multiusuario: modoMultiusuario_(), correo: correoActual_(), tieneHoja: !!id, urlHoja: url, nombreHoja: nombre };
+  return { multiusuario: modoMultiusuario_(), correo: correoActual_(), tieneHoja: hay, urlHoja: url, nombreHoja: nombre };
 }
 
 /** Un ID de hoja a partir de lo que pegue la persona: el ID solo o el enlace completo. */
