@@ -113,7 +113,8 @@ button.m-row:active, a.m-row:active { background: var(--m-fill); }
 .m-resumen { padding: var(--m-space-4); }
 .m-resumen-cifra { font-size: var(--m-text-title-1); font-weight: 700; letter-spacing: -0.01em; }
 .m-resumen-etiqueta { color: var(--m-label-2); font-size: var(--m-text-footnote); }
-.m-resumen-fila { display: flex; gap: var(--m-space-5); margin-top: var(--m-space-3); }
+.m-resumen-fila { display: flex; flex-wrap: wrap; gap: var(--m-space-3) var(--m-space-5); margin-top: var(--m-space-3); }
+.m-resumen-fila strong { white-space: nowrap; } /* una cifra nunca se parte en dos líneas: si no caben, la columna baja */
 
 /* ---------- Avisos, estados vacíos, banner ---------- */
 .m-banner { display: flex; align-items: center; gap: var(--m-space-3); margin-bottom: var(--m-space-4); padding: var(--m-space-3) var(--m-space-4); border-radius: var(--m-radius-lg); background: color-mix(in srgb, var(--m-warning) 14%, var(--m-bg-grouped)); color: var(--m-label); font-size: var(--m-text-subheadline); }
