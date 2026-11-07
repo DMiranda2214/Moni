@@ -1,5 +1,9 @@
 # Cambios
 
+## 1.1.2 — Parámetros de nómina y avisos (6 nov 2026)
+- **Corregido:** *Ajustes → Parámetros de nómina* no guardaba nada y mostraba *"Este parámetro lo gestiona la app"*. La protección bloqueaba toda clave que empezara por `Tasa_`, y el interés de cesantías se llama `Tasa_Interes_Cesantias`. Ahora solo se protegen las tasas de divisas (`Tasa_USD`, `Tasa_EUR`, sus fechas y fuentes, y `Tasa_Auto`). Con esto se puede actualizar el salario mínimo y desaparece el aviso de Inicio.
+- **Corregido:** en tema claro, los avisos de Inicio salían con fondo oscuro (compartían nombre de estilo con los mensajes emergentes).
+
 ## 1.1.1 — Arreglo de actualización (6 nov 2026)
 - **Corregido:** tras publicar la 1.1.0, las hojas ya creadas mostraban *"La tabla CDTs no existe en la base de datos"* en vez de actualizarse. La app recordaba por 6 horas que la hoja estaba bien y no la revisaba. Ahora esa revisión recordada cambia con cada versión de la app y, si aun así falta una tabla, la app olvida lo recordado y revisa de nuevo: con varias personas la hoja se actualiza sola; con una sola hoja se ofrece *Instalar*.
 
