@@ -172,5 +172,7 @@ module.exports = function (prueba, assert, crearEntorno) {
       assert.match(x.error.message, /gestiona la app/);
     });
     assert.strictEqual(e.llamar('obtenerAvisos_').some(a => a.id === 'smmlv'), false, 'al guardar el salario mínimo del año actual el aviso desaparece');
+    // El refresco liviano que usa la pantalla tras guardar ya no trae el aviso
+    assert.strictEqual(e.llamar('getRefresco', { config: true }).data.avisos.some(x => x.id === 'smmlv'), false);
   });
 };

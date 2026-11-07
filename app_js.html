@@ -5498,6 +5498,7 @@ document.addEventListener('submit', async ev => {
       const r = await api('saveConfigParams', mapa);
       Object.keys(r).forEach(k => { App.boot.config[k] = r[k]; });
       if (f.dataset.form === 'respaldos') App.resp.data = null;
+      await refrescarParcial({ config: true }); // los avisos de Inicio (por ejemplo, el del salario mínimo) se recalculan
       aviso('Parámetros guardados'); render();
     } catch (e) { caja.textContent = e.message; caja.hidden = false; }
     boton.disabled = false;

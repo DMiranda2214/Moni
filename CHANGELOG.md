@@ -1,5 +1,9 @@
 # Cambios
 
+## 1.1.3 — Avisos al día y resumen sin cortes (6 nov 2026)
+- **Corregido:** al guardar los *Parámetros de nómina* el aviso "Actualiza el salario mínimo" seguía en Inicio hasta recargar la app. Ahora los avisos se recalculan al guardar.
+- **Corregido:** en el resumen de Inicio, las cifras con centavos o la columna *Invertido* se partían en dos líneas o quedaban tapadas en el celular. Ahora una cifra nunca se parte: si no caben, la columna baja a la línea siguiente.
+
 ## 1.1.2 — Parámetros de nómina y avisos (6 nov 2026)
 - **Corregido:** *Ajustes → Parámetros de nómina* no guardaba nada y mostraba *"Este parámetro lo gestiona la app"*. La protección bloqueaba toda clave que empezara por `Tasa_`, y el interés de cesantías se llama `Tasa_Interes_Cesantias`. Ahora solo se protegen las tasas de divisas (`Tasa_USD`, `Tasa_EUR`, sus fechas y fuentes, y `Tasa_Auto`). Con esto se puede actualizar el salario mínimo y desaparece el aviso de Inicio.
 - **Corregido:** en tema claro, los avisos de Inicio salían con fondo oscuro (compartían nombre de estilo con los mensajes emergentes).
