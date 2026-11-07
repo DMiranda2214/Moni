@@ -153,4 +153,24 @@ module.exports = function (prueba, assert, crearEntorno) {
     u.ejecutar("CacheService.getScriptCache().put('ESQUEMA_OK', '5|0.0.1', 21600)");
     assert.strictEqual(plano(u.ejecutar('verificarEsquema(undefined, { usarCache: true })')).desdeCache, undefined);
   });
+
+  prueba('parámetros de nómina: se guardan todos juntos (incluida la tasa de cesantías); los que gestiona la app siguen protegidos', () => {
+    const e = E();
+    const anio = Number(hoy().slice(0, 4));
+    e.llamar('guardarMiNomina', 3000000);
+    e.ejecutar("guardarConfig_('SMMLV_Anio', String(" + (anio - 1) + "))");
+    assert.strictEqual(e.llamar('obtenerAvisos_').some(a => a.id === 'smmlv'), true, 'con el salario mínimo viejo hay aviso');
+    const r = e.llamar('saveConfigParams', { SMMLV: 1750905, SMMLV_Anio: anio, Aporte_Salud: 0.04, Aporte_Pension: 0.04, Tasa_Interes_Cesantias: 0.12, FSP_Umbral_SMMLV: 4, Cesantias_Dias_Actual: 360, Cesantias_Sueldo_Anterior: 0 });
+    assert.strictEqual(r.ok, true, r.error && r.error.message);
+    assert.strictEqual(e.llamar('saveConfigParam', 'Tasa_Interes_Cesantias', 0.11).ok, true);
+    const guardado = e.llamar('getTableData', 'Config').find(c => c.Clave === 'Tasa_Interes_Cesantias');
+    assert.strictEqual(String(guardado.Valor), '0.11');
+    // Esos sí los gestiona la app
+    ['Tasa_USD', 'Tasa_EUR_Fecha', 'Tasa_USD_Fuente', 'Tasa_Auto', 'Datos_Demo', 'Recordatorios_Activos', 'Calendario_ID'].forEach(k => {
+      const x = e.llamar('saveConfigParam', k, 'x');
+      assert.strictEqual(x.ok, false, k);
+      assert.match(x.error.message, /gestiona la app/);
+    });
+    assert.strictEqual(e.llamar('obtenerAvisos_').some(a => a.id === 'smmlv'), false, 'al guardar el salario mínimo del año actual el aviso desaparece');
+  });
 };

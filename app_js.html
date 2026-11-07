@@ -759,9 +759,9 @@ function htmlAvisos() {
   const icono = a => a.nivel === 'importante' ? 'alerta' : (a.nivel === 'novedad' ? 'prueba' : 'check');
   return '<section class="m-seccion m-tablero-ancho" aria-label="Para tener en cuenta"><h2 class="m-seccion-titulo">Para tener en cuenta' + (todos.length > 1 ? ' · ' + todos.length : '') + '</h2>' +
     todos.slice(0, limite).map(a =>
-      '<div class="m-banner m-aviso m-aviso-' + esc(a.nivel) + '" role="note">' + ico(icono(a)) +
-      '<span class="m-aviso-texto"><strong>' + esc(a.titulo) + '</strong> ' + esc(a.detalle) + '</span>' +
-      '<span class="m-aviso-acciones"><button type="button" class="m-btn-texto" data-acc="aviso-ir" data-ruta="' + esc(a.pantalla) + '">' + (a.nivel === 'novedad' ? 'Verlo' : 'Resolver') + '</button>' +
+      '<div class="m-banner m-pendiente m-pendiente-' + esc(a.nivel) + '" role="note">' + ico(icono(a)) +
+      '<span class="m-pendiente-texto"><strong>' + esc(a.titulo) + '</strong> ' + esc(a.detalle) + '</span>' +
+      '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="aviso-ir" data-ruta="' + esc(a.pantalla) + '">' + (a.nivel === 'novedad' ? 'Verlo' : 'Resolver') + '</button>' +
       (a.ocultable ? '<button type="button" class="m-btn-texto m-btn-suave" data-acc="aviso-ocultar" data-id="' + esc(a.id) + '">Ahora no</button>' : '') + '</span></div>').join('') +
     (todos.length > 3 ? '<button type="button" class="m-btn-texto" data-acc="avisos-todos">' + (App.avisosTodos ? 'Ver menos' : 'Ver los otros ' + (todos.length - 3)) + '</button>' : '') +
     '</section>';
