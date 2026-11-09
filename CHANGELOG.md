@@ -1,5 +1,15 @@
 # Cambios
 
+## Documentación al día (9 nov 2026)
+Solo documentos; no cambia el comportamiento de la app ni la versión.
+- **Corregido:** número de tablas (29) y de pruebas en README, ARQUITECTURA, INSTALACION, LANZAMIENTO y OPERACION; versión del README (1.1.3).
+- **Corregido:** `DESARROLLO.md` decía que `setupDatabase` no agrega columnas (sí lo hace con `MIGRACIONES_COLUMNAS`); ahora explica cómo migrar y cuándo subir `ESQUEMA_VERSION`.
+- **Corregido:** el bloqueo de escrituras es de la persona en modo multiusuario (ARQUITECTURA, SECURITY); la caché y la revisión del esquema describen los TTL y la firma reales.
+- **Nuevo:** `SECURITY.md` reescrito para un repositorio **público** y para varias personas (permisos, Drive restringido, qué nunca se sube); `INSTALACION.md` pasa a ser la guía manual de una sola hoja.
+- **Nuevo:** `API.md` con las 18 funciones que faltaban y los parámetros reales; `ESQUEMA.md` con la tabla completa de los 42 parámetros de `Config` (generada desde `DEFAULT_CONFIG`).
+- **Nuevo:** `REGLAS_DE_NEGOCIO.md` con monedas, conversión y comisión, recordatorios, gráficos y registro de errores; `GLOSARIO.md`, `GUIA_RAPIDA.md` y `EMPEZAR.md` con lo agregado desde la 1.0.
+- **Reordenado:** `MANUAL_USUARIO.md` (numeración continua, primer uso con *Crear mi hoja*, *Mi cuenta*, Inicio completo); `LANZAMIENTO.md` con la lista de lo que solo se puede probar en Google real.
+
 ## 1.1.3 — Avisos al día y resumen sin cortes (6 nov 2026)
 - **Corregido:** al guardar los *Parámetros de nómina* el aviso "Actualiza el salario mínimo" seguía en Inicio hasta recargar la app. Ahora los avisos se recalculan al guardar.
 - **Corregido:** en el resumen de Inicio, las cifras con centavos o la columna *Invertido* se partían en dos líneas o quedaban tapadas en el celular. Ahora una cifra nunca se parte: si no caben, la columna baja a la línea siguiente.

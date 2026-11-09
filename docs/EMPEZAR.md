@@ -37,7 +37,10 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
 | Ver cuánto queda en cada lugar | Pestaña **Bolsillos** |
 | Pagar la luz, el internet, Netflix… | **Inicio → Pagar servicios** |
 | Saber qué te toca pagar | **Inicio → Próximos pagos** |
-| Ver lo que vas a recibir | **Más → Nómina** y **Otros ingresos** |
+| Ver lo que vas a recibir | **Más → Nómina** y **Otros ingresos** (también en *Por recibir*, en Inicio) |
+| Ver en qué gastas | **Más → Gráficos** |
+| Tener cuentas en dólares | Crea el banco en **USD** y usa **Bolsillos → Convertir divisas** |
+| Que te avisen los pagos | **Ajustes → Recordatorios** (Google Calendar) |
 
 Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y la [Guía rápida](GUIA_RAPIDA.md). Junto a cada casilla hay una **"i"** que explica para qué sirve.
 
@@ -45,7 +48,8 @@ Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y 
 - **Copias de seguridad:** Ajustes → Respaldos. Actívalas para que se hagan solas en tu Drive.
 - **Tu hoja:** Ajustes → Mi cuenta tiene el enlace a tu hoja. No la edites a mano (podrías dañar la aplicación); para consultar, usa las pantallas de Moni.
 - **Compartir con tu pareja:** comparte tu hoja con su correo (permiso de edición) y que ella elija *"Ya tengo una hoja de Moni"*. Verán lo mismo con cuentas distintas.
-- **Borrar todo:** Ajustes → Borrar mis datos deja Moni como recién instalada. Antes puedes crear un respaldo.
+- **Borrar todo:** Ajustes → Borrar mis datos deja Moni como recién instalada (y quita tu calendario de recordatorios). Antes puedes crear un respaldo.
+- **Recuperar una copia:** Ajustes → Mi cuenta → Usar otra hoja, y pega el enlace de la copia que está en tu Drive (carpeta "Moni Respaldos").
 - **Cambiar de hoja:** Ajustes → Mi cuenta → Usar otra hoja (la actual no se borra).
 
 ## Si algo falla

@@ -5,7 +5,7 @@
 | **Banco** | Quien tiene tu dinero: un banco o una billetera (Nequi, Nu…) |
 | **Cuenta** | Una cuenta en un banco: billetera, débito, ahorro u otra |
 | **Bolsillo** | Una parte de una cuenta con un destino (Casa, Mercado, Ocio). Si una cuenta **no permite bolsillos**, tiene uno solo, interno, y se ve como la cuenta |
-| **Saldo de apertura** | Lo que había en un bolsillo al empezar (31/12/2026). Después queda fijo |
+| **Saldo de apertura / inicial** | Lo que había en un bolsillo cuando lo creaste en el asistente de primeros pasos: el punto de partida del que se calcula el saldo |
 | **Saldo** | Apertura + todo lo que entró y salió (sin contar lo anulado) |
 | **Movimiento** | Un gasto, ingreso, ajuste o traslado. Los traslados son dos movimientos que suman cero |
 | **Anular** | Quitar un movimiento sin borrarlo; se puede restaurar |
@@ -38,4 +38,15 @@
 | **Prima / Cesantías** | Prestaciones: prima en junio y diciembre; cesantías se consignan en febrero y sus intereses se pagan en enero |
 | **Suscripción** | Cobro fijo que se repite (streaming, música) |
 | **Servicio** | Cobro recurrente de valor variable (luz, agua, internet) |
-| **Datos de demostración** | Información ficticia para explorar la app; se borra sin tocar lo real |
+| **Moneda (divisa)** | La moneda de un banco: pesos (COP), dólares (USD) o euros (EUR). Sus cuentas y bolsillos la heredan |
+| **Otras monedas** | Los saldos que no están en pesos; se muestran aparte y nunca se suman al total |
+| **Tasa de referencia** | Cuántos pesos vale una unidad de otra moneda según Google Finance o lo que anotes; solo informativa (cada banco cambia a su precio) |
+| **Conversión** | Pasar dinero de una moneda a otra (por ejemplo, comprar dólares), con la tasa que dio el banco |
+| **Comisión** | Lo que cobra el banco por convertir; se anota aparte, dentro de la conversión |
+| **Hoja** | La hoja de cálculo de Google, en tu Drive, donde están tus datos. Cada persona tiene la suya |
+| **Asistente de primeros pasos** | La configuración guiada de la primera vez: nombre, bancos, cuentas, bolsillos, tarjetas, nómina, ingresos, CDT, hogar, servicios, suscripciones y dólar |
+| **Aviso (de Inicio)** | Algo por configurar o actualizar, calculado desde tu hoja; se va solo al resolverse |
+| **Recordatorios** | Los pagos de los próximos 45 días en un calendario "Moni" de tu Google Calendar |
+| **Ingreso recurrente** | Un ingreso distinto de la nómina que se repite (otro trabajo, arriendo); lo marcas como recibido y avanza |
+| **Registro de errores** | La lista de lo que falló o se rechazó, en *Ajustes*; sirve para reportar un problema |
+| **Datos de demostración** | Información ficticia para explorar la app; solo existe en el entorno de desarrollo y se borra sin tocar lo real |

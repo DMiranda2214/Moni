@@ -1,4 +1,4 @@
-# Moni — Especificación del esquema (v1)
+# Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
 El script de instalación (`setupDatabase`) crea estas 29 tablas, una por pestaña, con los encabezados exactos de abajo.
@@ -9,7 +9,7 @@ El script de instalación (`setupDatabase`) crea estas 29 tablas, una por pesta�
 |---|---|
 | IDs | `ID_*` es texto. UUID para datos creados por la app; *slug* legible (`bol-casa`) solo en semillas. **Nunca se escribe un ID fijo en el código** para referirse a un dato del usuario |
 | Fechas | `Fecha` = `yyyy-MM-dd`. `Mes` = `yyyy-MM`. Zona horaria de `Config.Zona_Horaria` (`America/Bogota`). **Se guardan como texto plano** (también `Creado_En` y `Actualizado_En`) para que Sheets no las convierta ni las corra de día; `setupDatabase` fija la zona horaria de la hoja |
-| Dinero | Número en pesos (COP), hasta 2 decimales. En `Movimientos`, **negativo = sale, positivo = entra** |
+| Dinero | Número, hasta 2 decimales, **en la moneda del banco** de la cuenta (`Bancos.Divisa`: `COP`, `USD` o `EUR`; pesos por defecto). En `Movimientos`, **negativo = sale, positivo = entra** |
 | Booleanos | `TRUE` / `FALSE` |
 | Borrado | Datos contables: `Anulado = TRUE` (no se borran). Catálogos: `Activo = FALSE` |
 | Auditoría | Toda tabla termina con `Creado_En` y `Actualizado_En` (fecha y hora ISO) |
@@ -19,7 +19,55 @@ El script de instalación (`setupDatabase`) crea estas 29 tablas, una por pesta�
 ## 1. Configuración (la edita la usuaria en Ajustes)
 
 **Config** — `Clave, Valor, Grupo, Tipo, Descripcion`
-Parámetros: nombre de usuario, año activo, zona horaria, moneda, periodicidad de nómina (por defecto `Mensual`), día de pago, SMMLV, aportes, método de tasa (`Excel`/`Exacta`), tema (`Claro`/`Oscuro`/`Automático`), color de acento, respaldos.
+
+Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_CONFIG` en `Setup.gs`; las filas se siembran al instalar y las claves nuevas se agregan solas (`asegurarConfig_`) en hojas ya creadas. Los marcados *(la gestiona la app)* no se pueden editar desde `saveConfigParam`; el resto se cambia desde Ajustes. El año activo se ajusta al año actual al crear la hoja.
+
+| Clave | Por defecto | Grupo | Para qué |
+|---|---|---|---|
+| `Nombre_Usuario` | — | General | Nombre con el que la app te saluda |
+| `Anio_Activo` | el año actual | General | Año de operación activo |
+| `Zona_Horaria` | `America/Bogota` | General | Zona horaria para cálculos de fechas |
+| `Moneda` | `COP` | General | Código de moneda (ISO 4217) |
+| `Tema` | `Automatico` | Apariencia | Claro, Oscuro o Automatico (sigue al dispositivo) |
+| `Color_Acento` | `rosa` | Apariencia | Color de acento de la interfaz |
+| `Avisos_Ocultos` | — | Sistema | Avisos de Inicio que la persona decidió ocultar (separados por coma) *(la gestiona la app)* |
+| `Datos_Demo` | `FALSE` | Sistema | TRUE mientras existan datos de demostración *(la gestiona la app)* |
+| `Carpeta_PDF` | `Moni/Extractos` | General | Ruta de Google Drive para extractos en PDF |
+| `Respaldo_Frecuencia_Dias` | `7` | Respaldos | Frecuencia de copia en días |
+| `Respaldo_Copias` | `8` | Respaldos | Número de copias retenidas |
+| `Nomina_Periodicidad` | `Mensual` | Nomina | La nómina se paga una vez al mes |
+| `Nomina_Dia_Pago` | `30` | Nomina | Día estimado de pago del salario |
+| `Dias_Base` | `30` | Nomina | Días comerciales por mes para nómina |
+| `Aporte_Salud` | `0.04` | Nomina | Porcentaje de aporte a salud del trabajador |
+| `Aporte_Pension` | `0.04` | Nomina | Porcentaje de aporte a pensión del trabajador |
+| `Redondeo_Aportes` | `-2` | Nomina | Redondeo de aportes (-2 = centena superior) |
+| `SMMLV` | `1423500` | Nomina | Salario mínimo mensual legal vigente. Actualizar cada enero |
+| `SMMLV_Anio` | `2025` | Nomina | Año del SMMLV registrado |
+| `FSP_Umbral_SMMLV` | `4` | Nomina | Umbral de SMMLV para el Fondo de Solidaridad Pensional |
+| `Auxilio_Transporte_Aplica` | `FALSE` | Nomina | Aplica auxilio de transporte legal |
+| `Prima_Fechas` | `06-30,12-20` | Nomina | Fechas límite de pago de prima |
+| `Cesantias_Fecha_Consignacion` | `02-14` | Nomina | Fecha máxima de consignación al fondo |
+| `Intereses_Cesantias_Fecha` | `01-31` | Nomina | Fecha máxima de pago de intereses de cesantías |
+| `Tasa_Interes_Cesantias` | `0.12` | Nomina | Tasa legal de intereses de cesantías |
+| `Cesantias_Dias_Actual` | `360` | Nomina | Días del año de cesantías con el sueldo actual (360 = todo el año; menos si el sueldo cambió) |
+| `Cesantias_Sueldo_Anterior` | `0` | Nomina | Sueldo que tenías antes del cambio, para los días restantes del año de cesantías (0 = sin cambio) |
+| `Credito_Metodo_Tasa` | `Excel` | Creditos | Conversión de tasa EA a periódica: Excel o Exacta |
+| `Tasa_USD` | — | Divisas | Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos *(la gestiona la app)* |
+| `Tasa_USD_Fecha` | — | Divisas | Fecha en que anotaste la tasa del dólar *(la gestiona la app)* |
+| `Tasa_EUR` | — | Divisas | Pesos que vale 1 euro *(la gestiona la app)* |
+| `Tasa_EUR_Fecha` | — | Divisas | Fecha en que anotaste la tasa del euro *(la gestiona la app)* |
+| `Tasa_USD_Fuente` | — | Divisas | De dónde salió la tasa del dólar: Manual o Google Finance *(la gestiona la app)* |
+| `Tasa_EUR_Fuente` | — | Divisas | De dónde salió la tasa del euro: Manual o Google Finance *(la gestiona la app)* |
+| `Tasa_Auto` | `FALSE` | Divisas | TRUE si la tasa se actualiza sola cada día con Google Finance *(la gestiona la app)* |
+| `Recordatorios_Activos` | `FALSE` | Recordatorios | TRUE si los pagos se anotan en Google Calendar *(la gestiona la app)* |
+| `Recordatorios_Dias_Antes` | `2` | Recordatorios | Días de anticipación del aviso (además del aviso del mismo día) *(la gestiona la app)* |
+| `Recordatorios_Hora` | `9` | Recordatorios | Hora del día en que suenan los avisos *(la gestiona la app)* |
+| `Recordatorios_Nomina` | `TRUE` | Recordatorios | Incluir las fechas de prima y cesantías *(la gestiona la app)* |
+| `Calendario_ID` | — | Recordatorios | Calendario de Google que crea la app *(la gestiona la app)* |
+| `Recordatorios_Ultima` | — | Recordatorios | Fecha y hora de la última sincronización *(la gestiona la app)* |
+| `Recordatorios_Resumen` | — | Recordatorios | Resultado de la última sincronización *(la gestiona la app)* |
+
+`Tipo` indica cómo se valida: `numero`, `moneda` y `porcentaje` (decimal entre 0 y 1: 4 % = `0.04`) exigen un número; `booleano` es `TRUE`/`FALSE`; `seleccion` y `texto` son texto.
 
 **Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago, Rendimiento_Base` (`Rendimiento_Base`: `Todo` o `Bolsillos`, sobre qué saldo rinde; `Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
 

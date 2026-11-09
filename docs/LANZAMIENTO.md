@@ -1,17 +1,17 @@
 # Lanzamiento
 
-Lista para pasar a producción y compartir la app. La versión 1.0.0 ya se publicó; esta lista sirve para cada versión nueva (la 1.1.0 agrega CDT, hogares y avisos).
+Lista para pasar a producción y compartir la app. Sirve para cada versión nueva: marca las casillas con la versión que vas a publicar. Las secciones 2 bis y 2 ter dicen qué probar de lo agregado desde la 1.0.
 
 
 ## 1. Antes de publicar (en tu computador)
-- [ ] `git checkout main && git pull` (con la versión 1.0.0 ya fusionada).
+- [ ] `git checkout main && git pull`, con la versión que vas a publicar ya fusionada.
 - [ ] `npm run verificar` → sintaxis, pruebas y contraste en verde.
 - [ ] `npm run paquete:prod` → arma el paquete de producción y confirma que **no lleva datos de demostración** (si algo del generador quedara, el script se detiene).
 
 ## 2. Probar en desarrollo
 - [ ] `npm run desplegar:dev` y abre la URL `/exec` de **desarrollo**.
 - [ ] Propiedad de script `DEMO_HABILITADO = TRUE` solo en el proyecto de desarrollo.
-- [ ] Crear la hoja desde cero (barra "n de 28") y completar el asistente con una cuenta de prueba.
+- [ ] Crear la hoja desde cero (barra "n de 29") y completar el asistente con una cuenta de prueba.
 - [ ] Registrar un gasto, un ingreso y un movimiento entre bolsillos; abrir su detalle y editarlo.
 - [ ] Generar el presupuesto del mes: aparecen las suscripciones y los servicios.
 - [ ] Nómina: sueldo, "Agregar algo de este mes" y registrar el pago.
@@ -24,6 +24,15 @@ Lista para pasar a producción y compartir la app. La versión 1.0.0 ya se publi
 - [ ] Fechas: escribir `2026/11/06` en un gasto y elegir otra con el calendario.
 - [ ] Avisos: "Para tener en cuenta" en Inicio; "Ahora no" oculta y *Ajustes → Avisos de Inicio* los devuelve.
 - [ ] Primeros pasos: tocar lo ya agregado lo abre para editarlo.
+
+## 2 ter. Lo que el simulador de las pruebas no puede comprobar (probar en Google real)
+- [ ] **Dólar de Google Finance:** en *Ajustes → Divisas*, *Actualizar ahora* trae la tasa (puede tardar unos segundos la primera vez); con la actualización diaria activa, al día siguiente la fecha cambia.
+- [ ] **Recordatorios:** activarlos pide el permiso de Calendar, crea el calendario "Moni" con los pagos de los próximos 45 días y, al pagar algo, el evento viejo se va y aparece el siguiente.
+- [ ] **Divisas:** un banco en USD, una conversión con tasa del banco y comisión aparte (se deshace todo junto); el Inicio muestra *Otras monedas*.
+- [ ] **Gráficos:** *Más → Gráficos* y los de Inicio, Presupuesto, Deudas, Ahorro, Vista anual y un bolsillo cargan sin errores en el celular.
+- [ ] **Registro de errores:** *Ajustes → Registro de errores* abre y *Copiar el registro* funciona (también tras provocar un aviso).
+- [ ] **Respaldos automáticos:** el disparador diario crea la copia (revisa "Moni Respaldos" al día siguiente).
+- [ ] **Borrar todos mis datos** (en una cuenta de prueba): deja la app como recién instalada y quita el calendario.
 
 ## 3. Producción
 - [ ] En el editor del proyecto de **producción**: ejecutar una vez `activarModoMultiusuario` y aceptar los permisos.
@@ -42,6 +51,7 @@ Lista para pasar a producción y compartir la app. La versión 1.0.0 ya se publi
 - [ ] Si algo falla: [Operación y solución de problemas](OPERACION.md). Para volver atrás: [Despliegue → Volver atrás](DESPLIEGUE.md#volver-atrás).
 
 ## Fuera de esta versión (ideas para después)
-- Reducir el permiso de Drive a los archivos que crea la app (evita la revisión de seguridad de Google si se abre a mucha gente).
+- Reducir el permiso de Drive a los archivos que crea la app (`drive.file`; evita la revisión de seguridad de Google si se abre a mucha gente). Hoy Drive se usa solo para la carpeta de respaldos y sus copias.
+- Pruebas automáticas de la interfaz (hoy solo se revisan sintaxis y contraste, y los flujos se prueban a mano).
 - Archivar movimientos por año cuando la hoja crezca mucho.
 - Rendimiento por bolsillo (hoy se elige por banco).

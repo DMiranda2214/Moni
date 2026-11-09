@@ -14,7 +14,9 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 - **Una pantalla, una llamada:** las lecturas devuelven todo lo que la pantalla necesita.
 - **Las escrituras devuelven lo que cambió:** `items` (movimientos afectados, listos para mostrar), `ultimos`, `saldos` y, si afectan un renglón, `presupuesto`. Algunas añaden más (`suscripciones`, `anterior`, `idMov`…).
 - Los catálogos solo se exponen si están declarados en `CATALOGOS` (`exigirCatalogo_`).
-- Los parámetros gestionados por la app (`Datos_Demo`) no se editan desde `saveConfigParam`.
+- Los parámetros gestionados por la app (los de demostración, avisos ocultos, tasas de divisas, recordatorios y `Calendario_ID`; ver [ESQUEMA.md](ESQUEMA.md#1-configuración-la-edita-la-usuaria-en-ajustes)) no se editan desde `saveConfigParam`.
+- Toda función pública de Apps Script se puede invocar desde fuera de la interfaz, así que **cada una valida su entrada** y la app corre "como la persona que accede": nadie lee ni escribe más que su propia hoja.
+- Los errores se anotan en el registro (`Log`): un fallo de código es *Error* y una regla de negocio rechazada es *Aviso* (`responder_` los clasifica).
 
 ## Arranque de la app
 
@@ -24,6 +26,8 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `instalarBaseDatos` | — |
 | `runDiagnostics` | — |
 | `getSaldos` | `hastaFecha` |
+| `getRefresco` | `{ tablas, config }` — refresco liviano tras guardar: solo lo que cambió (catálogos, saldos, lo invertido, estado del asistente y avisos) |
+| `refreshCache` | — — "Actualizar desde la hoja": olvida lo memorizado para releer todo (por si se editó la hoja a mano) |
 
 ## Catálogos
 
@@ -33,6 +37,8 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `saveCatalogo` | `tabla, item, opciones` |
 | `disableCatalogo` | `tabla, id` |
 | `enableCatalogo` | `tabla, id` |
+| `saveCuentaCompleta` | `cuenta, bolsillos` — una cuenta con sus bolsillos y saldos de una vez (asistente de primeros pasos) |
+| `saveNominaInicial` | `esc, subsidios` — la nómina y sus subsidios de una vez (asistente) |
 
 ## Movimientos
 
@@ -59,8 +65,12 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `payRenglonMes` | `idItem, pagado` |
 | `previewDistribucion` | `mes, idOrigen` |
 | `distribuir` | `mes, idOrigen, fecha, forzar` |
-| `getNomina` | `periodo, idEscenario` |
-| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo` |
+| `getNomina` | `periodo, idEscenario, opciones` |
+| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo, opciones` |
+| `saveMiNomina` | `sueldo, periodo, opciones` — el sueldo base (crea la nómina la primera vez) y devuelve la nómina del mes |
+| `saveConceptoNomina` | `d, periodo, opciones` — un descuento o ingreso fijo (libranza, medicina prepagada, bono…) |
+| `removeConceptoNomina` | `idConcepto, periodo, opciones` |
+| `addSuscripcionesPpto` | `mes` — agrega al presupuesto del mes las suscripciones y servicios que toca pagar y todavía no están |
 | `anularNomina` | `periodo` |
 
 ## Tarjetas y créditos
@@ -70,9 +80,11 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getDeudas` | — |
 | `getTarjeta` | `idTarjeta, mes` |
 | `addCompraTC` | `c` |
+| `addGastoTarjeta` | `c, vista` — gasto pagado con tarjeta desde Registrar; con renglón aparta el dinero de su bolsillo, sin renglón no aparta nada |
+| `voidGastoTarjeta` | `idCompra, idItem, vista` |
 | `voidCompraTC` | `idCompra` |
 | `restoreCompraTC` | `idCompra` |
-| `payExtracto` | `idTarjeta, mes, fecha` |
+| `payExtracto` | `idTarjeta, mes, fecha, idOrigen` |
 | `voidPagoExtracto` | `idExtracto` |
 | `previewCredito` | `c` |
 | `addCredito` | `c` |
@@ -104,7 +116,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 |---|---|
 | `getSuscripciones` | — |
 | `paySuscripcion` | `id, datos` |
-| `undoPagoSuscripcion` | `id, anterior, idMov, idCompra` |
+| `undoPagoSuscripcion` | `id, anterior, idMov, idCompra, idItem` |
 | `skipSuscripcion` | `id` |
 | `getProximos` | — |
 
@@ -115,24 +127,57 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getRespaldos` | — |
 | `makeRespaldo` | — |
 | `setRespaldoAuto` | `activar` |
-| `seedDemo` | — |
+| `seedDemo` | — *(solo en desarrollo: exige `DEMO_HABILITADO`)* |
 | `clearDemo` | — |
-| `getRecordatorios` | — |
-| `saveRecordatorios` | `ajustes` (`{ activos, diasAntes (0-7), hora (5-21), nomina }`) |
-| `syncRecordatorios` | — |
-| `removeRecordatorios` | — |
+| `saveConfigParam` | `clave, valor` |
+| `saveConfigParams` | `mapa` |
+| `resetConfigParam` | `clave` |
+| `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
+
+## Divisas, gráficos y registro de errores
+
+| Función | Parámetros |
+|---|---|
+| `addConversion` | `conversion` (`{ origen, destino, valorOrigen, valorDestino, comision, comisionEn: 'origen'\|'destino', fecha, notas }`), `vista` |
+| `saveTasaDivisa` | `divisa` (`USD`/`EUR`), `tasa` (vacío = quitar) |
 | `updateTasasGoogle` | — |
 | `saveTasaAuto` | `activar` |
 | `getGraficos` | `opciones` (`{ mes: 'AAAA-MM', meses: 3\|6\|12, divisa }`) |
 | `getLogs` | `opciones` (`{ soloErrores, limite }`) |
 | `clearLogs` | — |
-| `logClientError` | `mensaje, detalle` |
-| `addConversion` | `conversion` (`{ origen, destino, valorOrigen, valorDestino, fecha, notas }`), `vista` |
-| `saveTasaDivisa` | `divisa` (`USD`/`EUR`), `tasa` (vacío = quitar) |
-| `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
-| `saveConfigParam` | `clave, valor` |
-| `saveConfigParams` | `mapa` |
-| `resetConfigParam` | `clave` |
+| `logClientError` | `mensaje, detalle` *(el navegador reporta sus errores aquí; no pasa por `responder_`)* |
+
+## Recordatorios en Google Calendar
+
+| Función | Parámetros |
+|---|---|
+| `getRecordatorios` | — |
+| `saveRecordatorios` | `ajustes` (`{ activos, diasAntes (0-7), hora (5-21), nomina }`) |
+| `syncRecordatorios` | — |
+| `removeRecordatorios` | — |
+
+## Ingresos recurrentes
+
+Ingresos distintos de la nómina (otro trabajo, arriendo, ventas…). Crear o editar uno va por `saveCatalogo('Ingresos_Recurrentes', …)`.
+
+| Función | Parámetros |
+|---|---|
+| `getIngresosRecurrentes` | — |
+| `getProximosIngresos` | — *(lo que se espera recibir; se pide aparte del arranque)* |
+| `receiveIngreso` | `id, datos` |
+| `undoIngreso` | `id, anterior, idMov` |
+| `skipIngreso` | `id` |
+
+## Mi cuenta (varias personas)
+
+Una hoja por persona ([MULTIUSUARIO.md](MULTIUSUARIO.md)). Las usa la pantalla de bienvenida y *Ajustes → Mi cuenta*.
+
+| Función | Parámetros |
+|---|---|
+| `getMyAccount` | — *(estado de la cuenta; sin uso en la interfaz actual: el arranque trae `cuenta`)* |
+| `createMySheet` | — *(crea la hoja de la persona; si falta tiempo devuelve `parcial` y se repite)* |
+| `linkMySheet` | `enlace` (el enlace o el ID de una hoja de Moni o en blanco, con permiso de edición) |
+| `unlinkMySheet` | — *(suelta la hoja actual sin borrarla y apaga sus copias y recordatorios)* |
 
 ## CDT y avisos
 
@@ -144,6 +189,5 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `voidCdt` | `id` |
 | `dismissAviso` | `id` |
 | `restoreAvisos` | — |
-| `getRefresco` | `{ tablas, config }` — devuelve solo lo que cambió (catálogos, saldos, lo invertido, estado y avisos) |
 
 Crear o editar un CDT va por `saveCatalogo('CDTs', item, { descontar, ID_Bolsillo_Origen })`. `getBootstrap` trae `invertido` y `avisos`.

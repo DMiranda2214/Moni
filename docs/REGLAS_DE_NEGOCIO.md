@@ -11,6 +11,16 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - **Cuadrar:** diferencia = saldo real del banco − saldo de Moni de esa cuenta; el ajuste opcional es un movimiento de tipo *Ajuste*.
 - Una cuenta que **no permite bolsillos** tiene un único bolsillo interno; su saldo de apertura vive solo en ese bolsillo.
 
+## 1 bis. Monedas (divisas)
+- La **moneda se elige en el banco** (`COP`, `USD` o `EUR`; pesos por defecto). Sus cuentas y bolsillos la heredan y todo se muestra en esa moneda. No se puede cambiar la moneda de un banco que ya tiene cuentas: se crea otro banco.
+- **Los saldos de monedas distintas nunca se suman.** El Total, el Disponible y el Ahorro de Inicio son en pesos; las demás monedas van aparte en *Otras monedas*, con su **equivalente en pesos** (saldo × tasa de referencia) solo si hay una tasa anotada.
+- Un **traslado** solo se hace entre bolsillos de la **misma moneda**. Para pasar dinero entre monedas se usa la **conversión**.
+- Presupuesto, nómina, tarjetas (en bancos en pesos), créditos de autopago, ahorro con deuda, suscripciones, servicios y regalos **solo usan pesos**: el servidor rechaza un bolsillo en otra moneda y la pantalla no lo ofrece.
+- **Conversión** (Bolsillos → Convertir divisas): se escribe la **cantidad** de la moneda de afuera y la **tasa que dio el banco** por cada unidad; sale `cantidad × tasa` de un lado y llega la cantidad del otro. Son dos movimientos con el mismo `ID_Grupo` (`Subtipo = Conversion`) que **no suman cero** porque cada uno está en su moneda; la tasa implícita queda en las notas. La TRM de referencia **no interviene** (cada banco cambia a su precio): solo se muestra para comparar.
+- **Comisión** del banco (opcional, se escribe cada vez): un **gasto aparte** (`Subtipo = Comision`, categoría *Comisión bancaria*, que se crea sola) cobrado del bolsillo de origen o del de destino, dentro del mismo `ID_Grupo`: anular o restaurar la conversión mueve también la comisión. Si la persona desactivó la categoría, la comisión queda sin categoría.
+- Los totales de **entró** y **salió** (Movimientos, gráficos, vista anual) son de **una sola moneda** (pesos, o la del bolsillo o cuenta que se mira) y **no cuentan** los traslados ni las conversiones.
+- **Tasa de referencia:** se anota a mano o la trae Google Finance (hoja auxiliar `Tasas_Google`, `GOOGLEFINANCE("CURRENCY:USDCOP")`; es la tasa del mercado, no la TRM oficial). Guarda fecha y fuente y **solo es informativa**.
+
 ## 2. Presupuesto
 - **Plantilla** por escenario (uno es el base). **Generar** crea los renglones del mes; si el mes ya existe, reemplazarlo solo se permite si ningún renglón tiene movimientos.
 - **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma; y una **compra con tarjeta** enlazada suma el día de la compra (las de fuente *Del presupuesto* ya cuentan por su traslado a la reserva, así que no se cuentan dos veces; las *De otra persona* no cuentan).
@@ -85,6 +95,21 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 
 ## 7 quater. Fechas
 - Las fechas se muestran y se escriben como **AAAA/MM/DD**. Por dentro se guardan como texto AAAA-MM-DD; el servidor acepta las dos formas de separar.
+
+## 7 quinquies. Recordatorios en Google Calendar
+- Con los recordatorios activos, Moni mantiene un calendario propio, **"Moni"**, con un evento por cada pago de los **próximos 45 días**: extractos de tarjeta por pagar (con lo que falta), cuotas de créditos, suscripciones y servicios, vencimientos y pagos de CDT y, si se deja marcado, las fechas límite de prima y cesantías.
+- Cada evento suena **el mismo día** y **N días antes** (0 a 7), a la hora elegida (5 a 21, hora de Bogotá).
+- La sincronización es **idempotente** y por clave (`tipo|id|fecha`): crea lo que falta, corrige lo que cambió y borra lo que ya no corresponde (por ejemplo, un pago ya hecho). Los eventos que la persona ponga a mano en ese calendario no se tocan. Corre cada día y unos segundos después de cada cambio.
+- Los eventos llevan el valor de cada pago: el calendario es privado de la persona.
+
+## 7 sexies. Gráficos
+- **Entró** = movimientos positivos no anulados que no son traslado; **salió** = los negativos; **diferencia** = entró − salió. Las cifras del mes se comparan con el mes anterior (el color del cambio depende de si subir es bueno).
+- **Saldo al cierre de un mes** = saldo de apertura + todos los movimientos (también traslados y conversiones) hasta el fin de ese mes, de los bolsillos de cuentas activas de esa moneda. El del mes actual coincide con el total de Inicio.
+- **Gastos por categoría:** los del mes elegido, de mayor a menor; lo que no tiene categoría se nombra por su tipo (pago de tarjetas, cuotas de crédito, GMF…) o queda como *Sin categoría*. Se muestran las 7 mayores y "Otras".
+- En cada módulo: *plan frente a real* (Presupuesto), *cupo usado* y *avance de pago* (Deudas), evolución y avance de meta (Ahorro), entró/planeado/real por mes (Vista anual) y saldo por mes (un bolsillo).
+
+## 7 septies. Registro de errores
+- Cada error de la API, del navegador y de los procesos automáticos se anota en la hoja (tabla `Log`, últimas 500 entradas) con función, mensaje, traza y versión. Un fallo de código es **Error**; una regla de negocio que rechazó algo ("Escribe tu nombre") es **Aviso**; los hechos importantes (borrado total) son **Info**.
 
 ## 8. Saldos iniciales
 - Cada cuenta y bolsillo se crea con su **saldo inicial** (el punto de partida) en el asistente de primeros pasos; no hay un paso aparte de arranque. Después el saldo se calcula con los movimientos.

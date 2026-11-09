@@ -1,16 +1,17 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.1.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.1.3**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
-- **Todo es configurable:** bancos, cuentas, bolsillos, tarjetas, categorías, personas, escenarios y apariencia.
+- **Todo es configurable:** bancos (en pesos, dólares o euros), cuentas, bolsillos, tarjetas, categorías, personas, escenarios y apariencia.
+- **Código abierto a la vista:** este repositorio es **público** para que más gente pueda usar y revisar la app. Los datos de cada persona **nunca** están aquí (ver [Seguridad](SECURITY.md)).
 
 ## Qué hace
 
 | Módulo | Para qué sirve |
 |---|---|
-| **Inicio** | Resumen, accesos rápidos, próximos pagos y últimos movimientos |
+| **Inicio** | Resumen (con otras monedas aparte), avisos de lo que falta configurar, accesos rápidos, gráficos, próximos pagos y últimos movimientos |
 | **Bolsillos** | Saldo de cada cuenta y bolsillo; registrar, mover dinero y cuadrar con el banco |
 | **Presupuesto** | Plantilla por escenario, mes generado (con tus suscripciones y servicios), "real" calculado de tus movimientos |
 | **Nómina** | Tu sueldo y descuentos fijos, más lo de cada mes (horas extras, cesantías, prima, descuentos de la empresa); estimado con salud, pensión y prestaciones, y reparto a bolsillos |
@@ -21,7 +22,10 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
 | **Regalos** | Lista por año con estimado y gasto real |
 | **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
-| **Respaldos** | Copias en tu Drive, manuales o automáticas |
+| **Gráficos** | Gastos por categoría, entró y salió, y saldo mes a mes (en *Más → Gráficos* y dentro de Inicio, Presupuesto, Deudas, Ahorro, Vista anual y cada bolsillo) |
+| **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
+| **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |
+| **Respaldos y privacidad** | Copias en tu Drive (manuales o automáticas), registro de errores y *Borrar todos mis datos* |
 
 ## Documentación
 
@@ -30,7 +34,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | [**Empezar con Moni**](docs/EMPEZAR.md) | **Quien usa la app por primera vez**: qué es, cómo entrar y configurarla |
 | [Guía rápida](docs/GUIA_RAPIDA.md) | Quien usa la app: lo esencial en una página |
 | [Manual de usuario](docs/MANUAL_USUARIO.md) | Quien usa la app: todas las pantallas |
-| [Instalación y despliegue](docs/INSTALACION.md) | Quien publica la app por primera vez o la actualiza |
+| [Instalación manual](docs/INSTALACION.md) | Quien instala la app a mano para una sola hoja |
 | [Varias personas](docs/MULTIUSUARIO.md) | Una sola aplicación, cada persona con su hoja y sus datos |
 | [Despliegue](docs/DESPLIEGUE.md) | Desarrollo y producción con un comando, sin copiar código; producción sin datos de demostración |
 | [Operación y solución de problemas](docs/OPERACION.md) | Respaldos, recuperación, errores frecuentes |
@@ -51,11 +55,11 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 ## Inicio rápido (desarrollo)
 
 ```bash
-npm run verificar     # sintaxis + 159 pruebas + contraste de colores
+npm run verificar     # sintaxis + pruebas + contraste de colores
 npm run vista -- --demo   # vista previa en http://localhost:5178 con datos de demostración
 ```
 
-Para publicar en Google, sigue [Instalación y despliegue](docs/INSTALACION.md).
+Para publicar en Google, sigue [Despliegue](docs/DESPLIEGUE.md) (dos entornos, un comando) o, para una sola hoja a mano, [Instalación manual](docs/INSTALACION.md).
 
 ## Estructura
 
@@ -63,7 +67,9 @@ Para publicar en Google, sigue [Instalación y despliegue](docs/INSTALACION.md).
 *.gs              Backend (Apps Script): una responsabilidad por archivo
 index.html        Página; app_js.html, app_css.html y tokens.html se incluyen en ella
 appsscript.json   Manifiesto (permisos y web app)
-tests/            Pruebas en Node con un Google Sheets simulado en memoria
+scripts/          Despliegue por entorno (publicar.sh) y el stub de producción sin datos de demostración
+tests/            Pruebas en Node con un Google Sheets simulado en memoria, y la vista previa local
+.githooks/        Chequeo antes de cada push (se activa con `npm run hooks`)
 docs/             Documentación
 ```
 
@@ -71,7 +77,7 @@ docs/             Documentación
 
 **Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue](docs/DESPLIEGUE.md)).
 
-Probada con más de 260 pruebas automáticas sobre un Sheets simulado. La verificación en Google real (autorización, tiempos, varias personas) se hace con la [lista de lanzamiento](docs/LANZAMIENTO.md).
+Probada con cientos de pruebas automáticas sobre un Sheets simulado (`npm run verificar`). Lo que ese simulador no puede comprobar —autorización, tiempos, varias personas, el dólar de Google Finance y los avisos de Calendar— se verifica en Google real con la [lista de lanzamiento](docs/LANZAMIENTO.md). La interfaz no tiene pruebas automáticas todavía: se revisa su sintaxis y su contraste, y sus flujos se prueban a mano.
 
 ## Licencia
 
