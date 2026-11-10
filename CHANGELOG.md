@@ -1,7 +1,11 @@
 # Cambios
 
-## Documentación al día (9 nov 2026)
-Solo documentos; no cambia el comportamiento de la app ni la versión.
+## Documentación al día, licencia y limpieza (10 nov 2026)
+No cambia el comportamiento de la app ni la versión.
+- **Nuevo:** licencia **MIT** (`LICENSE`, README y `package.json`): el código es software libre. Los datos de cada persona no están en el repositorio.
+- **Nuevo:** `DESPLIEGUE.md` y README resumen los **entornos** (local, desarrollo, producción): qué cambia en cada uno y qué propiedades de script lleva cada proyecto.
+- **Limpieza:** se quitó `getMyAccount` (nada la llamaba; el estado de la cuenta viaja en `getBootstrap`). `listCatalogo`, `getSaldos` y `resetConfigParam` se conservan porque las pruebas y `tests/medir_llamadas.js` las usan.
+- **Corregido:** el comentario de `Setup.gs` ya no fija un número de tablas.
 - **Corregido:** número de tablas (29) y de pruebas en README, ARQUITECTURA, INSTALACION, LANZAMIENTO y OPERACION; versión del README (1.1.3).
 - **Corregido:** `DESARROLLO.md` decía que `setupDatabase` no agrega columnas (sí lo hace con `MIGRACIONES_COLUMNAS`); ahora explica cómo migrar y cuándo subir `ESQUEMA_VERSION`.
 - **Corregido:** el bloqueo de escrituras es de la persona en modo multiusuario (ARQUITECTURA, SECURITY); la caché y la revisión del esquema describen los TTL y la firma reales.

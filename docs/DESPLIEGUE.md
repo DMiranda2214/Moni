@@ -7,6 +7,31 @@ Dos entornos, cada uno un **proyecto de Apps Script** con su propia implementaci
 | **desarrollo** | Probar cada cambio con calma | De ejemplo | Sí (propiedad `DEMO_HABILITADO`) |
 | **producción** | La app que usa la gente | Reales, una hoja por persona | **No existe** |
 
+## Qué cambia entre entornos
+| | Local (`npm run vista`) | Desarrollo | Producción |
+|---|---|---|---|
+| **Dónde corre** | Tu computador, con Google simulado | Proyecto de Apps Script "Moni dev" | Proyecto de Apps Script "Moni" |
+| **Cómo se publica** | — | `npm run desplegar:dev` | `npm run desplegar:prod` |
+| **Código** | El del repositorio | El del repositorio, con `Demo.gs` | El del repositorio, con `Demo.gs` **vacío** (`scripts/stubs/Demo.gs`) |
+| **Datos de demostración** | Con `--demo` | Sí (`DEMO_HABILITADO = TRUE`) | No existen |
+| **Quién entra** | Tú | Quien pruebas (tú y testers); `USUARIOS_PERMITIDOS` puede cerrarlo | Cualquier persona con cuenta de Google y el enlace |
+| **Datos reales** | No | No: hojas de prueba | Sí: una hoja por persona en su Drive |
+| **Archivo de ID** | — | `.clasp.dev.json` | `.clasp.prod.json` |
+
+### Propiedades de script de cada proyecto
+Se configuran en el editor de Apps Script → Configuración del proyecto → Propiedades de la secuencia de comandos (o con las funciones indicadas). El código las lee en `Repo.gs`, `Code.gs` y `Respaldos.gs`.
+
+| Propiedad | Desarrollo | Producción | Para qué |
+|---|---|---|---|
+| `DEMO_HABILITADO` | `TRUE` | **no debe existir** | Permite crear datos de demostración (y mostrar su pantalla) |
+| `MODO_MULTIUSUARIO` | Opcional: actívalo (función `activarModoMultiusuario`) si quieres probar el flujo de varias personas como en producción | `TRUE` (`activarModoMultiusuario`, una vez) | Cada persona con su propia hoja, caché, bloqueo y activadores |
+| `USUARIOS_PERMITIDOS` | Opcional | Opcional | Lista de correos autorizados (separados por coma) para cerrar el acceso |
+| `SPREADSHEET_ID` | Solo en modo una hoja (`vincularHojaMoni`) | No se usa: el ID de cada persona está en sus propiedades de usuario | La hoja única del script |
+
+Las marcas del último respaldo (`ULTIMO_RESPALDO*`) las gestiona la app, y en modo multiusuario son de cada persona; no las edites.
+
+**Cómo saber en cuál estás:** en desarrollo, *Ajustes* muestra la sección *Datos de demostración*; en producción no aparece. La versión de la app está en *Ajustes → Diagnóstico*.
+
 ## Preparación (una sola vez)
 1. **Dos proyectos** en <https://script.google.com> → *Nuevo proyecto* ("Moni dev" y "Moni"). Copia el **ID de la secuencia de comandos** de cada uno (Configuración del proyecto). No uses `clasp create`: sobrescribe el manifiesto.
 2. **Activa la API de Apps Script** en <https://script.google.com/home/usersettings> con la cuenta dueña de los proyectos.

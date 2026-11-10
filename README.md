@@ -5,7 +5,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
 - **Todo es configurable:** bancos (en pesos, dólares o euros), cuentas, bolsillos, tarjetas, categorías, personas, escenarios y apariencia.
-- **Código abierto a la vista:** este repositorio es **público** para que más gente pueda usar y revisar la app. Los datos de cada persona **nunca** están aquí (ver [Seguridad](SECURITY.md)).
+- **Código abierto (MIT):** este repositorio es **público** para que más gente pueda usar, revisar y mejorar la app. Los datos de cada persona **nunca** están aquí (ver [Seguridad](SECURITY.md)).
 
 ## Qué hace
 
@@ -26,6 +26,15 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
 | **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |
 | **Respaldos y privacidad** | Copias en tu Drive (manuales o automáticas), registro de errores y *Borrar todos mis datos* |
+
+## Entornos
+| Entorno | Qué es | Datos | Cómo se llega |
+|---|---|---|---|
+| **Local** | Vista previa en tu computador, con un Google simulado en memoria | De ejemplo o vacíos | `npm run vista` (ver [Desarrollo](docs/DESARROLLO.md)) |
+| **Desarrollo** | Un proyecto de Apps Script de pruebas, con datos de demostración | De ejemplo (propiedad `DEMO_HABILITADO`) | `npm run desplegar:dev` |
+| **Producción** | La app que usa la gente, una hoja por persona, **sin** datos de demostración | Reales | `npm run desplegar:prod` |
+
+Se prueba en desarrollo y, cuando está bien, se publica en producción (sin CI/CD: un comando por entorno). Detalle y propiedades de cada uno en [Despliegue](docs/DESPLIEGUE.md).
 
 ## Documentación
 
@@ -81,4 +90,4 @@ Probada con cientos de pruebas automáticas sobre un Sheets simulado (`npm run v
 
 ## Licencia
 
-Sin licencia abierta: todos los derechos reservados a su autor mientras no se indique otra cosa.
+Software libre bajo la **licencia MIT** ([LICENSE](LICENSE)): puedes usar, copiar, modificar y distribuir Moni, incluso con fines comerciales, conservando el aviso de copyright. Se ofrece "tal cual", sin garantía. Esto cubre el **código**; los datos de cada persona son de ella y nunca están en este repositorio ([Seguridad](SECURITY.md)).

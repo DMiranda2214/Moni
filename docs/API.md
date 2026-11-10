@@ -25,7 +25,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getBootstrap` | — |
 | `instalarBaseDatos` | — |
 | `runDiagnostics` | — |
-| `getSaldos` | `hastaFecha` |
+| `getSaldos` | `hastaFecha` *(la interfaz no la llama —los saldos vienen en el arranque y en cada escritura—; la usa `tests/medir_llamadas.js`)* |
 | `getRefresco` | `{ tablas, config }` — refresco liviano tras guardar: solo lo que cambió (catálogos, saldos, lo invertido, estado del asistente y avisos) |
 | `refreshCache` | — — "Actualizar desde la hoja": olvida lo memorizado para releer todo (por si se editó la hoja a mano) |
 
@@ -33,7 +33,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 
 | Función | Parámetros |
 |---|---|
-| `listCatalogo` | `tabla, incluirInactivos` |
+| `listCatalogo` | `tabla, incluirInactivos` *(la interfaz no la llama —los catálogos vienen en el arranque—; la usan las pruebas de acceso por persona y de la lista de catálogos permitidos)* |
 | `saveCatalogo` | `tabla, item, opciones` |
 | `disableCatalogo` | `tabla, id` |
 | `enableCatalogo` | `tabla, id` |
@@ -131,7 +131,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `clearDemo` | — |
 | `saveConfigParam` | `clave, valor` |
 | `saveConfigParams` | `mapa` |
-| `resetConfigParam` | `clave` |
+| `resetConfigParam` | `clave` *(vuelve un parámetro a su valor por defecto; la interfaz aún no la llama, la cubre una prueba)* |
 | `resetAllData` | `confirmacion` (debe ser `BORRAR`), `opciones` (`{ respaldos: true }` manda también las copias de Drive a la papelera) |
 
 ## Divisas, gráficos y registro de errores
@@ -170,11 +170,10 @@ Ingresos distintos de la nómina (otro trabajo, arriendo, ventas…). Crear o ed
 
 ## Mi cuenta (varias personas)
 
-Una hoja por persona ([MULTIUSUARIO.md](MULTIUSUARIO.md)). Las usa la pantalla de bienvenida y *Ajustes → Mi cuenta*.
+Una hoja por persona ([MULTIUSUARIO.md](MULTIUSUARIO.md)). Las usa la pantalla de bienvenida y *Ajustes → Mi cuenta*; el estado de la cuenta (`cuenta`) viaja en `getBootstrap`.
 
 | Función | Parámetros |
 |---|---|
-| `getMyAccount` | — *(estado de la cuenta; sin uso en la interfaz actual: el arranque trae `cuenta`)* |
 | `createMySheet` | — *(crea la hoja de la persona; si falta tiempo devuelve `parcial` y se repite)* |
 | `linkMySheet` | `enlace` (el enlace o el ID de una hoja de Moni o en blanco, con permiso de edición) |
 | `unlinkMySheet` | — *(suelta la hoja actual sin borrarla y apaga sus copias y recordatorios)* |

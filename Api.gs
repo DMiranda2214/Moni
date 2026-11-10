@@ -815,7 +815,6 @@ function skipIngreso(id) {
 }
 
 // ---- Mi cuenta (varias personas) ----
-function getMyAccount() { return responder_(function () { return estadoMiCuenta(); }); }
 function createMySheet() { return responder_(function () { return crearMiHoja(); }); }
 function linkMySheet(enlace) { return responder_(function () { return vincularMiHoja(enlace); }); }
 function unlinkMySheet() { return responder_(function () { return desvincularMiHoja(); }); }

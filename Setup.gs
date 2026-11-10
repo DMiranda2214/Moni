@@ -1,6 +1,6 @@
 /**
  * Setup.gs — Moni
- * Esquema de la base de datos (27 tablas, ver docs/ESQUEMA.md) e instalación idempotente.
+ * Esquema de la base de datos (las tablas de SCHEMAS; ver docs/ESQUEMA.md) e instalación idempotente.
  * Toda tabla termina con Creado_En y Actualizado_En; Repo.gs los completa solo.
  */
 
