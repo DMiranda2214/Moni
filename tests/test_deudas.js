@@ -393,6 +393,89 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(d.pagos.length, 0);
   });
 
+  prueba('corregir un pago anterior: queda igual que si se hubiera pagado así desde el principio y no toca saldos', () => {
+    const A = escenario(), B = escenario();
+    const ra = credito(A, { desembolsar: false }), rb = credito(B, { desembolsar: false });
+    const cuota = A.e.llamar('obtenerCredito', ra.idCredito).cronograma[0].Cuota;
+    const pagarA = v => A.e.llamar('registrarPagoCredito', ra.idCredito, v, hoy());
+    const pagarB = v => B.e.llamar('registrarPagoCredito', rb.idCredito, v, hoy());
+    pagarA(); pagarA(); pagarA();
+    pagarB(); pagarB(cuota + 300000); pagarB();
+    const bolsilloAntes = A.saldo(A.pagos.ID_Bolsillo), ahorroAntes = A.saldo(A.ahorro.ID_Bolsillo);
+    const movs = A.e.llamar('listarMovimientos', {}).items.length;
+
+    A.e.llamar('editarPagoCredito', ra.idCredito, 2, cuota + 300000);
+    const da = A.e.llamar('obtenerCredito', ra.idCredito), db = B.e.llamar('obtenerCredito', rb.idCredito);
+    assert.strictEqual(da.credito.saldo, db.credito.saldo, 'mismo saldo');
+    assert.strictEqual(da.credito.cuotasTotal, db.credito.cuotasTotal, 'mismo plazo');
+    assert.deepStrictEqual(da.cronograma.map(f => [f.Num, f.Cuota, f.Interes, f.Capital, f.Saldo_Final, f.Estado]), db.cronograma.map(f => [f.Num, f.Cuota, f.Interes, f.Capital, f.Saldo_Final, f.Estado]));
+    assert.strictEqual(da.credito.Cuota_Fija, cuota, 'la cuota fija no cambia');
+    assert.strictEqual(da.pagos.find(q => q.Num_Cuota === 2).Valor_Pagado, cuota + 300000);
+    assert.strictEqual(da.pagos.find(q => q.Num_Cuota === 2).Abono_Extra, 300000);
+    assert.strictEqual(A.saldo(A.pagos.ID_Bolsillo), bolsilloAntes, 'no toca saldos');
+    assert.strictEqual(A.saldo(A.ahorro.ID_Bolsillo), ahorroAntes);
+    assert.strictEqual(A.e.llamar('listarMovimientos', {}).items.length, movs, 'ni crea movimientos');
+
+    // Lo corregido sigue funcionando: se puede anular el último pago y luego pagar de nuevo
+    const ult = da.ultimoPago;
+    A.e.llamar('anularPagoCredito', ult);
+    assert.strictEqual(A.e.llamar('obtenerCredito', ra.idCredito).credito.cuotasPagadas, 2);
+    A.e.llamar('registrarPagoCredito', ra.idCredito, undefined, hoy());
+    assert.strictEqual(A.e.llamar('obtenerCredito', ra.idCredito).credito.saldo, db.credito.saldo);
+  });
+
+  prueba('corregir un pago anterior: deshacer ese pago después vuelve al plazo original', () => {
+    const x = escenario();
+    const r = credito(x, { desembolsar: false });
+    const cuota = x.e.llamar('obtenerCredito', r.idCredito).cronograma[0].Cuota;
+    x.e.llamar('registrarPagoCredito', r.idCredito, undefined, hoy());
+    const p2 = x.e.llamar('registrarPagoCredito', r.idCredito, undefined, hoy());
+    x.e.llamar('editarPagoCredito', r.idCredito, 2, cuota + 250000);
+    assert.ok(x.e.llamar('obtenerCredito', r.idCredito).credito.cuotasTotal < 12);
+    x.e.llamar('anularPagoCredito', p2.idPago);
+    const d = x.e.llamar('obtenerCredito', r.idCredito);
+    assert.strictEqual(d.cronograma.length, 12, 'vuelve el plazo original');
+    assert.strictEqual(d.credito.cuotasPagadas, 1);
+    assert.strictEqual(d.credito.cuotasTotal, 12);
+  });
+
+  prueba('corregir una cuota que ya venía pagada al crear el crédito: crea su registro sin mover dinero', () => {
+    const x = escenario();
+    const r = credito(x, { cuotasPagadas: 4, desembolsar: false });
+    const antes = x.e.llamar('obtenerCredito', r.idCredito);
+    const cuota = antes.cronograma[0].Cuota;
+    assert.strictEqual(antes.pagos.length, 0);
+    x.e.llamar('editarPagoCredito', r.idCredito, 2, cuota + 100000);
+    const d = x.e.llamar('obtenerCredito', r.idCredito);
+    assert.strictEqual(d.pagos.length, 1);
+    assert.strictEqual(d.pagos[0].Num_Cuota, 2);
+    assert.strictEqual(d.pagos[0].Abono_Extra, 100000);
+    assert.strictEqual(d.credito.cuotasPagadas, 4);
+    assert.ok(d.credito.saldo < antes.credito.saldo, 'el saldo vigente baja');
+    assert.ok(d.credito.cuotasTotal < antes.credito.cuotasTotal, 'el plazo baja');
+    assert.strictEqual(x.e.llamar('listarMovimientos', {}).items.length, 0);
+    // Volver a dejarlo como la cuota normal
+    x.e.llamar('editarPagoCredito', r.idCredito, 2, cuota);
+    const d2 = x.e.llamar('obtenerCredito', r.idCredito);
+    assert.strictEqual(d2.credito.saldo, antes.credito.saldo);
+    assert.strictEqual(d2.credito.cuotasTotal, antes.credito.cuotasTotal);
+  });
+
+  prueba('corregir un pago anterior: valida la cuota, el valor y que no pase de lo que se debe', () => {
+    const x = escenario();
+    const r = credito(x, { desembolsar: false });
+    const cuota = x.e.llamar('obtenerCredito', r.idCredito).cronograma[0].Cuota;
+    x.e.llamar('registrarPagoCredito', r.idCredito, undefined, hoy());
+    assert.throws(x.e.falla('editarPagoCredito', r.idCredito, 5, cuota + 1000), /ya está pagada/);
+    assert.throws(x.e.falla('editarPagoCredito', r.idCredito, 1, 1000), /al menos la cuota/);
+    assert.throws(x.e.falla('editarPagoCredito', r.idCredito, 1, 5000000), /más de lo que se debe/);
+    assert.throws(x.e.falla('editarPagoCredito', 'no-existe', 1, cuota), /no existe/);
+    // Un pago posterior con abono grande ya no cabe si se sube mucho uno anterior
+    x.e.llamar('registrarPagoCredito', r.idCredito, cuota + 800000, hoy());
+    assert.throws(x.e.falla('editarPagoCredito', r.idCredito, 1, cuota + 500000), /./);
+    assert.strictEqual(x.e.llamar('obtenerCredito', r.idCredito).pagos.length, 2, 'si falla, no cambia nada');
+  });
+
   prueba('anular el pago que canceló el crédito lo deja activo otra vez', () => {
     const x = escenario();
     const r = credito(x, { desembolsar: false });

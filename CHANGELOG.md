@@ -1,5 +1,11 @@
 # Cambios
 
+## 1.2.0 — Nómina sin afectar saldos, pagos del presupuesto y corrección de cuotas (10 nov 2026)
+- **Nuevo:** al registrar la **nómina** hay un interruptor *Sumar a mis saldos*. Apagado, la nómina queda registrada y cuenta como ingreso del mes, pero no crea movimiento ni cambia saldos (para quien ya recibió el pago antes de empezar a usar Moni). Nueva columna `Nomina_Pagos.Afecta_Saldos` (se agrega sola a las hojas existentes; `ESQUEMA_VERSION` 6).
+- **Nuevo:** marcar un renglón del **presupuesto** como pagado abre una hoja de confirmación: de qué bolsillo salió, valor y fecha. Registra el pago según el tipo (gasto, compra con tarjeta, cuota de crédito, traslado a ahorro o fondo) o **enlaza un movimiento que ya anotaste** sin duplicarlo. Desmarcar pregunta si también se anulan los pagos.
+- **Nuevo:** en un **crédito**, tocar una cuota ya pagada permite **corregir lo que se pagó** (un abono extra que no se anotó): el cronograma se rehace con la misma cuota fija y tasa, y el saldo y el plazo se recalculan. No mueve dinero ni cambia saldos.
+- **Cambia:** antes la casilla *Pagado* solo ponía una marca sin registrar nada.
+
 ## Documentación al día, licencia y limpieza (10 nov 2026)
 No cambia el comportamiento de la app ni la versión.
 - **Nuevo:** licencia **MIT** (`LICENSE`, README y `package.json`): el código es software libre. Los datos de cada persona no están en el repositorio.

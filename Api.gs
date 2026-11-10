@@ -395,6 +395,27 @@ function payRenglonMes(idItem, pagado) {
   });
 }
 
+/** Movimientos sueltos que se pueden enlazar a un renglón en vez de registrar el pago otra vez. */
+function listMovimientosParaRenglon(idItem) {
+  return responder_(function () { return movimientosParaVincular(idItem); });
+}
+
+/** Marca un renglón como pagado registrando el pago (o enlazando uno existente). Devuelve el presupuesto y los movimientos tocados. */
+function payRenglonConfirmado(idItem, datos, vista) {
+  return responder_(function () {
+    const r = pagarRenglonMes(idItem, datos);
+    return resultadoEscritura_(r.ids, vista, { presupuesto: obtenerPresupuestoMes(r.mes) });
+  });
+}
+
+/** Desmarca un renglón; con `anular` también anula los pagos sencillos que registró. */
+function unpayRenglon(idItem, anular, vista) {
+  return responder_(function () {
+    const r = desmarcarRenglonMes(idItem, !!anular);
+    return resultadoEscritura_(r.ids, vista, { presupuesto: obtenerPresupuestoMes(r.mes) });
+  });
+}
+
 function previewDistribucion(mes, idOrigen) {
   return responder_(function () { return previsualizarDistribucion(mes, idOrigen); });
 }
@@ -410,10 +431,10 @@ function getNomina(periodo, idEscenario, opciones) {
   return responder_(function () { return obtenerNominaMes(periodo, idEscenario, opciones); });
 }
 
-function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones) {
+function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
   return responder_(function () {
-    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones);
-    return resultadoEscritura_([r.idMov], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
+    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos);
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
   });
 }
 
@@ -435,7 +456,7 @@ function removeConceptoNomina(idConcepto, periodo, opciones) {
 function anularNomina(periodo) {
   return responder_(function () {
     const r = anularPagoNomina(periodo);
-    return resultadoEscritura_([r.idMov], undefined, { nomina: obtenerNominaMes(periodo) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo) });
   });
 }
 
@@ -541,6 +562,14 @@ function payCredito(idCredito, valor, fecha, idBolsillo) {
   return responder_(function () {
     const r = registrarPagoCredito(idCredito, valor, fecha, idBolsillo);
     return Object.assign(resultadoCredito_(idCredito, r.ids), { pago: { num: r.num, valorCobrado: r.valorCobrado, excedente: r.excedente, cuotasAhorradas: r.cuotasAhorradas, cancela: r.cancela, idPago: r.idPago } });
+  });
+}
+
+/** Corrige lo que se pagó en una cuota ya pagada (por ejemplo, un abono extra que no se anotó). No toca saldos. */
+function editPagoCredito(idCredito, numCuota, valor) {
+  return responder_(function () {
+    const r = editarPagoCredito(idCredito, numCuota, valor);
+    return resultadoCredito_(r.idCredito, []);
   });
 }
 

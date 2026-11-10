@@ -2455,13 +2455,7 @@ async function abrirRenglon(id) {
   await abrirHoja({
     titulo: 'Renglón', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
     extra: {
-      pagar: () => {
-        const falta = Math.max(it.Restante, 0) || it.Plan;
-        siguiente = () => abrirRegistrar(apartar
-          ? { tipo: 'Mover', destino: it.ID_Bolsillo_Destino, concepto: it.Concepto, valor: falta, idItem: it.ID_Item }
-          : { tipo: 'Gasto', idBolsillo: it.ID_Bolsillo_Destino, concepto: it.Concepto, valor: falta, idItem: it.ID_Item });
-        return Promise.resolve();
-      },
+      pagar: () => { siguiente = () => abrirPagarRenglon(it.ID_Item); return Promise.resolve(); },
       editar: () => { siguiente = () => abrirRenglonMes(it); return Promise.resolve(); },
       'pedir-quitar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = true; $('[data-hoja-acc="quitar"]', raiz).focus(); },
       'no-quitar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = false; },
@@ -2469,6 +2463,98 @@ async function abrirRenglon(id) {
     }
   });
   if (siguiente) siguiente();
+}
+
+/** Confirmación al marcar un renglón como pagado: de qué bolsillo salió, cuánto y cuándo (o enlazar un pago que ya registraste). */
+async function abrirPagarRenglon(id) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it || it.Pagado) return;
+  const esCredito = it.Tipo === 'Cuota' && !!it.ID_Credito;
+  const esTarjeta = it.Tipo === 'Gasto' && !!it.ID_Tarjeta;
+  const mueve = it.Tipo !== 'Gasto' && !esCredito; // ahorro, fondo o cuota sin crédito: un traslado hacia el bolsillo de destino
+  const tj = esTarjeta ? porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta) : null;
+  const falta = Math.max(it.Restante, 0) || it.Plan;
+  const etiqueta = esTarjeta ? 'Se aparta de' : (mueve ? 'Sale de' : (esCredito ? 'Pagas desde' : 'Pagaste desde'));
+  const preferido = esCredito ? '' : (mueve ? (ultimoBolsillo() !== it.ID_Bolsillo_Destino ? ultimoBolsillo() : '') : (it.ID_Bolsillo_Destino || ultimoBolsillo()));
+  const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => !mueve || x[0] !== it.ID_Bolsillo_Destino) }));
+  const nota = esCredito ? 'Se registra como el pago de la cuota del crédito, con su cronograma.'
+    : (esTarjeta ? 'Se registra como una compra con ' + (tj ? tj.Nombre : 'la tarjeta') + '. El dinero se aparta del bolsillo que elijas.'
+    : (mueve ? 'El dinero se traslada al bolsillo “' + (it.Bolsillo || 'de destino') + '”.' : 'Se registra como un gasto de ese bolsillo.'));
+  const opts = (esCredito || esTarjeta ? '<option value="">' + (esCredito ? 'El de siempre de este crédito' : 'El bolsillo del renglón') + '</option>' : '') +
+    grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('');
+  const campoValor = { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, ayuda: 'Lo planeado es ' + dinero(it.Plan) + (it.Real > 0 ? ' y ya llevas ' + dinero(it.Real) : '') + '.' };
+  const cuerpo = '<form novalidate data-form="pagar-renglon">' +
+    '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
+    '<div class="m-campo" id="pr-existente" hidden><label class="m-label" for="f-Existente">¿Ya lo registraste?</label><select class="m-input" id="f-Existente"><option value="">No, registrar el pago ahora</option></select>' +
+    '<p class="m-ayuda">Si ya anotaste este pago en Movimientos, enlázalo aquí y no se duplica.</p></div>' +
+    '<div id="pr-nuevo">' + htmlCampo(campoValor, falta, {}) +
+    '<div class="m-campo"><label class="m-label" for="f-Origen">' + etiqueta + '</label><select class="m-input" id="f-Origen">' + opts + '</select><p class="m-ayuda">' + esc(nota) + '</p></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  await abrirHoja({
+    titulo: 'Marcar como pagado', der: 'Confirmar', cuerpo: cuerpo,
+    alAbrir: async raiz => {
+      activarEcoDinero(raiz);
+      const sel = $('#f-Existente', raiz);
+      sel.addEventListener('change', () => { $('#pr-nuevo', raiz).hidden = !!sel.value; });
+      try {
+        const lista = await api('listMovimientosParaRenglon', id);
+        if (lista.length) {
+          sel.insertAdjacentHTML('beforeend', lista.map(m => '<option value="' + esc(m.ID_Mov) + '">' + esc(fechaCorta(m.Fecha) + ' · ' + m.Concepto + ' · ' + dinero(m.Valor)) + '</option>').join(''));
+          $('#pr-existente', raiz).hidden = false;
+        }
+      } catch (e) { /* sin lista, se registra el pago normalmente */ }
+    },
+    alGuardar: async raiz => {
+      const existente = $('#f-Existente', raiz).value;
+      const datos = {};
+      if (existente) datos.ID_Mov = existente;
+      else {
+        const v = leerFormulario(raiz, [campoValor]);
+        if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe el valor.');
+        const origen = $('#f-Origen', raiz).value;
+        if (!origen && !esCredito && !(esTarjeta && it.ID_Bolsillo_Destino)) throw new Error('Elige el bolsillo.');
+        Object.assign(datos, { Valor: v.Valor, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: origen });
+      }
+      const res = await api('payRenglonConfirmado', id, datos, vistaActual());
+      if (datos.ID_Bolsillo) recordarBolsillo(datos.ID_Bolsillo);
+      aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
+      if (esCredito) App.cre.data = null;
+      if (esCredito || esTarjeta) { App.tar.data = null; App.deudas.data = null; }
+      render();
+      aviso('Renglón pagado', { deshacer: () => desmarcarRenglon(id, true) });
+    }
+  });
+}
+
+/** Desmarca un renglón; si tiene pagos registrados pregunta si también se anulan. */
+async function desmarcarRenglon(id, directoAnulando) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it) return;
+  const hacer = async anular => {
+    try {
+      const res = await api('unpayRenglon', id, anular, vistaActual());
+      aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
+      App.tar.data = null; App.deudas.data = null; render();
+      aviso(anular ? 'Renglón desmarcado y pagos anulados' : 'Renglón desmarcado');
+    } catch (e) { aviso(e.message, true); render(); }
+  };
+  if (directoAnulando) return hacer(true);
+  if (!(it.Real > 0)) return hacer(false);
+  let accion = null;
+  await abrirHoja({
+    titulo: 'Desmarcar', izq: 'Cancelar', sinGuardar: true,
+    cuerpo: '<p style="margin-bottom:var(--m-space-3)">“' + esc(it.Concepto) + '” tiene ' + dinero(it.Real) + ' registrados.' +
+      (it.Tipo === 'Cuota' && it.ID_Credito ? ' Los pagos de cuotas se anulan desde el crédito.' : ' ¿También quieres anular esos pagos y devolver el dinero?') + '</p>' +
+      (it.Tipo === 'Cuota' && it.ID_Credito ? '' : '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="anular">Desmarcar y anular los pagos</button>') +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="solo">Solo desmarcar</button>',
+    extra: {
+      anular: () => { accion = true; return Promise.resolve(); },
+      solo: () => { accion = false; return Promise.resolve(); }
+    }
+  });
+  if (accion !== null) hacer(accion);
 }
 
 async function abrirRenglonMes(item) {
@@ -2698,10 +2784,10 @@ function htmlNomina(d) {
     h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
       '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
       '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
-      '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>' +
+      (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>') +
       (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
       '</dl></div></section>' +
-      '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>' +
+      (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
       '<button class="m-accion-peligro" data-acc="anular-nomina">Anular esta nómina</button>';
   } else {
     h += '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina recibida</button></div>';
@@ -2799,23 +2885,25 @@ async function abrirRegistrarNomina() {
   if (!d || !d.calculo) return;
   const campos = [
     { k: 'Valor', label: 'Neto que recibiste', tipo: 'dinero', requerido: true, ayuda: 'Por defecto, el estimado. Cámbialo si el valor real fue distinto.' },
-    { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) }
+    { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), visible: v => v.Afecta !== false },
+    { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor', info: 'Apágalo si esta plata ya está en tus saldos (por ejemplo, la tenías antes de empezar a usar Moni). La nómina queda registrada y cuenta como ingreso del mes, pero no cambia ningún saldo.' }
   ];
   const preferido = ultimoBolsillo();
   await abrirHoja({
     titulo: 'Nómina de ' + mesTexto(App.nom.mes).toLowerCase(),
-    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[1], preferido, {}) +
+    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[2], true, {}) + htmlCampo(campos[1], preferido, {}) +
       '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => activarEcoDinero(raiz),
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true }); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos))); },
     alGuardar: async raiz => {
       const v = leerFormulario(raiz, campos);
+      const afecta = v.Afecta !== false;
       if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el neto que recibiste.');
-      if (!v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
-      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, v.Bolsillo, opcionesNomina());
-      recordarBolsillo(v.Bolsillo);
+      if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
+      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta);
+      if (afecta) recordarBolsillo(v.Bolsillo);
       aplicarEscritura(res); App.nom.data = res.nomina; render();
-      aviso('Nómina registrada', { deshacer: () => anularNominaYAvisar() });
+      aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
     }
   });
 }
@@ -3191,12 +3279,21 @@ function htmlCredito(d) {
 
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Tabla de amortización</h2><div class="m-group">' + d.cronograma.map(f => {
     const proxima = c.proxima && f.Num === c.proxima.Num && activo;
-    return '<div class="m-row' + (f.Estado === 'Pagada' ? ' m-hecho' : '') + '"' + (proxima ? ' style="background:var(--m-tint-soft)"' : '') + '>' +
+    if (f.Estado === 'Pagada') {
+      // Una cuota pagada se puede corregir (por ejemplo, un abono extra que ese mes no se anotó).
+      const pago = d.pagos.find(q => q.Num_Cuota === f.Num);
+      return fila({ clase: 'm-hecho', icono: 'check', attrs: 'data-acc="corregir-cuota" data-num="' + f.Num + '"', chevron: true,
+        titulo: 'Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)),
+        sub: 'Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + (pago && pago.Abono_Extra ? ' · abono ' + dinero(pago.Abono_Extra) : ''),
+        final: '<strong class="m-num">' + dinero(pago ? pago.Valor_Pagado : f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span>' });
+    }
+    return '<div class="m-row"' + (proxima ? ' style="background:var(--m-tint-soft)"' : '') + '>' +
       '<span class="m-row-icono">' + (f.Estado === 'Pagada' ? ico('check', 'm-icon-sm') : '<span class="m-num" style="font-size:var(--m-text-footnote);font-weight:600">' + f.Num + '</span>') + '</span>' +
       '<span class="m-row-texto"><span class="m-row-titulo" style="display:block">Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)) + (proxima ? ' · próxima' : '') + '</span>' +
       '<span class="m-row-sub" style="display:block">Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + '</span></span>' +
       '<span class="m-row-final"><strong class="m-num">' + dinero(f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span></span></div>';
-  }).join('') + '</div></section>';
+  }).join('') + '</div></section>' +
+    (d.cronograma.some(f => f.Estado === 'Pagada') ? '<p class="m-seccion-pie" style="margin-top:calc(var(--m-space-3) * -1)">Toca una cuota pagada para corregir lo que pagaste ese mes. El plazo y los saldos del crédito se recalculan; tus saldos de dinero no cambian.</p>' : '');
 
   if (d.pagos.length) {
     h += seccion('Pagos hechos', d.pagos.map(p => fila({
@@ -3213,6 +3310,31 @@ function htmlCredito(d) {
 function aplicarCredito(res) {
   App.deudas.data = null;
   if (res.credito && App.cre.id === res.credito.credito.ID_Credito) App.cre.data = res.credito;
+}
+
+/** Corrige el valor pagado de una cuota ya pagada: el crédito se recalcula, el dinero de tus bolsillos no se toca. */
+async function abrirCorregirCuota(num) {
+  const d = App.cre.data;
+  if (!d) return;
+  const f = d.cronograma.find(x => x.Num === num);
+  const pago = d.pagos.find(x => x.Num_Cuota === num);
+  if (!f) return;
+  const campos = [{ k: 'Valor', label: 'Lo que pagaste en esta cuota', tipo: 'dinero', requerido: true,
+    ayuda: 'La cuota es ' + dinero(f.Cuota) + '. Si ese mes pagaste de más, escribe el total: el excedente abona a capital y el plazo se acorta.' }];
+  await abrirHoja({
+    titulo: 'Cuota ' + num, der: 'Guardar',
+    cuerpo: '<form novalidate data-form="corregir-cuota">' + htmlCampo(campos[0], pago ? pago.Valor_Pagado : f.Cuota, {}) +
+      '<p class="m-ayuda">Solo corrige el crédito. No mueve dinero ni cambia los saldos de tus bolsillos: si el pago real ya quedó anotado, no se toca. Todo lo posterior se recalcula con la misma cuota fija.</p>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Valor', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe lo que pagaste.');
+      const res = await api('editPagoCredito', App.cre.id, num, v.Valor);
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso('Cuota ' + num + ' corregida');
+    }
+  });
 }
 
 async function abrirPagoCredito() {
@@ -5276,6 +5398,7 @@ const ACCIONES = {
   'nuevo-credito': () => abrirNuevoCredito(),
   'pagar-credito': () => abrirPagoCredito(),
   'editar-credito': () => abrirEditarCredito(),
+  'corregir-cuota': el => abrirCorregirCuota(Number(el.dataset.num)),
   'pago-credito': async el => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero al bolsillo y la cuota vuelve a quedar pendiente. Si el pago incluía un abono, el plazo vuelve al anterior.' });
     if (ok) anularPagoCreditoYAvisar(el.dataset.id);
@@ -5395,8 +5518,10 @@ document.addEventListener('change', async ev => {
     return;
   }
   if (t.dataset.accCambio === 'pagado') {
-    try { aplicarPresupuesto(await api('payRenglonMes', t.dataset.id, t.checked)); render(); }
-    catch (e) { t.checked = !t.checked; aviso(e.message, true); }
+    // Marcar o desmarcar nunca es solo una casilla: se abre la confirmación y la casilla vuelve a su estado hasta que termine.
+    const quiereMarcar = t.checked;
+    t.checked = !quiereMarcar;
+    if (quiereMarcar) abrirPagarRenglon(t.dataset.id); else desmarcarRenglon(t.dataset.id);
     return;
   }
   if (t.dataset.accCambio === 'nom-incl') {

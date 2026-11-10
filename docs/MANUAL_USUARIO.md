@@ -50,11 +50,13 @@ Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o
 ## 5. Presupuesto
 1. **Plantilla:** Ajustes → Plantilla del presupuesto. Cada renglón tiene concepto, monto, tipo (Gasto, Cuota de un crédito, Ahorro, Fondo) y bolsillo.
 2. **Generar** el mes: elige escenario (Normal, Contingencia…).
-3. El **Real** se calcula solo desde tus movimientos enlazados al renglón. **Marca como pagado** cuando lo cubras; allí se calcula el **ahorro** (plan − real).
+3. El **Real** se calcula solo desde tus movimientos enlazados al renglón. **Marca como pagado** cuando lo cubras: se abre una hoja donde confirmas **de qué bolsillo salió**, el valor y la fecha, y Moni registra el pago por ti (un gasto; una compra con tarjeta; el pago de la cuota de un crédito; o el traslado a tu ahorro o fondo). Si ya lo habías anotado en Movimientos, elige *¿Ya lo registraste?* y se **enlaza** sin duplicar. Al desmarcarlo, Moni pregunta si también anula esos pagos. Con el pago hecho se calcula el **ahorro** (plan − real).
 4. Puedes agregar renglones sueltos del mes, editar o eliminar.
 5. **Repartir la nómina en los bolsillos** (desde Nómina): mueve el dinero desde el bolsillo donde llegó hasta los bolsillos de destino del presupuesto. Los gastos y cuotas se agrupan por bolsillo; el ahorro y los fondos van renglón por renglón. Lo que ya está en el bolsillo de origen no se mueve, y si ya repartiste ese mes la app te pide confirmar antes de repetir.
 
 ## 6. Nómina
+> **¿Ya recibiste la nómina antes de empezar con Moni?** Al registrarla, apaga **Sumar a mis saldos**: la nómina queda registrada (y cuenta como ingreso del mes en el presupuesto y la vista anual) pero no cambia ningún saldo, porque ese dinero ya está en los que escribiste. Si te equivocas, anúlala y regístrala de nuevo.
+
 **Más → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
 
 Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descuentos o ingresos fijos (libranza, medicina prepagada, un auxilio). Mira el cálculo (devengos, salud, pensión, FSP, prima de junio/diciembre, intereses de cesantías) y, con **Agregar algo de este mes**, suma lo que solo cuenta en ese pago: horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa. Después **Registra** lo que realmente te llegó, indicando el bolsillo. Ya no hay escenarios: es una sola nómina. Se paga **una vez al mes**. Los parámetros (SMMLV, porcentajes) están en Ajustes → Parámetros de nómina; **actualiza el SMMLV cada enero**.
@@ -67,6 +69,7 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 ### Créditos de autopago
 - Un crédito es un préstamo desde tu ahorro hacia ti (o a alguien): monto, plazo, tasa y cuenta de ahorro. Moni calcula la cuota (amortización francesa) y el cronograma antes de guardar.
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
+- **Corregir una cuota ya pagada:** toca la cuota en la tabla de amortización y escribe lo que realmente pagaste ese mes (por ejemplo, con un abono extra que no anotaste). Moni rehace el cronograma con la misma cuota fija y tasa, así que el saldo y el plazo quedan como si siempre se hubiera pagado así. **No mueve dinero ni cambia tus saldos.**
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
 
 ## 8. Otros ingresos

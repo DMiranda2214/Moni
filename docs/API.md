@@ -62,11 +62,14 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `generarPresupuesto` | `mes, idEscenario, reemplazar` |
 | `saveRenglonMes` | `item` |
 | `deleteRenglonMes` | `idItem` |
-| `payRenglonMes` | `idItem, pagado` |
+| `payRenglonMes` | `idItem, pagado` (solo la marca; la app usa las tres siguientes) |
+| `payRenglonConfirmado` | `idItem, datos { Valor, Fecha, ID_Bolsillo, ID_Mov }, vista?` — registra el pago según el tipo del renglón (gasto, tarjeta, cuota de crédito, traslado a ahorro/fondo) o enlaza un movimiento existente (`ID_Mov`), y lo marca pagado |
+| `listMovimientosParaRenglon` | `idItem` — movimientos sueltos que se pueden enlazar a ese renglón |
+| `unpayRenglon` | `idItem, anular, vista?` — desmarca; con `anular` también anula los pagos sencillos que registró |
 | `previewDistribucion` | `mes, idOrigen` |
 | `distribuir` | `mes, idOrigen, fecha, forzar` |
 | `getNomina` | `periodo, idEscenario, opciones` |
-| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo, opciones` |
+| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos?` — con `afectaSaldos = false` no crea movimiento ni pide bolsillo |
 | `saveMiNomina` | `sueldo, periodo, opciones` — el sueldo base (crea la nómina la primera vez) y devuelve la nómina del mes |
 | `saveConceptoNomina` | `d, periodo, opciones` — un descuento o ingreso fijo (libranza, medicina prepagada, bono…) |
 | `removeConceptoNomina` | `idConcepto, periodo, opciones` |
@@ -92,6 +95,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `previewPagoCredito` | `idCredito, valor` |
 | `payCredito` | `idCredito, valor, fecha, idBolsillo` |
 | `voidPagoCredito` | `idPago` |
+| `editPagoCredito` | `idCredito, numCuota, valor` — corrige lo pagado en una cuota ya pagada y rehace el cronograma; no toca saldos |
 | `saveCredito` | `idCredito, datos` |
 | `cancelCredito` | `idCredito` |
 
