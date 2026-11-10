@@ -282,6 +282,38 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.match(n.error, /Aún no configuras tu nómina/);
   });
 
+  prueba('nómina sin afectar saldos: queda registrada y cuenta como ingreso del mes, pero no mueve dinero', () => {
+    const { e, nomina } = escenario();
+    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });
+    const antes = saldo(e, nomina.ID_Bolsillo);
+    const movs = e.llamar('listarMovimientos', {}).items.length;
+    const ingresoAntes = e.llamar('obtenerPresupuestoMes', hoy()).totales.ingresos;
+
+    const r = e.llamar('registrarPagoNomina', hoy(), undefined, '', diaHoy(), '', undefined, false);
+    assert.strictEqual(r.afectaSaldos, false);
+    assert.strictEqual(r.idMov, '');
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), antes, 'el saldo no cambia');
+    assert.strictEqual(e.llamar('listarMovimientos', {}).items.length, movs, 'no se crea ningún movimiento');
+
+    const n = e.llamar('obtenerNominaMes', hoy());
+    assert.strictEqual(n.pago.Afecta_Saldos, false);
+    assert.strictEqual(n.pago.Neto_Real, 2877445);
+    assert.strictEqual(e.hojas.Nomina_Pagos_Detalle.filas.slice(1).filter(f => f[0]).length, 3, 'guarda el detalle');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', hoy()).totales.ingresos, ingresoAntes + 2877445, 'cuenta como ingreso del mes');
+    assert.throws(e.falla('registrarPagoNomina', hoy(), undefined, 1000000, diaHoy(), nomina.ID_Bolsillo), /ya está registrada/);
+
+    e.llamar('anularPagoNomina', hoy());
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), antes, 'anularla tampoco toca saldos');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', hoy()).totales.ingresos, ingresoAntes);
+    assert.strictEqual(e.llamar('registrarPagoNomina', hoy(), undefined, '', diaHoy(), nomina.ID_Bolsillo).afectaSaldos, true, 'se puede registrar de nuevo afectando');
+  });
+
+  prueba('nómina: la que afecta saldos sigue pidiendo bolsillo', () => {
+    const { e } = escenario();
+    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });
+    assert.throws(e.falla('registrarPagoNomina', hoy(), undefined, '', diaHoy(), ''), /./);
+  });
+
   prueba('nómina: registrar el pago crea el ingreso, guarda el detalle y no se repite', () => {
     const { e, nomina } = escenario();
     e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });

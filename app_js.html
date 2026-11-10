@@ -2698,10 +2698,10 @@ function htmlNomina(d) {
     h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
       '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
       '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
-      '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>' +
+      (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>') +
       (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
       '</dl></div></section>' +
-      '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>' +
+      (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
       '<button class="m-accion-peligro" data-acc="anular-nomina">Anular esta nómina</button>';
   } else {
     h += '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina recibida</button></div>';
@@ -2799,23 +2799,25 @@ async function abrirRegistrarNomina() {
   if (!d || !d.calculo) return;
   const campos = [
     { k: 'Valor', label: 'Neto que recibiste', tipo: 'dinero', requerido: true, ayuda: 'Por defecto, el estimado. Cámbialo si el valor real fue distinto.' },
-    { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) }
+    { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), visible: v => v.Afecta !== false },
+    { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor', info: 'Apágalo si esta plata ya está en tus saldos (por ejemplo, la tenías antes de empezar a usar Moni). La nómina queda registrada y cuenta como ingreso del mes, pero no cambia ningún saldo.' }
   ];
   const preferido = ultimoBolsillo();
   await abrirHoja({
     titulo: 'Nómina de ' + mesTexto(App.nom.mes).toLowerCase(),
-    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[1], preferido, {}) +
+    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[2], true, {}) + htmlCampo(campos[1], preferido, {}) +
       '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => activarEcoDinero(raiz),
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true }); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos))); },
     alGuardar: async raiz => {
       const v = leerFormulario(raiz, campos);
+      const afecta = v.Afecta !== false;
       if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el neto que recibiste.');
-      if (!v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
-      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, v.Bolsillo, opcionesNomina());
-      recordarBolsillo(v.Bolsillo);
+      if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
+      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta);
+      if (afecta) recordarBolsillo(v.Bolsillo);
       aplicarEscritura(res); App.nom.data = res.nomina; render();
-      aviso('Nómina registrada', { deshacer: () => anularNominaYAvisar() });
+      aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
     }
   });
 }

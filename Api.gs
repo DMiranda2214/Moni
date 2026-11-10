@@ -410,10 +410,10 @@ function getNomina(periodo, idEscenario, opciones) {
   return responder_(function () { return obtenerNominaMes(periodo, idEscenario, opciones); });
 }
 
-function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones) {
+function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
   return responder_(function () {
-    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones);
-    return resultadoEscritura_([r.idMov], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
+    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos);
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
   });
 }
 
@@ -435,7 +435,7 @@ function removeConceptoNomina(idConcepto, periodo, opciones) {
 function anularNomina(periodo) {
   return responder_(function () {
     const r = anularPagoNomina(periodo);
-    return resultadoEscritura_([r.idMov], undefined, { nomina: obtenerNominaMes(periodo) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo) });
   });
 }
 

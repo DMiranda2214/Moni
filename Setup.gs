@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '5';
+const ESQUEMA_VERSION = '6';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -81,8 +81,8 @@ const SCHEMAS = {
     ['ID_Concepto', 'ID_Nomina_Esc', 'Tipo', 'Concepto', 'Activo', 'Tipo_Calculo', 'Dias', 'Porcentaje', 'Valor_Fijo', 'ID_Subsidio'],
     [170, 170, 100, 220, 70, 140, 70, 90, 120, 170]),
   Nomina_Pagos: tabla_(
-    ['ID_Nomina', 'Periodo', 'ID_Nomina_Esc', 'Estado', 'Devengado', 'Deducciones', 'Extras', 'Neto_Estimado', 'Neto_Real', 'Fecha_Pago', 'ID_Bolsillo_Destino', 'ID_Mov', 'Notas', 'Origen', 'Anulado'],
-    [170, 90, 170, 100, 120, 120, 110, 130, 130, 110, 170, 170, 200, 80, 80]),
+    ['ID_Nomina', 'Periodo', 'ID_Nomina_Esc', 'Estado', 'Devengado', 'Deducciones', 'Extras', 'Neto_Estimado', 'Neto_Real', 'Fecha_Pago', 'ID_Bolsillo_Destino', 'ID_Mov', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos'],
+    [170, 90, 170, 100, 120, 120, 110, 130, 130, 110, 170, 170, 200, 80, 80, 110]),
   Nomina_Pagos_Detalle: tabla_(['ID_Detalle', 'ID_Nomina', 'Tipo', 'Concepto', 'Valor'], [170, 170, 100, 240, 120]),
 
   // ---- Créditos (autopago) ----
@@ -277,7 +277,8 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Bancos', columna: 'Rendimiento_Pago', valor: '' },
   { tabla: 'Bancos', columna: 'Rendimiento_Base', valor: '' },
   { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' },
-  { tabla: 'Suscripciones', columna: 'ID_Inmueble', valor: '' }
+  { tabla: 'Suscripciones', columna: 'ID_Inmueble', valor: '' },
+  { tabla: 'Nomina_Pagos', columna: 'Afecta_Saldos', valor: true }
 ];
 
 function migrarColumnas_(ss) {

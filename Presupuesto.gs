@@ -85,6 +85,7 @@ function obtenerPresupuestoMes(mes) {
   getTableData('Movimientos', { excludeAnulados: true }).forEach(mv => {
     if (mv.Tipo_Mov === 'Ingreso' && mv.Fecha && mv.Fecha.slice(0, 7) === m) ingresos += Number(mv.Valor) || 0;
   });
+  nominasInformativas_().forEach(n => { if (n.mes === m) ingresos += n.valor; }); // nómina registrada sin afectar saldos
   ingresos = redondear2_(ingresos);
   const saldo = redondear2_(ingresos - gastado);
 

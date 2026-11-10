@@ -35,6 +35,7 @@ function obtenerVistaAnual(anio) {
     const m = porMes[mv.Fecha.slice(0, 7)];
     if (m) m.ingreso += Number(mv.Valor) || 0;
   });
+  nominasInformativas_().forEach(n => { const m = porMes[n.mes]; if (m) m.ingreso += n.valor; });
   // TTCC: lo comprado con tarjeta que NO está en ningún renglón (lo de un renglón ya cuenta en su plan y su real).
   // Cuenta en el mes de la compra; lo "De otra persona" se reembolsa y no cuenta.
   compras.forEach(c => {

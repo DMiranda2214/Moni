@@ -212,15 +212,27 @@ function obtenerNominaMes(periodo, idEsc, opciones) {
   return {
     periodo: p, calculo: calculo, error: error, configurada: leer_('Nomina_Escenarios').some(estaActivo),
     conceptos: calculo ? conceptosFijosNomina_(calculo.escenario.ID_Nomina_Esc) : [],
-    pago: pago ? { ID_Nomina: pago.ID_Nomina, Estado: pago.Estado, Neto_Estimado: Number(pago.Neto_Estimado) || 0, Neto_Real: Number(pago.Neto_Real) || 0, Fecha_Pago: pago.Fecha_Pago, ID_Bolsillo_Destino: pago.ID_Bolsillo_Destino, ID_Mov: pago.ID_Mov } : null
+    pago: pago ? { ID_Nomina: pago.ID_Nomina, Estado: pago.Estado, Neto_Estimado: Number(pago.Neto_Estimado) || 0, Neto_Real: Number(pago.Neto_Real) || 0, Fecha_Pago: pago.Fecha_Pago, ID_Bolsillo_Destino: pago.ID_Bolsillo_Destino, ID_Mov: pago.ID_Mov, Afecta_Saldos: afectaSaldosNomina_(pago) } : null
   };
+}
+
+/** Las nóminas registradas antes de existir la columna (o con la celda vacía) sí afectaron los saldos. */
+function afectaSaldosNomina_(pago) {
+  return pago.Afecta_Saldos === undefined || pago.Afecta_Saldos === '' || esVerdadero(pago.Afecta_Saldos);
+}
+
+/** Nóminas vigentes registradas sin afectar saldos: cuentan como ingreso de su mes, pero no hay movimiento. [{ mes, valor }] */
+function nominasInformativas_() {
+  return leer_('Nomina_Pagos')
+    .filter(n => !esVerdadero(n.Anulado) && !afectaSaldosNomina_(n))
+    .map(n => ({ mes: String(n.Fecha_Pago || n.Periodo || '').slice(0, 7), valor: Number(n.Neto_Real) || 0 }));
 }
 
 /**
  * Registra la nómina recibida: guarda el cálculo del mes (con su detalle congelado) y crea el
  * ingreso en el bolsillo elegido. Solo un pago por mes.
  */
-function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opciones) {
+function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
   const p = mesValido_(periodo);
   if (leer_('Nomina_Pagos').some(n => n.Periodo === p && !esVerdadero(n.Anulado))) {
     throw new Error('La nómina de ese mes ya está registrada. Anúlala primero si necesitas corregirla.');
@@ -229,20 +241,22 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
   const calculo = calcularNominaEscenario_(esc, p, opciones);
   const neto = numero_(netoReal === undefined || netoReal === '' ? calculo.totales.neto : netoReal, 'El neto recibido', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const f = fechaMovimiento_(fecha);
-  exigirPesos_(idBolsillo, 'El bolsillo donde llega la nómina');
+  // Sin afectar saldos: la nómina queda registrada (y cuenta como ingreso del mes) pero no mueve dinero ni pide bolsillo.
+  const afecta = !(afectaSaldos === false || afectaSaldos === 'false');
+  if (afecta) exigirPesos_(idBolsillo, 'El bolsillo donde llega la nómina');
 
   const catSalario = leer_('Categorias').find(c => c.ID_Categoria === 'cat-salario' && estaActivo(c));
-  const mov = registrarMovimiento({
+  const mov = afecta ? registrarMovimiento({
     Tipo_Mov: 'Ingreso', Subtipo: 'Nomina', Valor: neto, Fecha: f, Concepto: 'Nómina ' + p,
     ID_Bolsillo: idBolsillo, ID_Categoria: catSalario ? catSalario.ID_Categoria : '', Notas: 'Escenario: ' + esc.Nombre
-  });
+  }) : { ID_Mov: '' };
 
   const idNomina = nuevoId_('nom');
   insertRow('Nomina_Pagos', {
     ID_Nomina: idNomina, Periodo: p, ID_Nomina_Esc: esc.ID_Nomina_Esc, Estado: 'Recibido',
     Devengado: calculo.totales.devengado, Deducciones: calculo.totales.deducciones, Extras: calculo.totales.extras,
-    Neto_Estimado: calculo.totales.neto, Neto_Real: neto, Fecha_Pago: f, ID_Bolsillo_Destino: idBolsillo,
-    ID_Mov: mov.ID_Mov, Notas: 'Escenario: ' + esc.Nombre, Origen: 'App', Anulado: false
+    Neto_Estimado: calculo.totales.neto, Neto_Real: neto, Fecha_Pago: f, ID_Bolsillo_Destino: afecta ? idBolsillo : '',
+    ID_Mov: mov.ID_Mov, Notas: 'Escenario: ' + esc.Nombre + (afecta ? '' : ' · sin afectar saldos'), Origen: 'App', Anulado: false, Afecta_Saldos: afecta
   });
 
   const detalle = [];
@@ -251,7 +265,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
   calculo.extras.forEach(d => detalle.push({ ID_Detalle: nuevoId_('ndt'), ID_Nomina: idNomina, Tipo: 'Extra', Concepto: d.concepto, Valor: d.valor }));
   insertRows('Nomina_Pagos_Detalle', detalle);
 
-  return { idNomina: idNomina, idMov: mov.ID_Mov, neto: neto, periodo: p };
+  return { idNomina: idNomina, idMov: mov.ID_Mov, neto: neto, periodo: p, afectaSaldos: afecta };
 }
 
 /** Anula la nómina registrada de un mes y su ingreso. */
