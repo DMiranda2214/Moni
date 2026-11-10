@@ -565,6 +565,14 @@ function payCredito(idCredito, valor, fecha, idBolsillo) {
   });
 }
 
+/** Corrige lo que se pagó en una cuota ya pagada (por ejemplo, un abono extra que no se anotó). No toca saldos. */
+function editPagoCredito(idCredito, numCuota, valor) {
+  return responder_(function () {
+    const r = editarPagoCredito(idCredito, numCuota, valor);
+    return resultadoCredito_(r.idCredito, []);
+  });
+}
+
 function voidPagoCredito(idPago) {
   return responder_(function () {
     const r = anularPagoCredito(idPago);

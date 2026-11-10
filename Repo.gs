@@ -481,6 +481,34 @@ function deleteRow(sheetName, rowNumber) {
 }
 
 /**
+ * Elimina varias filas de una tabla de trabajo de una vez (por número real de fila). Agrupa las filas seguidas para
+ * hacer pocas llamadas a Google. Solo para datos derivados que se recalculan por completo (el cronograma de un crédito).
+ */
+function deleteRows(sheetName, rowNumbers) {
+  const filas = Array.from(new Set((rowNumbers || []).map(Number))).sort((a, b) => b - a);
+  if (!filas.length) return { ok: true, eliminadas: 0 };
+  if (filas.some(f => !Number.isInteger(f) || f < 2)) throw new Error(`Número de fila no válido para "${sheetName}".`);
+
+  const lock = tomarBloqueo(10000);
+  try {
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
+    if (filas[0] > sheet.getLastRow()) throw new Error(`La fila ${filas[0]} no existe en "${sheetName}".`);
+    // De abajo hacia arriba, para que borrar un tramo no mueva los números de los que faltan.
+    let fin = filas[0], inicio = filas[0];
+    for (let i = 1; i <= filas.length; i++) {
+      if (i < filas.length && filas[i] === inicio - 1) { inicio = filas[i]; continue; }
+      sheet.deleteRows(inicio, fin - inicio + 1);
+      if (i < filas.length) { fin = filas[i]; inicio = filas[i]; }
+    }
+    invalidateCache(sheetName);
+    return { ok: true, eliminadas: filas.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Borrado lógico: establece la columna 'Anulado' en true.
  */
 function softDeleteById(sheetName, idColumnName, idValue) {

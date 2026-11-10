@@ -23,6 +23,7 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 
 ## 2. Presupuesto
 - **Plantilla** por escenario (uno es el base). **Generar** crea los renglones del mes; si el mes ya existe, reemplazarlo solo se permite si ningún renglón tiene movimientos.
+- **Marcar como pagado** registra el pago de verdad (`pagarRenglonMes`): Gasto → movimiento de gasto desde el bolsillo elegido (o compra con tarjeta si el renglón se paga con tarjeta); Cuota con crédito → pago de la cuota; Ahorro, Fondo o cuota sin crédito → traslado desde el bolsillo elegido al de destino. Todo queda enlazado al renglón. Alternativa: enlazar un movimiento suelto del mes (o del anterior) para no duplicarlo. Desmarcar puede anular los pagos sencillos; los de cuotas de crédito y los repartos de nómina se deshacen desde su pantalla.
 - **Real** de un renglón se **calcula** (no se escribe): un gasto enlazado suma; un ajuste enlazado resta; el lado de entrada de un traslado enlazado suma; y una **compra con tarjeta** enlazada suma el día de la compra (las de fuente *Del presupuesto* ya cuentan por su traslado a la reserva, así que no se cuentan dos veces; las *De otra persona* no cuentan).
 - Una suscripción o servicio puede pertenecer a un **hogar** (`ID_Inmueble`): el mismo nombre se puede repetir en hogares distintos y, cuando hay varios hogares, el renglón se llama *Nombre · Hogar*.
 - **Suscripciones y servicios dentro del presupuesto:** al generar un mes, cada suscripción o servicio que toca ese mes (según su periodicidad, contada desde su próximo cobro) entra como renglón de gasto, con su valor, su bolsillo o su tarjeta (`Presupuesto_Mes.ID_Suscripcion` los enlaza). Si el presupuesto del mes ya existe, la suscripción nueva o editada entra o se actualiza sola (mientras el renglón no esté pagado); el botón *Agregar* de Presupuesto cubre las que falten. Pagar la suscripción cuenta como lo real del renglón y lo deja pagado; deshacer el pago lo devuelve a pendiente. Un renglón de la plantilla con el mismo nombre que el *Renglón* de la suscripción cuenta como el suyo (no se duplica).
@@ -32,6 +33,7 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - **Repartir la nómina:** un traslado por destino (gastos y cuotas agrupados por bolsillo; ahorro y fondos por renglón). Cada mes se reparte una vez salvo que se fuerce.
 
 ## 3. Nómina (una vez al mes)
+- **Sin afectar saldos:** una nómina se puede registrar con `Afecta_Saldos = FALSE` (para quien ya tenía ese dinero en sus saldos iniciales). No crea movimiento ni pide bolsillo; queda con su detalle, cuenta como **ingreso del mes** (de su fecha de pago) en el presupuesto y la vista anual, y no se puede repartir en bolsillos. Para cambiarla se anula y se vuelve a registrar. Las anteriores a esta opción se tratan como que sí afectaron.
 El estimado replica la hoja "Estimado nómina" del Excel original: cada línea tiene una casilla (se incluye o no) y los días que aplican.
 - **Líneas:** sueldo básico (días × sueldo / 30), subsidios (salariales o no), prima (días × día base), vacaciones (días × día base), intereses de cesantías, salud, pensión, fondo de solidaridad y los **conceptos fijos** del escenario (libranza, bono…).
 - **Por defecto:** el sueldo y los subsidios van incluidos; la prima, solo en junio y diciembre (15 días); las vacaciones, apagadas (0 días); los intereses de cesantías, en enero.
@@ -58,7 +60,8 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - Te prestas desde una **cuenta de ahorro** (el desembolso sale del ahorro) y pagas con **amortización francesa**; cada cuota **vuelve al ahorro**.
 - **Tasa:** la EA se convierte a periódica con el método del Excel (`2·((1+EA)^(1/2) − 1)/períodos`, quincenal o mensual) o con el método exacto, según `Credito_Metodo_Tasa`.
 - **Cuota fija** y tasa fijas. Un **abono mayor que la cuota recalcula el plazo** (la última cuota se ajusta). Un abono mayor que el saldo cobra solo lo necesario.
-- El **cronograma** es versionado: al recalcular, el anterior queda como *Reemplazada*.
+- El **cronograma** es versionado: al recalcular por un pago nuevo, el anterior queda como *Reemplazada*.
+- **Corregir una cuota pagada** (`editarPagoCredito`): se cambia el valor pagado de esa cuota (≥ cuota fija, sin pasar de lo que se debe) y el cronograma completo se **rehace** pagando de nuevo, en orden, todas las cuotas pagadas con sus valores, con la misma cuota fija y tasa. No toca movimientos ni saldos; si la cuota venía como pagada al crear el crédito, se crea su registro de pago sin movimiento. Si lo corregido haría que otro pago sobrepase la deuda, se rechaza con un mensaje y no cambia nada. El cronograma anterior se sustituye (no se conserva como *Reemplazada*).
 - Cifras de control: 2.400.000 a 48 quincenas con tasa 0,4067404 % → 55.140,90; 1.000.000 a 12 cuotas con 0,8333333 % → 87.915,89; 500.000 a 10 cuotas con 1 % → 52.791,04.
 
 ## 6. Ahorro

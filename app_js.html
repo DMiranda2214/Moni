@@ -3279,12 +3279,21 @@ function htmlCredito(d) {
 
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Tabla de amortización</h2><div class="m-group">' + d.cronograma.map(f => {
     const proxima = c.proxima && f.Num === c.proxima.Num && activo;
-    return '<div class="m-row' + (f.Estado === 'Pagada' ? ' m-hecho' : '') + '"' + (proxima ? ' style="background:var(--m-tint-soft)"' : '') + '>' +
+    if (f.Estado === 'Pagada') {
+      // Una cuota pagada se puede corregir (por ejemplo, un abono extra que ese mes no se anotó).
+      const pago = d.pagos.find(q => q.Num_Cuota === f.Num);
+      return fila({ clase: 'm-hecho', icono: 'check', attrs: 'data-acc="corregir-cuota" data-num="' + f.Num + '"', chevron: true,
+        titulo: 'Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)),
+        sub: 'Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + (pago && pago.Abono_Extra ? ' · abono ' + dinero(pago.Abono_Extra) : ''),
+        final: '<strong class="m-num">' + dinero(pago ? pago.Valor_Pagado : f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span>' });
+    }
+    return '<div class="m-row"' + (proxima ? ' style="background:var(--m-tint-soft)"' : '') + '>' +
       '<span class="m-row-icono">' + (f.Estado === 'Pagada' ? ico('check', 'm-icon-sm') : '<span class="m-num" style="font-size:var(--m-text-footnote);font-weight:600">' + f.Num + '</span>') + '</span>' +
       '<span class="m-row-texto"><span class="m-row-titulo" style="display:block">Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)) + (proxima ? ' · próxima' : '') + '</span>' +
       '<span class="m-row-sub" style="display:block">Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + '</span></span>' +
       '<span class="m-row-final"><strong class="m-num">' + dinero(f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span></span></div>';
-  }).join('') + '</div></section>';
+  }).join('') + '</div></section>' +
+    (d.cronograma.some(f => f.Estado === 'Pagada') ? '<p class="m-seccion-pie" style="margin-top:calc(var(--m-space-3) * -1)">Toca una cuota pagada para corregir lo que pagaste ese mes. El plazo y los saldos del crédito se recalculan; tus saldos de dinero no cambian.</p>' : '');
 
   if (d.pagos.length) {
     h += seccion('Pagos hechos', d.pagos.map(p => fila({
@@ -3301,6 +3310,31 @@ function htmlCredito(d) {
 function aplicarCredito(res) {
   App.deudas.data = null;
   if (res.credito && App.cre.id === res.credito.credito.ID_Credito) App.cre.data = res.credito;
+}
+
+/** Corrige el valor pagado de una cuota ya pagada: el crédito se recalcula, el dinero de tus bolsillos no se toca. */
+async function abrirCorregirCuota(num) {
+  const d = App.cre.data;
+  if (!d) return;
+  const f = d.cronograma.find(x => x.Num === num);
+  const pago = d.pagos.find(x => x.Num_Cuota === num);
+  if (!f) return;
+  const campos = [{ k: 'Valor', label: 'Lo que pagaste en esta cuota', tipo: 'dinero', requerido: true,
+    ayuda: 'La cuota es ' + dinero(f.Cuota) + '. Si ese mes pagaste de más, escribe el total: el excedente abona a capital y el plazo se acorta.' }];
+  await abrirHoja({
+    titulo: 'Cuota ' + num, der: 'Guardar',
+    cuerpo: '<form novalidate data-form="corregir-cuota">' + htmlCampo(campos[0], pago ? pago.Valor_Pagado : f.Cuota, {}) +
+      '<p class="m-ayuda">Solo corrige el crédito. No mueve dinero ni cambia los saldos de tus bolsillos: si el pago real ya quedó anotado, no se toca. Todo lo posterior se recalcula con la misma cuota fija.</p>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Valor', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe lo que pagaste.');
+      const res = await api('editPagoCredito', App.cre.id, num, v.Valor);
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso('Cuota ' + num + ' corregida');
+    }
+  });
 }
 
 async function abrirPagoCredito() {
@@ -5364,6 +5398,7 @@ const ACCIONES = {
   'nuevo-credito': () => abrirNuevoCredito(),
   'pagar-credito': () => abrirPagoCredito(),
   'editar-credito': () => abrirEditarCredito(),
+  'corregir-cuota': el => abrirCorregirCuota(Number(el.dataset.num)),
   'pago-credito': async el => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero al bolsillo y la cuota vuelve a quedar pendiente. Si el pago incluía un abono, el plazo vuelve al anterior.' });
     if (ok) anularPagoCreditoYAvisar(el.dataset.id);

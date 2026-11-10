@@ -311,6 +311,83 @@ function anularPagoCredito(idPago) {
   return { ids: ids, idCredito: pago.ID_Credito };
 }
 
+/**
+ * Corrige el valor pagado de una cuota que ya se pagó (por ejemplo, si ese mes se hizo un abono extra que no se anotó).
+ * No toca saldos ni movimientos: solo corrige el crédito. El cronograma se rehace desde el principio con la misma cuota fija
+ * y la misma tasa: cada pago con excedente abona a capital y acorta el plazo, igual que si se hubiera pagado así desde el
+ * comienzo. Si la cuota venía como "ya pagada" al crear el crédito, se crea su registro de pago (sin movimiento).
+ * @param {string} idCredito
+ * @param {number} numCuota número de la cuota ya pagada
+ * @param {number} nuevoValor lo que realmente se pagó en esa cuota (cuota + abono extra)
+ */
+function editarPagoCredito(idCredito, numCuota, nuevoValor) {
+  const credito = creditoActivo_(idCredito);
+  if (credito.Estado === 'Anulado') throw new Error('Este crédito está anulado.');
+  const num = Number(numCuota);
+  const valor = numero_(nuevoValor, 'El valor pagado', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+
+  const filas = leer_('Creditos_Cronograma').filter(f => f.ID_Credito === idCredito);
+  if (!filas.length) throw new Error('El crédito no tiene cronograma.');
+  const vMin = Math.min.apply(null, filas.map(f => Number(f.Version)));
+  const base = filas.filter(f => Number(f.Version) === vMin).sort((a, b) => Number(a.Num) - Number(b.Num));
+  const pagos = leer_('Creditos_Pagos').filter(p => p.ID_Credito === idCredito && !esVerdadero(p.Anulado));
+  const pagoDe = n => pagos.find(p => Number(p.Num_Cuota) === n);
+  const pagadas = cronogramaVigente_(idCredito).filter(f => f.Estado === 'Pagada').map(f => Number(f.Num)).sort((a, b) => a - b);
+  if (pagadas.indexOf(num) === -1) throw new Error('Solo se puede corregir una cuota que ya está pagada.');
+
+  const i = Number(credito.Tasa_Periodica) || 0, cuotaFija = Number(credito.Cuota_Fija);
+  const fechaDe = n => fechaCuota_(credito.Fecha_Inicio, credito.Periodicidad, n);
+  const todas = base.map(f => ({
+    Num: Number(f.Num), Fecha_Prevista: f.Fecha_Prevista, Saldo_Inicial: Number(f.Saldo_Inicial), Cuota: Number(f.Cuota), Interes: Number(f.Interes),
+    Capital: Number(f.Capital), Saldo_Final: Number(f.Saldo_Final), Version: vMin, Estado: 'Pendiente'
+  }));
+  const vivas = () => todas.filter(f => f.Estado === 'Pendiente');
+  const ultima = pagadas[pagadas.length - 1];
+  const resultado = {};
+
+  // Se vuelven a "pagar" en orden todas las cuotas pagadas, cada una con lo que realmente se pagó.
+  pagadas.forEach(n => {
+    const k = vivas().find(f => f.Num === n);
+    if (!k) throw new Error('El cronograma no cuadra con los pagos: no se puede corregir.');
+    const p = pagoDe(n);
+    const v = n === num ? valor : (p ? Number(p.Valor_Pagado) : k.Cuota);
+    if (v < k.Cuota - SALDO_CERO) throw new Error('El pago de la cuota ' + n + ' debe cubrir al menos la cuota (' + pesos_(k.Cuota) + ').');
+    const resta = redondear2_(k.Saldo_Final);
+    let extra = redondear2_(v - k.Cuota);
+    if (extra > resta + SALDO_CERO) throw new Error('Con ese valor, el pago de la cuota ' + n + ' (' + pesos_(v) + ') pagaría más de lo que se debe. Corrige también ese pago.');
+    if (extra > resta) extra = resta;
+    if (extra < SALDO_CERO) extra = 0;
+    k.Estado = 'Pagada';
+    const saldoDespues = redondear2_(resta - extra);
+    const termina = saldoDespues < SALDO_CERO;
+    if (termina && n !== ultima) throw new Error('Con ese valor el crédito quedaría pagado antes de la cuota ' + ultima + '. Corrige también los pagos posteriores.');
+    if (extra > 0) {
+      vivas().filter(f => f.Num > n).forEach(f => { f.Estado = 'Reemplazada'; });
+      if (!termina) {
+        const plazo = plazoRestante_(saldoDespues, i, cuotaFija);
+        generarCronograma_(saldoDespues, i, cuotaFija, n + 1, plazo, fechaDe).forEach(f => todas.push(Object.assign(f, { Version: k.Version + 1, Estado: 'Pendiente' })));
+      }
+    }
+    resultado[n] = { Valor_Pagado: redondear2_(k.Cuota + extra), Interes: k.Interes, Capital_Cuota: k.Capital, Abono_Extra: extra, Saldo_Despues: termina ? 0 : saldoDespues, Version: k.Version, fecha: k.Fecha_Prevista };
+  });
+
+  // Ya validado todo: se reemplaza el cronograma y se corrigen los pagos.
+  deleteRows('Creditos_Cronograma', filas.map(f => f._rowIndex));
+  insertRows('Creditos_Cronograma', todas.map(f => filaCronograma_(idCredito, f.Version, f, f.Estado)));
+  pagadas.forEach(n => {
+    const r = resultado[n], p = pagoDe(n);
+    if (p) updateRow('Creditos_Pagos', p._rowIndex, { Valor_Pagado: r.Valor_Pagado, Interes: r.Interes, Capital_Cuota: r.Capital_Cuota, Abono_Extra: r.Abono_Extra, Saldo_Despues: r.Saldo_Despues, Version: r.Version });
+    else if (n === num) {
+      insertRow('Creditos_Pagos', { ID_Pago: nuevoId_('pgo'), ID_Credito: idCredito, Fecha: r.fecha, Num_Cuota: n, Valor_Pagado: r.Valor_Pagado, Interes: r.Interes,
+        Capital_Cuota: r.Capital_Cuota, Abono_Extra: r.Abono_Extra, Saldo_Despues: r.Saldo_Despues, Version: r.Version, ID_Grupo: '', Anulado: false });
+    }
+  });
+  const pendientes = vivas().length;
+  const ultimoNum = todas.filter(f => f.Estado !== 'Reemplazada').reduce((m, f) => Math.max(m, f.Num), 0);
+  updateRow('Creditos', credito._rowIndex, { Num_Periodos: ultimoNum, Estado: pendientes ? 'Activo' : 'Pagado' });
+  return { idCredito: idCredito, num: num, cuotasRestantes: pendientes, saldo: pendientes ? vivas()[0].Saldo_Inicial : 0 };
+}
+
 /** Cambia datos que no alteran el cronograma. */
 function editarCredito(idCredito, datos) {
   const c = creditoActivo_(idCredito);
