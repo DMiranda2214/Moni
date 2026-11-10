@@ -291,6 +291,92 @@ function marcarRenglonPagado(idItem, pagado) {
   return { mes: fila.Mes, pagado: !!pagado };
 }
 
+/**
+ * Movimientos que se pueden enlazar a un renglón ya pagado "por fuera": gastos (o traslados, si el renglón aparta dinero)
+ * del mes del renglón y del anterior que todavía no pertenecen a ningún renglón. Los más recientes primero.
+ */
+function movimientosParaVincular(idItem) {
+  const item = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
+  if (!item) throw new Error('El renglón no existe.');
+  const apartar = (item.Tipo || 'Gasto') !== 'Gasto';
+  const a = +item.Mes.slice(0, 4), mm = +item.Mes.slice(5, 7);
+  const anterior = mm === 1 ? (a - 1) + '-12' : a + '-' + ('0' + (mm - 1)).slice(-2);
+  return getTableData('Movimientos', { excludeAnulados: true })
+    .filter(m => !m.ID_Item_Ppto && !m.Subtipo && m.Fecha && (m.Fecha.slice(0, 7) === item.Mes || m.Fecha.slice(0, 7) === anterior) &&
+      (apartar ? (m.Tipo_Mov === 'Transferencia' && Number(m.Valor) > 0) : m.Tipo_Mov === 'Gasto'))
+    .sort((x, y) => String(y.Fecha).localeCompare(String(x.Fecha)))
+    .slice(0, 40)
+    .map(m => ({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: Math.abs(Number(m.Valor) || 0), ID_Bolsillo: m.ID_Bolsillo }));
+}
+
+/**
+ * Marca un renglón como pagado registrando de verdad el pago, según su tipo:
+ *   - con `ID_Mov`: enlaza un movimiento que ya existe (no duplica nada);
+ *   - Gasto: un gasto desde `ID_Bolsillo` (o una compra con tarjeta si el renglón se paga con tarjeta);
+ *   - Cuota de un crédito: el pago de la cuota, con su cronograma;
+ *   - Ahorro, fondo o cuota sin crédito: un traslado de `ID_Bolsillo` al bolsillo de destino del renglón.
+ * @param {Object} d { Valor, Fecha, ID_Bolsillo, ID_Mov }
+ * @returns {{ mes: string, ids: string[] }}
+ */
+function pagarRenglonMes(idItem, d) {
+  const item = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
+  if (!item) throw new Error('El renglón no existe.');
+  if (esVerdadero(item.Pagado)) throw new Error('Este renglón ya está pagado.');
+  const x = d || {};
+  const tipo = item.Tipo || 'Gasto';
+  const ids = [];
+
+  if (x.ID_Mov) {
+    const mov = buscarPorId_(leer_('Movimientos'), 'ID_Mov', x.ID_Mov);
+    if (!mov || esVerdadero(mov.Anulado)) throw new Error('Ese movimiento no existe o está anulado.');
+    if (mov.ID_Item_Ppto) throw new Error('Ese movimiento ya está enlazado a otro renglón.');
+    const patas = mov.ID_Grupo ? leer_('Movimientos').filter(m => m.ID_Grupo === mov.ID_Grupo && !esVerdadero(m.Anulado)) : [mov];
+    patas.forEach(m => { updateRow('Movimientos', m._rowIndex, { ID_Item_Ppto: idItem }); ids.push(m.ID_Mov); });
+  } else {
+    const fecha = fechaMovimiento_(x.Fecha);
+    const valor = numero_(x.Valor, 'El valor', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+    if (tipo === 'Cuota' && item.ID_Credito) {
+      registrarPagoCredito(item.ID_Credito, valor, fecha, x.ID_Bolsillo || undefined).ids.forEach(i => ids.push(i));
+    } else if (tipo === 'Gasto' && item.ID_Tarjeta) {
+      const compra = registrarCompraTC({ ID_Tarjeta: item.ID_Tarjeta, Fecha: fecha, Concepto: item.Concepto, Valor: valor, ID_Item_Ppto: idItem,
+        ID_Bolsillo_Origen: x.ID_Bolsillo || '' });
+      if (compra.ID_Mov_Reserva) filasDelGrupo_(compra.ID_Mov_Reserva).filas.forEach(f => ids.push(f.ID_Mov));
+    } else if (tipo === 'Gasto') {
+      if (!x.ID_Bolsillo) throw new Error('Elige el bolsillo desde el que pagaste.');
+      ids.push(registrarMovimiento({ Tipo_Mov: 'Gasto', Valor: valor, Fecha: fecha, Concepto: item.Concepto, ID_Bolsillo: x.ID_Bolsillo, ID_Item_Ppto: idItem }).ID_Mov);
+    } else {
+      if (!x.ID_Bolsillo) throw new Error('Elige el bolsillo del que sale el dinero.');
+      if (!item.ID_Bolsillo_Destino) throw new Error('Este renglón no tiene bolsillo de destino. Edítalo y elígelo primero.');
+      registrarTransferencia(x.ID_Bolsillo, item.ID_Bolsillo_Destino, valor, fecha, item.Concepto, '', 'App', { ID_Item_Ppto: idItem })
+        .patas.forEach(p => ids.push(p.ID_Mov));
+    }
+  }
+  updateRow('Presupuesto_Mes', item._rowIndex, { Pagado: true });
+  return { mes: item.Mes, ids: ids };
+}
+
+/**
+ * Desmarca un renglón. Con `anular`, también anula los pagos sencillos que registró (gastos, traslados y compras con tarjeta
+ * sin pagar en un extracto). Los pagos de cuotas de crédito y los repartos de la nómina no se tocan: se anulan desde su pantalla.
+ */
+function desmarcarRenglonMes(idItem, anular) {
+  const item = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
+  if (!item) throw new Error('El renglón no existe.');
+  const ids = [];
+  if (anular) {
+    getTableData('Movimientos', { excludeAnulados: true }).filter(m => m.ID_Item_Ppto === idItem && !m.Subtipo).forEach(m => {
+      const vigente = leer_('Movimientos').find(f => f.ID_Mov === m.ID_Mov);
+      if (!vigente || esVerdadero(vigente.Anulado)) return; // ya cayó con la otra pata de su traslado
+      anularMovimiento(m.ID_Mov).ids.forEach(i => ids.push(i));
+    });
+    leer_('Compras_TC').filter(c => c.ID_Item_Ppto === idItem && !esVerdadero(c.Anulado) && !esVerdadero(c.Pagado)).forEach(c => {
+      anularCompraTC(c.ID_Compra).ids.forEach(i => ids.push(i));
+    });
+  }
+  updateRow('Presupuesto_Mes', buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem)._rowIndex, { Pagado: false });
+  return { mes: item.Mes, ids: ids };
+}
+
 // ---------------------------------------------------------------------------
 // Distribución de la nómina entre bolsillos
 // ---------------------------------------------------------------------------

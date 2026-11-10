@@ -112,6 +112,67 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('obtenerPresupuestoMes', hoy()).totales.ahorro, 18000);
   });
 
+  prueba('pagar renglón: un gasto sale del bolsillo elegido (no del sugerido), cuenta como real y marca pagado', () => {
+    const { e, esc, casa, nomina, servicios } = conPlantilla();
+    e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);
+    const luz = () => e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Luz');
+    const antesNomina = saldo(e, nomina.ID_Bolsillo), antesServ = saldo(e, servicios.ID_Bolsillo);
+    const r = e.llamar('pagarRenglonMes', luz().ID_Item, { Valor: 62000, Fecha: diaHoy(), ID_Bolsillo: nomina.ID_Bolsillo });
+    assert.strictEqual(r.ids.length, 1);
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), antesNomina - 62000, 'sale de donde se dijo');
+    assert.strictEqual(saldo(e, servicios.ID_Bolsillo), antesServ, 'el bolsillo sugerido no se toca');
+    assert.strictEqual(luz().Real, 62000);
+    assert.strictEqual(luz().Pagado, true);
+    assert.throws(e.falla('pagarRenglonMes', luz().ID_Item, { Valor: 1, ID_Bolsillo: nomina.ID_Bolsillo }), /ya está pagado/);
+    assert.throws(e.falla('pagarRenglonMes', e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Mercado').ID_Item, { Valor: 5 }), /Elige el bolsillo/);
+  });
+
+  prueba('pagar renglón: ahorro o fondo mueve dinero desde el bolsillo elegido hacia el de destino', () => {
+    const { e, esc, nomina, ahorro } = conPlantilla();
+    e.llamar('registrarMovimiento', { Tipo_Mov: 'Ingreso', Concepto: 'Nómina', ID_Bolsillo: nomina.ID_Bolsillo, Valor: 1000000 });
+    e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);
+    const a = () => e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Ahorro mensual');
+    e.llamar('pagarRenglonMes', a().ID_Item, { Valor: 500000, Fecha: diaHoy(), ID_Bolsillo: nomina.ID_Bolsillo });
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), 500000);
+    assert.strictEqual(saldo(e, ahorro.ID_Bolsillo), 500000);
+    assert.strictEqual(a().Real, 500000);
+    assert.strictEqual(a().Pagado, true);
+  });
+
+  prueba('pagar renglón: se puede enlazar un gasto que ya estaba registrado, sin duplicarlo', () => {
+    const { e, esc, casa } = conPlantilla();
+    e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);
+    const mer = () => e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Mercado');
+    const suelto = e.llamar('registrarMovimiento', { Concepto: 'Compra D1', ID_Bolsillo: casa.ID_Bolsillo, Valor: 150000 });
+    const antes = saldo(e, casa.ID_Bolsillo);
+    const lista = e.llamar('movimientosParaVincular', mer().ID_Item);
+    assert.ok(lista.some(m => m.ID_Mov === suelto.ID_Mov));
+    e.llamar('pagarRenglonMes', mer().ID_Item, { ID_Mov: suelto.ID_Mov });
+    assert.strictEqual(saldo(e, casa.ID_Bolsillo), antes, 'no se mueve dinero otra vez');
+    assert.strictEqual(mer().Real, 150000);
+    assert.strictEqual(mer().Pagado, true);
+    assert.ok(!e.llamar('movimientosParaVincular', e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Luz').ID_Item).some(m => m.ID_Mov === suelto.ID_Mov), 'ya no se ofrece');
+    assert.throws(e.falla('pagarRenglonMes', e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Luz').ID_Item, { ID_Mov: suelto.ID_Mov }), /ya está enlazado/);
+  });
+
+  prueba('desmarcar renglón: con anular devuelve el dinero; sin anular solo quita la marca', () => {
+    const { e, esc, casa, nomina } = conPlantilla();
+    e.llamar('registrarMovimiento', { Tipo_Mov: 'Ingreso', Concepto: 'Nómina', ID_Bolsillo: nomina.ID_Bolsillo, Valor: 1000000 });
+    e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);
+    const item = nombre => e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === nombre);
+    e.llamar('pagarRenglonMes', item('Ahorro mensual').ID_Item, { Valor: 400000, Fecha: diaHoy(), ID_Bolsillo: nomina.ID_Bolsillo });
+    e.llamar('pagarRenglonMes', item('Mercado').ID_Item, { Valor: 90000, Fecha: diaHoy(), ID_Bolsillo: nomina.ID_Bolsillo });
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), 510000);
+
+    e.llamar('desmarcarRenglonMes', item('Mercado').ID_Item, false);
+    assert.strictEqual(item('Mercado').Pagado, false);
+    assert.strictEqual(item('Mercado').Real, 90000, 'sin anular, el gasto sigue');
+    e.llamar('desmarcarRenglonMes', item('Ahorro mensual').ID_Item, true);
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), 910000, 'el traslado se anuló');
+    assert.strictEqual(item('Ahorro mensual').Real, 0);
+    assert.strictEqual(item('Ahorro mensual').Pagado, false);
+  });
+
   prueba('real: un movimiento anulado deja de contar; el ajuste y el sobregasto se reflejan', () => {
     const { e, esc, casa } = conPlantilla();
     e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);

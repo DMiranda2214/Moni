@@ -395,6 +395,27 @@ function payRenglonMes(idItem, pagado) {
   });
 }
 
+/** Movimientos sueltos que se pueden enlazar a un renglón en vez de registrar el pago otra vez. */
+function listMovimientosParaRenglon(idItem) {
+  return responder_(function () { return movimientosParaVincular(idItem); });
+}
+
+/** Marca un renglón como pagado registrando el pago (o enlazando uno existente). Devuelve el presupuesto y los movimientos tocados. */
+function payRenglonConfirmado(idItem, datos, vista) {
+  return responder_(function () {
+    const r = pagarRenglonMes(idItem, datos);
+    return resultadoEscritura_(r.ids, vista, { presupuesto: obtenerPresupuestoMes(r.mes) });
+  });
+}
+
+/** Desmarca un renglón; con `anular` también anula los pagos sencillos que registró. */
+function unpayRenglon(idItem, anular, vista) {
+  return responder_(function () {
+    const r = desmarcarRenglonMes(idItem, !!anular);
+    return resultadoEscritura_(r.ids, vista, { presupuesto: obtenerPresupuestoMes(r.mes) });
+  });
+}
+
 function previewDistribucion(mes, idOrigen) {
   return responder_(function () { return previsualizarDistribucion(mes, idOrigen); });
 }
