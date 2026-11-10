@@ -74,6 +74,8 @@ function sembrarDatosDemo() {
     bol('demo-bol-reserva-azul', 'demo-cta-2', 'Reserva Tarjeta Azul', 'Reserva_Tarjeta', 310000, false, 1),
     bol('demo-bol-personal', 'demo-cta-2', 'Gastos personales', 'Operativo', 150000, false, 2),
     bol('demo-bol-viaje', 'demo-cta-2', 'Fondo de viaje', 'Fondo', 400000, false, 3),
+    bol('demo-bol-sin-asignar-1', 'demo-cta-1', 'Sin asignar', 'General', 0, true, 0),
+    bol('demo-bol-sin-asignar-2', 'demo-cta-2', 'Sin asignar', 'General', 0, true, 0),
     bol('demo-bol-general-3', 'demo-cta-3', 'Débito diario', 'General', 85000, true, 1),
     bol('demo-bol-general-4', 'demo-cta-4', 'Ahorro programado', 'General', 4200000, true, 1)
   ];

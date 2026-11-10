@@ -82,6 +82,10 @@ function armarBootstrap_() {
       return { instalado: false, faltantes: verificacion.faltantes, diferencias: verificacion.diferencias };
     }
 
+    // Datos que una versión nueva necesita en hojas ya creadas: toda cuenta tiene su saldo interno ("Sin asignar").
+    // Solo corre cuando la revisión del esquema no viene de la memoria (una vez por versión), y no cambia ningún saldo.
+    if (!verificacion.desdeCache) { try { if (asegurarBolsillosInternos_()) invalidateCache(); } catch (e) {} }
+
     precargarTablas_(Object.keys(SCHEMAS)); // todo lo que esté en caché, en 2 llamadas
     const config = {};
     getTableData('Config').forEach(c => { config[c.Clave] = c.Valor; });

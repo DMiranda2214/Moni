@@ -207,19 +207,7 @@ const CATALOGOS = {
       else if (actual) permite = esVerdadero(actual.Permite_Bolsillos);
       else permite = tipo !== 'Debito'; // por defecto, una cuenta débito es un solo saldo
 
-      // Se valida aquí, antes de escribir nada: si falla, la cuenta queda exactamente como estaba.
-      if (actual && esVerdadero(actual.Permite_Bolsillos) && !permite) {
-        const delaCuenta = leer_('Bolsillos').filter(b => b.ID_Cuenta === actual.ID_Cuenta && estaActivo(b));
-        if (delaCuenta.length > 1) {
-          const destino = opciones && opciones.fusionarEn;
-          if (!destino) {
-            throw new Error('La cuenta tiene ' + delaCuenta.length + ' bolsillos activos. Elige en cuál juntar el dinero de todos para quitar los bolsillos.');
-          }
-          if (!delaCuenta.some(b => b.ID_Bolsillo === destino)) {
-            throw new Error('El bolsillo donde se junta el dinero debe ser uno activo de esta cuenta.');
-          }
-        }
-      }
+      // Al quitar los bolsillos, el dinero de todos se junta en el saldo "sin asignar" de la cuenta (ver despues).
 
       const saldoReal = numero_(item.Saldo_Real !== undefined ? item.Saldo_Real : actual && actual.Saldo_Real, 'El saldo real');
       let fechaSaldo = fechaIso_(item.Fecha_Saldo_Real !== undefined ? item.Fecha_Saldo_Real : actual && actual.Fecha_Saldo_Real, 'La fecha del saldo real');
@@ -239,17 +227,17 @@ const CATALOGOS = {
     },
     despues: function (reg, anterior, item, opciones) {
       const permite = esVerdadero(reg.Permite_Bolsillos);
+      // Toda cuenta tiene su saldo interno: con bolsillos es el dinero "sin asignar"; sin bolsillos, el saldo de la cuenta.
       if (!anterior) {
-        if (!permite) crearBolsilloInterno_(reg, numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }));
+        crearBolsilloInterno_(reg, numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }));
         return;
       }
       const antes = esVerdadero(anterior.Permite_Bolsillos);
-      if (antes && !permite && opciones && opciones.fusionarEn) fusionarBolsillos_(reg, opciones.fusionarEn);
       if (antes !== permite) cambiarModoBolsillos_(reg, permite);
-      if (!permite && item.Saldo_Apertura !== undefined) {
-        const general = leer_('Bolsillos').find(b => b.ID_Cuenta === reg.ID_Cuenta && esVerdadero(b.Es_Interno));
-        if (general) {
-          updateRow('Bolsillos', general._rowIndex, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
+      if (item.Saldo_Apertura !== undefined) {
+        const interno = leer_('Bolsillos').find(b => b.ID_Cuenta === reg.ID_Cuenta && esVerdadero(b.Es_Interno));
+        if (interno) {
+          updateRow('Bolsillos', interno._rowIndex, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
         }
       }
     },
@@ -310,7 +298,7 @@ const CATALOGOS = {
     },
     bloqueos: function (reg) {
       const msgs = [];
-      if (esVerdadero(reg.Es_Interno)) return ['es el saldo interno de una cuenta sin bolsillos; desactiva la cuenta'];
+      if (esVerdadero(reg.Es_Interno)) return ['es el saldo propio de la cuenta (sin asignar); desactiva la cuenta'];
       const saldo = mapaSaldosBolsillos_()[reg.ID_Bolsillo] || 0;
       if (Math.abs(saldo) >= SALDO_CERO) msgs.push('tiene un saldo distinto de cero; trasládalo a otro bolsillo');
       const id = reg.ID_Bolsillo;
@@ -861,20 +849,41 @@ function guardarCuentaConBolsillos(cuenta, bolsillos) {
 // Cuentas con o sin bolsillos
 // ---------------------------------------------------------------------------
 
-/** Crea el bolsillo interno "General" de una cuenta que no usa bolsillos. */
-function crearBolsilloInterno_(cuenta, saldoApertura) {
+const NOMBRE_SIN_ASIGNAR = 'Sin asignar';
+
+/**
+ * Crea el bolsillo interno de una cuenta: el saldo propio de la cuenta, que no pertenece a ningún bolsillo.
+ * Si la cuenta usa bolsillos se llama "Sin asignar"; si no, lleva el nombre de la cuenta (es toda la cuenta).
+ */
+function crearBolsilloInterno_(cuenta, saldoApertura, activo) {
   insertRow('Bolsillos', {
     ID_Bolsillo: nuevoId_('bol'),
     ID_Cuenta: cuenta.ID_Cuenta,
-    Nombre: cuenta.Nombre,
+    Nombre: esVerdadero(cuenta.Permite_Bolsillos) ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre,
     Rol: 'General',
     Saldo_Apertura: saldoApertura || 0,
     Es_Interno: true,
     Color: '', Icono: '',
-    Activo: true,
-    Orden: 1
+    Activo: activo === undefined ? true : !!activo,
+    Orden: 0
   });
   invalidateCache('Bolsillos');
+}
+
+/**
+ * Migración: toda cuenta debe tener su bolsillo interno (las que usan bolsillos y se crearon antes no lo tienen).
+ * Se crea en cero, así que no cambia ningún saldo. Idempotente.
+ * @returns {number} cuántos creó
+ */
+function asegurarBolsillosInternos_() {
+  const bolsillos = leer_('Bolsillos');
+  let creados = 0;
+  leer_('Cuentas').forEach(c => {
+    if (bolsillos.some(b => b.ID_Cuenta === c.ID_Cuenta && esVerdadero(b.Es_Interno))) return;
+    crearBolsilloInterno_(c, 0, estaActivo(c));
+    creados++;
+  });
+  return creados;
 }
 
 /**
@@ -897,25 +906,20 @@ function fusionarBolsillos_(cuenta, idDestino) {
 }
 
 /**
- * Cambia una cuenta entre "con bolsillos" y "sin bolsillos".
- *  - Con → sin: solo si queda a lo sumo un bolsillo activo (que pasa a ser el saldo interno); esa
- *    condición se valida en Cuentas.normalizar, antes de escribir. La fusión de varios bolsillos con
- *    traslado de saldo llega con las transferencias (Fase 2).
- *  - Sin → con: el saldo interno pasa a ser un bolsillo normal que se puede renombrar.
+ * Cambia una cuenta entre "con bolsillos" y "sin bolsillos". El saldo interno es el mismo en los dos modos:
+ *  - Sin → con: el saldo de la cuenta queda como dinero "sin asignar" y se pueden crear bolsillos.
+ *  - Con → sin: el dinero de todos los bolsillos se junta en el saldo interno (con traslados que quedan
+ *    en el historial) y los bolsillos se desactivan; el saldo interno vuelve a llevar el nombre de la cuenta.
  */
 function cambiarModoBolsillos_(cuenta, permite) {
-  const delaCuenta = leer_('Bolsillos').filter(b => b.ID_Cuenta === cuenta.ID_Cuenta && estaActivo(b));
-
-  if (permite) {
-    delaCuenta.filter(b => esVerdadero(b.Es_Interno))
-      .forEach(b => updateRow('Bolsillos', b._rowIndex, { Es_Interno: false, Rol: 'Operativo' }));
-  } else {
-    if (delaCuenta.length === 1) {
-      updateRow('Bolsillos', delaCuenta[0]._rowIndex, { Es_Interno: true, Rol: 'General', Nombre: cuenta.Nombre });
-    } else {
-      crearBolsilloInterno_(cuenta, 0);
-    }
+  let interno = leer_('Bolsillos').find(b => b.ID_Cuenta === cuenta.ID_Cuenta && esVerdadero(b.Es_Interno) && estaActivo(b));
+  if (!interno) {
+    crearBolsilloInterno_(cuenta, 0);
+    interno = leer_('Bolsillos').find(b => b.ID_Cuenta === cuenta.ID_Cuenta && esVerdadero(b.Es_Interno) && estaActivo(b));
   }
+  if (!permite) fusionarBolsillos_(cuenta, interno.ID_Bolsillo);
+  const vigente = leer_('Bolsillos').find(b => b.ID_Bolsillo === interno.ID_Bolsillo);
+  updateRow('Bolsillos', vigente._rowIndex, { Nombre: permite ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre, Rol: 'General', Es_Interno: true });
   invalidateCache('Bolsillos');
 }
 
