@@ -273,40 +273,34 @@ module.exports = function (prueba, assert, crearEntorno) {
   });
 
   // ---------------------------------------------------------------- fusión de bolsillos
-  prueba('fusión: quitar los bolsillos de una cuenta junta el dinero en el elegido y deja el historial', () => {
+  prueba('fusión: quitar los bolsillos de una cuenta junta el dinero en su saldo interno y deja el historial', () => {
     const { e, c1, casa, mercado } = escenario();
     e.llamar('registrarMovimiento', { Concepto: 'Compra', ID_Bolsillo: mercado.ID_Bolsillo, Valor: 50000 });
     const total = e.llamar('obtenerSaldos').total;
 
-    assert.throws(e.falla('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false }), /Elige en cuál juntar/);
-    assert.throws(e.falla('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false }, { fusionarEn: 'otro' }), /uno activo de esta cuenta/);
-
-    e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false }, { fusionarEn: casa.ID_Bolsillo });
+    e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false });
     const quedan = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.ID_Cuenta === c1.ID_Cuenta);
     assert.strictEqual(quedan.length, 1);
     assert.strictEqual(quedan[0].Es_Interno, true);
-    assert.strictEqual(quedan[0].ID_Bolsillo, casa.ID_Bolsillo);
+    assert.notStrictEqual(quedan[0].ID_Bolsillo, casa.ID_Bolsillo);
     assert.strictEqual(e.llamar('resumenSaldos_').cuentas[c1.ID_Cuenta].Saldo, 1150000, 'el saldo de la cuenta queda intacto');
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[quedan[0].ID_Bolsillo], 1150000);
     assert.strictEqual(e.llamar('obtenerSaldos').total, total, 'fusionar no cambia el total');
     assert.ok(e.llamar('listarMovimientos', {}).items.some(i => /Fusión de bolsillos/.test(i.Concepto)), 'queda un traslado en el historial');
     assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[mercado.ID_Bolsillo], 0);
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 0);
   });
 
   prueba('fusión: un bolsillo en negativo también se junta correctamente', () => {
     const { e, c1, casa, mercado } = escenario();
     e.llamar('registrarMovimiento', { Concepto: 'Gasto grande', ID_Bolsillo: mercado.ID_Bolsillo, Valor: 300000 }); // mercado = -100.000
     const total = e.llamar('obtenerSaldos').total;
-    e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false }, { fusionarEn: casa.ID_Bolsillo });
+    e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false });
+    const interno = e.llamar('listarCatalogo', 'Bolsillos').find(b => b.ID_Cuenta === c1.ID_Cuenta);
     assert.strictEqual(e.llamar('obtenerSaldos').total, total);
-    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 900000);
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[interno.ID_Bolsillo], 900000);
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[casa.ID_Bolsillo], 0);
     assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[mercado.ID_Bolsillo], 0);
-  });
-
-  prueba('fusión: si la validación falla, la cuenta no cambia', () => {
-    const { e, c1 } = escenario();
-    assert.throws(e.falla('guardarCatalogo', 'Cuentas', { ID_Cuenta: c1.ID_Cuenta, Permite_Bolsillos: false }));
-    const c = e.llamar('listarCatalogo', 'Cuentas').find(x => x.ID_Cuenta === c1.ID_Cuenta);
-    assert.strictEqual(c.Permite_Bolsillos, true);
   });
 
   // ---------------------------------------------------------------- API

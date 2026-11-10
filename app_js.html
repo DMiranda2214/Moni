@@ -471,6 +471,8 @@ function infoBolsillo(id) {
   }
   return null;
 }
+/** Nombre con que se muestra un bolsillo: el saldo propio de una cuenta con bolsillos es "Sin asignar"; el de una cuenta sin bolsillos, la cuenta misma. */
+function nombreBolsillo(b, c) { return b.Es_Interno ? (esVerdad(c.Permite_Bolsillos) ? 'Sin asignar' : c.Nombre) : b.Nombre; }
 const hayBolsillos = () => ((App.boot.saldos && App.boot.saldos.cuentas) || []).some(c => c.bolsillos.length);
 
 function buscarMov(id) {
@@ -908,11 +910,13 @@ function vBolsillos() {
   }
 
   s.cuentas.forEach(c => {
-    const filas = c.bolsillos.length
-      ? c.bolsillos.map(b => fila({
+    // "Sin asignar" no estorba cuando está en cero y la cuenta ya tiene otros bolsillos
+    const visibles = c.bolsillos.filter(b => !(b.Es_Interno && esVerdad(c.Permite_Bolsillos) && Math.abs(b.Saldo) < 0.005 && c.bolsillos.length > 1));
+    const filas = visibles.length
+      ? visibles.map(b => fila({
           icono: b.Rol === 'Reserva_Tarjeta' ? 'tarjetas' : 'bolsillos',
-          titulo: esc(b.Es_Interno ? c.Nombre : b.Nombre),
-          sub: b.Es_Interno ? 'Cuenta sin bolsillos' : (b.Rol === 'Operativo' ? '' : esc(etiqueta('RolBolsillo', b.Rol))),
+          titulo: esc(nombreBolsillo(b, c)),
+          sub: b.Es_Interno ? (esVerdad(c.Permite_Bolsillos) ? 'Dinero que no está en ningún bolsillo' : 'Cuenta sin bolsillos') : (b.Rol === 'Operativo' ? '' : esc(etiqueta('RolBolsillo', b.Rol))),
           final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</strong>',
           chevron: true,
           attrs: 'data-acc="ir" data-ruta="bolsillo/' + esc(b.ID_Bolsillo) + '"'
@@ -1130,12 +1134,8 @@ const CAT = {
       { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco', b => b.Nombre + ((b.Divisa || 'COP') !== 'COP' ? ' (' + b.Divisa + ')' : '')) },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
       { k: 'Tipo', label: 'Tipo', tipo: 'select', requerido: true, opciones: optsEnum(['Cuentas', 'Tipo'], 'TipoCuenta') },
-      { k: 'Permite_Bolsillos', label: 'Usar bolsillos', tipo: 'interruptor', ayuda: 'Los bolsillos reparten el dinero de la cuenta por propósito. Si lo desactivas, la cuenta se maneja como un solo saldo.', defecto: true },
-      { k: 'fusionarEn', label: 'Dónde juntar el dinero de los bolsillos', tipo: 'select', requerido: true,
-        ayuda: 'El saldo de cada bolsillo se traslada a este y queda registrado en el historial.',
-        visible: (v, x) => !!x.existente && esVerdad(x.existente.Permite_Bolsillos) && !v.Permite_Bolsillos && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1,
-        opciones: x => x.existente ? bolsillosActivosDe(x.existente.ID_Cuenta).map(b => [b.ID_Bolsillo, b.Nombre]) : [] },
-      { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', visible: (v, x) => !v.Permite_Bolsillos && !(x.existente && esVerdad(x.existente.Permite_Bolsillos) && bolsillosActivosDe(x.existente.ID_Cuenta).length > 1), ayuda: 'Cuánto dinero hay hoy en esta cuenta.' },
+      { k: 'Permite_Bolsillos', label: 'Usar bolsillos', tipo: 'interruptor', ayuda: 'Los bolsillos reparten el dinero de la cuenta por propósito. Puedes activarlo cuando los necesites. Si lo desactivas, el dinero de todos los bolsillos se junta en un solo saldo (queda un traslado en el historial).', defecto: true },
+      { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', ayuda: 'Cuánto dinero hay hoy en esta cuenta. Si usas bolsillos, escribe solo lo que no está en ninguno: queda como “Sin asignar” y puede ser 0.' },
       { k: 'Saldo_Real', label: 'Saldo que muestra tu banco (para cuadrar)', tipo: 'dinero', soloAlEditar: true, ayuda: 'Opcional. Cuando quieras comprobar que todo cuadra, escribe aquí lo que dice la app de tu banco: Moni lo compara con su propio saldo.' },
       { k: 'Meta', label: 'Meta de ahorro (opcional)', tipo: 'dinero', visible: v => v.Tipo === 'Ahorro' }
     ]
@@ -1362,7 +1362,6 @@ const INFO_CAMPOS = {
     Nombre: 'Cómo la reconoces: “Cuenta de ahorros”, “Nómina”, “Billetera”…',
     Tipo: 'Billetera: el dinero del día a día. Débito: una cuenta de banco. Ahorro: dinero que guardas, con meta y rendimientos. Otra: lo demás.',
     Permite_Bolsillos: 'Con bolsillos repartes el dinero de la cuenta por propósito (casa, mercado, un viaje). Sin bolsillos, la cuenta es un solo saldo.',
-    fusionarEn: 'Al quitar los bolsillos, el dinero de todos se junta en este, con un traslado que queda en el historial.',
     Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: desde aquí Moni suma y resta cada movimiento que registres.',
     Saldo_Real: 'No es el saldo inicial. Es lo que dice la app de tu banco hoy: Moni lo compara con el saldo que ella calcula con tus movimientos y te avisa si hay diferencia. Al crear la cuenta no hace falta.',
     Meta: 'Cuánto quieres ahorrar en esta cuenta. Moni muestra qué tanto llevas.'
@@ -1560,7 +1559,6 @@ function vCatalogo(tabla) {
 
 function idCampo(k) { return 'f-' + k; }
 
-const bolsillosActivosDe = idCuenta => activos('Bolsillos').filter(b => b.ID_Cuenta === idCuenta);
 
 function htmlCampo(c, valor, ctx) {
   const id = idCampo(c.k);
@@ -1731,10 +1729,6 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.reserva === '__nueva') opciones.crearReserva = { ID_Cuenta: v.cuentaReserva };
         else envio.ID_Bolsillo_Reserva = v.reserva;
         delete envio.reserva; delete envio.cuentaReserva;
-      }
-      if (tabla === 'Cuentas') {
-        if (v.fusionarEn) opciones.fusionarEn = v.fusionarEn;
-        delete envio.fusionarEn;
       }
       if (tabla === 'Escenarios') {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
@@ -1974,7 +1968,7 @@ function vBolsillo(id) {
   }
 
   return {
-    titulo: b.Es_Interno ? c.Nombre : b.Nombre,
+    titulo: nombreBolsillo(b, c),
     acciones: '<button class="m-btn-texto" data-acc="editar-bolsillo" data-id="' + esc(id) + '">Editar</button>',
     html: html,
     despues: () => { if (!d.data && !d.cargando && !d.error) cargarDetalle(); }
@@ -2040,7 +2034,7 @@ async function cargarMov() {
 function opcionesBolsillos() {
   return ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
     grupo: c.Banco + ' · ' + c.Nombre + (c.Divisa !== 'COP' ? ' (' + c.Divisa + ')' : ''),
-    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, (b.Es_Interno ? c.Nombre : b.Nombre) + ' — ' + dinero(b.Saldo, c.Divisa)])
+    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, nombreBolsillo(b, c) + ' — ' + dinero(b.Saldo, c.Divisa)])
   }));
 }
 
@@ -2282,7 +2276,7 @@ async function abrirDetalleMov(id) {
 async function abrirCuadre(idCuenta) {
   const c = ((App.boot.saldos && App.boot.saldos.cuentas) || []).find(x => x.ID_Cuenta === idCuenta);
   if (!c) return;
-  const opcionesAjuste = [['', 'No ajustar: solo guardar el saldo']].concat(c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre]));
+  const opcionesAjuste = [['', 'No ajustar: solo guardar el saldo']].concat(c.bolsillos.map(b => [b.ID_Bolsillo, nombreBolsillo(b, c)]));
   const cuerpo = '<form novalidate data-form="cuadre">' +
     '<p class="m-hoja-mensaje">Moni suma <strong>' + dinero(c.Saldo, c.Divisa) + '</strong> en “' + esc(c.Nombre) + '”. Escribe lo que muestra tu banco para compararlos.</p>' +
     htmlCampo({ k: 'Valor', label: 'Saldo según tu banco', tipo: 'dinero', requerido: true }, c.Saldo_Real === null || c.Saldo_Real === undefined ? '' : c.Saldo_Real) +
@@ -2343,7 +2337,7 @@ const TIPOS_RENGLON = [['Gasto', 'Gasto'], ['Cuota', 'Cuota de un crédito'], ['
 function opcionesDestino(conNinguno) {
   const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length && c.Divisa === 'COP').map(c => ({
     grupo: c.Banco + ' · ' + c.Nombre,
-    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, b.Es_Interno ? c.Nombre : b.Nombre])
+    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, nombreBolsillo(b, c)])
   }));
   return (conNinguno ? [['', 'Ninguno']] : []).concat(grupos);
 }
@@ -2669,7 +2663,7 @@ function vPlantilla() {
     html += '<div class="m-group">' + filas.map(p => {
       const b = p.ID_Bolsillo_Destino ? infoBolsillo(p.ID_Bolsillo_Destino) : null;
       return fila({
-        titulo: esc(p.Concepto), sub: esc(p.Tipo === 'Cuota' ? 'Cuota' : p.Tipo) + (b ? ' · ' + esc(b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : ''),
+        titulo: esc(p.Concepto), sub: esc(p.Tipo === 'Cuota' ? 'Cuota' : p.Tipo) + (b ? ' · ' + esc(nombreBolsillo(b.b, b.c)) : ''),
         final: '<span class="m-num">' + dinero(p.Monto_Plan) + '</span>', chevron: true,
         attrs: 'data-acc="editar-plantilla" data-id="' + esc(p.ID_Plantilla) + '"'
       });
@@ -2784,7 +2778,7 @@ function htmlNomina(d) {
     h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
       '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
       '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
-      (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? (b.b.Es_Interno ? b.c.Nombre : b.b.Nombre) : '') + '</dd></div>') +
+      (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? nombreBolsillo(b.b, b.c) : '') + '</dd></div>') +
       (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
       '</dl></div></section>' +
       (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
@@ -5103,13 +5097,14 @@ function sincronizarBolsillosAsist(f) {
   const bloque = $('#asist-bols', f), sw = $('#' + idCampo('Permite_Bolsillos'), f);
   if (!bloque || !sw) return;
   bloque.hidden = !sw.checked;
-  let total = 0, n = 0;
+  const suelto = leerDinero(($('#' + idCampo('Saldo_Apertura'), f) || {}).value || '');
+  let total = suelto !== '' && !isNaN(suelto) ? suelto : 0, n = 0;
   $$('[data-fila-bols]', bloque).forEach(fila => {
     const nom = $('[data-ab="nombre"]', fila).value.trim(), v = leerDinero($('[data-ab="saldo"]', fila).value);
     if (nom || (v !== '' && !isNaN(v))) n++;
     if (v !== '' && !isNaN(v)) total += v;
   });
-  $('#asist-bols-total', f).textContent = n ? 'Total de la cuenta: ' + dinero(total) + ' en ' + n + (n === 1 ? ' bolsillo' : ' bolsillos') : '';
+  $('#asist-bols-total', f).textContent = n ? 'Total de la cuenta: ' + dinero(total) + ' en ' + n + (n === 1 ? ' bolsillo' : ' bolsillos') + (suelto && !isNaN(suelto) ? ' (incluye ' + dinero(suelto) + ' sin asignar)' : '') : '';
 }
 
 /** Los bolsillos escritos en el paso de cuentas. Una fila vacía se ignora. */

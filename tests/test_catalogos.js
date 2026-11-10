@@ -149,23 +149,80 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(b.Saldo_Apertura, -82840.34);
   });
 
-  prueba('cambiar de "con bolsillos" a "sin bolsillos" exige dejar uno solo', () => {
+  prueba('toda cuenta tiene su saldo interno: "Sin asignar" si usa bolsillos, el nombre de la cuenta si no', () => {
+    const e = E();
+    const { banco, cuenta } = conBancoYCuenta(e);
+    const interno = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.ID_Cuenta === cuenta.ID_Cuenta);
+    assert.strictEqual(cuenta.Permite_Bolsillos, true);
+    assert.strictEqual(interno.length, 1);
+    assert.strictEqual(interno[0].Es_Interno, true);
+    assert.strictEqual(interno[0].Nombre, 'Sin asignar');
+    assert.strictEqual(interno[0].Rol, 'General');
+
+    const deb = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Débito diario', Tipo: 'Debito' });
+    const unico = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.ID_Cuenta === deb.ID_Cuenta);
+    assert.strictEqual(unico.length, 1);
+    assert.strictEqual(unico[0].Nombre, 'Débito diario');
+    assert.strictEqual(unico[0].Es_Interno, true);
+  });
+
+  prueba('una cuenta con bolsillos puede tener saldo sin asignar, y se mueve y se usa como cualquier bolsillo', () => {
+    const e = E();
+    const banco = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco' });
+    const cuenta = e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Principal', Tipo: 'Billetera', Saldo_Apertura: 300000 });
+    const casa = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'Casa', Saldo_Apertura: 200000 });
+    const interno = e.llamar('listarCatalogo', 'Bolsillos').find(b => b.ID_Cuenta === cuenta.ID_Cuenta && b.Es_Interno);
+    assert.strictEqual(interno.Saldo_Apertura, 300000);
+    assert.strictEqual(e.llamar('resumenSaldos_').cuentas[cuenta.ID_Cuenta].Saldo, 500000);
+
+    e.llamar('registrarMovimiento', { Tipo_Mov: 'Ingreso', Concepto: 'Nómina', ID_Bolsillo: interno.ID_Bolsillo, Valor: 100000 });
+    e.llamar('registrarTransferencia', interno.ID_Bolsillo, casa.ID_Bolsillo, 150000, undefined, 'Reparto');
+    const mapa = e.llamar('mapaSaldosBolsillos_');
+    assert.strictEqual(mapa[interno.ID_Bolsillo], 250000, 'lo que queda sin asignar');
+    assert.strictEqual(mapa[casa.ID_Bolsillo], 350000);
+    assert.throws(e.falla('desactivarCatalogo', 'Bolsillos', interno.ID_Bolsillo), /saldo propio/);
+    // el saldo sin asignar se puede corregir desde la cuenta
+    e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: cuenta.ID_Cuenta, Saldo_Apertura: 0 });
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[interno.ID_Bolsillo], -50000, 'apertura 0 + ingreso 100.000 − reparto 150.000');
+  });
+
+  prueba('la migración crea el saldo interno de las cuentas con bolsillos que no lo tienen, sin cambiar saldos', () => {
     const e = E();
     const { cuenta } = conBancoYCuenta(e);
-    e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'A' });
-    const b = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'B' });
-    assert.throws(e.falla('guardarCatalogo', 'Cuentas', { ID_Cuenta: cuenta.ID_Cuenta, Permite_Bolsillos: false }), /2 bolsillos activos/);
-    e.llamar('desactivarCatalogo', 'Bolsillos', b.ID_Bolsillo);
+    e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'Casa', Saldo_Apertura: 700000 });
+    const fila = e.ejecutar("leer_('Bolsillos').find(b => esVerdadero(b.Es_Interno))._rowIndex");
+    e.ctx.__fila = fila; e.ejecutar('deleteRow("Bolsillos", __fila)'); // una hoja de la versión anterior: sin saldo interno
+    assert.strictEqual(e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.Es_Interno).length, 0);
+    const total = e.llamar('obtenerSaldos').total;
+
+    assert.strictEqual(e.llamar('asegurarBolsillosInternos_'), 1);
+    const interno = e.llamar('listarCatalogo', 'Bolsillos').filter(b => b.Es_Interno);
+    assert.strictEqual(interno.length, 1);
+    assert.strictEqual(interno[0].Nombre, 'Sin asignar');
+    assert.strictEqual(e.llamar('obtenerSaldos').total, total, 'no cambia ningún saldo');
+    assert.strictEqual(e.llamar('asegurarBolsillosInternos_'), 0, 'idempotente');
+  });
+
+  prueba('cambiar de "con bolsillos" a "sin bolsillos" junta todo en el saldo interno, sin pedir nada', () => {
+    const e = E();
+    const { cuenta } = conBancoYCuenta(e);
+    e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'A', Saldo_Apertura: 100 });
+    e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'B', Saldo_Apertura: 250 });
     e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: cuenta.ID_Cuenta, Permite_Bolsillos: false });
     const quedan = e.llamar('listarCatalogo', 'Bolsillos');
     assert.strictEqual(quedan.length, 1);
     assert.strictEqual(quedan[0].Es_Interno, true);
     assert.strictEqual(quedan[0].Rol, 'General');
-    // y de vuelta: el interno pasa a ser un bolsillo normal
+    assert.strictEqual(quedan[0].Nombre, cuenta.Nombre);
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[quedan[0].ID_Bolsillo], 350);
+    // y de vuelta: el saldo queda sin asignar y se pueden crear bolsillos otra vez
     e.llamar('guardarCatalogo', 'Cuentas', { ID_Cuenta: cuenta.ID_Cuenta, Permite_Bolsillos: true });
-    const despues = e.llamar('listarCatalogo', 'Bolsillos')[0];
-    assert.strictEqual(despues.Es_Interno, false);
-    assert.strictEqual(despues.Rol, 'Operativo');
+    const despues = e.llamar('listarCatalogo', 'Bolsillos');
+    assert.strictEqual(despues.length, 1);
+    assert.strictEqual(despues[0].Nombre, 'Sin asignar');
+    assert.strictEqual(despues[0].Es_Interno, true);
+    assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[despues[0].ID_Bolsillo], 350);
+    assert.ok(e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'Nuevo' }).ID_Bolsillo);
   });
 
   prueba('un bolsillo con saldo distinto de cero no se desactiva', () => {
@@ -181,7 +238,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const e = E();
     const { cuenta } = conBancoYCuenta(e, { Tipo: 'Debito', Nombre: 'Débito' });
     const interno = e.llamar('listarCatalogo', 'Bolsillos')[0];
-    assert.throws(e.falla('desactivarCatalogo', 'Bolsillos', interno.ID_Bolsillo), /saldo interno/);
+    assert.throws(e.falla('desactivarCatalogo', 'Bolsillos', interno.ID_Bolsillo), /saldo propio/);
     e.llamar('desactivarCatalogo', 'Cuentas', cuenta.ID_Cuenta);
     assert.strictEqual(e.llamar('listarCatalogo', 'Bolsillos').length, 0);
   });

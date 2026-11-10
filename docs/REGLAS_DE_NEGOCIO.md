@@ -9,7 +9,9 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - **Anular** marca el movimiento (o el grupo completo); no borra. Se puede restaurar si los bolsillos siguen activos.
 - La fecha de un movimiento no puede ser futura. Las fechas se guardan como texto `AAAA-MM-DD`.
 - **Cuadrar:** diferencia = saldo real del banco − saldo de Moni de esa cuenta; el ajuste opcional es un movimiento de tipo *Ajuste*.
-- Una cuenta que **no permite bolsillos** tiene un único bolsillo interno; su saldo de apertura vive solo en ese bolsillo.
+- **Toda cuenta tiene un bolsillo interno** con su saldo propio. Si la cuenta usa bolsillos se llama **"Sin asignar"**: el dinero que no está en ningún bolsillo (una nómina sin repartir, una diferencia de *Cuadrar*, un saldo inicial sin destino). Si no los usa, ese bolsillo es toda la cuenta y lleva su nombre. Su saldo de apertura es el *Saldo inicial* de la cuenta.
+- **Usar bolsillos** se puede activar o desactivar cuando se quiera: al activarlo, el saldo de la cuenta queda como *Sin asignar* y se pueden crear bolsillos; al desactivarlo, el dinero de todos los bolsillos se junta en el saldo interno (traslados que quedan en el historial) y los bolsillos se desactivan.
+- *Sin asignar* se oculta de la lista de Bolsillos mientras esté en 0 y la cuenta tenga otros bolsillos, pero siempre se puede elegir al registrar un ingreso o un movimiento. Con el rendimiento *solo sobre bolsillos*, el dinero sin asignar no rinde (como el saldo de una cuenta sin bolsillos).
 
 ## 1 bis. Monedas (divisas)
 - La **moneda se elige en el banco** (`COP`, `USD` o `EUR`; pesos por defecto). Sus cuentas y bolsillos la heredan y todo se muestra en esa moneda. No se puede cambiar la moneda de un banco que ya tiene cuentas: se crea otro banco.

@@ -34,7 +34,7 @@ Toca **Registrar** o un acceso rápido y elige:
 Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para corregir un movimiento, ábrelo y **Editar** (los traslados y los pagos automáticos se anulan y se vuelven a registrar).
 
 ## 4. Bolsillos
-Cada cuenta con sus bolsillos y saldos. Toca un bolsillo para ver sus movimientos por mes, **Registrar**, **Mover dinero** o **Editar**. En la cuenta, **Cuadrar** compara con el saldo de tu banco: escribe lo que dice el banco; si hay diferencia, puedes dejar un **ajuste**.
+Cada cuenta con sus bolsillos y saldos. Si en una cuenta con bolsillos queda dinero que no está en ninguno (por ejemplo, una nómina que aún no repartes), aparece como **Sin asignar**; con saldo en cero se oculta, pero siempre puedes elegirlo al registrar. En la cuenta puedes escribir un *Saldo inicial* que quede sin asignar, y activar o desactivar **Usar bolsillos** cuando los necesites. Toca un bolsillo para ver sus movimientos por mes, **Registrar**, **Mover dinero** o **Editar**. En la cuenta, **Cuadrar** compara con el saldo de tu banco: escribe lo que dice el banco; si hay diferencia, puedes dejar un **ajuste**.
 
 ### Dólares y otras monedas
 - La moneda se elige **al crear el banco** (pesos, dólares o euros). Sus cuentas y bolsillos la heredan, y todo se muestra en esa moneda.

@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.2.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.3.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).

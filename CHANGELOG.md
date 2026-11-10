@@ -1,5 +1,10 @@
 # Cambios
 
+## 1.3.0 — Saldo "Sin asignar" en todas las cuentas (10 nov 2026)
+- **Nuevo:** toda cuenta puede tener dinero que no está en ningún bolsillo. Las cuentas con bolsillos tienen un saldo propio llamado **Sin asignar** (el *Saldo inicial* de la cuenta, una nómina sin repartir, una diferencia de *Cuadrar*). Se oculta de la lista mientras esté en 0 y la cuenta tenga otros bolsillos, pero siempre se puede elegir al registrar o mover dinero.
+- **Cambia:** *Usar bolsillos* se puede activar o desactivar cuando se quiera. Al desactivarlo, el dinero de todos los bolsillos se junta solo en el saldo interno (ya no hay que elegir dónde).
+- **Migración:** las cuentas con bolsillos creadas antes reciben su saldo *Sin asignar* en 0 al abrir la app; no cambia ningún saldo.
+
 ## 1.2.0 — Nómina sin afectar saldos, pagos del presupuesto y corrección de cuotas (10 nov 2026)
 - **Nuevo:** al registrar la **nómina** hay un interruptor *Sumar a mis saldos*. Apagado, la nómina queda registrada y cuenta como ingreso del mes, pero no crea movimiento ni cambia saldos (para quien ya recibió el pago antes de empezar a usar Moni). Nueva columna `Nomina_Pagos.Afecta_Saldos` (se agrega sola a las hojas existentes; `ESQUEMA_VERSION` 6).
 - **Nuevo:** marcar un renglón del **presupuesto** como pagado abre una hoja de confirmación: de qué bolsillo salió, valor y fecha. Registra el pago según el tipo (gasto, compra con tarjeta, cuota de crédito, traslado a ahorro o fondo) o **enlaza un movimiento que ya anotaste** sin duplicarlo. Desmarcar pregunta si también se anulan los pagos.

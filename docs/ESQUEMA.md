@@ -73,14 +73,14 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 
 **Cuentas** — `ID_Cuenta, ID_Banco, Nombre, Tipo, Permite_Bolsillos, Fecha_Apertura, Saldo_Real, Fecha_Saldo_Real, Meta, Activo, Orden`
 - `Tipo`: `Billetera`, `Debito`, `Ahorro`, `Otra`.
-- `Permite_Bolsillos = FALSE` → la cuenta es un solo saldo. La app crea un bolsillo `General` interno (oculto).
+- **Toda cuenta tiene un bolsillo interno** (`Es_Interno = TRUE`, `Rol = General`): su saldo propio. Con `Permite_Bolsillos = TRUE` se llama **"Sin asignar"** (dinero que no está en ningún bolsillo); con `FALSE` la cuenta es un solo saldo y el interno lleva el nombre de la cuenta.
 - **El saldo de apertura vive en los bolsillos** (`Bolsillos.Saldo_Apertura`); la cuenta no lo guarda, para no tener dos fuentes. `Fecha_Apertura` es la fecha desde la que se llevan los saldos.
 - `Saldo_Real` / `Fecha_Saldo_Real`: último saldo auditado en la app del banco, para el cuadre.
 - `Meta`: objetivo de ahorro (solo cuentas `Ahorro`).
 
 **Bolsillos** — `ID_Bolsillo, ID_Cuenta, Nombre, Rol, Saldo_Apertura, Es_Interno, Color, Icono, Activo, Orden`
 - `Rol`: `Operativo`, `Reserva_Tarjeta`, `Fondo`, `General`.
-- `Es_Interno = TRUE` solo para el bolsillo `General` de cuentas sin bolsillos.
+- `Es_Interno = TRUE` para el saldo propio de cada cuenta (uno por cuenta). Solo admite cambiar su saldo de apertura; se desactiva con la cuenta. Las hojas anteriores a la 1.3 se completan solas al abrir la app (se crea en 0, sin cambiar saldos).
 
 **Tarjetas** — `ID_Tarjeta, ID_Banco, Nombre, Cupo, Dia_Corte, Dia_Pago, ID_Bolsillo_Reserva, ID_Bolsillo_Personal, Color, Activo, Orden`
 - `ID_Bolsillo_Reserva`: dinero apartado para pagar el extracto.

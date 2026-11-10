@@ -4,7 +4,7 @@
 |---|---|
 | **Banco** | Quien tiene tu dinero: un banco o una billetera (Nequi, Nu…) |
 | **Cuenta** | Una cuenta en un banco: billetera, débito, ahorro u otra |
-| **Bolsillo** | Una parte de una cuenta con un destino (Casa, Mercado, Ocio). Si una cuenta **no permite bolsillos**, tiene uno solo, interno, y se ve como la cuenta |
+| **Bolsillo** | Una parte de una cuenta con un destino (Casa, Mercado, Ocio). Toda cuenta tiene además un saldo propio, interno: **Sin asignar** si usa bolsillos (dinero que no está en ninguno), o la cuenta misma si no los usa |
 | **Saldo de apertura / inicial** | Lo que había en un bolsillo cuando lo creaste en el asistente de primeros pasos: el punto de partida del que se calcula el saldo |
 | **Saldo** | Apertura + todo lo que entró y salió (sin contar lo anulado) |
 | **Movimiento** | Un gasto, ingreso, ajuste o traslado. Los traslados son dos movimientos que suman cero |
