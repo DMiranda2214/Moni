@@ -431,6 +431,14 @@ function distribuir(mes, idOrigen, fecha, forzar) {
   });
 }
 
+/** Los presupuestos que cambian al registrar o anular una nómina: el del mes que paga y el del mes en que se recibió. */
+function presupuestosDeNomina_(periodo, fecha) {
+  const meses = [String(periodo).slice(0, 7)];
+  const mf = String(fecha || '').slice(0, 7);
+  if (mf && meses.indexOf(mf) === -1) meses.push(mf);
+  return meses.map(m => obtenerPresupuestoMes(m));
+}
+
 function getNomina(periodo, idEscenario, opciones) {
   return responder_(function () { return obtenerNominaMes(periodo, idEscenario, opciones); });
 }
@@ -438,7 +446,7 @@ function getNomina(periodo, idEscenario, opciones) {
 function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
   return responder_(function () {
     const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos);
-    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario), presupuestos: presupuestosDeNomina_(periodo, fecha) });
   });
 }
 
@@ -460,7 +468,7 @@ function removeConceptoNomina(idConcepto, periodo, opciones) {
 function anularNomina(periodo) {
   return responder_(function () {
     const r = anularPagoNomina(periodo);
-    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo), presupuestos: presupuestosDeNomina_(periodo, r.fecha) });
   });
 }
 

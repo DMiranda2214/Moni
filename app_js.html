@@ -2896,7 +2896,7 @@ async function abrirRegistrarNomina() {
       if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
       const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta);
       if (afecta) recordarBolsillo(v.Bolsillo);
-      aplicarEscritura(res); App.nom.data = res.nomina; render();
+      aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
       aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
     }
   });
@@ -2905,7 +2905,7 @@ async function abrirRegistrarNomina() {
 async function anularNominaYAvisar() {
   try {
     const res = await api('anularNomina', App.nom.mes);
-    aplicarEscritura(res); App.nom.data = res.nomina; render();
+    aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
     aviso('Nómina anulada');
   } catch (e) { aviso(e.message, true); }
 }

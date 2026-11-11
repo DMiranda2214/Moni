@@ -275,7 +275,7 @@ function anularPagoNomina(periodo) {
   if (!pago) throw new Error('No hay una nómina registrada en ese mes.');
   if (pago.ID_Mov) anularMovimiento(pago.ID_Mov);
   updateRow('Nomina_Pagos', pago._rowIndex, { Anulado: true });
-  return { idMov: pago.ID_Mov, periodo: p };
+  return { idMov: pago.ID_Mov, periodo: p, fecha: pago.Fecha_Pago };
 }
 
 // ---------------------------------------------------------------------------

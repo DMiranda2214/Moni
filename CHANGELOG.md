@@ -1,5 +1,8 @@
 # Cambios
 
+## 1.3.1 — La nómina sin afectar saldos se ve al instante en el presupuesto (11 nov 2026)
+- **Corregido:** al registrar (o anular) una nómina sin afectar saldos, el presupuesto seguía mostrando el *Entró* anterior hasta recargar la app. Ahora se actualiza al momento.
+
 ## 1.3.0 — Saldo "Sin asignar" en todas las cuentas (10 nov 2026)
 - **Nuevo:** toda cuenta puede tener dinero que no está en ningún bolsillo. Las cuentas con bolsillos tienen un saldo propio llamado **Sin asignar** (el *Saldo inicial* de la cuenta, una nómina sin repartir, una diferencia de *Cuadrar*). Se oculta de la lista mientras esté en 0 y la cuenta tenga otros bolsillos, pero siempre se puede elegir al registrar o mover dinero.
 - **Cambia:** *Usar bolsillos* se puede activar o desactivar cuando se quiera. Al desactivarlo, el dinero de todos los bolsillos se junta solo en el saldo interno (ya no hay que elegir dónde).
