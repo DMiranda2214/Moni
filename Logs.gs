@@ -11,7 +11,7 @@
  * Registrar nunca debe romper lo que se estaba haciendo: todo está envuelto para no lanzar.
  */
 
-const VERSION_APP = '1.3.1';
+const VERSION_APP = '1.4.0';
 const MAX_LOG_FILAS = 500;
 const MARGEN_RECORTE_LOG = 50; // se recorta cada vez que sobran 50, no en cada entrada
 

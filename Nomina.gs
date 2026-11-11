@@ -212,7 +212,7 @@ function obtenerNominaMes(periodo, idEsc, opciones) {
   return {
     periodo: p, calculo: calculo, error: error, configurada: leer_('Nomina_Escenarios').some(estaActivo),
     conceptos: calculo ? conceptosFijosNomina_(calculo.escenario.ID_Nomina_Esc) : [],
-    pago: pago ? { ID_Nomina: pago.ID_Nomina, Estado: pago.Estado, Neto_Estimado: Number(pago.Neto_Estimado) || 0, Neto_Real: Number(pago.Neto_Real) || 0, Fecha_Pago: pago.Fecha_Pago, ID_Bolsillo_Destino: pago.ID_Bolsillo_Destino, ID_Mov: pago.ID_Mov, Afecta_Saldos: afectaSaldosNomina_(pago) } : null
+    pago: pago ? { ID_Nomina: pago.ID_Nomina, Estado: pago.Estado, Neto_Estimado: Number(pago.Neto_Estimado) || 0, Neto_Real: Number(pago.Neto_Real) || 0, Fecha_Pago: pago.Fecha_Pago, ID_Bolsillo_Destino: pago.ID_Bolsillo_Destino, ID_Mov: pago.ID_Mov, Afecta_Saldos: afectaSaldosNomina_(pago), Mes_Presupuesto: mesPresupuestoNomina_(pago) } : null
   };
 }
 
@@ -221,18 +221,45 @@ function afectaSaldosNomina_(pago) {
   return pago.Afecta_Saldos === undefined || pago.Afecta_Saldos === '' || esVerdadero(pago.Afecta_Saldos);
 }
 
-/** Nóminas vigentes registradas sin afectar saldos: cuentan como ingreso de su mes, pero no hay movimiento. [{ mes, valor }] */
-function nominasInformativas_() {
-  return leer_('Nomina_Pagos')
-    .filter(n => !esVerdadero(n.Anulado) && !afectaSaldosNomina_(n))
-    .map(n => ({ mes: String(n.Fecha_Pago || n.Periodo || '').slice(0, 7), valor: Number(n.Neto_Real) || 0 }));
+/**
+ * El mes del presupuesto en que cuenta una nómina: el que la persona eligió (por ejemplo, el mes siguiente si la recibió
+ * a fin de mes) o, si no eligió, el mes que paga. Es independiente de la fecha real, que manda en saldos e historial.
+ */
+function mesPresupuestoNomina_(pago) {
+  return String(pago.Mes_Presupuesto || '').trim().slice(0, 7) || String(pago.Periodo || '').slice(0, 7);
+}
+
+/**
+ * Lo que las nóminas vigentes aportan como ingreso a cada mes del presupuesto y de la vista anual.
+ * Sus movimientos (si los hay) se cuentan aquí y no por su fecha, para no sumarlos dos veces.
+ * @returns {{ porMes: Object, idsMov: Object }}
+ */
+function ingresosNomina_() {
+  const porMes = {}, idsMov = {};
+  leer_('Nomina_Pagos').filter(n => !esVerdadero(n.Anulado)).forEach(n => {
+    const m = mesPresupuestoNomina_(n);
+    porMes[m] = (porMes[m] || 0) + (Number(n.Neto_Real) || 0);
+    if (n.ID_Mov) idsMov[n.ID_Mov] = true;
+  });
+  return { porMes: porMes, idsMov: idsMov };
+}
+
+/** Cambia el mes del presupuesto en que cuenta una nómina ya registrada. No toca saldos ni movimientos. */
+function cambiarMesPresupuestoNomina(periodo, mesNuevo) {
+  const p = mesValido_(periodo);
+  const pago = leer_('Nomina_Pagos').find(n => n.Periodo === p && !esVerdadero(n.Anulado));
+  if (!pago) throw new Error('No hay una nómina registrada en ese mes.');
+  const nuevo = mesValido_(mesNuevo);
+  const anterior = mesPresupuestoNomina_(pago);
+  updateRow('Nomina_Pagos', pago._rowIndex, { Mes_Presupuesto: nuevo });
+  return { periodo: p, anterior: anterior, nuevo: nuevo };
 }
 
 /**
  * Registra la nómina recibida: guarda el cálculo del mes (con su detalle congelado) y crea el
  * ingreso en el bolsillo elegido. Solo un pago por mes.
  */
-function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
+function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opciones, afectaSaldos, mesPresupuesto) {
   const p = mesValido_(periodo);
   if (leer_('Nomina_Pagos').some(n => n.Periodo === p && !esVerdadero(n.Anulado))) {
     throw new Error('La nómina de ese mes ya está registrada. Anúlala primero si necesitas corregirla.');
@@ -243,6 +270,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
   const f = fechaMovimiento_(fecha);
   // Sin afectar saldos: la nómina queda registrada (y cuenta como ingreso del mes) pero no mueve dinero ni pide bolsillo.
   const afecta = !(afectaSaldos === false || afectaSaldos === 'false');
+  const mesP = mesPresupuesto ? mesValido_(mesPresupuesto) : p;
   if (afecta) exigirPesos_(idBolsillo, 'El bolsillo donde llega la nómina');
 
   const catSalario = leer_('Categorias').find(c => c.ID_Categoria === 'cat-salario' && estaActivo(c));
@@ -256,7 +284,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
     ID_Nomina: idNomina, Periodo: p, ID_Nomina_Esc: esc.ID_Nomina_Esc, Estado: 'Recibido',
     Devengado: calculo.totales.devengado, Deducciones: calculo.totales.deducciones, Extras: calculo.totales.extras,
     Neto_Estimado: calculo.totales.neto, Neto_Real: neto, Fecha_Pago: f, ID_Bolsillo_Destino: afecta ? idBolsillo : '',
-    ID_Mov: mov.ID_Mov, Notas: 'Escenario: ' + esc.Nombre + (afecta ? '' : ' · sin afectar saldos'), Origen: 'App', Anulado: false, Afecta_Saldos: afecta
+    ID_Mov: mov.ID_Mov, Notas: 'Escenario: ' + esc.Nombre + (afecta ? '' : ' · sin afectar saldos'), Origen: 'App', Anulado: false, Afecta_Saldos: afecta, Mes_Presupuesto: mesP
   });
 
   const detalle = [];
@@ -265,7 +293,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
   calculo.extras.forEach(d => detalle.push({ ID_Detalle: nuevoId_('ndt'), ID_Nomina: idNomina, Tipo: 'Extra', Concepto: d.concepto, Valor: d.valor }));
   insertRows('Nomina_Pagos_Detalle', detalle);
 
-  return { idNomina: idNomina, idMov: mov.ID_Mov, neto: neto, periodo: p, afectaSaldos: afecta };
+  return { idNomina: idNomina, idMov: mov.ID_Mov, neto: neto, periodo: p, afectaSaldos: afecta, mesPresupuesto: mesP };
 }
 
 /** Anula la nómina registrada de un mes y su ingreso. */
@@ -275,7 +303,7 @@ function anularPagoNomina(periodo) {
   if (!pago) throw new Error('No hay una nómina registrada en ese mes.');
   if (pago.ID_Mov) anularMovimiento(pago.ID_Mov);
   updateRow('Nomina_Pagos', pago._rowIndex, { Anulado: true });
-  return { idMov: pago.ID_Mov, periodo: p, fecha: pago.Fecha_Pago };
+  return { idMov: pago.ID_Mov, periodo: p, fecha: pago.Fecha_Pago, mesPresupuesto: mesPresupuestoNomina_(pago) };
 }
 
 // ---------------------------------------------------------------------------

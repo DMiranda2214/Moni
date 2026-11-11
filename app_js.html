@@ -2779,6 +2779,7 @@ function htmlNomina(d) {
       '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
       '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
       (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? nombreBolsillo(b.b, b.c) : '') + '</dd></div>') +
+      '<div><dt>Cuenta en el presupuesto de</dt><dd>' + esc(mesTexto(d.pago.Mes_Presupuesto || d.periodo)) + ' · <button type="button" class="m-btn-texto" data-acc="nom-cambiar-mes">Cambiar</button></dd></div>' +
       (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
       '</dl></div></section>' +
       (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
@@ -2880,12 +2881,15 @@ async function abrirRegistrarNomina() {
   const campos = [
     { k: 'Valor', label: 'Neto que recibiste', tipo: 'dinero', requerido: true, ayuda: 'Por defecto, el estimado. Cámbialo si el valor real fue distinto.' },
     { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), visible: v => v.Afecta !== false },
+    { k: 'MesPpto', label: 'Cuenta en el presupuesto de', tipo: 'select', requerido: true,
+      opciones: () => [-1, 0, 1].map(d => [mesMas(App.nom.mes, d), mesTexto(mesMas(App.nom.mes, d))]),
+      ayuda: 'Si recibiste el pago a fin de mes para el mes siguiente, elige el mes siguiente: el ingreso cuenta en su presupuesto. Tus saldos y el historial siguen con la fecha real.' },
     { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor', info: 'Apágalo si esta plata ya está en tus saldos (por ejemplo, la tenías antes de empezar a usar Moni). La nómina queda registrada y cuenta como ingreso del mes, pero no cambia ningún saldo.' }
   ];
   const preferido = ultimoBolsillo();
   await abrirHoja({
     titulo: 'Nómina de ' + mesTexto(App.nom.mes).toLowerCase(),
-    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[2], true, {}) + htmlCampo(campos[1], preferido, {}) +
+    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[3], true, {}) + htmlCampo(campos[1], preferido, {}) + htmlCampo(campos[2], App.nom.mes, {}) +
       '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true }); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos))); },
@@ -2894,10 +2898,30 @@ async function abrirRegistrarNomina() {
       const afecta = v.Afecta !== false;
       if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el neto que recibiste.');
       if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
-      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta);
+      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta, v.MesPpto || App.nom.mes);
       if (afecta) recordarBolsillo(v.Bolsillo);
       aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
       aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
+    }
+  });
+}
+
+/** Corrige en qué mes del presupuesto cuenta una nómina ya registrada (no mueve dinero ni cambia saldos). */
+async function abrirCambiarMesNomina() {
+  const d = App.nom.data;
+  if (!d || !d.pago) return;
+  const actual = d.pago.Mes_Presupuesto || d.periodo;
+  const campos = [{ k: 'Mes', label: 'Cuenta en el presupuesto de', tipo: 'select', requerido: true,
+    opciones: () => [-2, -1, 0, 1, 2].map(x => [mesMas(d.periodo, x), mesTexto(mesMas(d.periodo, x))]),
+    ayuda: 'Solo cambia en qué mes del presupuesto y de la vista anual cuenta este ingreso. No mueve dinero ni cambia tus saldos.' }];
+  await abrirHoja({
+    titulo: 'Mes de la nómina', der: 'Guardar',
+    cuerpo: '<form novalidate data-form="mes-nomina">' + htmlCampo(campos[0], actual, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      const res = await api('changeMesNomina', d.periodo, v.Mes);
+      (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
+      aviso('Ahora cuenta en ' + mesTexto(v.Mes).toLowerCase());
     }
   });
 }
@@ -5426,6 +5450,7 @@ const ACCIONES = {
   distribuir: () => abrirDistribucion(App.ppto.mes),
   'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
   'registrar-nomina': () => abrirRegistrarNomina(),
+  'nom-cambiar-mes': () => abrirCambiarMesNomina(),
   'nom-concepto-nuevo': () => abrirConceptoNomina(null),
   'nom-sueldo': () => abrirSueldoNomina(),
   'aviso-ir': el => navegar(el.dataset.ruta),
