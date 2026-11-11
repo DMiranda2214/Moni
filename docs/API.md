@@ -69,7 +69,8 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `previewDistribucion` | `mes, idOrigen` |
 | `distribuir` | `mes, idOrigen, fecha, forzar` |
 | `getNomina` | `periodo, idEscenario, opciones` |
-| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos?` — con `afectaSaldos = false` no crea movimiento ni pide bolsillo |
+| `registrarNomina` | `periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos?, mesPresupuesto?` — con `afectaSaldos = false` no crea movimiento ni pide bolsillo; `mesPresupuesto` (AAAA-MM) es el mes del presupuesto en que cuenta (por defecto, el que paga) |
+| `changeMesNomina` | `periodo, mesNuevo` — cambia el mes del presupuesto de una nómina ya registrada; no toca saldos |
 | `saveMiNomina` | `sueldo, periodo, opciones` — el sueldo base (crea la nómina la primera vez) y devuelve la nómina del mes |
 | `saveConceptoNomina` | `d, periodo, opciones` — un descuento o ingreso fijo (libranza, medicina prepagada, bono…) |
 | `removeConceptoNomina` | `idConcepto, periodo, opciones` |
