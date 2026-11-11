@@ -30,12 +30,13 @@ function obtenerVistaAnual(anio) {
     if (esVerdadero(i.Pagado)) m.ahorro += plan - r;
   });
   const divisaDe = mapaDivisas_().bolsillos;
+  const nomina = ingresosNomina_();
   movs.forEach(mv => {
-    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha || (divisaDe[mv.ID_Bolsillo] || DIVISA_BASE) !== DIVISA_BASE) return;
+    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha || nomina.idsMov[mv.ID_Mov] || (divisaDe[mv.ID_Bolsillo] || DIVISA_BASE) !== DIVISA_BASE) return;
     const m = porMes[mv.Fecha.slice(0, 7)];
     if (m) m.ingreso += Number(mv.Valor) || 0;
   });
-  nominasInformativas_().forEach(n => { const m = porMes[n.mes]; if (m) m.ingreso += n.valor; });
+  Object.keys(nomina.porMes).forEach(k => { const m = porMes[k]; if (m) m.ingreso += nomina.porMes[k]; });
   // TTCC: lo comprado con tarjeta que NO está en ningún renglón (lo de un renglón ya cuenta en su plan y su real).
   // Cuenta en el mes de la compra; lo "De otra persona" se reembolsa y no cuenta.
   compras.forEach(c => {

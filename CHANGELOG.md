@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.4.0 — Mes del presupuesto de la nómina (11 nov 2026)
+- **Nuevo:** al registrar la nómina eliges **en qué mes del presupuesto cuenta** (por defecto, el que paga). Una nómina recibida a fin de mes para el mes siguiente suma en el presupuesto y la vista anual de ese mes; los saldos y el historial siguen la fecha real. Vale para toda nómina, afecte o no los saldos.
+- **Nuevo:** en una nómina ya registrada, **Cambiar** junto a *Cuenta en el presupuesto de* corrige ese mes sin tocar saldos. Las registradas antes cuentan en el mes que pagan. Nueva columna `Nomina_Pagos.Mes_Presupuesto` (`ESQUEMA_VERSION` 8; se agrega sola).
+- **Corregido:** el presupuesto se actualiza al instante al registrar o anular una nómina (1.3.1).
+
+## 1.3.1 — La nómina sin afectar saldos se ve al instante en el presupuesto (11 nov 2026)
+- **Corregido:** al registrar (o anular) una nómina sin afectar saldos, el presupuesto seguía mostrando el *Entró* anterior hasta recargar la app. Ahora se actualiza al momento.
+
 ## 1.3.0 — Saldo "Sin asignar" en todas las cuentas (10 nov 2026)
 - **Nuevo:** toda cuenta puede tener dinero que no está en ningún bolsillo. Las cuentas con bolsillos tienen un saldo propio llamado **Sin asignar** (el *Saldo inicial* de la cuenta, una nómina sin repartir, una diferencia de *Cuadrar*). Se oculta de la lista mientras esté en 0 y la cuenta tenga otros bolsillos, pero siempre se puede elegir al registrar o mover dinero.
 - **Cambia:** *Usar bolsillos* se puede activar o desactivar cuando se quiera. Al desactivarlo, el dinero de todos los bolsillos se junta solo en el saldo interno (ya no hay que elegir dónde).

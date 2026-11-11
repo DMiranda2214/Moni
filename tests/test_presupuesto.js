@@ -369,6 +369,47 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('registrarPagoNomina', hoy(), undefined, '', diaHoy(), nomina.ID_Bolsillo).afectaSaldos, true, 'se puede registrar de nuevo afectando');
   });
 
+  prueba('nómina: cuenta en el mes del presupuesto que se elige (por ejemplo, el siguiente) y no en el de la fecha real', () => {
+    const { e, nomina } = escenario();
+    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });
+    const [a, m] = hoy().split('-').map(Number);
+    const siguiente = m === 12 ? (a + 1) + '-01' : a + '-' + ('0' + (m + 1)).slice(-2);
+    const ing = mes => e.llamar('obtenerPresupuestoMes', mes).totales.ingresos;
+    const antesHoy = ing(hoy()), antesSig = ing(siguiente);
+    const saldoAntes = saldo(e, nomina.ID_Bolsillo);
+
+    // Recibida hoy (a fin de mes) para pagar el mes siguiente
+    e.llamar('registrarPagoNomina', siguiente, undefined, 2877445, diaHoy(), nomina.ID_Bolsillo, undefined, true, siguiente);
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), saldoAntes + 2877445, 'el saldo y el historial siguen la fecha real');
+    assert.strictEqual(ing(siguiente), antesSig + 2877445, 'cuenta en el presupuesto del mes elegido');
+    assert.strictEqual(ing(hoy()), antesHoy, 'y no se suma dos veces en el mes de la fecha real');
+    const anual = e.llamar('obtenerVistaAnual', +siguiente.slice(0, 4)).meses.find(x => x.mes === siguiente);
+    assert.strictEqual(anual.ingreso, 2877445, 'la vista anual también');
+
+    // Corregirlo después, sin tocar saldos
+    const r = e.llamar('cambiarMesPresupuestoNomina', siguiente, hoy());
+    assert.strictEqual(r.anterior, siguiente);
+    assert.strictEqual(e.llamar('obtenerNominaMes', siguiente).pago.Mes_Presupuesto, hoy());
+    assert.strictEqual(ing(hoy()), antesHoy + 2877445);
+    assert.strictEqual(ing(siguiente), antesSig);
+    assert.strictEqual(saldo(e, nomina.ID_Bolsillo), saldoAntes + 2877445, 'cambiar el mes no mueve dinero');
+    assert.throws(e.falla('cambiarMesPresupuestoNomina', '2000-01', hoy()), /No hay una nómina/);
+    assert.throws(e.falla('cambiarMesPresupuestoNomina', siguiente, 'abc'), /./);
+  });
+
+  prueba('nómina: sin elegir mes cuenta en el mes que paga, y las registradas antes de esta opción siguen igual', () => {
+    const { e, nomina } = escenario();
+    e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });
+    const ing = () => e.llamar('obtenerPresupuestoMes', hoy()).totales.ingresos;
+    const antes = ing();
+    e.llamar('registrarPagoNomina', hoy(), undefined, '', diaHoy(), nomina.ID_Bolsillo);
+    assert.strictEqual(e.llamar('obtenerNominaMes', hoy()).pago.Mes_Presupuesto, hoy());
+    assert.strictEqual(ing(), antes + 2877445);
+    // una fila vieja, sin la columna: cuenta en su periodo
+    e.ejecutar("updateRow('Nomina_Pagos', leer_('Nomina_Pagos').find(n => !esVerdadero(n.Anulado))._rowIndex, { Mes_Presupuesto: '' })");
+    assert.strictEqual(ing(), antes + 2877445);
+  });
+
   prueba('nómina: la que afecta saldos sigue pidiendo bolsillo', () => {
     const { e } = escenario();
     e.llamar('guardarCatalogo', 'Nomina_Escenarios', { Nombre: 'Actual', Sueldo_Base: 3127845, Vigente: true });

@@ -55,7 +55,9 @@ Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o
 5. **Repartir la nómina en los bolsillos** (desde Nómina): mueve el dinero desde el bolsillo donde llegó hasta los bolsillos de destino del presupuesto. Los gastos y cuotas se agrupan por bolsillo; el ahorro y los fondos van renglón por renglón. Lo que ya está en el bolsillo de origen no se mueve, y si ya repartiste ese mes la app te pide confirmar antes de repetir.
 
 ## 6. Nómina
-> **¿Ya recibiste la nómina antes de empezar con Moni?** Al registrarla, apaga **Sumar a mis saldos**: la nómina queda registrada (y cuenta como ingreso del mes en el presupuesto y la vista anual) pero no cambia ningún saldo, porque ese dinero ya está en los que escribiste. Si te equivocas, anúlala y regístrala de nuevo.
+> **¿Ya recibiste la nómina antes de empezar con Moni?** Al registrarla, apaga **Sumar a mis saldos**: la nómina queda registrada (y cuenta como ingreso en el presupuesto y la vista anual) pero no cambia ningún saldo, porque ese dinero ya está en los que escribiste. Si te equivocas, anúlala y regístrala de nuevo.
+>
+> **¿La recibiste a fin de mes para el mes siguiente?** En *Cuenta en el presupuesto de* elige el mes siguiente: el ingreso suma en el presupuesto de ese mes, mientras tus saldos y el historial siguen con la fecha real. Si ya la registraste, en *Nómina recibida* toca **Cambiar** junto a ese mes; no mueve dinero.
 
 **Más → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
 

@@ -431,14 +431,29 @@ function distribuir(mes, idOrigen, fecha, forzar) {
   });
 }
 
+/** Los presupuestos de estos meses (sin repetir), para que la pantalla los muestre al día tras tocar una nómina. */
+function presupuestosDeNomina_(meses) {
+  const unicos = [];
+  (meses || []).forEach(m => { if (m && unicos.indexOf(m) === -1) unicos.push(m); });
+  return unicos.map(m => obtenerPresupuestoMes(m));
+}
+
+/** Cambia el mes del presupuesto en que cuenta una nómina ya registrada. */
+function changeMesNomina(periodo, mesNuevo) {
+  return responder_(function () {
+    const r = cambiarMesPresupuestoNomina(periodo, mesNuevo);
+    return { nomina: obtenerNominaMes(periodo), presupuestos: presupuestosDeNomina_([r.anterior, r.nuevo]) };
+  });
+}
+
 function getNomina(periodo, idEscenario, opciones) {
   return responder_(function () { return obtenerNominaMes(periodo, idEscenario, opciones); });
 }
 
-function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos) {
+function registrarNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos, mesPresupuesto) {
   return responder_(function () {
-    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos);
-    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario) });
+    const r = registrarPagoNomina(periodo, idEscenario, netoReal, fecha, idBolsillo, opciones, afectaSaldos, mesPresupuesto);
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo, idEscenario), presupuestos: presupuestosDeNomina_([r.mesPresupuesto]) });
   });
 }
 
@@ -460,7 +475,7 @@ function removeConceptoNomina(idConcepto, periodo, opciones) {
 function anularNomina(periodo) {
   return responder_(function () {
     const r = anularPagoNomina(periodo);
-    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { nomina: obtenerNominaMes(periodo), presupuestos: presupuestosDeNomina_([r.mesPresupuesto]) });
   });
 }
 

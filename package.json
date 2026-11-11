@@ -1,6 +1,6 @@
 {
   "name": "moni",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "license": "MIT",
   "description": "Moni: finanzas personales sobre Google Sheets con Apps Script",
