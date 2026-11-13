@@ -17,13 +17,28 @@ const ACENTOS = {
 };
 // </ACENTOS>
 
+/** Las cuatro áreas de la app. Cada una abre su pantalla de entrada (`ruta`). */
 const TABS = [
-  { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio' },
-  { id: 'bolsillos', etiqueta: 'Bolsillos', icono: 'bolsillos' },
-  { id: 'presupuesto', etiqueta: 'Presupuesto', icono: 'presupuesto' },
-  { id: 'tarjetas', etiqueta: 'Deudas', icono: 'tarjetas' },
-  { id: 'mas', etiqueta: 'Más', icono: 'mas' }
+  { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: 'inicio' },
+  { id: 'dinero', etiqueta: 'Dinero', icono: 'bolsillos', ruta: 'bolsillos' },
+  { id: 'planear', etiqueta: 'Planear', icono: 'calendario', ruta: 'planear' },
+  { id: 'deudas', etiqueta: 'Deudas', icono: 'tarjetas', ruta: 'tarjetas' }
 ];
+
+/** Cada pantalla principal pertenece a un área: el área marca la pestaña (o el grupo de la barra lateral) activa. */
+const AREA_DE_RUTA = {
+  inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero',
+  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', anual: 'planear',
+  tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
+};
+
+/** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
+const GRUPOS_NAV = [
+  { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['regalos', 'Regalos', 'regalo'], ['anual', 'Vista anual', 'calendario']] },
+  { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
+];
+const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
 
 const ETIQUETAS = {
   TipoCuenta: { Billetera: 'Billetera', Debito: 'Débito', Ahorro: 'Ahorro', Otra: 'Otra' },
@@ -488,7 +503,7 @@ function buscarMov(id) {
 // Navegación
 // ---------------------------------------------------------------------------
 
-const esTab = r => TABS.some(t => t.id === r);
+const esTab = r => Object.prototype.hasOwnProperty.call(AREA_DE_RUTA, r);
 
 function navegar(ruta) {
   if (esTab(ruta)) App.pila = [ruta];
@@ -502,8 +517,7 @@ function volver() {
 const rutaActual = () => App.pila[App.pila.length - 1];
 
 function tituloRuta(ruta) {
-  const t = TABS.find(x => x.id === ruta);
-  if (t) return t.etiqueta;
+  if (TITULOS_BASE[ruta]) return TITULOS_BASE[ruta];
   const partes = ruta.split('/');
   if (partes[0] === 'ajustes' && partes.length === 1) return 'Ajustes';
   if (partes[0] === 'movimientos') return 'Movimientos';
@@ -530,12 +544,16 @@ function render(enfocar) {
   const ruta = rutaActual();
   const raiz = App.pila[0];
 
-  // Navegación principal
-  const navHtml = (clase) => TABS.map(t =>
-    '<button class="' + clase + '" data-acc="tab" data-ruta="' + t.id + '"' + (t.id === raiz ? ' aria-current="page"' : '') + '>' +
-    ico(t.icono) + '<span>' + esc(t.etiqueta) + '</span></button>').join('');
-  $('#tabbar').innerHTML = navHtml('m-tab');
-  $('#lateral').innerHTML = '<div class="m-marca">Moni</div>' + navHtml('m-lateral-item');
+  // Navegación principal: barra inferior (celular) y barra lateral (tablet y computador)
+  const area = AREA_DE_RUTA[raiz] || '';
+  const puedeRegistrar = !!(App.boot && App.boot.instalado && hayBolsillos());
+  const tabHtml = t => '<button class="m-tab" data-acc="tab" data-ruta="' + t.ruta + '"' + (t.id === area ? ' aria-current="page"' : '') + '>' +
+    '<span class="m-tab-ico">' + ico(t.icono) + '</span><span>' + esc(t.etiqueta) + '</span></button>';
+  $('#tabbar').innerHTML = tabHtml(TABS[0]) + tabHtml(TABS[1]) +
+    '<div class="m-tab-centro">' + (puedeRegistrar ? '<button class="m-tab-mas" data-acc="menu-registrar" aria-label="Registrar un movimiento">' + ico('plus') + '</button>' : '') + '</div>' +
+    tabHtml(TABS[2]) + tabHtml(TABS[3]);
+  $('#lateral').innerHTML = htmlLateral(raiz, area, puedeRegistrar);
+  document.body.classList.toggle('m-lat-chica', lateralChica());
 
   // Pantalla
   let vista;
@@ -553,12 +571,12 @@ function render(enfocar) {
 
   const titulo = vista.ocultarTitulo ? '' : '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(vista.titulo) + '</h1>';
   $('#vista').classList.toggle('m-ancha', !!vista.ancha);
-  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + vista.html;
+  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + pildorasDinero(ruta) + vista.html;
   document.title = (vista.titulo ? vista.titulo + ' · ' : '') + 'Moni';
 
   document.body.classList.toggle('m-asistente', !!vista.asistente);
   const fab = $('#fab');
-  if (fab) fab.hidden = !!vista.asistente || !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
+  if (fab) fab.hidden = true; // registrar ahora vive en el botón + de la barra inferior y en la barra lateral
 
   if (vista.despues) vista.despues();
   activarViz();
@@ -574,7 +592,7 @@ function pantalla(ruta) {
   if (!App.boot) return { titulo: 'Moni', html: '<div class="m-cargando">Cargando…</div>', ocultarTitulo: true };
   // Varias personas: antes de nada, cada una necesita su propia hoja.
   if (App.boot.sinHoja) return vCrearHoja();
-  if (!App.boot.instalado && ruta !== 'mas' && ruta.indexOf('ajustes') !== 0) return vInstalar();
+  if (!App.boot.instalado && ruta.indexOf('ajustes') !== 0) return vInstalar();
 
   const partes = ruta.split('/');
   switch (partes[0]) {
@@ -595,7 +613,7 @@ function pantalla(ruta) {
     case 'tarjetas': return vDeudas();
     case 'tarjeta': return vTarjeta(partes[1]);
     case 'credito': return vCredito(partes[1]);
-    case 'mas': return vMas();
+    case 'planear': return vPlanear();
     case 'ajustes':
       if (partes.length === 1) return vAjustes();
       if (partes[1] === 'perfil') return vPerfil();
@@ -804,7 +822,7 @@ function vInicio() {
       rap('capas', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"') +
       rap('pulso', 'Pagar servicios', 'data-acc="ir" data-ruta="pagos"') +
       rap('tarjetas', 'Tarjetas', 'data-acc="tab" data-ruta="tarjetas"') +
-      rap('presupuesto', 'Presupuesto', 'data-acc="tab" data-ruta="presupuesto"') + '</div></section>';
+      rap('presupuesto', 'Presupuesto', 'data-acc="ir" data-ruta="presupuesto"') + '</div></section>';
   }
   html += '<div class="m-tablero">';
 
@@ -935,23 +953,147 @@ function vBolsillos() {
   return { titulo: 'Bolsillos', html: html };
 }
 
-function vMas() {
+/** Pantalla de entrada del área Planear: lo que entra y lo que se decidió gastar. */
+function vPlanear() {
+  const p = App.boot.ppto || {};
+  const t = p.totales || {};
+  const mes = mesTexto(App.boot.hoy.slice(0, 7)).toLowerCase();
+  const destacada = p.existe
+    ? '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra m-num">' + dinero(t.saldo) + '</span><span class="m-destacada-sub">te queda · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</span></span>' + ico('der', 'm-chevron') + '</button>'
+    : '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra">Aún no lo creas</span><span class="m-destacada-sub">Se arma en un toque desde tu plantilla</span></span>' + ico('der', 'm-chevron') + '</button>';
+  const inv = App.boot.invertido && App.boot.invertido.cantidad;
   return {
-    titulo: 'Más',
-    html: seccion('',
-      irA('movimientos', { icono: 'presupuesto', titulo: 'Movimientos', sub: 'Todo lo que has registrado, por mes' }) +
-      irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte' }) +
-      irA('ingresos', { icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…' }) +
-      irA('cdt', { icono: 'capas', titulo: 'CDT', sub: (App.boot.invertido && App.boot.invertido.cantidad) ? 'Invertido: ' + dinero(App.boot.invertido.total) : 'Dinero invertido a plazo fijo' }) +
-      irA('ahorro', { icono: 'bolsillos', titulo: 'Ahorro', sub: 'Saldos, rendimientos y lo que le debes' }) +
-      irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
-      irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
-      irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
-      irA('graficos', { icono: 'pulso', titulo: 'Gráficos', sub: 'En qué gastas y cómo evoluciona tu dinero' }) +
-      irA('anual', { icono: 'presupuesto', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante' }) +
-      irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Cuentas, bolsillos, tarjetas y apariencia' }))
+    titulo: 'Planear', subtitulo: 'Lo que entra y lo que decidiste gastar',
+    html: destacada +
+      '<section class="m-seccion" aria-label="Cada mes"><h2 class="m-seccion-titulo">Cada mes</h2><div class="m-group">' +
+      fila({ icono: 'presupuesto', titulo: 'Presupuesto', sub: 'Plan frente a lo real, renglón por renglón', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+      fila({ icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' }) +
+      fila({ icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos" data-tono="menta"' }) +
+      fila({ icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos" data-tono="durazno"' }) +
+      '</div></section>' +
+      '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
+      fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
+      fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
+      '</div></section>'
   };
 }
+
+/** Pestañas internas del área Dinero (solo en sus pantallas de entrada). */
+function pildorasDinero(ruta) {
+  if (App.pila.length !== 1 || AREA_DE_RUTA[ruta] !== 'dinero') return '';
+  const grupo = GRUPOS_NAV[0];
+  return '<div class="m-pildoras" role="tablist" aria-label="Dinero">' + grupo.items.map(it =>
+    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + it[0] + '" aria-selected="' + (it[0] === ruta) + '">' + esc(it[1]) + '</button>').join('') + '</div>';
+}
+
+// ---------- Barra lateral ----------
+
+const lateralChica = () => {
+  try { const g = localStorage.getItem('moni.lateral'); if (g) return g === 'chica'; } catch (e) {}
+  return window.innerWidth < 1100;
+};
+function alternarLateral() {
+  const nueva = !lateralChica();
+  try { localStorage.setItem('moni.lateral', nueva ? 'chica' : 'ancha'); } catch (e) {}
+  document.body.classList.toggle('m-lat-chica', nueva);
+  $('#lateral').innerHTML = htmlLateral(App.pila[0], AREA_DE_RUTA[App.pila[0]] || '', !!(App.boot && App.boot.instalado && hayBolsillos()));
+}
+
+function htmlLateral(raiz, area, puedeRegistrar) {
+  const item = (ruta, etiqueta, icono) => '<button class="m-lat-item" data-acc="ir" data-ruta="' + ruta + '" title="' + esc(etiqueta) + '"' + (ruta === raiz ? ' aria-current="page"' : '') + '>' +
+    ico(icono) + '<span class="m-lat-txt">' + esc(etiqueta) + '</span></button>';
+  const chica = lateralChica();
+  const nombre = cfg('Nombre_Usuario') || '';
+  return '<div class="m-lat-cab"><span class="m-logo" aria-hidden="true">M</span><span class="m-lat-txt m-marca">Moni</span>' +
+    '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
+    (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
+    '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
+    '<nav class="m-lat-nav" aria-label="Principal">' + item('inicio', 'Inicio', 'inicio') +
+    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</nav>' +
+    '<div class="m-lat-pie">' + item('guia', 'Guía de uso', 'etiqueta') + item('ajustes', 'Ajustes', 'ajustes') +
+    '<div class="m-lat-usuario"><span class="m-avatar" aria-hidden="true">' + esc((nombre.charAt(0) || 'M').toUpperCase()) + '</span><span class="m-lat-txt">' + esc(nombre || 'Mi cuenta') + '</span></div></div>';
+}
+
+// ---------- Registrar (botón +) ----------
+
+async function abrirMenuRegistrar() {
+  if (!App.boot || !App.boot.instalado || !hayBolsillos()) return;
+  const recientes = ((App.boot.ultimos || []).filter(m => m.Tipo_Mov === 'Gasto' && !m.Anulado && m.Valor < 0)).slice(0, 2);
+  const tile = (tipo, titulo, sub, icono, tono) => '<button class="m-reg-tile" data-reg="' + tipo + '" data-tono="' + tono + '"><span class="m-reg-ico">' + ico(icono) + '</span><strong>' + esc(titulo) + '</strong><span>' + esc(sub) + '</span></button>';
+  const cuerpo = '<div class="m-reg-rejilla">' +
+    tile('Gasto', 'Gasto', 'Lo que pagaste', 'plus', 'rosa') + tile('Ingreso', 'Ingreso', 'Dinero que llegó', 'check', 'menta') +
+    tile('Mover', 'Mover dinero', 'Entre bolsillos', 'mover', 'lila') +
+    (hayOtrasDivisas() ? tile('Convertir', 'Convertir', 'Pesos y dólares', 'capas', 'durazno') : '') + '</div>' +
+    (recientes.length ? '<h3 class="m-seccion-titulo" style="margin:var(--m-space-4) 0 var(--m-space-2)">Repetir uno reciente</h3><div class="m-group">' +
+      recientes.map(m => fila({ titulo: esc(m.Concepto), sub: esc(m.Bolsillo || ''), final: '<strong class="m-num">' + dinero(m.Valor, m.Divisa) + '</strong>', attrs: 'data-rep="' + esc(m.ID_Mov) + '"' })).join('') + '</div>' : '');
+  await abrirHoja({
+    titulo: '¿Qué quieres registrar?', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    alAbrir: raiz => raiz.addEventListener('click', ev => {
+      const t = ev.target.closest('[data-reg]'), r = ev.target.closest('[data-rep]');
+      if (t) {
+        if (t.dataset.reg === 'Convertir') abrirConversion(); else abrirRegistrar({ tipo: t.dataset.reg });
+      } else if (r) {
+        const m = recientes.find(x => x.ID_Mov === r.dataset.rep);
+        if (m) abrirRegistrar({ tipo: 'Gasto', concepto: m.Concepto, valor: Math.abs(m.Valor), idBolsillo: m.ID_Bolsillo });
+      }
+    })
+  });
+}
+
+// ---------- Buscar o ir a… (Ctrl K) ----------
+
+const sinTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function destinosBuscables() {
+  const lista = [['inicio', 'Inicio', 'Pantalla principal', 'inicio'], ['planear', 'Planear', 'Área', 'calendario']];
+  GRUPOS_NAV.forEach(g => g.items.forEach(it => lista.push([it[0], it[1], g.titulo, it[2]])));
+  lista.push(['guia', 'Guía de uso', 'Ayuda', 'etiqueta'], ['ajustes', 'Ajustes', 'Configuración', 'ajustes'],
+    ['ajustes/perfil', 'Perfil', 'Ajustes', 'usuario'], ['ajustes/apariencia', 'Apariencia', 'Ajustes', 'paleta'],
+    ['ajustes/Bancos', 'Bancos', 'Ajustes', 'banco'], ['ajustes/Cuentas', 'Cuentas', 'Ajustes', 'cuenta'], ['ajustes/Tarjetas', 'Tarjetas (ajustes)', 'Ajustes', 'tarjetas'],
+    ['ajustes/plantilla', 'Plantilla del presupuesto', 'Ajustes', 'presupuesto'], ['ajustes/divisas', 'Divisas', 'Ajustes', 'banco'],
+    ['ajustes/respaldos', 'Respaldos', 'Ajustes', 'capas'], ['ajustes/recordatorios', 'Recordatorios', 'Ajustes', 'calendario']);
+  ((App.boot && App.boot.saldos && App.boot.saldos.cuentas) || []).forEach(c => c.bolsillos.forEach(b => {
+    if (b.Es_Interno && !esVerdad(c.Permite_Bolsillos)) lista.push(['bolsillo/' + b.ID_Bolsillo, c.Nombre, 'Cuenta · ' + c.Banco, 'cuenta']);
+    else lista.push(['bolsillo/' + b.ID_Bolsillo, nombreBolsillo(b, c), 'Bolsillo · ' + c.Nombre, 'bolsillos']);
+  }));
+  return lista;
+}
+
+async function abrirBuscador() {
+  if (!App.boot || !App.boot.instalado) return;
+  const todos = destinosBuscables();
+  const htmlLista = q => {
+    const n = sinTildes(q).trim();
+    const hay = todos.filter(d => !n || sinTildes(d[1] + ' ' + d[2]).indexOf(n) !== -1).slice(0, 12);
+    return hay.length ? hay.map(d => fila({ icono: d[3], titulo: esc(d[1]), sub: esc(d[2]), chevron: true, attrs: 'data-ir="' + esc(d[0]) + '"' })).join('')
+      : '<div class="m-row"><span class="m-row-sub">No encontré nada con ese nombre.</span></div>';
+  };
+  await abrirHoja({
+    titulo: 'Buscar o ir a…', izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<div class="m-campo"><input class="m-input" id="buscador" type="search" placeholder="Pantalla, cuenta o bolsillo" autocomplete="off" aria-label="Buscar"></div>' +
+      '<div class="m-group" id="buscador-lista">' + htmlLista('') + '</div>',
+    alAbrir: raiz => {
+      const inp = $('#buscador', raiz), lista = $('#buscador-lista', raiz);
+      inp.focus();
+      inp.addEventListener('input', () => { lista.innerHTML = htmlLista(inp.value); });
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { const p = $('[data-ir]', lista); if (p) p.click(); } });
+      lista.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-ir]');
+        if (!b) return;
+        if (hojaActual) hojaActual.finalizar();
+        navegar(b.dataset.ir);
+      });
+    }
+  });
+}
+
+document.addEventListener('keydown', ev => {
+  const t = ev.target, escribiendo = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirBuscador(); return; }
+  if (!escribiendo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.toLowerCase() === 'n' && !hojaActual && !document.body.classList.contains('m-asistente')) { ev.preventDefault(); abrirMenuRegistrar(); }
+});
 
 function vAjustes() {
   const n = t => activos(t).filter(f => !esVerdad(f.Es_Interno)).length;
@@ -960,6 +1102,7 @@ function vAjustes() {
     titulo: 'Ajustes',
     html:
       seccion('Tú',
+        irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
         irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
@@ -5484,6 +5627,9 @@ const ACCIONES = {
     if (inf.b.Es_Interno) abrirFormulario('Cuentas', inf.c.ID_Cuenta); else abrirFormulario('Bolsillos', inf.b.ID_Bolsillo);
   },
   tab: el => navegar(el.dataset.ruta),
+  'menu-registrar': () => abrirMenuRegistrar(),
+  buscar: () => abrirBuscador(),
+  'lat-alternar': () => alternarLateral(),
   ir: el => navegar(el.dataset.ruta),
   volver: () => volver(),
   'actualizar-datos': async () => {
