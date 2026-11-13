@@ -1115,6 +1115,11 @@ async function abrirBuscador() {
   });
 }
 
+document.addEventListener('toggle', ev => {
+  const d = ev.target;
+  if (d && d.classList && d.classList.contains('m-nom-grupo')) { App.nom.abiertos = App.nom.abiertos || {}; App.nom.abiertos[d.dataset.grupo] = d.open; }
+}, true);
+
 document.addEventListener('keydown', ev => {
   const t = ev.target, escribiendo = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirBuscador(); return; }
@@ -2916,47 +2921,61 @@ function filaLineaNomina(l, bloqueado) {
     '<span class="m-row-final"><span class="m-num ' + (l.grupo === 'deduccion' ? 'm-negativo' : '') + '">' + (l.grupo === 'deduccion' ? '−' : '') + dinero(l.valor) + '</span>' + quitar + '</span></div></div>';
 }
 
+/** La nómina ya registrada del mes: qué llegó, a dónde y qué se puede hacer con ella. */
+function htmlNominaRecibida(d) {
+  const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
+  const dif = d.pago.Neto_Real - d.pago.Neto_Estimado;
+  return '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
+    '<div><dt>Te llegaron</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
+    '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
+    (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? nombreBolsillo(b.b, b.c) : '') + '</dd></div>') +
+    '<div><dt>Cuenta en el presupuesto de</dt><dd>' + esc(mesTexto(d.pago.Mes_Presupuesto || d.periodo)) + ' · <button type="button" class="m-btn-texto" data-acc="nom-cambiar-mes">Cambiar</button></dd></div>' +
+    (Math.abs(dif) >= 0.005 ? '<div><dt>Frente a lo estimado</dt><dd class="m-num ' + (dif < 0 ? 'm-negativo' : 'm-positivo') + '">' + (dif > 0 ? '+' : '') + dinero(dif) + '</dd></div>' : '') +
+    '</dl></div></section>' +
+    (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
+    '<button class="m-accion-peligro" data-acc="anular-nomina">Anular esta nómina</button>';
+}
+
 function htmlNomina(d) {
   if (!d.calculo) {
     return vacio('usuario', d.configurada ? 'No se pudo calcular tu nómina' : 'Configura tu nómina', d.configurada ? d.error : 'Escribe tu sueldo base y Moni calcula cuánto te llega cada mes, con salud, pensión, prima y cesantías.',
       '<button class="m-btn m-btn-primary" data-acc="nom-sueldo">' + (d.configurada ? 'Revisar mi sueldo' : 'Escribir mi sueldo') + '</button>');
   }
-  const c = d.calculo;
+  const c = d.calculo, t = c.totales;
   const bloqueado = !!d.pago; // con la nómina ya registrada, el estimado queda como se calculó
-  let h = '';
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Vas a recibir en ' + esc(mesTexto(d.periodo).toLowerCase()) + ' (estimado)</div>' +
-    '<div class="m-resumen-cifra m-num">' + dinero(c.totales.neto) + '</div>' +
-    '<p class="m-ayuda">Devengado ' + dinero(c.totales.devengado) + ' − descuentos ' + dinero(c.totales.deducciones) + (c.totales.extras ? ' + prestaciones ' + dinero(c.totales.extras) : '') + '</p></div><div style="height:var(--m-space-4)"></div>';
-
-  h += seccion('Tu sueldo',
-    fila({ titulo: 'Sueldo base', sub: bloqueado ? '' : 'Toca para cambiarlo', final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>', chevron: !bloqueado, attrs: bloqueado ? '' : 'data-acc="nom-sueldo"' }) +
-    fila({ titulo: 'Valor de un día' + '', sub: 'Sueldo y subsidios salariales entre ' + c.diasBase + ' días', final: '<span class="m-num">' + dinero(c.diaBase) + '</span>' }),
-    'Marca o desmarca cada línea para ver cómo cambia lo que recibes. Los días sirven para un mes incompleto, la prima (15 = medio mes) o las vacaciones.');
+  const mes = mesTexto(d.periodo).toLowerCase();
   const L = g => c.lineas.filter(l => l.grupo === g);
-  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Lo que recibes</h2><div class="m-group">' + L('devengo').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div></section>';
-  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Prestaciones</h2><div class="m-group">' + L('extra').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
-    '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
-  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
-    '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
-  h += htmlNominaGraficos(c);
-  if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-adic-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar algo de este mes</button></div>' +
-    '<p class="m-ayuda" style="margin-top:calc(var(--m-space-3) * -1)">Horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa: solo para el pago de este mes.</p>' +
-    '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
+  const abierto = g => !!(App.nom.abiertos && App.nom.abiertos[g]);
+  let h = '';
 
-  if (d.pago) {
-    const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
-    h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
-      '<div><dt>Neto recibido</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
-      '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
-      (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó a tus saldos (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? nombreBolsillo(b.b, b.c) : '') + '</dd></div>') +
-      '<div><dt>Cuenta en el presupuesto de</dt><dd>' + esc(mesTexto(d.pago.Mes_Presupuesto || d.periodo)) + ' · <button type="button" class="m-btn-texto" data-acc="nom-cambiar-mes">Cambiar</button></dd></div>' +
-      (Math.abs(d.pago.Neto_Real - d.pago.Neto_Estimado) >= 0.005 ? '<div><dt>Diferencia con lo estimado</dt><dd class="m-num">' + dinero(d.pago.Neto_Real - d.pago.Neto_Estimado) + '</dd></div>' : '') +
-      '</dl></div></section>' +
-      (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
-      '<button class="m-accion-peligro" data-acc="anular-nomina">Anular esta nómina</button>';
-  } else {
-    h += '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina recibida</button></div>';
-  }
+  // 1. Lo principal: cuánto te llega
+  h += '<section class="m-nom-hero" aria-label="Cuánto te llega"><div class="m-nom-cab"><span>Te llegan en ' + esc(mes) + '</span>' +
+    '<span class="m-insignia ' + (d.pago ? 'm-insignia-ok' : '') + '">' + (d.pago ? 'Ya registrada' : 'Estimado') + '</span></div>' +
+    '<div class="m-nom-neto m-num">' + dinero(d.pago ? d.pago.Neto_Real : t.neto) + '</div>' +
+    '<div class="m-nom-flujo"><div><small>Ganas</small><strong class="m-num">' + dinero(t.devengado) + '</strong></div><span aria-hidden="true">−</span>' +
+    '<div><small>Descuentos</small><strong class="m-num">' + dinero(t.deducciones) + '</strong></div>' +
+    (t.extras ? '<span aria-hidden="true">+</span><div><small>Prestaciones</small><strong class="m-num">' + dinero(t.extras) + '</strong></div>' : '') + '</div></section>';
+
+  // 2. Lo que sigue: registrarla (o ver la ya registrada)
+  if (d.pago) h += htmlNominaRecibida(d);
+  else h += '<section class="m-nom-accion"><div><strong>¿Ya te llegó?</strong><p>Anótala y Moni la suma a tu bolsillo y al presupuesto del mes.</p></div>' +
+    '<button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina</button></section>';
+
+  // 3. Cómo se calcula: cerrado por defecto, para no abrumar
+  h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Cómo se calcula</h2>';
+  h += '<div class="m-group" style="margin-bottom:var(--m-space-3)">' +
+    fila({ titulo: 'Tu sueldo base', sub: bloqueado ? 'Valor de un día: ' + dinero(c.diaBase) : 'Toca para cambiarlo · un día vale ' + dinero(c.diaBase), final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>', chevron: !bloqueado, attrs: bloqueado ? '' : 'data-acc="nom-sueldo"' }) + '</div>';
+  const grupo = (clave, titulo, sub, total, signo, lineas, pie) => '<details class="m-nom-grupo" data-grupo="' + clave + '"' + (abierto(clave) ? ' open' : '') + '><summary><span><strong>' + esc(titulo) + '</strong><small>' + esc(sub) + '</small></span>' +
+    '<span class="m-num ' + (signo === '−' ? 'm-negativo' : '') + '">' + signo + dinero(total) + '</span></summary><div class="m-group">' + lineas.map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</details>';
+  h += grupo('devengo', 'Lo que ganas', 'Sueldo y lo que te pagan además', t.devengado, '', L('devengo'),
+    bloqueado ? '' : 'Los días sirven para un mes incompleto. Desmarca una línea si este mes no te la pagan.');
+  h += grupo('extra', 'Prestaciones', 'Prima, cesantías y vacaciones', t.extras, '+', L('extra'), 'La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú (15 días = medio mes).');
+  h += grupo('deduccion', 'Descuentos', 'Salud, pensión y lo que te descuentan', t.deducciones, '−', L('deduccion'), 'Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).');
+
+  if (!bloqueado) h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Ajustar este mes</h2><div class="m-group">' +
+    fila({ icono: 'plus', titulo: 'Algo de este mes', sub: 'Horas extras, un bono, cesantías, un descuento de la empresa', chevron: true, attrs: 'data-acc="nom-adic-nuevo" data-tono="menta"' }) +
+    fila({ icono: 'plus', titulo: 'Un descuento o ingreso fijo', sub: 'Libranza, medicina prepagada, un auxilio: se repite cada mes', chevron: true, attrs: 'data-acc="nom-concepto-nuevo" data-tono="lila"' }) + '</div>';
+  h += htmlNominaGraficos(c);
   return h;
 }
 
@@ -3048,50 +3067,47 @@ async function abrirConceptoNomina(idConcepto) {
 async function abrirRegistrarNomina() {
   const d = App.nom.data;
   if (!d || !d.calculo) return;
+  const estimado = d.calculo.totales.neto, mes = mesTexto(App.nom.mes).toLowerCase();
   const campos = [
-    { k: 'Valor', label: 'Neto que recibiste', tipo: 'dinero', requerido: true, ayuda: 'Por defecto, el estimado. Cámbialo si el valor real fue distinto.' },
+    { k: 'Valor', label: 'Neto que te llegó', tipo: 'dinero', requerido: true },
     { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), visible: v => v.Afecta !== false },
     { k: 'MesPpto', label: 'Cuenta en el presupuesto de', tipo: 'select', requerido: true,
-      opciones: () => [-1, 0, 1].map(d => [mesMas(App.nom.mes, d), mesTexto(mesMas(App.nom.mes, d))]),
-      ayuda: 'Si recibiste el pago a fin de mes para el mes siguiente, elige el mes siguiente: el ingreso cuenta en su presupuesto. Tus saldos y el historial siguen con la fecha real.' },
-    { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor', info: 'Apágalo si esta plata ya está en tus saldos (por ejemplo, la tenías antes de empezar a usar Moni). La nómina queda registrada y cuenta como ingreso del mes, pero no cambia ningún saldo.' }
+      opciones: () => [-1, 0, 1].map(x => [mesMas(App.nom.mes, x), mesTexto(mesMas(App.nom.mes, x))]),
+      ayuda: 'Si te pagaron a fin de mes por el mes siguiente, elige el siguiente: el ingreso cuenta en su presupuesto. Tus saldos y el historial siguen con la fecha real.' },
+    { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor' }
   ];
-  const preferido = ultimoBolsillo();
+  const paso = (n, titulo, cuerpo) => '<section class="m-nom-paso"><h3><span class="m-nom-num" aria-hidden="true">' + n + '</span>' + esc(titulo) + '</h3>' + cuerpo + '</section>';
   await abrirHoja({
-    titulo: 'Nómina de ' + mesTexto(App.nom.mes).toLowerCase(),
-    cuerpo: '<form novalidate data-form="nomina">' + htmlCampo(campos[0], d.calculo.totales.neto, {}) + htmlCampo(campos[3], true, {}) + htmlCampo(campos[1], preferido, {}) + htmlCampo(campos[2], App.nom.mes, {}) +
-      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    titulo: 'Registrar nómina', der: 'Guardar',
+    cuerpo: '<form novalidate data-form="nomina">' +
+      '<p class="m-nom-intro">Moni calculó <strong>' + dinero(estimado) + '</strong> para ' + esc(mes) + '. Confirma lo que realmente te consignaron.</p>' +
+      paso(1, '¿Cuánto te llegó?', htmlCampo(campos[0], estimado, {}) + '<p class="m-ayuda" id="nom-dif" aria-live="polite">Es el estimado: si el valor fue otro, cámbialo.</p>') +
+      paso(2, '¿Dónde y cuándo?', htmlCampo(campos[1], ultimoBolsillo(), {}) +
+        '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha en que llegó</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>') +
+      paso(3, '¿Cómo la contamos?', htmlCampo(campos[3], true, {}) +
+        '<p class="m-ayuda">Déjalo encendido si este dinero entró <strong>ahora</strong>: se suma al bolsillo. Apágalo si ya lo tenías contado en los saldos que escribiste al empezar: la nómina queda registrada pero tus saldos no cambian.</p>') +
+      '<details class="m-nom-mas"><summary>Más opciones</summary>' + htmlCampo(campos[2], App.nom.mes, {}) + '</details>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true }); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos))); },
+    alAbrir: raiz => {
+      activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true });
+      const entrada = $('#f-Valor', raiz), dif = $('#nom-dif', raiz);
+      const actualizarDif = () => {
+        const v = leerDinero(entrada.value);
+        if (v === '' || isNaN(v) || Math.abs(v - estimado) < 0.005) { dif.textContent = 'Es el estimado: si el valor fue otro, cámbialo.'; return; }
+        dif.textContent = (v > estimado ? 'Es ' + dinero(v - estimado) + ' más' : 'Es ' + dinero(estimado - v) + ' menos') + ' que lo estimado.';
+      };
+      entrada.addEventListener('input', actualizarDif);
+      raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos)));
+    },
     alGuardar: async raiz => {
       const v = leerFormulario(raiz, campos);
       const afecta = v.Afecta !== false;
-      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el neto que recibiste.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe cuánto te llegó.');
       if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
       const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta, v.MesPpto || App.nom.mes);
       if (afecta) recordarBolsillo(v.Bolsillo);
       aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
       aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
-    }
-  });
-}
-
-/** Corrige en qué mes del presupuesto cuenta una nómina ya registrada (no mueve dinero ni cambia saldos). */
-async function abrirCambiarMesNomina() {
-  const d = App.nom.data;
-  if (!d || !d.pago) return;
-  const actual = d.pago.Mes_Presupuesto || d.periodo;
-  const campos = [{ k: 'Mes', label: 'Cuenta en el presupuesto de', tipo: 'select', requerido: true,
-    opciones: () => [-2, -1, 0, 1, 2].map(x => [mesMas(d.periodo, x), mesTexto(mesMas(d.periodo, x))]),
-    ayuda: 'Solo cambia en qué mes del presupuesto y de la vista anual cuenta este ingreso. No mueve dinero ni cambia tus saldos.' }];
-  await abrirHoja({
-    titulo: 'Mes de la nómina', der: 'Guardar',
-    cuerpo: '<form novalidate data-form="mes-nomina">' + htmlCampo(campos[0], actual, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alGuardar: async raiz => {
-      const v = leerFormulario(raiz, campos);
-      const res = await api('changeMesNomina', d.periodo, v.Mes);
-      (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
-      aviso('Ahora cuenta en ' + mesTexto(v.Mes).toLowerCase());
     }
   });
 }
@@ -3117,23 +3133,52 @@ const PARAMETROS_NOMINA = [
   { k: 'Cesantias_Sueldo_Anterior', label: 'Sueldo anterior (solo si cambió este año)', tipo: 'dinero', defecto: '0' }
 ];
 
+const AYUDA_PARAM = {
+  SMMLV: 'Lo que dice el decreto del año. Se usa para saber desde cuándo aplica el Fondo de Solidaridad Pensional.',
+  SMMLV_Anio: 'El año al que corresponde el salario mínimo que escribes.',
+  Aporte_Salud: 'Lo que se te descuenta para salud. Por ley es 4 %.',
+  Aporte_Pension: 'Lo que se te descuenta para pensión. Por ley es 4 %.',
+  Tasa_Interes_Cesantias: 'Tasa anual con la que se calculan los intereses de tus cesantías. Por ley es 12 %.',
+  FSP_Umbral_SMMLV: 'Desde cuántos salarios mínimos de ingreso se descuenta el Fondo de Solidaridad Pensional (por ley, 4).',
+  Cesantias_Dias_Actual: 'Cuántos días del año de cesantías llevas con tu sueldo actual. 360 si todo el año ganaste lo mismo.',
+  Cesantias_Sueldo_Anterior: 'Solo si tu sueldo cambió este año: cuánto ganabas antes. Si no cambió, déjalo en 0.'
+};
+
+/** Un campo de los parámetros de nómina. `forzado` reemplaza el valor guardado (por ejemplo, para pedir el del año nuevo). */
+function campoParam(c, forzado) {
+  const id = 'p-' + c.k, ayuda = AYUDA_PARAM[c.k] || c.ayuda || '';
+  const pie = ayuda ? '<p class="m-ayuda">' + esc(ayuda) + '</p>' : '';
+  const guardado = forzado !== undefined ? forzado : (cfg(c.k) || c.defecto || '');
+  if (c.tipo === 'porcentaje') {
+    const n = Number(String(guardado).replace(',', '.'));
+    return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + ' (%)</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" data-pct="1" type="text" inputmode="decimal" value="' +
+      (guardado !== '' && isFinite(n) ? String(Math.round(n * 10000) / 100).replace('.', ',') : '') + '">' + pie + '</div>';
+  }
+  if (c.tipo === 'dinero') {
+    const n = Number(guardado);
+    return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" type="text" inputmode="decimal" placeholder="' + (guardado === '' ? 'Escríbelo aquí' : '') + '" value="' +
+      (guardado !== '' && isFinite(n) ? new Intl.NumberFormat('es-CO').format(n) : '') + '">' + pie + '</div>';
+  }
+  return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" type="number" inputmode="numeric" min="' + c.min + '" max="' + c.max + '" value="' + esc(guardado) + '">' + pie + '</div>';
+}
+
 function vParametros() {
-  const campo = c => {
-    if (c.tipo === 'porcentaje') {
-      const n = Number((cfg(c.k) || c.defecto || '').replace(',', '.'));
-      return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + ' (%)</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" data-pct="1" type="text" inputmode="decimal" value="' + (isFinite(n) ? String(Math.round(n * 10000) / 100).replace('.', ',') : '') + '"></div>';
-    }
-    if (c.tipo === 'dinero') {
-      const n = Number((cfg(c.k) || c.defecto || ''));
-      return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + '</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" type="text" inputmode="decimal" value="' + (isFinite(n) ? new Intl.NumberFormat('es-CO').format(n) : '') + '"><p class="m-ayuda">' + esc(c.ayuda || '') + '</p></div>';
-    }
-    return '<div class="m-campo"><label class="m-label" for="p-' + c.k + '">' + esc(c.label) + '</label><input class="m-input m-num" id="p-' + c.k + '" data-param="' + c.k + '" type="number" inputmode="numeric" min="' + c.min + '" max="' + c.max + '" value="' + esc((cfg(c.k) || c.defecto || '')) + '"></div>';
-  };
-  return {
-    titulo: 'Parámetros de nómina',
-    html: avisoSmmlv() + '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + PARAMETROS_NOMINA.map(campo).join('') +
-      '<div id="param-error" class="m-error-form" role="alert" hidden></div><button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>'
-  };
+  const anio = Number(App.boot.hoy.slice(0, 4)), guardado = Number(cfg('SMMLV_Anio'));
+  const vencido = !!guardado && guardado < anio;
+  const smmlv = PARAMETROS_NOMINA.find(c => c.k === 'SMMLV'), smmlvAnio = PARAMETROS_NOMINA.find(c => c.k === 'SMMLV_Anio');
+  const resto = PARAMETROS_NOMINA.filter(c => c.k !== 'SMMLV' && c.k !== 'SMMLV_Anio');
+  const cierre = texto => '<div id="param-error" class="m-error-form" role="alert" hidden></div><button type="submit" class="m-btn m-btn-primary" style="width:100%">' + texto + '</button>';
+  // El salario mínimo va aparte y primero: es lo único que hay que actualizar cada año
+  const tarjeta = '<form class="m-group m-param-destacado" data-form="parametros" novalidate>' +
+    '<h2 class="m-param-titulo">Salario mínimo ' + (vencido ? '<span class="m-insignia m-insignia-alerta">Por actualizar</span>' : '<span class="m-insignia m-insignia-ok">Al día</span>') + '</h2>' +
+    '<p class="m-ayuda">' + (vencido
+      ? 'Tienes guardado el de ' + guardado + ' (' + dinero(Number(cfg('SMMLV')) || 0) + '). Escribe el de ' + anio + ' y guarda: tu nómina se calcula con ese valor.'
+      : 'Es el de ' + (guardado || anio) + '. Cámbialo cada enero, cuando se publique el nuevo.') + '</p>' +
+    campoParam(smmlv, vencido ? '' : undefined) + campoParam(smmlvAnio, vencido ? String(anio) : undefined) + cierre('Guardar salario mínimo') + '</form>';
+  const otros = '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Aportes y prestaciones</h2>' +
+    '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + resto.map(c => campoParam(c)).join('') + cierre('Guardar aportes y prestaciones') + '</form>' +
+    '<p class="m-seccion-pie">Los valores por defecto son los de la ley colombiana. Cámbialos solo si tu situación es distinta.</p>';
+  return { titulo: 'Parámetros de nómina', html: tarjeta + otros };
 }
 
 // ---------------------------------------------------------------------------
