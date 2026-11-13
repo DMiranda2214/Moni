@@ -1,6 +1,10 @@
 # Manual de usuario
 
-Moni funciona en el celular y en el computador. En el celular, abajo hay cinco pestañas; en el computador, a la izquierda.
+Moni funciona en el celular y en el computador. En el celular, abajo hay cuatro pestañas (**Inicio, Dinero, Planear y Deudas**) y, en el centro, el botón **+** para registrar un gasto, un ingreso, mover dinero o convertir divisas (también puedes repetir uno reciente). En tablet y computador las mismas áreas están en una **barra lateral** que se puede contraer, con el botón *Registrar* (atajo **N**) y una búsqueda para ir a cualquier pantalla, cuenta o bolsillo (**Ctrl K**). *Ajustes* y la *Guía de uso* están al pie de la barra lateral y, en el celular, en Ajustes.
+
+- **Dinero:** Bolsillos, Movimientos, Ahorro y CDT.
+- **Planear:** Presupuesto, Nómina, Otros ingresos, Servicios y suscripciones, Regalos y Vista anual.
+- **Deudas:** tarjetas de crédito y créditos.
 ## 1. Primer uso
 
 1. **Abre el enlace** de la app (guárdalo como favorito o *Agregar a pantalla de inicio*). Google te pedirá iniciar sesión.
@@ -13,9 +17,11 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cinco p
 
 ## 2. Inicio
 - **Primeros pasos** (hasta que termines de configurar) y, después, **Para tener en cuenta**: avisos de lo que falta o está desactualizado (ver sección 15).
-- **Accesos rápidos:** Gasto, Ingreso, Mover dinero, Pagar servicios, Tarjetas, Presupuesto.
-- **Resumen:** total, disponible y ahorro (en pesos).
-- **Cuentas:** saldo de cada una (toca para ver sus bolsillos).
+- **Primeros pasos:** mientras falten, una tarjeta con tu avance y el siguiente paso; los pasos se agrupan en *Lo básico* y *Para sacarle más provecho*.
+- **Saldo total** (tarjeta pastel): total, disponible, ahorro e invertido, con un ojo para ocultar las cifras.
+- **Este mes:** lo que entró, lo gastado y lo que te queda, con el avance del presupuesto.
+- **Accesos rápidos:** Mover dinero, Servicios, Movimientos y Ahorro (para gastos e ingresos está el botón **+**).
+- **Tus cuentas:** saldo de cada una (toca para ver sus bolsillos).
 - **Gráficos:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
 - **Otras monedas:** los saldos en dólares o euros, aparte, con su equivalente en pesos si anotaste la tasa.
 - **Invertido:** el capital de tus CDT vigentes (no es dinero disponible).
@@ -39,7 +45,7 @@ Cada cuenta con sus bolsillos y saldos. Si en una cuenta con bolsillos queda din
 ### Dólares y otras monedas
 - La moneda se elige **al crear el banco** (pesos, dólares o euros). Sus cuentas y bolsillos la heredan, y todo se muestra en esa moneda.
 - Los saldos **no se mezclan**: el Total del Inicio es solo en pesos y, aparte, aparece **Otras monedas**. Si anotas cuánto vale el dólar en **Ajustes → Divisas** (o activas **Traerla sola de Google Finance**), se ve el equivalente en pesos. Es solo una referencia: cada banco cambia a su propio precio, así que los saldos y las conversiones nunca la usan.
-- Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Bolsillos → Convertir divisas**: escribes **cuántos dólares compras o vendes** y **la tasa que te dio el banco por cada uno**; Moni calcula cuánto sale y cuánto llega. La TRM de referencia (si la anotaste) solo se muestra para comparar.
+- Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Dinero → Bolsillos → Convertir divisas**: escribes **cuántos dólares compras o vendes** y **la tasa que te dio el banco por cada uno**; Moni calcula cuánto sale y cuánto llega. La TRM de referencia (si la anotaste) solo se muestra para comparar.
 - Si el banco cobra **comisión aparte**, escríbela en el mismo panel y elige de qué bolsillo se cobra (origen o destino). Queda como un gasto de la categoría *Comisión bancaria*, dentro de la misma conversión: al deshacerla se deshace todo junto.
 - Entre bolsillos de la misma moneda, **Mover dinero** funciona igual que siempre.
 - Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones y regalos funcionan solo en pesos: no ofrecen bolsillos en otras monedas.
@@ -59,7 +65,7 @@ Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o
 >
 > **¿La recibiste a fin de mes para el mes siguiente?** En *Cuenta en el presupuesto de* elige el mes siguiente: el ingreso suma en el presupuesto de ese mes, mientras tus saldos y el historial siguen con la fecha real. Si ya la registraste, en *Nómina recibida* toca **Cambiar** junto a ese mes; no mueve dinero.
 
-**Más → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
+**Planear → Nómina** abre el **estimado de lo que vas a recibir** en el próximo pago (como la hoja de estimado del Excel). Cada línea tiene una **casilla** para incluirla o no, y puedes cambiar los **días** (un mes incompleto, la prima, las vacaciones). El total se actualiza al instante. Con **Agregar un descuento o ingreso fijo** sumas cosas como una libranza, la medicina prepagada o un bono.
 
 Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descuentos o ingresos fijos (libranza, medicina prepagada, un auxilio). Mira el cálculo (devengos, salud, pensión, FSP, prima de junio/diciembre, intereses de cesantías) y, con **Agregar algo de este mes**, suma lo que solo cuenta en ese pago: horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa. Después **Registra** lo que realmente te llegó, indicando el bolsillo. Ya no hay escenarios: es una sola nómina. Se paga **una vez al mes**. Los parámetros (SMMLV, porcentajes) están en Ajustes → Parámetros de nómina; **actualiza el SMMLV cada enero**.
 
@@ -75,20 +81,20 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
 
 ## 8. Otros ingresos
-**Más → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.
+**Planear → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.
 
 ## 9. Ahorro
-**Más → Ahorro.** Por cada cuenta de ahorro: saldo, meta, rendimientos y **deuda con el ahorro**.
+**Dinero → Ahorro.** Por cada cuenta de ahorro: saldo, meta, rendimientos y **deuda con el ahorro**.
 - **Rendimiento estimado:** si configuraste la tasa de tu banco (Ajustes → Bancos: % EA y si paga cada día o cada mes), Moni calcula cuánto te rinde y lo que falta por registrar; **Registrar este rendimiento** lo anota (corrígelo si tu banco muestra otro valor).
 - **Rendimiento:** interés (suma), retención y GMF (restan).
 - **Sacar para gastos:** pasa dinero a un bolsillo y queda como algo por **reponer**.
 - **Reponer:** devuelve dinero al ahorro y baja la deuda.
 
 ## 10. CDT
-**Más → CDT.** Registra cada CDT con su banco, capital, tasa (% EA), fecha de inicio, plazo en días, cuándo paga los intereses y la retención que te aplica el banco. Si el dinero sale hoy de un bolsillo, activa *Descontar el capital de un bolsillo*; si ya lo tenías antes de usar Moni, déjalo apagado. El capital aparece como **Invertido** (no como disponible). En el detalle ves cuánto ganarás (bruto, retención y neto) y cuánto del plazo ha pasado, y puedes **Registrar intereses** (si los paga por periodos), **Cobrar** o **Cancelar antes de tiempo** (con la opción de **renovar**), **Editar** o **Anular**. Los vencimientos salen en *Por recibir* de Inicio y en Google Calendar.
+**Dinero → CDT.** Registra cada CDT con su banco, capital, tasa (% EA), fecha de inicio, plazo en días, cuándo paga los intereses y la retención que te aplica el banco. Si el dinero sale hoy de un bolsillo, activa *Descontar el capital de un bolsillo*; si ya lo tenías antes de usar Moni, déjalo apagado. El capital aparece como **Invertido** (no como disponible). En el detalle ves cuánto ganarás (bruto, retención y neto) y cuánto del plazo ha pasado, y puedes **Registrar intereses** (si los paga por periodos), **Cobrar** o **Cancelar antes de tiempo** (con la opción de **renovar**), **Editar** o **Anular**. Los vencimientos salen en *Por recibir* de Inicio y en Google Calendar.
 
 ## 11. Servicios y suscripciones
-**Más → Servicios y suscripciones** (o *Pagar servicios* en Inicio).
+**Planear → Servicios y suscripciones** (o *Pagar servicios* en Inicio).
 - Arriba: cuánto te cuestan **al mes y al año**.
 - **Por pagar:** vencidas o en los próximos 7 días.
 - Toca un cobro: **Registrar el pago** (desde un bolsillo o con una tarjeta), **Ir a pagar** (enlace), **Copiar código**, **Saltar este cobro** o **Editar**.
@@ -97,30 +103,27 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - Abajo: **Códigos y enlaces de pago** de tus servicios públicos (Ajustes → Servicios públicos).
 
 ## 12. Regalos
-**Más → Regalos.** Lista por año: a quién, idea, estimado. **Registrar la compra** crea el gasto y suma al real. Hay resumen de estimado, gastado y comprados.
+**Planear → Regalos.** Lista por año: a quién, idea, estimado. **Registrar la compra** crea el gasto y suma al real. Hay resumen de estimado, gastado y comprados.
 
 ## 13. Vista anual y gráficos
-**Más → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
+**Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
 ### Gráficos
-**Más → Gráficos** muestra, para el mes y la moneda que elijas (los filtros van arriba y valen para todo):
-- **Cifras del mes** (entró, salió y diferencia) con el cambio frente al mes anterior.
-- **Gastos por categoría** del mes, de mayor a menor (las 7 mayores y "Otras").
-- **Entró y salió** de los últimos 3, 6 o 12 meses.
-- **Saldo al cierre de cada mes.**
-
-Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto. Los traslados no cuentan como entrada ni salida; cada moneda se ve por separado.
-
-También hay gráficos dentro de cada módulo:
-- **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes (con un acceso a todos los gráficos).
+No hay una pantalla aparte de gráficos: **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
+- **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
+- **Movimientos:** *En qué gastaste este mes*, por categoría.
 - **Presupuesto:** *Plan frente a real* de los renglones más avanzados; los que se pasan dicen "excedido".
+- **Nómina:** *A dónde va lo descontado* de tu devengado.
+- **Servicios y suscripciones:** *Lo que más pesa al mes* (los pagos anuales o semestrales se reparten por mes).
+- **Regalos:** lo gastado frente a lo estimado de cada persona.
+- **CDT:** cuánto hay en cada uno y el avance de su plazo.
 - **Deudas:** *Cupo usado* de cada tarjeta y *Avance de los créditos*; dentro de un crédito, cómo baja el saldo cuota a cuota.
 - **Ahorro:** evolución del ahorro total y de cada cuenta, y avance hacia las metas.
 - **Vista anual:** entró, planeado y real mes a mes.
 - **Un bolsillo:** su saldo al cierre de cada mes.
 
 ## 14. Movimientos
-**Más → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
+**Dinero → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
 
 ## 15. Avisos en Inicio
 **Para tener en cuenta** te dice qué falta configurar o está desactualizado (salario mínimo, un CDT vencido, suscripciones que faltan en el presupuesto, la nómina, los recordatorios…). Toca **Resolver** para ir a donde se arregla; los que no son urgentes se pueden ocultar con **Ahora no** y volver a mostrar en *Ajustes → Avisos de Inicio*.

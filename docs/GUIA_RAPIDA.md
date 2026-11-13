@@ -14,18 +14,18 @@
 
 ## Lo de cada mes
 1. **Presupuesto → Generar** el mes desde tu plantilla.
-2. **Más → Nómina → Registrar** lo que te llegó y repartirlo a tus bolsillos.
+2. **Planear → Nómina → Registrar** lo que te llegó y repartirlo a tus bolsillos.
 3. **Deudas →** tarjeta → **Pagar extracto**; créditos → **Pagar cuota**.
-4. **Bolsillos → Cuadrar** cada cuenta con lo que dice tu banco.
+4. **Dinero → Bolsillos → Cuadrar** cada cuenta con lo que dice tu banco.
 
 ## Más cosas (detalle en el [Manual](MANUAL_USUARIO.md))
 | Quiero… | Hago… |
 |---|---|
-| Ver en qué gasto y cómo evoluciona mi dinero | **Más → Gráficos** (y los gráficos de Inicio, Presupuesto, Deudas, Ahorro y cada bolsillo) |
+| Ver en qué gasto y cómo evoluciona mi dinero | Los gráficos de **Inicio**, **Dinero → Movimientos**, Presupuesto, Deudas, Ahorro y cada bolsillo |
 | Tener una cuenta en dólares | Crea el **banco en USD** (Ajustes → Bancos); los saldos van aparte, en *Otras monedas* |
-| Comprar dólares | **Bolsillos → Convertir divisas**: cantidad, tasa que dio el banco y comisión |
-| Anotar un CDT | **Más → CDT** |
-| Anotar otro ingreso (arriendo, otro trabajo) | **Más → Otros ingresos** |
+| Comprar dólares | **Dinero → Bolsillos → Convertir divisas**: cantidad, tasa que dio el banco y comisión |
+| Anotar un CDT | **Dinero → CDT** |
+| Anotar otro ingreso (arriendo, otro trabajo) | **Planear → Otros ingresos** |
 | Que me avisen los pagos en el calendario | **Ajustes → Recordatorios** |
 | Usar otra hoja o volver a una copia | **Ajustes → Mi cuenta → Usar otra hoja** |
 | Reportar un problema | **Ajustes → Registro de errores → Copiar el registro** |

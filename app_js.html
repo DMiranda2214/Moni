@@ -17,13 +17,28 @@ const ACENTOS = {
 };
 // </ACENTOS>
 
+/** Las cuatro áreas de la app. Cada una abre su pantalla de entrada (`ruta`). */
 const TABS = [
-  { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio' },
-  { id: 'bolsillos', etiqueta: 'Bolsillos', icono: 'bolsillos' },
-  { id: 'presupuesto', etiqueta: 'Presupuesto', icono: 'presupuesto' },
-  { id: 'tarjetas', etiqueta: 'Deudas', icono: 'tarjetas' },
-  { id: 'mas', etiqueta: 'Más', icono: 'mas' }
+  { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: 'inicio' },
+  { id: 'dinero', etiqueta: 'Dinero', icono: 'bolsillos', ruta: 'bolsillos' },
+  { id: 'planear', etiqueta: 'Planear', icono: 'calendario', ruta: 'planear' },
+  { id: 'deudas', etiqueta: 'Deudas', icono: 'tarjetas', ruta: 'tarjetas' }
 ];
+
+/** Cada pantalla principal pertenece a un área: el área marca la pestaña (o el grupo de la barra lateral) activa. */
+const AREA_DE_RUTA = {
+  inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero',
+  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', anual: 'planear',
+  tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
+};
+
+/** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
+const GRUPOS_NAV = [
+  { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['regalos', 'Regalos', 'regalo'], ['anual', 'Vista anual', 'calendario']] },
+  { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
+];
+const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
 
 const ETIQUETAS = {
   TipoCuenta: { Billetera: 'Billetera', Debito: 'Débito', Ahorro: 'Ahorro', Otra: 'Otra' },
@@ -331,13 +346,13 @@ async function refrescarParcial(opc) {
     try { aplicarPresupuesto(await api('getPresupuesto', App.boot.hoy.slice(0, 7))); } catch (e) { /* se pedirá al abrir el presupuesto */ }
   }
   if (opc.config) aplicarApariencia();
-  App.graf.data = null; App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   return r;
 }
 
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
+  App.pag.data = null; App.ing.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
@@ -443,7 +458,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
-  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -488,7 +503,7 @@ function buscarMov(id) {
 // Navegación
 // ---------------------------------------------------------------------------
 
-const esTab = r => TABS.some(t => t.id === r);
+const esTab = r => Object.prototype.hasOwnProperty.call(AREA_DE_RUTA, r);
 
 function navegar(ruta) {
   if (esTab(ruta)) App.pila = [ruta];
@@ -502,14 +517,12 @@ function volver() {
 const rutaActual = () => App.pila[App.pila.length - 1];
 
 function tituloRuta(ruta) {
-  const t = TABS.find(x => x.id === ruta);
-  if (t) return t.etiqueta;
+  if (TITULOS_BASE[ruta]) return TITULOS_BASE[ruta];
   const partes = ruta.split('/');
   if (partes[0] === 'ajustes' && partes.length === 1) return 'Ajustes';
   if (partes[0] === 'movimientos') return 'Movimientos';
   if (partes[0] === 'nomina') return 'Nómina';
   if (partes[0] === 'regalos') return 'Regalos';
-  if (partes[0] === 'graficos') return 'Gráficos';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -530,12 +543,16 @@ function render(enfocar) {
   const ruta = rutaActual();
   const raiz = App.pila[0];
 
-  // Navegación principal
-  const navHtml = (clase) => TABS.map(t =>
-    '<button class="' + clase + '" data-acc="tab" data-ruta="' + t.id + '"' + (t.id === raiz ? ' aria-current="page"' : '') + '>' +
-    ico(t.icono) + '<span>' + esc(t.etiqueta) + '</span></button>').join('');
-  $('#tabbar').innerHTML = navHtml('m-tab');
-  $('#lateral').innerHTML = '<div class="m-marca">Moni</div>' + navHtml('m-lateral-item');
+  // Navegación principal: barra inferior (celular) y barra lateral (tablet y computador)
+  const area = AREA_DE_RUTA[raiz] || '';
+  const puedeRegistrar = !!(App.boot && App.boot.instalado && hayBolsillos());
+  const tabHtml = t => '<button class="m-tab" data-acc="tab" data-ruta="' + t.ruta + '"' + (t.id === area ? ' aria-current="page"' : '') + '>' +
+    '<span class="m-tab-ico">' + ico(t.icono) + '</span><span>' + esc(t.etiqueta) + '</span></button>';
+  $('#tabbar').innerHTML = tabHtml(TABS[0]) + tabHtml(TABS[1]) +
+    '<div class="m-tab-centro">' + (puedeRegistrar ? '<button class="m-tab-mas" data-acc="menu-registrar" aria-label="Registrar un movimiento">' + ico('plus') + '</button>' : '') + '</div>' +
+    tabHtml(TABS[2]) + tabHtml(TABS[3]);
+  $('#lateral').innerHTML = htmlLateral(raiz, area, puedeRegistrar);
+  document.body.classList.toggle('m-lat-chica', lateralChica());
 
   // Pantalla
   let vista;
@@ -553,12 +570,12 @@ function render(enfocar) {
 
   const titulo = vista.ocultarTitulo ? '' : '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(vista.titulo) + '</h1>';
   $('#vista').classList.toggle('m-ancha', !!vista.ancha);
-  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + vista.html;
+  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + pildorasDinero(ruta) + vista.html;
   document.title = (vista.titulo ? vista.titulo + ' · ' : '') + 'Moni';
 
   document.body.classList.toggle('m-asistente', !!vista.asistente);
   const fab = $('#fab');
-  if (fab) fab.hidden = !!vista.asistente || !(App.boot && App.boot.instalado && hayBolsillos() && ['inicio', 'bolsillos', 'presupuesto', 'movimientos'].indexOf(ruta) !== -1);
+  if (fab) fab.hidden = true; // registrar ahora vive en el botón + de la barra inferior y en la barra lateral
 
   if (vista.despues) vista.despues();
   activarViz();
@@ -574,7 +591,7 @@ function pantalla(ruta) {
   if (!App.boot) return { titulo: 'Moni', html: '<div class="m-cargando">Cargando…</div>', ocultarTitulo: true };
   // Varias personas: antes de nada, cada una necesita su propia hoja.
   if (App.boot.sinHoja) return vCrearHoja();
-  if (!App.boot.instalado && ruta !== 'mas' && ruta.indexOf('ajustes') !== 0) return vInstalar();
+  if (!App.boot.instalado && ruta.indexOf('ajustes') !== 0) return vInstalar();
 
   const partes = ruta.split('/');
   switch (partes[0]) {
@@ -583,7 +600,6 @@ function pantalla(ruta) {
     case 'presupuesto': return vPresupuesto();
     case 'nomina': return vNomina();
     case 'regalos': return vRegalos();
-    case 'graficos': return vGraficos();
     case 'anual': return vAnual();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
@@ -595,7 +611,7 @@ function pantalla(ruta) {
     case 'tarjetas': return vDeudas();
     case 'tarjeta': return vTarjeta(partes[1]);
     case 'credito': return vCredito(partes[1]);
-    case 'mas': return vMas();
+    case 'planear': return vPlanear();
     case 'ajustes':
       if (partes.length === 1) return vAjustes();
       if (partes[1] === 'perfil') return vPerfil();
@@ -769,63 +785,118 @@ function htmlAvisos() {
     '</section>';
 }
 
+/** Anillo de avance (SVG). `pct` de 0 a 1. */
+function htmlAnillo(pct, tam, centro, etiqueta) {
+  const r = 40, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
+  return '<div class="m-anillo" style="width:' + tam + 'px;height:' + tam + 'px"><svg viewBox="0 0 96 96" width="' + tam + '" height="' + tam + '" role="img" aria-label="' + esc(etiqueta) + '">' +
+    '<circle cx="48" cy="48" r="' + r + '" class="m-anillo-fondo"/><circle cx="48" cy="48" r="' + r + '" class="m-anillo-valor" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - p)).toFixed(1) + '" transform="rotate(-90 48 48)"/></svg>' +
+    '<div class="m-anillo-centro">' + centro + '</div></div>';
+}
+
+const cifrasOcultas = () => { try { return localStorage.getItem('moni.ocultar') === '1'; } catch (e) { return false; } };
+const cifraHero = (n, divisa) => cifrasOcultas() ? '••••' : dinero(n, divisa);
+
+/** Tarjeta de avance de los primeros pasos y la lista agrupada. */
+function htmlPrimerosPasos(estado) {
+  const pasos = estado.pasos, hechos = pasos.filter(p => p.hecho).length;
+  const basicos = pasos.filter(p => !p.opcional), extras = pasos.filter(p => p.opcional);
+  const basicosListos = basicos.every(p => p.hecho);
+  const siguiente = pasos.find(p => !p.hecho && !p.opcional) || pasos.find(p => !p.hecho);
+  const reanudar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'));
+  const filaPaso = p => fila({ icono: p.hecho ? 'check' : 'plus', titulo: esc(p.titulo), sub: p.opcional ? 'Opcional' : '', chevron: true,
+    attrs: 'data-acc="ir" data-ruta="' + esc(p.pantalla) + '"', clase: p.hecho ? 'm-hecho' : '' });
+  let h = '<section class="m-ppasos" aria-label="Primeros pasos"><div class="m-ppasos-cab">' +
+    htmlAnillo(hechos / pasos.length, 64, '<strong>' + hechos + '/' + pasos.length + '</strong>', hechos + ' de ' + pasos.length + ' pasos') +
+    '<div><h2>Primeros pasos</h2><p>' + (basicosListos ? 'Lo básico ya está. Lo que falta es opcional.' : 'Completa lo básico para empezar.') + '</p></div></div>';
+  if (reanudar) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('capas') + '</span><div><small>Asistente</small><strong>Continuar donde quedaste</strong></div><button class="m-btn m-btn-primary" data-acc="asist-reanudar">Continuar</button></div>';
+  } else if (siguiente) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('plus') + '</span><div><small>Siguiente</small><strong>' + esc(siguiente.titulo) + '</strong></div>' +
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="' + esc(siguiente.pantalla) + '">Continuar</button></div>';
+  }
+  h += '</section>';
+  h += seccion('Lo básico' + (basicosListos ? ' · listo' : ''), basicos.map(filaPaso).join(''));
+  if (extras.length) h += seccion('Para sacarle más provecho', extras.map(filaPaso).join(''), 'Cuando termines, esta tarjeta se oculta sola. Puedes volver a estos pasos desde Ajustes.');
+  return h;
+}
+
 function vInicio() {
   if (asistenteVisible()) return vAsistente();
   const nombre = cfg('Nombre_Usuario');
   const estado = App.boot.estado || {};
   const s = App.boot.saldos || { cuentas: [] };
+  const inv = App.boot.invertido && App.boot.invertido.cantidad ? App.boot.invertido : null;
+  const pendientesPasos = !!(estado.pasos && !estado.completo);
   let html = bannerDemo();
 
-  if (estado.pasos && !estado.completo) {
-    const hechos = estado.pasos.filter(p => p.hecho).length;
-    // Quien dejó el asistente "para más tarde" lo retoma desde aquí; con datos de demostración no aplica.
-    const retomar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'))
-      ? fila({ icono: 'capas', titulo: 'Continuar con el asistente', sub: 'Te lleva paso a paso', chevron: true, attrs: 'data-acc="asist-reanudar"' }) : '';
-    html += '<section class="m-seccion" aria-label="Primeros pasos"><h2 class="m-seccion-titulo">Primeros pasos · ' + hechos + ' de ' + estado.pasos.length + '</h2>' +
-      '<div class="m-group">' + retomar + estado.pasos.map(p =>
-        fila({
-          icono: p.hecho ? 'check' : 'plus',
-          titulo: esc(p.titulo),
-          sub: p.opcional ? 'Opcional' : '',
-          chevron: true,
-          attrs: 'data-acc="ir" data-ruta="' + esc(p.pantalla) + '"',
-          clase: p.hecho ? 'm-hecho' : ''
-        })).join('') + '</div>' +
-      '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
+  if (pendientesPasos) html += htmlPrimerosPasos(estado);
+  else html += htmlAvisos();
+
+  // Saldo total (tarjeta pastel)
+  if (s.cuentas.length) {
+    const oculto = cifrasOcultas();
+    html += '<section class="m-hero" aria-label="Saldo total"><div class="m-hero-cab"><h2>Saldo total</h2>' +
+      '<button class="m-hero-ojo" data-acc="ocultar-cifras" aria-label="' + (oculto ? 'Mostrar' : 'Ocultar') + ' las cifras" aria-pressed="' + oculto + '">' + ico('ojo') + '</button></div>' +
+      '<div class="m-hero-cifra m-num ' + claseSaldo(s.total) + '">' + cifraHero(s.total) + '</div><div class="m-hero-chips">' +
+      '<div><span>Disponible</span><strong class="m-num">' + cifraHero(s.disponible) + '</strong></div>' +
+      '<div><span>Ahorro</span><strong class="m-num">' + cifraHero(s.ahorro) + '</strong></div>' +
+      (inv ? '<div><span>Invertido</span><strong class="m-num">' + cifraHero(inv.total) + '</strong></div>' : '') + '</div></section>';
   }
 
-  if (!(estado.pasos && !estado.completo)) html += htmlAvisos(); // con los primeros pasos sin terminar, esos pasos ya son el aviso
+  // Este mes de un vistazo
+  const pp = App.boot.ppto;
+  if (pp && s.cuentas.length) {
+    if (pp.existe) {
+      const t = pp.totales, avance = t.plan > 0 ? t.real / t.plan : 0;
+      html += '<section class="m-este-mes" aria-label="Este mes"><div class="m-este-cab"><h2>Este mes · ' + esc(mesTexto(pp.mes).toLowerCase().replace(/ de \d+$/, '')) + '</h2>' +
+        '<button class="m-btn-texto" data-acc="ir" data-ruta="presupuesto">Presupuesto</button></div><div class="m-este-cuerpo">' +
+        htmlAnillo(avance, 96, '<strong>' + Math.round(avance * 100) + ' %</strong><small>gastado</small>', Math.round(avance * 100) + ' % del presupuesto gastado') +
+        '<dl class="m-este-lista"><div><dt>Entró</dt><dd class="m-num m-positivo">' + dinero(t.ingresos) + '</dd></div><div><dt>Gastado</dt><dd class="m-num">' + dinero(t.real) + '</dd></div>' +
+        '<div class="m-este-total"><dt>Te queda</dt><dd class="m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</dd></div></dl></div>' +
+        '<p class="m-este-pie">Planeado ' + dinero(t.plan) + ' · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</p></section>';
+    } else {
+      html += '<section class="m-seccion" aria-label="Este mes"><div class="m-group">' +
+        fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+        '</div></section>';
+    }
+  }
 
   if (hayBolsillos()) {
-    const rap = (icono, texto, attrs) => '<button class="m-rapido" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
+    const rap = (icono, texto, attrs, tono) => '<button class="m-rapido" data-tono="' + tono + '" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
     html += '<section class="m-seccion m-tablero-ancho" aria-label="Accesos rápidos"><div class="m-rapidos">' +
-      rap('plus', 'Gasto', 'data-acc="rapido" data-tipo="Gasto"') +
-      rap('check', 'Ingreso', 'data-acc="rapido" data-tipo="Ingreso"') +
-      rap('capas', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"') +
-      rap('pulso', 'Pagar servicios', 'data-acc="ir" data-ruta="pagos"') +
-      rap('tarjetas', 'Tarjetas', 'data-acc="tab" data-ruta="tarjetas"') +
-      rap('presupuesto', 'Presupuesto', 'data-acc="tab" data-ruta="presupuesto"') + '</div></section>';
+      rap('mover', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"', 'rosa') +
+      rap('tarjetas', 'Servicios', 'data-acc="ir" data-ruta="pagos"', 'menta') +
+      rap('presupuesto', 'Movimientos', 'data-acc="ir" data-ruta="movimientos"', 'lila') +
+      rap('bolsillos', 'Ahorro', 'data-acc="ir" data-ruta="ahorro"', 'durazno') + '</div></section>';
   }
   html += '<div class="m-tablero">';
 
-  if (s.cuentas.length) {
-    html += '<section class="m-seccion" aria-label="Resumen"><h2 class="m-seccion-titulo">Resumen</h2><div class="m-group m-resumen">' +
-      '<div class="m-resumen-etiqueta">Total</div><div class="m-resumen-cifra m-num ' + claseSaldo(s.total) + '">' + dinero(s.total) + '</div>' +
-      '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Disponible</div><strong class="m-num ' + claseSaldo(s.disponible) + '">' + dinero(s.disponible) + '</strong></div>' +
-      '<div><div class="m-resumen-etiqueta">Ahorro</div><strong class="m-num">' + dinero(s.ahorro) + '</strong></div>' +
-      (App.boot.invertido && App.boot.invertido.cantidad ? '<div><div class="m-resumen-etiqueta">Invertido</div><strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong></div>' : '') + '</div></div></section>';
-    if (App.boot.invertido && App.boot.invertido.cantidad) {
-      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + App.boot.invertido.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (App.boot.invertido.proximoVencimiento ? ' · próximo vence ' + fechaTxt(App.boot.invertido.proximoVencimiento) : ''),
-        final: '<strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt"' }));
-    }
+  // Próximos pagos
+  const prox = App.boot.proximos || [];
+  if (prox.length) {
+    const tono = p => p.tipo === 'Tarjeta' ? 'rosa' : (p.tipo === 'Credito' ? 'lila' : 'durazno');
+    html += seccion('Próximos pagos', prox.map(p => fila({
+      icono: p.tipo === 'Tarjeta' ? 'tarjetas' : (p.tipo === 'Credito' ? 'capas' : (p.tipo === 'Servicio' ? 'rayo' : 'etiqueta')),
+      titulo: esc(p.titulo),
+      sub: esc(textoPlazo(p.dias)) + ' · ' + esc(p.detalle),
+      final: '<strong class="m-num' + (p.dias < 0 ? ' m-negativo' : '') + '">' + dinero(p.valor) + '</strong>',
+      chevron: true,
+      attrs: (p.susc ? 'data-acc="susc" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="' + (p.tipo === 'Tarjeta' ? 'tarjeta/' : 'credito/') + esc(p.id) + '"') + ' data-tono="' + tono(p) + '"'
+    })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
+  }
 
-    html += seccion('Cuentas', s.cuentas.map(c => fila({
+  if (s.cuentas.length) {
+    html += seccion('Tus cuentas', s.cuentas.map(c => fila({
       icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
       titulo: esc(c.Nombre),
       sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (c.Divisa !== 'COP' ? ' · ' + esc(c.Divisa) : ''),
       final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo, c.Divisa) + '</strong>',
-      attrs: 'data-acc="ir" data-ruta="bolsillos"'
+      attrs: 'data-acc="ir" data-ruta="bolsillos" data-tono="' + (c.Tipo === 'Ahorro' ? 'menta' : 'celeste') + '"'
     })).join(''));
+    if (inv) {
+      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + inv.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (inv.proximoVencimiento ? ' · próximo vence ' + fechaTxt(inv.proximoVencimiento) : ''),
+        final: '<strong class="m-num">' + dinero(inv.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt" data-tono="lila"' }));
+    }
 
     html += htmlInicioGraficos();
 
@@ -838,35 +909,8 @@ function vInicio() {
         chevron: true, attrs: 'data-acc="ir" data-ruta="bolsillos"'
       })).join(''));
     }
-  } else if (!(estado.pasos && !estado.completo)) {
+  } else if (!pendientesPasos) {
     html += vacio('bolsillos', 'Aún no tienes cuentas', 'Agrega una cuenta desde Ajustes para ver tus saldos aquí.');
-  }
-
-  const pp = App.boot.ppto;
-  if (pp && s.cuentas.length) {
-    if (pp.existe) {
-      const avance = pp.totales.plan > 0 ? Math.min(100, Math.round(pp.totales.real / pp.totales.plan * 100)) : 0;
-      html += '<section class="m-seccion" aria-label="Presupuesto del mes"><h2 class="m-seccion-titulo">Presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()) + '</h2><div class="m-group">' +
-        fila({ titulo: 'Gastado ' + dinero(pp.totales.real) + ' de ' + dinero(pp.totales.plan), sub: pp.totales.pagados + ' de ' + pp.totales.renglones + ' renglones pagados',
-          final: '<strong class="m-num ' + claseSaldo(pp.totales.saldo) + '">' + dinero(pp.totales.saldo) + '</strong><span class="m-row-sub" style="display:block">te queda</span>',
-          chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto"' }) +
-        '<div style="padding:0 var(--m-space-4) var(--m-space-4)"><div class="m-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div></div></div></section>';
-    } else {
-      html += '<section class="m-seccion" aria-label="Presupuesto del mes"><div class="m-group">' +
-        fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto"' }) + '</div></section>';
-    }
-  }
-
-  const prox = App.boot.proximos || [];
-  if (prox.length) {
-    html += seccion('Próximos pagos', prox.map(p => fila({
-      icono: p.tipo === 'Tarjeta' ? 'tarjetas' : (p.tipo === 'Credito' ? 'capas' : (p.tipo === 'Servicio' ? 'pulso' : 'etiqueta')),
-      titulo: esc(p.titulo),
-      sub: esc(textoPlazo(p.dias)) + ' · ' + esc(p.detalle),
-      final: '<strong class="m-num' + (p.dias < 0 ? ' m-negativo' : '') + '">' + dinero(p.valor) + '</strong>',
-      chevron: true,
-      attrs: p.susc ? 'data-acc="susc" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="' + (p.tipo === 'Tarjeta' ? 'tarjeta/' : 'credito/') + esc(p.id) + '"'
-    })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
   }
 
   const porRecibir = App.boot.porRecibir || [];
@@ -935,23 +979,147 @@ function vBolsillos() {
   return { titulo: 'Bolsillos', html: html };
 }
 
-function vMas() {
+/** Pantalla de entrada del área Planear: lo que entra y lo que se decidió gastar. */
+function vPlanear() {
+  const p = App.boot.ppto || {};
+  const t = p.totales || {};
+  const mes = mesTexto(App.boot.hoy.slice(0, 7)).toLowerCase();
+  const destacada = p.existe
+    ? '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra m-num">' + dinero(t.saldo) + '</span><span class="m-destacada-sub">te queda · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</span></span>' + ico('der', 'm-chevron') + '</button>'
+    : '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra">Aún no lo creas</span><span class="m-destacada-sub">Se arma en un toque desde tu plantilla</span></span>' + ico('der', 'm-chevron') + '</button>';
+  const inv = App.boot.invertido && App.boot.invertido.cantidad;
   return {
-    titulo: 'Más',
-    html: seccion('',
-      irA('movimientos', { icono: 'presupuesto', titulo: 'Movimientos', sub: 'Todo lo que has registrado, por mes' }) +
-      irA('nomina', { icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte' }) +
-      irA('ingresos', { icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…' }) +
-      irA('cdt', { icono: 'capas', titulo: 'CDT', sub: (App.boot.invertido && App.boot.invertido.cantidad) ? 'Invertido: ' + dinero(App.boot.invertido.total) : 'Dinero invertido a plazo fijo' }) +
-      irA('ahorro', { icono: 'bolsillos', titulo: 'Ahorro', sub: 'Saldos, rendimientos y lo que le debes' }) +
-      irA('regalos', { icono: 'hogar', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año' }) +
-      irA('pagos', { icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…' }) +
-      irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
-      irA('graficos', { icono: 'pulso', titulo: 'Gráficos', sub: 'En qué gastas y cómo evoluciona tu dinero' }) +
-      irA('anual', { icono: 'presupuesto', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante' }) +
-      irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Cuentas, bolsillos, tarjetas y apariencia' }))
+    titulo: 'Planear', subtitulo: 'Lo que entra y lo que decidiste gastar',
+    html: destacada +
+      '<section class="m-seccion" aria-label="Cada mes"><h2 class="m-seccion-titulo">Cada mes</h2><div class="m-group">' +
+      fila({ icono: 'presupuesto', titulo: 'Presupuesto', sub: 'Plan frente a lo real, renglón por renglón', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+      fila({ icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' }) +
+      fila({ icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos" data-tono="menta"' }) +
+      fila({ icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos" data-tono="durazno"' }) +
+      '</div></section>' +
+      '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
+      fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
+      fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
+      '</div></section>'
   };
 }
+
+/** Pestañas internas del área Dinero (solo en sus pantallas de entrada). */
+function pildorasDinero(ruta) {
+  if (App.pila.length !== 1 || AREA_DE_RUTA[ruta] !== 'dinero') return '';
+  const grupo = GRUPOS_NAV[0];
+  return '<div class="m-pildoras" role="tablist" aria-label="Dinero">' + grupo.items.map(it =>
+    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + it[0] + '" aria-selected="' + (it[0] === ruta) + '">' + esc(it[1]) + '</button>').join('') + '</div>';
+}
+
+// ---------- Barra lateral ----------
+
+const lateralChica = () => {
+  try { const g = localStorage.getItem('moni.lateral'); if (g) return g === 'chica'; } catch (e) {}
+  return window.innerWidth < 1100;
+};
+function alternarLateral() {
+  const nueva = !lateralChica();
+  try { localStorage.setItem('moni.lateral', nueva ? 'chica' : 'ancha'); } catch (e) {}
+  document.body.classList.toggle('m-lat-chica', nueva);
+  $('#lateral').innerHTML = htmlLateral(App.pila[0], AREA_DE_RUTA[App.pila[0]] || '', !!(App.boot && App.boot.instalado && hayBolsillos()));
+}
+
+function htmlLateral(raiz, area, puedeRegistrar) {
+  const item = (ruta, etiqueta, icono) => '<button class="m-lat-item" data-acc="ir" data-ruta="' + ruta + '" title="' + esc(etiqueta) + '"' + (ruta === raiz ? ' aria-current="page"' : '') + '>' +
+    ico(icono) + '<span class="m-lat-txt">' + esc(etiqueta) + '</span></button>';
+  const chica = lateralChica();
+  const nombre = cfg('Nombre_Usuario') || '';
+  return '<div class="m-lat-cab"><span class="m-logo" aria-hidden="true">' + ico('bolsillos') + '</span><span class="m-lat-txt m-marca">Moni</span>' +
+    '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
+    (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
+    '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
+    '<nav class="m-lat-nav" aria-label="Principal">' + item('inicio', 'Inicio', 'inicio') +
+    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</nav>' +
+    '<div class="m-lat-pie">' + item('guia', 'Guía de uso', 'etiqueta') + item('ajustes', 'Ajustes', 'ajustes') +
+    '<div class="m-lat-usuario"><span class="m-avatar" aria-hidden="true">' + esc((nombre.charAt(0) || 'M').toUpperCase()) + '</span><span class="m-lat-txt">' + esc(nombre || 'Mi cuenta') + '</span></div></div>';
+}
+
+// ---------- Registrar (botón +) ----------
+
+async function abrirMenuRegistrar() {
+  if (!App.boot || !App.boot.instalado || !hayBolsillos()) return;
+  const recientes = ((App.boot.ultimos || []).filter(m => m.Tipo_Mov === 'Gasto' && !m.Anulado && m.Valor < 0)).slice(0, 2);
+  const tile = (tipo, titulo, sub, icono, tono) => '<button class="m-reg-tile" data-reg="' + tipo + '" data-tono="' + tono + '"><span class="m-reg-ico">' + ico(icono) + '</span><strong>' + esc(titulo) + '</strong><span>' + esc(sub) + '</span></button>';
+  const cuerpo = '<div class="m-reg-rejilla">' +
+    tile('Gasto', 'Gasto', 'Lo que pagaste', 'plus', 'rosa') + tile('Ingreso', 'Ingreso', 'Dinero que llegó', 'check', 'menta') +
+    tile('Mover', 'Mover dinero', 'Entre bolsillos', 'mover', 'lila') +
+    (hayOtrasDivisas() ? tile('Convertir', 'Convertir', 'Pesos y dólares', 'capas', 'durazno') : '') + '</div>' +
+    (recientes.length ? '<h3 class="m-seccion-titulo" style="margin:var(--m-space-4) 0 var(--m-space-2)">Repetir uno reciente</h3><div class="m-group">' +
+      recientes.map(m => fila({ titulo: esc(m.Concepto), sub: esc(m.Bolsillo || ''), final: '<strong class="m-num">' + dinero(m.Valor, m.Divisa) + '</strong>', attrs: 'data-rep="' + esc(m.ID_Mov) + '"' })).join('') + '</div>' : '');
+  await abrirHoja({
+    titulo: '¿Qué quieres registrar?', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    alAbrir: raiz => raiz.addEventListener('click', ev => {
+      const t = ev.target.closest('[data-reg]'), r = ev.target.closest('[data-rep]');
+      if (t) {
+        if (t.dataset.reg === 'Convertir') abrirConversion(); else abrirRegistrar({ tipo: t.dataset.reg });
+      } else if (r) {
+        const m = recientes.find(x => x.ID_Mov === r.dataset.rep);
+        if (m) abrirRegistrar({ tipo: 'Gasto', concepto: m.Concepto, valor: Math.abs(m.Valor), idBolsillo: m.ID_Bolsillo });
+      }
+    })
+  });
+}
+
+// ---------- Buscar o ir a… (Ctrl K) ----------
+
+const sinTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function destinosBuscables() {
+  const lista = [['inicio', 'Inicio', 'Pantalla principal', 'inicio'], ['planear', 'Planear', 'Área', 'calendario']];
+  GRUPOS_NAV.forEach(g => g.items.forEach(it => lista.push([it[0], it[1], g.titulo, it[2]])));
+  lista.push(['guia', 'Guía de uso', 'Ayuda', 'etiqueta'], ['ajustes', 'Ajustes', 'Configuración', 'ajustes'],
+    ['ajustes/perfil', 'Perfil', 'Ajustes', 'usuario'], ['ajustes/apariencia', 'Apariencia', 'Ajustes', 'paleta'],
+    ['ajustes/Bancos', 'Bancos', 'Ajustes', 'banco'], ['ajustes/Cuentas', 'Cuentas', 'Ajustes', 'cuenta'], ['ajustes/Tarjetas', 'Tarjetas (ajustes)', 'Ajustes', 'tarjetas'],
+    ['ajustes/plantilla', 'Plantilla del presupuesto', 'Ajustes', 'presupuesto'], ['ajustes/divisas', 'Divisas', 'Ajustes', 'banco'],
+    ['ajustes/respaldos', 'Respaldos', 'Ajustes', 'capas'], ['ajustes/recordatorios', 'Recordatorios', 'Ajustes', 'calendario']);
+  ((App.boot && App.boot.saldos && App.boot.saldos.cuentas) || []).forEach(c => c.bolsillos.forEach(b => {
+    if (b.Es_Interno && !esVerdad(c.Permite_Bolsillos)) lista.push(['bolsillo/' + b.ID_Bolsillo, c.Nombre, 'Cuenta · ' + c.Banco, 'cuenta']);
+    else lista.push(['bolsillo/' + b.ID_Bolsillo, nombreBolsillo(b, c), 'Bolsillo · ' + c.Nombre, 'bolsillos']);
+  }));
+  return lista;
+}
+
+async function abrirBuscador() {
+  if (!App.boot || !App.boot.instalado) return;
+  const todos = destinosBuscables();
+  const htmlLista = q => {
+    const n = sinTildes(q).trim();
+    const hay = todos.filter(d => !n || sinTildes(d[1] + ' ' + d[2]).indexOf(n) !== -1).slice(0, 12);
+    return hay.length ? hay.map(d => fila({ icono: d[3], titulo: esc(d[1]), sub: esc(d[2]), chevron: true, attrs: 'data-ir="' + esc(d[0]) + '"' })).join('')
+      : '<div class="m-row"><span class="m-row-sub">No encontré nada con ese nombre.</span></div>';
+  };
+  await abrirHoja({
+    titulo: 'Buscar o ir a…', izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<div class="m-campo"><input class="m-input" id="buscador" type="search" placeholder="Pantalla, cuenta o bolsillo" autocomplete="off" aria-label="Buscar"></div>' +
+      '<div class="m-group" id="buscador-lista">' + htmlLista('') + '</div>',
+    alAbrir: raiz => {
+      const inp = $('#buscador', raiz), lista = $('#buscador-lista', raiz);
+      inp.focus();
+      inp.addEventListener('input', () => { lista.innerHTML = htmlLista(inp.value); });
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { const p = $('[data-ir]', lista); if (p) p.click(); } });
+      lista.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-ir]');
+        if (!b) return;
+        if (hojaActual) hojaActual.finalizar();
+        navegar(b.dataset.ir);
+      });
+    }
+  });
+}
+
+document.addEventListener('keydown', ev => {
+  const t = ev.target, escribiendo = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirBuscador(); return; }
+  if (!escribiendo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.toLowerCase() === 'n' && !hojaActual && !document.body.classList.contains('m-asistente')) { ev.preventDefault(); abrirMenuRegistrar(); }
+});
 
 function vAjustes() {
   const n = t => activos(t).filter(f => !esVerdad(f.Es_Interno)).length;
@@ -960,6 +1128,7 @@ function vAjustes() {
     titulo: 'Ajustes',
     html:
       seccion('Tú',
+        irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
         irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
@@ -1925,7 +2094,7 @@ function interruptorAnulados(vista, marcado) {
 }
 
 function cambiarMes(vista, delta) {
-  const st = vista === 'graf' ? App.graf : vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
+  const st = vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
   st.mes = mesMas(st.mes, delta); st.data = null; st.error = null;
   if (vista === 'nom') st.opciones = null; // cada mes parte de sus valores por defecto
   render();
@@ -2004,7 +2173,7 @@ function vMovimientos() {
   if (m.error) html += bloqueError(m.error, 'recargar-mov');
   else if (!m.data) html += esqueleto(6);
   else {
-    html += resumenMes(m.data.totales) + '<div id="lista-mov">';
+    html += resumenMes(m.data.totales) + htmlMovGraficos(m.data.items) + '<div id="lista-mov">';
     const lista = filtrarMov(m.data.items);
     html += lista.length ? htmlListaMov(lista, false)
       : vacio('presupuesto', m.texto ? 'Nada coincide con la búsqueda' : 'Sin movimientos en este mes', m.texto ? 'Prueba con otra palabra.' : 'Usa el botón Registrar para anotar un gasto o un ingreso.');
@@ -2769,6 +2938,7 @@ function htmlNomina(d) {
     '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
     '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
+  h += htmlNominaGraficos(c);
   if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-adic-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar algo de este mes</button></div>' +
     '<p class="m-ayuda" style="margin-top:calc(var(--m-space-3) * -1)">Horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa: solo para el pago de este mes.</p>' +
     '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
@@ -3662,7 +3832,7 @@ function htmlRegalos(d) {
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Diferencia</div><strong class="m-num ' + (t.diferencia < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(t.diferencia) + '</strong></div><div><div class="m-resumen-etiqueta">Comprados</div><strong class="m-num">' + t.comprados + ' de ' + t.total + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
   if (!d.items.length) return h + vacio('hogar', 'Sin regalos en ' + d.anio, 'Anota a quién le vas a regalar y cuánto calculas gastar. Cuando compres, registra el gasto y se calcula la diferencia.',
     '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar un regalo</button>');
-  return h + '<div class="m-group">' + d.items.map(i => fila({
+  return h + htmlRegalosGraficos(d) + '<div class="m-group">' + d.items.map(i => fila({
     titulo: esc(i.Persona) + (i.Aplica ? '' : ' <span class="m-insignia">no aplica</span>'), sub: (i.Idea ? esc(i.Idea) + ' · ' : '') + 'estimado ' + dinero(i.Estimado),
     final: i.Comprado ? '<strong class="m-num">' + dinero(i.Real) + '</strong><span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>' : '<span class="m-row-sub">pendiente</span>',
     clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"'
@@ -3798,7 +3968,7 @@ function vGuia() {
       seccion('Cada mes',
         paso('Presupuesto', 'Genera el mes desde tu plantilla. Marca como pagado lo que ya cubriste.') +
         paso('Nómina', 'Calcula lo que te llega y repártelo a tus bolsillos una sola vez al mes.') +
-        paso('Servicios y suscripciones', 'En Más → Servicios y suscripciones (o “Pagar servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
+        paso('Servicios y suscripciones', 'En Planear → Servicios y suscripciones (o “Servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
         paso('Tarjetas y créditos', 'En Deudas registras compras con tarjeta y pagas el extracto. Los créditos de autopago se pagan desde tu ahorro y cada cuota regresa a él.')) +
       seccion('Cuando algo no cuadra',
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
@@ -3836,7 +4006,7 @@ function htmlCdts(d) {
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganarás (neto)</div><strong class="m-num m-positivo">' + dinero(t.netoEsperado) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Próximo vence</div><strong class="m-num">' + (t.proximoVencimiento ? esc(fechaTxt(t.proximoVencimiento)) : '—') + '</strong></div></div>' +
     '<p class="m-ayuda">' + t.cantidad + (t.cantidad === 1 ? ' CDT vigente' : ' CDT vigentes') + ' · este dinero no cuenta como disponible.</p></div>';
-  if (d.vigentes.length) h += '<div style="height:var(--m-space-4)"></div>' + seccion('Vigentes', d.vigentes.map(filaCdt).join(''));
+  if (d.vigentes.length) h += htmlCdtGraficos(d) + seccion('Vigentes', d.vigentes.map(filaCdt).join(''));
   if (d.cerrados.length) h += seccion('Cerrados', d.cerrados.map(x => fila({
     icono: 'check', titulo: esc(x.Nombre), sub: esc(x.Banco) + ' · cerrado el ' + esc(fechaTxt(x.Fecha_Cierre)), final: '<span class="m-num">' + dinero(x.Capital) + '</span>',
     clase: 'm-hecho', chevron: true, attrs: 'data-acc="cdt" data-id="' + esc(x.ID_CDT) + '"'
@@ -4088,6 +4258,7 @@ function vPagos() {
       html += '<div class="m-group m-resumen"><div class="m-resumen-etiqueta">Te cuestan al mes</div><div class="m-resumen-cifra m-num">' + dinero(t.mensual) + '</div>' +
         '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Al año</div><strong class="m-num">' + dinero(t.anual) + '</strong></div>' +
         '<div><div class="m-resumen-etiqueta">Suscripciones al mes</div><strong class="m-num">' + dinero(t.mensualSuscripciones) + '</strong></div></div></div>';
+      html += '<div style="height:var(--m-space-4)"></div>' + htmlCobrosGraficos(d.items);
       const pronto = d.items.filter(x => x.estado !== 'ok');
       if (pronto.length) html += '<div style="height:var(--m-space-4)"></div>' + seccion('Por pagar', pronto.map(filaCobro).join(''), 'Vencidas o en los próximos ' + 7 + ' días.');
       const resto = d.items.filter(x => x.estado === 'ok');
@@ -4267,14 +4438,13 @@ async function cargarRecordatorios() {
 }
 
 // ---------------------------------------------------------------------------
-// Gráficos (SVG sin librerías): componentes reutilizables y la pantalla Más → Gráficos.
-// Los usan Inicio, Presupuesto, Deudas, Ahorro, la Vista anual y el detalle de un bolsillo.
+// Gráficos (SVG sin librerías): componentes reutilizables. No hay una pantalla aparte: cada módulo trae los suyos
+// (Inicio, Movimientos, Presupuesto, Deudas, Ahorro, CDT, Regalos, Nómina, Servicios, Vista anual y el detalle de un bolsillo).
 // Cada gráfico se registra en VIZ con su id al armar el HTML; render() llama a activarViz() para conectar
 // hover, foco y teclado. Marcas finas, cuadrícula recesiva y una tabla con los mismos datos.
 // Una sola moneda por gráfico: los pesos y los dólares no se suman.
 // ---------------------------------------------------------------------------
 
-App.graf = { mes: null, meses: 6, divisa: 'COP', data: null, cargando: false, error: null };
 App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
 const VIZ = { items: {}, n: 0 };
 
@@ -4506,34 +4676,7 @@ function activarViz() {
   });
 }
 
-// ---- Pantalla Más → Gráficos ----
-
-function vGraficos() {
-  const g = App.graf;
-  if (!g.mes) g.mes = App.boot.hoy.slice(0, 7);
-  const divisas = ['COP'].concat(activos('Bancos').map(b => b.Divisa || 'COP').filter((d, i, a) => d !== 'COP' && a.indexOf(d) === i));
-  if (divisas.indexOf(g.divisa) === -1) g.divisa = 'COP';
-  const segmentos = (nombre, etiqueta, opciones, actual) => '<div class="m-segmentado" role="radiogroup" aria-label="' + esc(etiqueta) + '">' +
-    opciones.map(o => '<label><input type="radio" name="' + nombre + '" value="' + esc(o[0]) + '"' + (String(o[0]) === String(actual) ? ' checked' : '') + '><span>' + esc(o[1]) + '</span></label>').join('') + '</div>';
-
-  // Los filtros van en una sola fila sobre los gráficos y valen para todos
-  let html = bannerDemo() + '<div class="m-filtros-viz">' + navegadorMes('graf', g.mes) +
-    segmentos('graf-rango', 'Meses a mostrar', [[3, '3 meses'], [6, '6 meses'], [12, '12 meses']], g.meses) +
-    (divisas.length > 1 ? segmentos('graf-divisa', 'Moneda', divisas.map(d => [d, d]), g.divisa) : '') + '</div>';
-
-  if (g.error) html += bloqueError(g.error, 'recargar-graf');
-  else if (!g.data) html += esqueleto(5);
-  else html += htmlGraficos(g.data);
-  return {
-    titulo: 'Gráficos', html: html,
-    despues: () => {
-      if (!g.data && !g.cargando && !g.error) {
-        const clave = () => g.mes + '|' + g.meses + '|' + g.divisa, k = clave();
-        cargarEn(g, 'graficos', 'getGraficos', [{ mes: g.mes, meses: g.meses, divisa: g.divisa }], () => k === clave());
-      }
-    }
-  };
-}
+// ---- Categorías de gasto (las usan Inicio y Movimientos) ----
 
 /** Barras de las categorías con mayor gasto (y "Otras"), con su porcentaje. */
 function itemsCategorias(d, cats) {
@@ -4548,32 +4691,6 @@ function categoriasVisibles(d) {
   return d.categorias.slice(0, TOP).concat([{ Nombre: 'Otras', Valor: Math.round(resto * 100) / 100 }]);
 }
 
-function htmlGraficos(d) {
-  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
-  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null, fm = n => dinero(n, dv);
-
-  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
-  const tile = (etiqueta, valor, previo, subeEsBueno) => {
-    let delta = '';
-    if (previo !== null && previo !== undefined && previo !== 0) {
-      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
-      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
-    }
-    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(fm(valor)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
-  };
-  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
-
-  const puntos = puntosMeses(s.map(m => m.mes)), cats = categoriasVisibles(d);
-  return kpis +
-    tarjetaViz('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), vizBarrasH({ items: itemsCategorias(d, cats), divisa: dv, vacio: 'Sin gastos este mes.' }),
-      d.categorias.length ? tablaViz(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '') +
-    tarjetaViz('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses',
-      vizColumnas({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: s.map(m => m.ingresos) }, { nombre: 'Salió', clave: 'viz-s2', valores: s.map(m => m.gastos) }], divisa: dv, etiqueta: 'Entró y salió por mes',
-        extraTip: i => [{ valor: fm(s[i].neto), etiqueta: 'Diferencia' }] }),
-      tablaViz(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
-    tarjetaViz('gv-saldo', 'Saldo al cierre de cada mes', lineaSaldo(s, dv, 190), tablaSaldo(s, dv));
-}
-
 // ---- Gráficos dentro de los módulos ----
 
 /** Inicio: saldo de los últimos 6 meses y en qué se fue el dinero este mes (se pide aparte, sin frenar la pantalla). */
@@ -4584,7 +4701,7 @@ function htmlInicioGraficos() {
   return tarjetaViz('ini-saldo', 'Tu saldo en los últimos ' + g.serie.length + ' meses', lineaSaldo(g.serie, 'COP', 150), tablaSaldo(g.serie, 'COP')) +
     (cats.length ? tarjetaViz('ini-cat', 'En qué gastaste · ' + mesTexto(g.mes), vizBarrasH({ items: itemsCategorias(g, cats), divisa: 'COP' }),
       tablaViz(['Categoría', 'Valor', '%'], g.categorias.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, g.totalGastos)]))) : '') +
-    '<section class="m-seccion"><div class="m-group">' + fila({ icono: 'pulso', titulo: 'Ver todos los gráficos', chevron: true, attrs: 'data-acc="ir" data-ruta="graficos"' }) + '</div></section>';
+    '';
 }
 
 async function cargarInicioGraf() {
@@ -4593,6 +4710,60 @@ async function cargarInicioGraf() {
   try { st.data = await api('getGraficos', { meses: 6, divisa: 'COP' }); } catch (e) { /* es un adorno: si falla, Inicio sigue igual */ }
   st.cargando = false; st.viejo = false; st.intentado = true;
   if (rutaActual() === 'inicio') render();
+}
+
+/** Movimientos: en qué categorías se fue el dinero del mes que se está viendo. */
+function htmlMovGraficos(items) {
+  const por = {};
+  let total = 0;
+  (items || []).forEach(i => {
+    if (i.Anulado || i.esTransferencia || i.Tipo_Mov !== 'Gasto' || (i.Divisa || 'COP') !== 'COP') return;
+    const v = Math.abs(Number(i.Valor) || 0), n = i.Categoria || 'Sin categoría';
+    por[n] = (por[n] || 0) + v; total += v;
+  });
+  const lista = Object.keys(por).map(k => ({ Nombre: k, Valor: Math.round(por[k] * 100) / 100 })).sort((a, b) => b.Valor - a.Valor);
+  if (!lista.length) return '';
+  return tarjetaViz('mov-cat', 'En qué gastaste este mes', vizBarrasH({ items: itemsCategorias({ totalGastos: total }, categoriasVisibles({ categorias: lista })), divisa: 'COP' }),
+    tablaViz(['Categoría', 'Valor', '%'], lista.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, total)])));
+}
+
+/** CDT: cuánto hay en cada uno y qué tanto del plazo ha pasado. */
+function htmlCdtGraficos(d) {
+  const v = d.vigentes;
+  if (!v.length) return '';
+  const orden = v.slice().sort((a, b) => b.Capital - a.Capital);
+  const barras = vizBarrasH({ items: orden.map(x => ({ nombre: x.Nombre, valor: x.Capital, detalle: x.Banco + ' · ' + textoPlazo(x.dias).toLowerCase() })), divisa: 'COP' });
+  const medidores = vizMedidores(v.map(x => ({ nombre: x.Nombre, valor: Math.round(x.avance * 100), tope: 100, texto: Math.round(x.avance * 100) + ' % del plazo · ' + textoPlazo(x.dias).toLowerCase() })));
+  return tarjetaViz('cdt-capital', 'Cuánto hay en cada CDT', barras, tablaViz(['CDT', 'Capital', 'Ganarás (neto)'], orden.map(x => [x.Nombre, dinero(x.Capital), dinero(x.netoTotal)]))) +
+    '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance del plazo</h2><div class="m-group m-viz-tarjeta">' + medidores + '</div></section>';
+}
+
+/** Regalos: lo gastado frente a lo estimado de cada persona. */
+function htmlRegalosGraficos(d) {
+  const items = d.items.filter(i => i.Aplica && Number(i.Estimado) > 0)
+    .map(i => ({ nombre: i.Persona, valor: Number(i.Real) || 0, tope: Number(i.Estimado), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Estimado)) }));
+  if (items.length < 2) return '';
+  items.sort((a, b) => b.valor / b.tope - a.valor / a.tope);
+  return '<section class="m-seccion"><h2 class="m-seccion-titulo">Gastado frente a lo estimado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>';
+}
+
+const MESES_DE_PERIODO = { Mensual: 1, Bimestral: 2, Trimestral: 3, Semestral: 6, Anual: 12 };
+
+/** Servicios y suscripciones: qué cobros pesan más cada mes (los pagos anuales o semestrales se reparten por mes). */
+function htmlCobrosGraficos(items) {
+  const lista = (items || []).map(x => ({ nombre: x.Nombre, valor: Math.round(Number(x.Valor) / (MESES_DE_PERIODO[x.Periodicidad] || 1) * 100) / 100, detalle: x.Tipo === 'Servicio' ? 'Servicio' : 'Suscripción' }))
+    .filter(x => x.valor > 0).sort((a, b) => b.valor - a.valor);
+  if (lista.length < 2) return '';
+  return tarjetaViz('pag-mensual', 'Lo que más pesa al mes', vizBarrasH({ items: lista.slice(0, 8), divisa: 'COP' }), tablaViz(['Cobro', 'Al mes'], lista.map(x => [x.nombre, dinero(x.valor)])));
+}
+
+/** Nómina: a dónde va lo que se descuenta del devengado. */
+function htmlNominaGraficos(c) {
+  const ded = c.lineas.filter(l => l.grupo === 'deduccion' && l.incluido && Math.abs(l.valor) > 0).sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+  if (!ded.length) return '';
+  const dev = c.totales.devengado;
+  return tarjetaViz('nom-desc', 'A dónde va lo descontado', vizBarrasH({ items: ded.map(l => ({ nombre: l.concepto, valor: Math.abs(l.valor), detalle: porcentajeDe(Math.abs(l.valor), dev) + ' de lo que devengas' })), divisa: 'COP' }),
+    tablaViz(['Descuento', 'Valor', '% del devengado'], ded.map(l => [l.concepto, dinero(Math.abs(l.valor)), porcentajeDe(Math.abs(l.valor), dev)])));
 }
 
 /** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
@@ -4847,7 +5018,7 @@ const TEXTOS_ASIST = {
   bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
-  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Más → Nómina.' },
+  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Planear → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
   cdt: { titulo: '¿Tienes CDT?', sub: 'Es opcional. Un CDT es dinero que tienes a plazo fijo en un banco. Regístralo con su capital, tasa y plazo: Moni lo muestra como "Invertido" (no como disponible), calcula lo que ganarás y te avisa cuando vence. Los que ya tenías no descuentan nada de tus bolsillos.' },
   suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; si lo pagas en más de un hogar, elige a cuál pertenece. Moni te recuerda cuándo se cobra.' },
@@ -4913,16 +5084,51 @@ function valorInicialAsist(c) {
   return c.defecto !== undefined ? c.defecto : '';
 }
 
-function htmlPasosAsist(actual) {
+/** Cabecera del paso: Atrás, "Paso X de N", salir y la barra de tramos. */
+function htmlCabAsist(p) {
+  const idx = PASOS_ASIST.indexOf(p) + 1, n = PASOS_ASIST.length;
+  const hecho = {};
+  App.boot.estado.pasos.forEach(x => { hecho[x.id] = x.hecho; });
+  return '<div class="m-asist-barra"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
+    '<span class="m-asist-paso">Paso ' + idx + ' de ' + n + '</span>' +
+    (p.opcional ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar</button>' : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Más tarde</button>') + '</div>' +
+    '<div class="m-tramos" role="progressbar" aria-valuemin="0" aria-valuemax="' + n + '" aria-valuenow="' + idx + '" aria-label="Paso ' + idx + ' de ' + n + '">' +
+    PASOS_ASIST.map((x, i) => '<span class="' + (x.id === p.id ? 'm-tramo-actual' : (hecho[x.id] || i < idx - 1 ? 'm-tramo-hecho' : '')) + '"></span>').join('') + '</div>';
+}
+
+/** Pasos a la izquierda (solo en pantallas anchas). */
+function htmlRailAsist(actual) {
   const estado = {};
   App.boot.estado.pasos.forEach(p => { estado[p.id] = p; });
-  return '<ol class="m-pasos" aria-label="Progreso de la configuración">' + PASOS_ASIST.map((p, i) => {
-    const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
-    const nota = { actual: 'paso actual', hecho: 'completado', pendiente: 'pendiente' }[clase];
-    return '<li class="m-paso m-paso-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '>' +
-      '<span class="m-paso-punto" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
-      '<span class="m-paso-nombre">' + esc(p.corto) + '<span class="m-sr-only"> (' + nota + ')</span></span></li>';
-  }).join('') + '</ol>';
+  return '<aside class="m-asist-rail" aria-label="Pasos de la configuración"><div class="m-asist-marca"><span class="m-logo" aria-hidden="true">' + ico('bolsillos') + '</span><span>Moni</span></div>' +
+    '<p>Vamos a dejarla lista en unos minutos. Puedes salir y seguir después.</p><ol>' + PASOS_ASIST.map((p, i) => {
+      const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
+      return '<li class="m-rail-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '><span class="m-rail-num" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
+        '<span>' + esc(p.corto) + (p.opcional ? '<small> · opcional</small>' : '') + '<span class="m-sr-only"> (' + { actual: 'paso actual', hecho: 'completado', pendiente: 'pendiente' }[clase] + ')</span></span></li>';
+    }).join('') + '</ol></aside>';
+}
+
+/** Vista previa de la cuenta mientras se escribe (paso de cuentas, pantallas anchas). */
+function actualizarPreviewAsist(f) {
+  const cont = $('#asist-preview');
+  if (!cont || !f) return;
+  const v = id => { const el = $('#' + idCampo(id), f); return el ? el.value : ''; };
+  const banco = (() => { const el = $('#' + idCampo('ID_Banco'), f); return el && el.selectedOptions && el.selectedOptions[0] && el.value ? el.selectedOptions[0].textContent : ''; })();
+  const usa = !!($('#' + idCampo('Permite_Bolsillos'), f) || {}).checked;
+  const num = t => { const x = leerDinero(t); return x === '' || isNaN(x) ? 0 : x; };
+  const suelto = num(v('Saldo_Apertura'));
+  const filas = [];
+  if (usa) $$('[data-fila-bols]', f).forEach(fila => {
+    const nom = $('[data-ab="nombre"]', fila).value.trim(), val = num($('[data-ab="saldo"]', fila).value);
+    if (nom || val) filas.push([nom || 'Sin nombre', val]);
+  });
+  const total = suelto + filas.reduce((x, y) => x + y[1], 0);
+  cont.innerHTML = '<div class="m-prev-cab">Así queda tu cuenta</div><div class="m-prev-hero"><small>' + esc((banco ? banco + ' · ' : '') + (v('Nombre').trim() || 'Tu cuenta')) + '</small>' +
+    '<strong class="m-num">' + dinero(total) + '</strong></div><div class="m-group">' +
+    (usa ? filas.map(x => '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo">' + esc(x[0]) + '</span></span><span class="m-row-final m-num">' + dinero(x[1]) + '</span></div>').join('') +
+      '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo m-prev-suelto">Sin asignar</span></span><span class="m-row-final m-num m-prev-suelto">' + dinero(suelto) + '</span></div>'
+      : '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo">Un solo saldo</span></span><span class="m-row-final m-num">' + dinero(suelto) + '</span></div>') +
+    '</div><p class="m-ayuda">Este mismo saldo es el que vas a ver en Inicio cuando termines.</p>';
 }
 
 /** Lo que ya se agregó en este paso, con el mismo texto que las listas de Ajustes. */
@@ -4983,7 +5189,7 @@ function vPasoAsistente(id) {
   } else if (id === 'nomina') {
     const yaHay = activos('Nomina_Escenarios').length > 0;
     cuerpo = yaHay
-      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina (sueldo base ' + dinero(activos('Nomina_Escenarios')[0].Sueldo_Base) + '). Puedes ajustarla cuando quieras en Más → Nómina.</p><button type="button" class="m-btn m-btn-secondary" data-acc="asist-sueldo">Cambiar mi sueldo</button></div>'
+      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina (sueldo base ' + dinero(activos('Nomina_Escenarios')[0].Sueldo_Base) + '). Puedes ajustarla cuando quieras en Planear → Nómina.</p><button type="button" class="m-btn m-btn-secondary" data-acc="asist-sueldo">Cambiar mi sueldo</button></div>'
       : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
         '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +
@@ -5013,20 +5219,15 @@ function vPasoAsistente(id) {
   }
 
   return {
-    titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true,
-    html: '<div class="m-asist">' + htmlPasosAsist(id) +
-      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + ' · ' + esc(p.corto) + (p.opcional ? ' · opcional' : '') + '</p>' +
+    titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true, ancha: true,
+    html: '<div class="m-asist m-asist-2col' + (id === 'cuentas' ? ' m-asist-3col' : '') + '">' + htmlRailAsist(id) + '<div class="m-asist-main">' + htmlCabAsist(p) +
       '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(t.titulo) + '</h1>' +
       '<p class="m-subtitulo">' + esc(t.sub) + '</p>' +
       '<div class="m-error-form" id="asist-error" role="alert" hidden></div>' + cuerpo +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" id="asist-principal" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
         (p.otro && campos ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-otro">' + esc(p.otro) + '</button>' : '') +
-        '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
-        (p.opcional
-          ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar este paso</button>'
-          : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button>') + '</div></div>' +
-      hechos + '</div>',
+        '</div>' + hechos + '</div>' + (id === 'cuentas' ? '<aside class="m-asist-prev" id="asist-preview" aria-label="Vista previa de la cuenta"></aside>' : '') + '</div>',
     despues: () => {
       const f = $('#asist-form');
       const principal = $('#asist-principal');
@@ -5128,6 +5329,7 @@ function sincronizarBolsillosAsist(f) {
     if (nom || (v !== '' && !isNaN(v))) n++;
     if (v !== '' && !isNaN(v)) total += v;
   });
+  actualizarPreviewAsist(f);
   $('#asist-bols-total', f).textContent = n ? 'Total de la cuenta: ' + dinero(total) + ' en ' + n + (n === 1 ? ' bolsillo' : ' bolsillos') + (suelto && !isNaN(suelto) ? ' (incluye ' + dinero(suelto) + ' sin asignar)' : '') : '';
 }
 
@@ -5262,7 +5464,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing, App.cdt].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.rec, App.ing, App.cdt].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -5325,7 +5527,6 @@ const ACCIONES = {
     if (!ok) return;
     try { await api('removeRecordatorios'); await refrescar(); render(); aviso('Recordatorios quitados'); } catch (e) { aviso(e.message, true); }
   },
-  'recargar-graf': () => { App.graf.error = null; App.graf.data = null; render(); },
   convertir: () => abrirConversion(),
   'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
   'log-limpiar': async () => {
@@ -5484,6 +5685,10 @@ const ACCIONES = {
     if (inf.b.Es_Interno) abrirFormulario('Cuentas', inf.c.ID_Cuenta); else abrirFormulario('Bolsillos', inf.b.ID_Bolsillo);
   },
   tab: el => navegar(el.dataset.ruta),
+  'menu-registrar': () => abrirMenuRegistrar(),
+  'ocultar-cifras': () => { try { localStorage.setItem('moni.ocultar', cifrasOcultas() ? '0' : '1'); } catch (e) {} render(); },
+  buscar: () => abrirBuscador(),
+  'lat-alternar': () => alternarLateral(),
   ir: el => navegar(el.dataset.ruta),
   volver: () => volver(),
   'actualizar-datos': async () => {
@@ -5562,8 +5767,6 @@ document.addEventListener('change', async ev => {
     } catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
-  if (t.name === 'graf-rango') { App.graf.meses = Number(t.value); App.graf.data = null; render(); return; }
-  if (t.name === 'graf-divisa') { App.graf.divisa = t.value; App.graf.data = null; render(); return; }
   if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
   if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
   if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }

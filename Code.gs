@@ -20,10 +20,21 @@ function doGet(e) {
 
   const template = HtmlService.createTemplateFromFile('index');
 
-  return template.evaluate()
+  const salida = template.evaluate()
     .setTitle('Moni')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover') // sin bloquear el zoom (accesibilidad)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  // El ícono de la pestaña: el de Moni en lugar del genérico de Apps Script. Si falla, la app abre igual.
+  try { salida.setFaviconUrl(urlIcono_()); } catch (e) {}
+  return salida;
+}
+
+/** Dirección pública del ícono de la app (assets/icono.png del repositorio). Se puede cambiar con la propiedad de script ICONO_URL. */
+const ICONO_URL = 'https://raw.githubusercontent.com/DMiranda2214/Moni/main/assets/icono.png';
+function urlIcono_() {
+  let propia = '';
+  try { propia = String(PropertiesService.getScriptProperties().getProperty('ICONO_URL') || '').trim(); } catch (e) {}
+  return /^https:\/\//.test(propia) ? propia : ICONO_URL;
 }
 
 /**

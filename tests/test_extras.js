@@ -704,4 +704,15 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.deepStrictEqual(pasos.filter(p => ['nomina', 'ingresos'].includes(p.id)).map(p => [p.id, p.hecho, p.opcional]), [['nomina', true, true], ['ingresos', false, true]]);
     assert.strictEqual(e.llamar('obtenerEstadoConfiguracion').completo, false, 'los pasos nuevos no son obligatorios: el resto sigue mandando');
   });
+
+  prueba('ícono de la app: usa el del repositorio y se puede cambiar con la propiedad ICONO_URL (solo https)', () => {
+    const e = E();
+    e.cargar('Code.gs');
+    const def = e.llamar('urlIcono_');
+    assert.match(def, /^https:\/\/.+\/assets\/icono\.png$/);
+    e.propiedades.ICONO_URL = 'https://ejemplo.com/otro.png';
+    assert.strictEqual(e.llamar('urlIcono_'), 'https://ejemplo.com/otro.png');
+    e.propiedades.ICONO_URL = 'http://inseguro.com/x.png';
+    assert.strictEqual(e.llamar('urlIcono_'), def, 'sin https no se acepta');
+  });
 };
