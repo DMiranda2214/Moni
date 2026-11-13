@@ -787,63 +787,118 @@ function htmlAvisos() {
     '</section>';
 }
 
+/** Anillo de avance (SVG). `pct` de 0 a 1. */
+function htmlAnillo(pct, tam, centro, etiqueta) {
+  const r = 40, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
+  return '<div class="m-anillo" style="width:' + tam + 'px;height:' + tam + 'px"><svg viewBox="0 0 96 96" width="' + tam + '" height="' + tam + '" role="img" aria-label="' + esc(etiqueta) + '">' +
+    '<circle cx="48" cy="48" r="' + r + '" class="m-anillo-fondo"/><circle cx="48" cy="48" r="' + r + '" class="m-anillo-valor" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - p)).toFixed(1) + '" transform="rotate(-90 48 48)"/></svg>' +
+    '<div class="m-anillo-centro">' + centro + '</div></div>';
+}
+
+const cifrasOcultas = () => { try { return localStorage.getItem('moni.ocultar') === '1'; } catch (e) { return false; } };
+const cifraHero = (n, divisa) => cifrasOcultas() ? '••••' : dinero(n, divisa);
+
+/** Tarjeta de avance de los primeros pasos y la lista agrupada. */
+function htmlPrimerosPasos(estado) {
+  const pasos = estado.pasos, hechos = pasos.filter(p => p.hecho).length;
+  const basicos = pasos.filter(p => !p.opcional), extras = pasos.filter(p => p.opcional);
+  const basicosListos = basicos.every(p => p.hecho);
+  const siguiente = pasos.find(p => !p.hecho && !p.opcional) || pasos.find(p => !p.hecho);
+  const reanudar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'));
+  const filaPaso = p => fila({ icono: p.hecho ? 'check' : 'plus', titulo: esc(p.titulo), sub: p.opcional ? 'Opcional' : '', chevron: true,
+    attrs: 'data-acc="ir" data-ruta="' + esc(p.pantalla) + '"', clase: p.hecho ? 'm-hecho' : '' });
+  let h = '<section class="m-ppasos" aria-label="Primeros pasos"><div class="m-ppasos-cab">' +
+    htmlAnillo(hechos / pasos.length, 64, '<strong>' + hechos + '/' + pasos.length + '</strong>', hechos + ' de ' + pasos.length + ' pasos') +
+    '<div><h2>Primeros pasos</h2><p>' + (basicosListos ? 'Lo básico ya está. Lo que falta es opcional.' : 'Completa lo básico para empezar.') + '</p></div></div>';
+  if (reanudar) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('capas') + '</span><div><small>Asistente</small><strong>Continuar donde quedaste</strong></div><button class="m-btn m-btn-primary" data-acc="asist-reanudar">Continuar</button></div>';
+  } else if (siguiente) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('plus') + '</span><div><small>Siguiente</small><strong>' + esc(siguiente.titulo) + '</strong></div>' +
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="' + esc(siguiente.pantalla) + '">Continuar</button></div>';
+  }
+  h += '</section>';
+  h += seccion('Lo básico' + (basicosListos ? ' · listo' : ''), basicos.map(filaPaso).join(''));
+  if (extras.length) h += seccion('Para sacarle más provecho', extras.map(filaPaso).join(''), 'Cuando termines, esta tarjeta se oculta sola. Puedes volver a estos pasos desde Ajustes.');
+  return h;
+}
+
 function vInicio() {
   if (asistenteVisible()) return vAsistente();
   const nombre = cfg('Nombre_Usuario');
   const estado = App.boot.estado || {};
   const s = App.boot.saldos || { cuentas: [] };
+  const inv = App.boot.invertido && App.boot.invertido.cantidad ? App.boot.invertido : null;
+  const pendientesPasos = !!(estado.pasos && !estado.completo);
   let html = bannerDemo();
 
-  if (estado.pasos && !estado.completo) {
-    const hechos = estado.pasos.filter(p => p.hecho).length;
-    // Quien dejó el asistente "para más tarde" lo retoma desde aquí; con datos de demostración no aplica.
-    const retomar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'))
-      ? fila({ icono: 'capas', titulo: 'Continuar con el asistente', sub: 'Te lleva paso a paso', chevron: true, attrs: 'data-acc="asist-reanudar"' }) : '';
-    html += '<section class="m-seccion" aria-label="Primeros pasos"><h2 class="m-seccion-titulo">Primeros pasos · ' + hechos + ' de ' + estado.pasos.length + '</h2>' +
-      '<div class="m-group">' + retomar + estado.pasos.map(p =>
-        fila({
-          icono: p.hecho ? 'check' : 'plus',
-          titulo: esc(p.titulo),
-          sub: p.opcional ? 'Opcional' : '',
-          chevron: true,
-          attrs: 'data-acc="ir" data-ruta="' + esc(p.pantalla) + '"',
-          clase: p.hecho ? 'm-hecho' : ''
-        })).join('') + '</div>' +
-      '<div class="m-progreso" style="margin:var(--m-space-3) var(--m-space-4) 0" role="progressbar" aria-valuemin="0" aria-valuemax="' + estado.pasos.length + '" aria-valuenow="' + hechos + '" aria-label="Avance de la configuración"><span style="width:' + Math.round(hechos / estado.pasos.length * 100) + '%"></span></div></section>';
+  if (pendientesPasos) html += htmlPrimerosPasos(estado);
+  else html += htmlAvisos();
+
+  // Saldo total (tarjeta pastel)
+  if (s.cuentas.length) {
+    const oculto = cifrasOcultas();
+    html += '<section class="m-hero" aria-label="Saldo total"><div class="m-hero-cab"><h2>Saldo total</h2>' +
+      '<button class="m-hero-ojo" data-acc="ocultar-cifras" aria-label="' + (oculto ? 'Mostrar' : 'Ocultar') + ' las cifras" aria-pressed="' + oculto + '">' + ico('ojo') + '</button></div>' +
+      '<div class="m-hero-cifra m-num ' + claseSaldo(s.total) + '">' + cifraHero(s.total) + '</div><div class="m-hero-chips">' +
+      '<div><span>Disponible</span><strong class="m-num">' + cifraHero(s.disponible) + '</strong></div>' +
+      '<div><span>Ahorro</span><strong class="m-num">' + cifraHero(s.ahorro) + '</strong></div>' +
+      (inv ? '<div><span>Invertido</span><strong class="m-num">' + cifraHero(inv.total) + '</strong></div>' : '') + '</div></section>';
   }
 
-  if (!(estado.pasos && !estado.completo)) html += htmlAvisos(); // con los primeros pasos sin terminar, esos pasos ya son el aviso
+  // Este mes de un vistazo
+  const pp = App.boot.ppto;
+  if (pp && s.cuentas.length) {
+    if (pp.existe) {
+      const t = pp.totales, avance = t.plan > 0 ? t.real / t.plan : 0;
+      html += '<section class="m-este-mes" aria-label="Este mes"><div class="m-este-cab"><h2>Este mes · ' + esc(mesTexto(pp.mes).toLowerCase().replace(/ de \d+$/, '')) + '</h2>' +
+        '<button class="m-btn-texto" data-acc="ir" data-ruta="presupuesto">Presupuesto</button></div><div class="m-este-cuerpo">' +
+        htmlAnillo(avance, 96, '<strong>' + Math.round(avance * 100) + ' %</strong><small>gastado</small>', Math.round(avance * 100) + ' % del presupuesto gastado') +
+        '<dl class="m-este-lista"><div><dt>Entró</dt><dd class="m-num m-positivo">' + dinero(t.ingresos) + '</dd></div><div><dt>Gastado</dt><dd class="m-num">' + dinero(t.real) + '</dd></div>' +
+        '<div class="m-este-total"><dt>Te queda</dt><dd class="m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</dd></div></dl></div>' +
+        '<p class="m-este-pie">Planeado ' + dinero(t.plan) + ' · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</p></section>';
+    } else {
+      html += '<section class="m-seccion" aria-label="Este mes"><div class="m-group">' +
+        fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+        '</div></section>';
+    }
+  }
 
   if (hayBolsillos()) {
-    const rap = (icono, texto, attrs) => '<button class="m-rapido" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
+    const rap = (icono, texto, attrs, tono) => '<button class="m-rapido" data-tono="' + tono + '" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
     html += '<section class="m-seccion m-tablero-ancho" aria-label="Accesos rápidos"><div class="m-rapidos">' +
-      rap('plus', 'Gasto', 'data-acc="rapido" data-tipo="Gasto"') +
-      rap('check', 'Ingreso', 'data-acc="rapido" data-tipo="Ingreso"') +
-      rap('capas', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"') +
-      rap('pulso', 'Pagar servicios', 'data-acc="ir" data-ruta="pagos"') +
-      rap('tarjetas', 'Tarjetas', 'data-acc="tab" data-ruta="tarjetas"') +
-      rap('presupuesto', 'Presupuesto', 'data-acc="ir" data-ruta="presupuesto"') + '</div></section>';
+      rap('mover', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"', 'rosa') +
+      rap('tarjetas', 'Servicios', 'data-acc="ir" data-ruta="pagos"', 'menta') +
+      rap('presupuesto', 'Movimientos', 'data-acc="ir" data-ruta="movimientos"', 'lila') +
+      rap('bolsillos', 'Ahorro', 'data-acc="ir" data-ruta="ahorro"', 'durazno') + '</div></section>';
   }
   html += '<div class="m-tablero">';
 
-  if (s.cuentas.length) {
-    html += '<section class="m-seccion" aria-label="Resumen"><h2 class="m-seccion-titulo">Resumen</h2><div class="m-group m-resumen">' +
-      '<div class="m-resumen-etiqueta">Total</div><div class="m-resumen-cifra m-num ' + claseSaldo(s.total) + '">' + dinero(s.total) + '</div>' +
-      '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Disponible</div><strong class="m-num ' + claseSaldo(s.disponible) + '">' + dinero(s.disponible) + '</strong></div>' +
-      '<div><div class="m-resumen-etiqueta">Ahorro</div><strong class="m-num">' + dinero(s.ahorro) + '</strong></div>' +
-      (App.boot.invertido && App.boot.invertido.cantidad ? '<div><div class="m-resumen-etiqueta">Invertido</div><strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong></div>' : '') + '</div></div></section>';
-    if (App.boot.invertido && App.boot.invertido.cantidad) {
-      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + App.boot.invertido.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (App.boot.invertido.proximoVencimiento ? ' · próximo vence ' + fechaTxt(App.boot.invertido.proximoVencimiento) : ''),
-        final: '<strong class="m-num">' + dinero(App.boot.invertido.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt"' }));
-    }
+  // Próximos pagos
+  const prox = App.boot.proximos || [];
+  if (prox.length) {
+    const tono = p => p.tipo === 'Tarjeta' ? 'rosa' : (p.tipo === 'Credito' ? 'lila' : 'durazno');
+    html += seccion('Próximos pagos', prox.map(p => fila({
+      icono: p.tipo === 'Tarjeta' ? 'tarjetas' : (p.tipo === 'Credito' ? 'capas' : (p.tipo === 'Servicio' ? 'rayo' : 'etiqueta')),
+      titulo: esc(p.titulo),
+      sub: esc(textoPlazo(p.dias)) + ' · ' + esc(p.detalle),
+      final: '<strong class="m-num' + (p.dias < 0 ? ' m-negativo' : '') + '">' + dinero(p.valor) + '</strong>',
+      chevron: true,
+      attrs: (p.susc ? 'data-acc="susc" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="' + (p.tipo === 'Tarjeta' ? 'tarjeta/' : 'credito/') + esc(p.id) + '"') + ' data-tono="' + tono(p) + '"'
+    })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
+  }
 
-    html += seccion('Cuentas', s.cuentas.map(c => fila({
+  if (s.cuentas.length) {
+    html += seccion('Tus cuentas', s.cuentas.map(c => fila({
       icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
       titulo: esc(c.Nombre),
       sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (c.Divisa !== 'COP' ? ' · ' + esc(c.Divisa) : ''),
       final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo, c.Divisa) + '</strong>',
-      attrs: 'data-acc="ir" data-ruta="bolsillos"'
+      attrs: 'data-acc="ir" data-ruta="bolsillos" data-tono="' + (c.Tipo === 'Ahorro' ? 'menta' : 'celeste') + '"'
     })).join(''));
+    if (inv) {
+      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + inv.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (inv.proximoVencimiento ? ' · próximo vence ' + fechaTxt(inv.proximoVencimiento) : ''),
+        final: '<strong class="m-num">' + dinero(inv.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt" data-tono="lila"' }));
+    }
 
     html += htmlInicioGraficos();
 
@@ -856,35 +911,8 @@ function vInicio() {
         chevron: true, attrs: 'data-acc="ir" data-ruta="bolsillos"'
       })).join(''));
     }
-  } else if (!(estado.pasos && !estado.completo)) {
+  } else if (!pendientesPasos) {
     html += vacio('bolsillos', 'Aún no tienes cuentas', 'Agrega una cuenta desde Ajustes para ver tus saldos aquí.');
-  }
-
-  const pp = App.boot.ppto;
-  if (pp && s.cuentas.length) {
-    if (pp.existe) {
-      const avance = pp.totales.plan > 0 ? Math.min(100, Math.round(pp.totales.real / pp.totales.plan * 100)) : 0;
-      html += '<section class="m-seccion" aria-label="Presupuesto del mes"><h2 class="m-seccion-titulo">Presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()) + '</h2><div class="m-group">' +
-        fila({ titulo: 'Gastado ' + dinero(pp.totales.real) + ' de ' + dinero(pp.totales.plan), sub: pp.totales.pagados + ' de ' + pp.totales.renglones + ' renglones pagados',
-          final: '<strong class="m-num ' + claseSaldo(pp.totales.saldo) + '">' + dinero(pp.totales.saldo) + '</strong><span class="m-row-sub" style="display:block">te queda</span>',
-          chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto"' }) +
-        '<div style="padding:0 var(--m-space-4) var(--m-space-4)"><div class="m-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div></div></div></section>';
-    } else {
-      html += '<section class="m-seccion" aria-label="Presupuesto del mes"><div class="m-group">' +
-        fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto"' }) + '</div></section>';
-    }
-  }
-
-  const prox = App.boot.proximos || [];
-  if (prox.length) {
-    html += seccion('Próximos pagos', prox.map(p => fila({
-      icono: p.tipo === 'Tarjeta' ? 'tarjetas' : (p.tipo === 'Credito' ? 'capas' : (p.tipo === 'Servicio' ? 'pulso' : 'etiqueta')),
-      titulo: esc(p.titulo),
-      sub: esc(textoPlazo(p.dias)) + ' · ' + esc(p.detalle),
-      final: '<strong class="m-num' + (p.dias < 0 ? ' m-negativo' : '') + '">' + dinero(p.valor) + '</strong>',
-      chevron: true,
-      attrs: p.susc ? 'data-acc="susc" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="' + (p.tipo === 'Tarjeta' ? 'tarjeta/' : 'credito/') + esc(p.id) + '"'
-    })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
   }
 
   const porRecibir = App.boot.porRecibir || [];
@@ -5628,6 +5656,7 @@ const ACCIONES = {
   },
   tab: el => navegar(el.dataset.ruta),
   'menu-registrar': () => abrirMenuRegistrar(),
+  'ocultar-cifras': () => { try { localStorage.setItem('moni.ocultar', cifrasOcultas() ? '0' : '1'); } catch (e) {} render(); },
   buscar: () => abrirBuscador(),
   'lat-alternar': () => alternarLateral(),
   ir: el => navegar(el.dataset.ruta),
