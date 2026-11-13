@@ -346,13 +346,13 @@ async function refrescarParcial(opc) {
     try { aplicarPresupuesto(await api('getPresupuesto', App.boot.hoy.slice(0, 7))); } catch (e) { /* se pedirá al abrir el presupuesto */ }
   }
   if (opc.config) aplicarApariencia();
-  App.graf.data = null; App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
+  App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   return r;
 }
 
 async function refrescar() {
   App.boot = await api('getBootstrap');
-  App.pag.data = null; App.ing.data = null; App.graf.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
+  App.pag.data = null; App.ing.data = null; App.proximosViejos = !!App.boot.proximosPendientes;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   aplicarApariencia();
   pedirSyncRecordatorios();
@@ -458,7 +458,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
-  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; App.graf.data = null;
+  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -523,7 +523,6 @@ function tituloRuta(ruta) {
   if (partes[0] === 'movimientos') return 'Movimientos';
   if (partes[0] === 'nomina') return 'Nómina';
   if (partes[0] === 'regalos') return 'Regalos';
-  if (partes[0] === 'graficos') return 'Gráficos';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -601,7 +600,6 @@ function pantalla(ruta) {
     case 'presupuesto': return vPresupuesto();
     case 'nomina': return vNomina();
     case 'regalos': return vRegalos();
-    case 'graficos': return vGraficos();
     case 'anual': return vAnual();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
@@ -2096,7 +2094,7 @@ function interruptorAnulados(vista, marcado) {
 }
 
 function cambiarMes(vista, delta) {
-  const st = vista === 'graf' ? App.graf : vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
+  const st = vista === 'det' ? App.det : vista === 'ppto' ? App.ppto : vista === 'nom' ? App.nom : vista === 'aho' ? App.ahoC : App.mov;
   st.mes = mesMas(st.mes, delta); st.data = null; st.error = null;
   if (vista === 'nom') st.opciones = null; // cada mes parte de sus valores por defecto
   render();
@@ -2175,7 +2173,7 @@ function vMovimientos() {
   if (m.error) html += bloqueError(m.error, 'recargar-mov');
   else if (!m.data) html += esqueleto(6);
   else {
-    html += resumenMes(m.data.totales) + '<div id="lista-mov">';
+    html += resumenMes(m.data.totales) + htmlMovGraficos(m.data.items) + '<div id="lista-mov">';
     const lista = filtrarMov(m.data.items);
     html += lista.length ? htmlListaMov(lista, false)
       : vacio('presupuesto', m.texto ? 'Nada coincide con la búsqueda' : 'Sin movimientos en este mes', m.texto ? 'Prueba con otra palabra.' : 'Usa el botón Registrar para anotar un gasto o un ingreso.');
@@ -2940,6 +2938,7 @@ function htmlNomina(d) {
     '<p class="m-seccion-pie">La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú.</p></section>';
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Descuentos</h2><div class="m-group">' + L('deduccion').map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' +
     '<p class="m-seccion-pie">Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).</p></section>';
+  h += htmlNominaGraficos(c);
   if (!bloqueado) h += '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-adic-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar algo de este mes</button></div>' +
     '<p class="m-ayuda" style="margin-top:calc(var(--m-space-3) * -1)">Horas extras, un bono, el pago de cesantías, la prima o un descuento de la empresa: solo para el pago de este mes.</p>' +
     '<div class="m-acciones-fila" style="margin-bottom:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="nom-concepto-nuevo">' + ico('plus', 'm-icon-sm') + 'Agregar un descuento o ingreso fijo</button></div>';
@@ -3833,7 +3832,7 @@ function htmlRegalos(d) {
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Diferencia</div><strong class="m-num ' + (t.diferencia < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(t.diferencia) + '</strong></div><div><div class="m-resumen-etiqueta">Comprados</div><strong class="m-num">' + t.comprados + ' de ' + t.total + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
   if (!d.items.length) return h + vacio('hogar', 'Sin regalos en ' + d.anio, 'Anota a quién le vas a regalar y cuánto calculas gastar. Cuando compres, registra el gasto y se calcula la diferencia.',
     '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar un regalo</button>');
-  return h + '<div class="m-group">' + d.items.map(i => fila({
+  return h + htmlRegalosGraficos(d) + '<div class="m-group">' + d.items.map(i => fila({
     titulo: esc(i.Persona) + (i.Aplica ? '' : ' <span class="m-insignia">no aplica</span>'), sub: (i.Idea ? esc(i.Idea) + ' · ' : '') + 'estimado ' + dinero(i.Estimado),
     final: i.Comprado ? '<strong class="m-num">' + dinero(i.Real) + '</strong><span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>' : '<span class="m-row-sub">pendiente</span>',
     clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"'
@@ -4007,7 +4006,7 @@ function htmlCdts(d) {
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganarás (neto)</div><strong class="m-num m-positivo">' + dinero(t.netoEsperado) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Próximo vence</div><strong class="m-num">' + (t.proximoVencimiento ? esc(fechaTxt(t.proximoVencimiento)) : '—') + '</strong></div></div>' +
     '<p class="m-ayuda">' + t.cantidad + (t.cantidad === 1 ? ' CDT vigente' : ' CDT vigentes') + ' · este dinero no cuenta como disponible.</p></div>';
-  if (d.vigentes.length) h += '<div style="height:var(--m-space-4)"></div>' + seccion('Vigentes', d.vigentes.map(filaCdt).join(''));
+  if (d.vigentes.length) h += htmlCdtGraficos(d) + seccion('Vigentes', d.vigentes.map(filaCdt).join(''));
   if (d.cerrados.length) h += seccion('Cerrados', d.cerrados.map(x => fila({
     icono: 'check', titulo: esc(x.Nombre), sub: esc(x.Banco) + ' · cerrado el ' + esc(fechaTxt(x.Fecha_Cierre)), final: '<span class="m-num">' + dinero(x.Capital) + '</span>',
     clase: 'm-hecho', chevron: true, attrs: 'data-acc="cdt" data-id="' + esc(x.ID_CDT) + '"'
@@ -4259,6 +4258,7 @@ function vPagos() {
       html += '<div class="m-group m-resumen"><div class="m-resumen-etiqueta">Te cuestan al mes</div><div class="m-resumen-cifra m-num">' + dinero(t.mensual) + '</div>' +
         '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Al año</div><strong class="m-num">' + dinero(t.anual) + '</strong></div>' +
         '<div><div class="m-resumen-etiqueta">Suscripciones al mes</div><strong class="m-num">' + dinero(t.mensualSuscripciones) + '</strong></div></div></div>';
+      html += '<div style="height:var(--m-space-4)"></div>' + htmlCobrosGraficos(d.items);
       const pronto = d.items.filter(x => x.estado !== 'ok');
       if (pronto.length) html += '<div style="height:var(--m-space-4)"></div>' + seccion('Por pagar', pronto.map(filaCobro).join(''), 'Vencidas o en los próximos ' + 7 + ' días.');
       const resto = d.items.filter(x => x.estado === 'ok');
@@ -4438,14 +4438,13 @@ async function cargarRecordatorios() {
 }
 
 // ---------------------------------------------------------------------------
-// Gráficos (SVG sin librerías): componentes reutilizables y la pantalla Más → Gráficos.
-// Los usan Inicio, Presupuesto, Deudas, Ahorro, la Vista anual y el detalle de un bolsillo.
+// Gráficos (SVG sin librerías): componentes reutilizables. No hay una pantalla aparte: cada módulo trae los suyos
+// (Inicio, Movimientos, Presupuesto, Deudas, Ahorro, CDT, Regalos, Nómina, Servicios, Vista anual y el detalle de un bolsillo).
 // Cada gráfico se registra en VIZ con su id al armar el HTML; render() llama a activarViz() para conectar
 // hover, foco y teclado. Marcas finas, cuadrícula recesiva y una tabla con los mismos datos.
 // Una sola moneda por gráfico: los pesos y los dólares no se suman.
 // ---------------------------------------------------------------------------
 
-App.graf = { mes: null, meses: 6, divisa: 'COP', data: null, cargando: false, error: null };
 App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
 const VIZ = { items: {}, n: 0 };
 
@@ -4679,33 +4678,6 @@ function activarViz() {
 
 // ---- Pantalla Más → Gráficos ----
 
-function vGraficos() {
-  const g = App.graf;
-  if (!g.mes) g.mes = App.boot.hoy.slice(0, 7);
-  const divisas = ['COP'].concat(activos('Bancos').map(b => b.Divisa || 'COP').filter((d, i, a) => d !== 'COP' && a.indexOf(d) === i));
-  if (divisas.indexOf(g.divisa) === -1) g.divisa = 'COP';
-  const segmentos = (nombre, etiqueta, opciones, actual) => '<div class="m-segmentado" role="radiogroup" aria-label="' + esc(etiqueta) + '">' +
-    opciones.map(o => '<label><input type="radio" name="' + nombre + '" value="' + esc(o[0]) + '"' + (String(o[0]) === String(actual) ? ' checked' : '') + '><span>' + esc(o[1]) + '</span></label>').join('') + '</div>';
-
-  // Los filtros van en una sola fila sobre los gráficos y valen para todos
-  let html = bannerDemo() + '<div class="m-filtros-viz">' + navegadorMes('graf', g.mes) +
-    segmentos('graf-rango', 'Meses a mostrar', [[3, '3 meses'], [6, '6 meses'], [12, '12 meses']], g.meses) +
-    (divisas.length > 1 ? segmentos('graf-divisa', 'Moneda', divisas.map(d => [d, d]), g.divisa) : '') + '</div>';
-
-  if (g.error) html += bloqueError(g.error, 'recargar-graf');
-  else if (!g.data) html += esqueleto(5);
-  else html += htmlGraficos(g.data);
-  return {
-    titulo: 'Gráficos', html: html,
-    despues: () => {
-      if (!g.data && !g.cargando && !g.error) {
-        const clave = () => g.mes + '|' + g.meses + '|' + g.divisa, k = clave();
-        cargarEn(g, 'graficos', 'getGraficos', [{ mes: g.mes, meses: g.meses, divisa: g.divisa }], () => k === clave());
-      }
-    }
-  };
-}
-
 /** Barras de las categorías con mayor gasto (y "Otras"), con su porcentaje. */
 function itemsCategorias(d, cats) {
   return cats.map(c => ({ nombre: c.Nombre, valor: c.Valor, detalle: porcentajeDe(c.Valor, d.totalGastos) + ' de lo que salió' }));
@@ -4719,32 +4691,6 @@ function categoriasVisibles(d) {
   return d.categorias.slice(0, TOP).concat([{ Nombre: 'Otras', Valor: Math.round(resto * 100) / 100 }]);
 }
 
-function htmlGraficos(d) {
-  if (!d.hayDatos) return vacio('presupuesto', 'Aún no hay movimientos en este periodo', 'Cuando registres gastos e ingresos, aquí verás en qué se va tu dinero y cómo evoluciona.');
-  const dv = d.divisa, s = d.serie, a = s[s.length - 1], b = s.length > 1 ? s[s.length - 2] : null, fm = n => dinero(n, dv);
-
-  // Cifras del mes con su cambio frente al anterior; el color del cambio depende de si subir es bueno
-  const tile = (etiqueta, valor, previo, subeEsBueno) => {
-    let delta = '';
-    if (previo !== null && previo !== undefined && previo !== 0) {
-      const pct = Math.round((valor - previo) / Math.abs(previo) * 100);
-      if (pct !== 0) delta = '<span class="m-kpi-delta ' + ((pct > 0) === subeEsBueno ? 'm-delta-bueno' : 'm-delta-malo') + '">' + (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + ' %</span><span class="m-kpi-ref"> vs ' + esc(mesCorto(b.mes)) + '</span>';
-    }
-    return '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(etiqueta) + '</div><div class="m-kpi-valor m-num" title="' + esc(fm(valor)) + '">' + esc(compactoMoneda(valor, dv)) + '</div><div class="m-kpi-pie">' + delta + '</div></div>';
-  };
-  const kpis = '<div class="m-kpis" aria-label="Resumen de ' + esc(mesTexto(d.mes)) + '">' + tile('Entró', a.ingresos, b && b.ingresos, true) + tile('Salió', a.gastos, b && b.gastos, false) + tile('Diferencia', a.neto, b && b.neto, true) + '</div>';
-
-  const puntos = puntosMeses(s.map(m => m.mes)), cats = categoriasVisibles(d);
-  return kpis +
-    tarjetaViz('gv-cat', 'Gastos por categoría · ' + mesTexto(d.mes), vizBarrasH({ items: itemsCategorias(d, cats), divisa: dv, vacio: 'Sin gastos este mes.' }),
-      d.categorias.length ? tablaViz(['Categoría', 'Valor', '%'], d.categorias.map(c => [c.Nombre, fm(c.Valor), porcentajeDe(c.Valor, d.totalGastos)])) : '') +
-    tarjetaViz('gv-flujo', 'Entró y salió · últimos ' + s.length + ' meses',
-      vizColumnas({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: s.map(m => m.ingresos) }, { nombre: 'Salió', clave: 'viz-s2', valores: s.map(m => m.gastos) }], divisa: dv, etiqueta: 'Entró y salió por mes',
-        extraTip: i => [{ valor: fm(s[i].neto), etiqueta: 'Diferencia' }] }),
-      tablaViz(['Mes', 'Entró', 'Salió', 'Diferencia'], s.map(m => [mesTexto(m.mes), fm(m.ingresos), fm(m.gastos), fm(m.neto)]))) +
-    tarjetaViz('gv-saldo', 'Saldo al cierre de cada mes', lineaSaldo(s, dv, 190), tablaSaldo(s, dv));
-}
-
 // ---- Gráficos dentro de los módulos ----
 
 /** Inicio: saldo de los últimos 6 meses y en qué se fue el dinero este mes (se pide aparte, sin frenar la pantalla). */
@@ -4755,7 +4701,7 @@ function htmlInicioGraficos() {
   return tarjetaViz('ini-saldo', 'Tu saldo en los últimos ' + g.serie.length + ' meses', lineaSaldo(g.serie, 'COP', 150), tablaSaldo(g.serie, 'COP')) +
     (cats.length ? tarjetaViz('ini-cat', 'En qué gastaste · ' + mesTexto(g.mes), vizBarrasH({ items: itemsCategorias(g, cats), divisa: 'COP' }),
       tablaViz(['Categoría', 'Valor', '%'], g.categorias.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, g.totalGastos)]))) : '') +
-    '<section class="m-seccion"><div class="m-group">' + fila({ icono: 'pulso', titulo: 'Ver todos los gráficos', chevron: true, attrs: 'data-acc="ir" data-ruta="graficos"' }) + '</div></section>';
+    '';
 }
 
 async function cargarInicioGraf() {
@@ -4764,6 +4710,60 @@ async function cargarInicioGraf() {
   try { st.data = await api('getGraficos', { meses: 6, divisa: 'COP' }); } catch (e) { /* es un adorno: si falla, Inicio sigue igual */ }
   st.cargando = false; st.viejo = false; st.intentado = true;
   if (rutaActual() === 'inicio') render();
+}
+
+/** Movimientos: en qué categorías se fue el dinero del mes que se está viendo. */
+function htmlMovGraficos(items) {
+  const por = {};
+  let total = 0;
+  (items || []).forEach(i => {
+    if (i.Anulado || i.esTransferencia || i.Tipo_Mov !== 'Gasto' || (i.Divisa || 'COP') !== 'COP') return;
+    const v = Math.abs(Number(i.Valor) || 0), n = i.Categoria || 'Sin categoría';
+    por[n] = (por[n] || 0) + v; total += v;
+  });
+  const lista = Object.keys(por).map(k => ({ Nombre: k, Valor: Math.round(por[k] * 100) / 100 })).sort((a, b) => b.Valor - a.Valor);
+  if (!lista.length) return '';
+  return tarjetaViz('mov-cat', 'En qué gastaste este mes', vizBarrasH({ items: itemsCategorias({ totalGastos: total }, categoriasVisibles({ categorias: lista })), divisa: 'COP' }),
+    tablaViz(['Categoría', 'Valor', '%'], lista.map(c => [c.Nombre, dinero(c.Valor), porcentajeDe(c.Valor, total)])));
+}
+
+/** CDT: cuánto hay en cada uno y qué tanto del plazo ha pasado. */
+function htmlCdtGraficos(d) {
+  const v = d.vigentes;
+  if (!v.length) return '';
+  const orden = v.slice().sort((a, b) => b.Capital - a.Capital);
+  const barras = vizBarrasH({ items: orden.map(x => ({ nombre: x.Nombre, valor: x.Capital, detalle: x.Banco + ' · ' + textoPlazo(x.dias).toLowerCase() })), divisa: 'COP' });
+  const medidores = vizMedidores(v.map(x => ({ nombre: x.Nombre, valor: Math.round(x.avance * 100), tope: 100, texto: Math.round(x.avance * 100) + ' % del plazo · ' + textoPlazo(x.dias).toLowerCase() })));
+  return tarjetaViz('cdt-capital', 'Cuánto hay en cada CDT', barras, tablaViz(['CDT', 'Capital', 'Ganarás (neto)'], orden.map(x => [x.Nombre, dinero(x.Capital), dinero(x.netoTotal)]))) +
+    '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance del plazo</h2><div class="m-group m-viz-tarjeta">' + medidores + '</div></section>';
+}
+
+/** Regalos: lo gastado frente a lo estimado de cada persona. */
+function htmlRegalosGraficos(d) {
+  const items = d.items.filter(i => i.Aplica && Number(i.Estimado) > 0)
+    .map(i => ({ nombre: i.Persona, valor: Number(i.Real) || 0, tope: Number(i.Estimado), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Estimado)) }));
+  if (items.length < 2) return '';
+  items.sort((a, b) => b.valor / b.tope - a.valor / a.tope);
+  return '<section class="m-seccion"><h2 class="m-seccion-titulo">Gastado frente a lo estimado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>';
+}
+
+const MESES_DE_PERIODO = { Mensual: 1, Bimestral: 2, Trimestral: 3, Semestral: 6, Anual: 12 };
+
+/** Servicios y suscripciones: qué cobros pesan más cada mes (los pagos anuales o semestrales se reparten por mes). */
+function htmlCobrosGraficos(items) {
+  const lista = (items || []).map(x => ({ nombre: x.Nombre, valor: Math.round(Number(x.Valor) / (MESES_DE_PERIODO[x.Periodicidad] || 1) * 100) / 100, detalle: x.Tipo === 'Servicio' ? 'Servicio' : 'Suscripción' }))
+    .filter(x => x.valor > 0).sort((a, b) => b.valor - a.valor);
+  if (lista.length < 2) return '';
+  return tarjetaViz('pag-mensual', 'Lo que más pesa al mes', vizBarrasH({ items: lista.slice(0, 8), divisa: 'COP' }), tablaViz(['Cobro', 'Al mes'], lista.map(x => [x.nombre, dinero(x.valor)])));
+}
+
+/** Nómina: a dónde va lo que se descuenta del devengado. */
+function htmlNominaGraficos(c) {
+  const ded = c.lineas.filter(l => l.grupo === 'deduccion' && l.incluido && Math.abs(l.valor) > 0).sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+  if (!ded.length) return '';
+  const dev = c.totales.devengado;
+  return tarjetaViz('nom-desc', 'A dónde va lo descontado', vizBarrasH({ items: ded.map(l => ({ nombre: l.concepto, valor: Math.abs(l.valor), detalle: porcentajeDe(Math.abs(l.valor), dev) + ' de lo que devengas' })), divisa: 'COP' }),
+    tablaViz(['Descuento', 'Valor', '% del devengado'], ded.map(l => [l.concepto, dinero(Math.abs(l.valor)), porcentajeDe(Math.abs(l.valor), dev)])));
 }
 
 /** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
@@ -5464,7 +5464,7 @@ function vBorrar() {
 
 /** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
 function olvidarDatosLocales() {
-  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.graf, App.rec, App.ing, App.cdt].forEach(s => {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.rec, App.ing, App.cdt].forEach(s => {
     s.data = null; s.error = null; s.cargando = false;
     ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
     if ('idEsc' in s) s.idEsc = '';
@@ -5527,7 +5527,6 @@ const ACCIONES = {
     if (!ok) return;
     try { await api('removeRecordatorios'); await refrescar(); render(); aviso('Recordatorios quitados'); } catch (e) { aviso(e.message, true); }
   },
-  'recargar-graf': () => { App.graf.error = null; App.graf.data = null; render(); },
   convertir: () => abrirConversion(),
   'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
   'log-limpiar': async () => {
@@ -5768,8 +5767,6 @@ document.addEventListener('change', async ev => {
     } catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
-  if (t.name === 'graf-rango') { App.graf.meses = Number(t.value); App.graf.data = null; render(); return; }
-  if (t.name === 'graf-divisa') { App.graf.divisa = t.value; App.graf.data = null; render(); return; }
   if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
   if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
   if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }
