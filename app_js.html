@@ -5084,16 +5084,51 @@ function valorInicialAsist(c) {
   return c.defecto !== undefined ? c.defecto : '';
 }
 
-function htmlPasosAsist(actual) {
+/** Cabecera del paso: Atrás, "Paso X de N", salir y la barra de tramos. */
+function htmlCabAsist(p) {
+  const idx = PASOS_ASIST.indexOf(p) + 1, n = PASOS_ASIST.length;
+  const hecho = {};
+  App.boot.estado.pasos.forEach(x => { hecho[x.id] = x.hecho; });
+  return '<div class="m-asist-barra"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
+    '<span class="m-asist-paso">Paso ' + idx + ' de ' + n + '</span>' +
+    (p.opcional ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar</button>' : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Más tarde</button>') + '</div>' +
+    '<div class="m-tramos" role="progressbar" aria-valuemin="0" aria-valuemax="' + n + '" aria-valuenow="' + idx + '" aria-label="Paso ' + idx + ' de ' + n + '">' +
+    PASOS_ASIST.map((x, i) => '<span class="' + (x.id === p.id ? 'm-tramo-actual' : (hecho[x.id] || i < idx - 1 ? 'm-tramo-hecho' : '')) + '"></span>').join('') + '</div>';
+}
+
+/** Pasos a la izquierda (solo en pantallas anchas). */
+function htmlRailAsist(actual) {
   const estado = {};
   App.boot.estado.pasos.forEach(p => { estado[p.id] = p; });
-  return '<ol class="m-pasos" aria-label="Progreso de la configuración">' + PASOS_ASIST.map((p, i) => {
-    const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
-    const nota = { actual: 'paso actual', hecho: 'completado', pendiente: 'pendiente' }[clase];
-    return '<li class="m-paso m-paso-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '>' +
-      '<span class="m-paso-punto" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
-      '<span class="m-paso-nombre">' + esc(p.corto) + '<span class="m-sr-only"> (' + nota + ')</span></span></li>';
-  }).join('') + '</ol>';
+  return '<aside class="m-asist-rail" aria-label="Pasos de la configuración"><div class="m-asist-marca"><span class="m-logo" aria-hidden="true">M</span><span>Moni</span></div>' +
+    '<p>Vamos a dejarla lista en unos minutos. Puedes salir y seguir después.</p><ol>' + PASOS_ASIST.map((p, i) => {
+      const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
+      return '<li class="m-rail-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '><span class="m-rail-num" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
+        '<span>' + esc(p.corto) + (p.opcional ? '<small> · opcional</small>' : '') + '<span class="m-sr-only"> (' + { actual: 'paso actual', hecho: 'completado', pendiente: 'pendiente' }[clase] + ')</span></span></li>';
+    }).join('') + '</ol></aside>';
+}
+
+/** Vista previa de la cuenta mientras se escribe (paso de cuentas, pantallas anchas). */
+function actualizarPreviewAsist(f) {
+  const cont = $('#asist-preview');
+  if (!cont || !f) return;
+  const v = id => { const el = $('#' + idCampo(id), f); return el ? el.value : ''; };
+  const banco = (() => { const el = $('#' + idCampo('ID_Banco'), f); return el && el.selectedOptions && el.selectedOptions[0] && el.value ? el.selectedOptions[0].textContent : ''; })();
+  const usa = !!($('#' + idCampo('Permite_Bolsillos'), f) || {}).checked;
+  const num = t => { const x = leerDinero(t); return x === '' || isNaN(x) ? 0 : x; };
+  const suelto = num(v('Saldo_Apertura'));
+  const filas = [];
+  if (usa) $$('[data-fila-bols]', f).forEach(fila => {
+    const nom = $('[data-ab="nombre"]', fila).value.trim(), val = num($('[data-ab="saldo"]', fila).value);
+    if (nom || val) filas.push([nom || 'Sin nombre', val]);
+  });
+  const total = suelto + filas.reduce((x, y) => x + y[1], 0);
+  cont.innerHTML = '<div class="m-prev-cab">Así queda tu cuenta</div><div class="m-prev-hero"><small>' + esc((banco ? banco + ' · ' : '') + (v('Nombre').trim() || 'Tu cuenta')) + '</small>' +
+    '<strong class="m-num">' + dinero(total) + '</strong></div><div class="m-group">' +
+    (usa ? filas.map(x => '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo">' + esc(x[0]) + '</span></span><span class="m-row-final m-num">' + dinero(x[1]) + '</span></div>').join('') +
+      '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo m-prev-suelto">Sin asignar</span></span><span class="m-row-final m-num m-prev-suelto">' + dinero(suelto) + '</span></div>'
+      : '<div class="m-row"><span class="m-row-texto"><span class="m-row-titulo">Un solo saldo</span></span><span class="m-row-final m-num">' + dinero(suelto) + '</span></div>') +
+    '</div><p class="m-ayuda">Este mismo saldo es el que vas a ver en Inicio cuando termines.</p>';
 }
 
 /** Lo que ya se agregó en este paso, con el mismo texto que las listas de Ajustes. */
@@ -5184,20 +5219,15 @@ function vPasoAsistente(id) {
   }
 
   return {
-    titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true,
-    html: '<div class="m-asist">' + htmlPasosAsist(id) +
-      '<p class="m-asist-paso">Paso ' + (PASOS_ASIST.indexOf(p) + 1) + ' de ' + PASOS_ASIST.length + ' · ' + esc(p.corto) + (p.opcional ? ' · opcional' : '') + '</p>' +
+    titulo: 'Configuración inicial', ocultarTitulo: true, asistente: true, ancha: true,
+    html: '<div class="m-asist m-asist-2col' + (id === 'cuentas' ? ' m-asist-3col' : '') + '">' + htmlRailAsist(id) + '<div class="m-asist-main">' + htmlCabAsist(p) +
       '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(t.titulo) + '</h1>' +
       '<p class="m-subtitulo">' + esc(t.sub) + '</p>' +
       '<div class="m-error-form" id="asist-error" role="alert" hidden></div>' + cuerpo +
       '<div class="m-asist-acciones">' +
         '<button type="button" class="m-btn m-btn-primary" id="asist-principal" data-acc="asist-continuar">' + esc(continuar) + '</button>' +
         (p.otro && campos ? '<button type="button" class="m-btn m-btn-secondary" data-acc="asist-otro">' + esc(p.otro) + '</button>' : '') +
-        '<div class="m-asist-navegar"><button type="button" class="m-btn-texto" data-acc="asist-atras">' + ico('izq', 'm-icon-sm') + 'Atrás</button>' +
-        (p.opcional
-          ? '<button type="button" class="m-btn-texto" data-acc="asist-saltar">Saltar este paso</button>'
-          : '<button type="button" class="m-btn-texto" data-acc="asist-omitir">Seguir más tarde</button>') + '</div></div>' +
-      hechos + '</div>',
+        '</div>' + hechos + '</div>' + (id === 'cuentas' ? '<aside class="m-asist-prev" id="asist-preview" aria-label="Vista previa de la cuenta"></aside>' : '') + '</div>',
     despues: () => {
       const f = $('#asist-form');
       const principal = $('#asist-principal');
@@ -5299,6 +5329,7 @@ function sincronizarBolsillosAsist(f) {
     if (nom || (v !== '' && !isNaN(v))) n++;
     if (v !== '' && !isNaN(v)) total += v;
   });
+  actualizarPreviewAsist(f);
   $('#asist-bols-total', f).textContent = n ? 'Total de la cuenta: ' + dinero(total) + ' en ' + n + (n === 1 ? ' bolsillo' : ' bolsillos') + (suelto && !isNaN(suelto) ? ' (incluye ' + dinero(suelto) + ' sin asignar)' : '') : '';
 }
 

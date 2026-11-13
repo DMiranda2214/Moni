@@ -557,3 +557,45 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-rapido[data-tono] .m-rapido-icono { background: var(--m-bg-grouped); }
 @media (min-width: 900px) { .m-rapidos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 </style>
+
+<style>
+/* ---------- Asistente: tramos de avance, pasos laterales y vista previa ---------- */
+.m-asist-barra { display: flex; align-items: center; justify-content: space-between; gap: var(--m-space-2); }
+.m-asist-barra .m-asist-paso { padding: 0; color: var(--m-label-2); text-transform: none; letter-spacing: 0; font-weight: 700; }
+.m-asist-barra .m-btn-texto { width: auto; }
+.m-tramos { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin: var(--m-space-1) 0 var(--m-space-4); }
+.m-tramos span { height: 6px; border-radius: 3px; background: var(--m-fill); }
+.m-tramos .m-tramo-hecho, .m-tramos .m-tramo-actual { background: var(--m-tint); }
+.m-tramos .m-tramo-hecho { opacity: 0.55; }
+.m-asist-rail, .m-asist-prev { display: none; }
+@media (max-width: 899px) {
+  .m-asist-acciones { position: sticky; bottom: 0; z-index: 5; margin: var(--m-space-4) calc(var(--m-space-4) * -1) 0; padding: var(--m-space-3) var(--m-space-4) calc(var(--m-space-4) + var(--m-safe-bottom)); background: var(--m-bg-grouped); border-top: 0.5px solid var(--m-separator); }
+}
+@media (min-width: 900px) {
+  .m-asist-2col { width: 100%; max-width: 1040px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--m-space-6); align-items: start; }
+  .m-asist-3col { max-width: 1280px; }
+  .m-asist-rail { display: block; position: sticky; top: var(--m-space-5); padding: var(--m-space-5) var(--m-space-4); border-radius: 22px; background: var(--m-hero); color: var(--m-hero-tx); }
+  .m-asist-rail p { margin: 0 0 var(--m-space-4); font-size: var(--m-text-subheadline); color: var(--m-hero-tx2); line-height: 1.4; }
+  .m-asist-marca { display: flex; align-items: center; gap: var(--m-space-3); margin-bottom: var(--m-space-3); font-size: var(--m-text-title-3); font-weight: 800; }
+  .m-asist-rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .m-asist-rail li { display: flex; align-items: center; gap: var(--m-space-3); padding: var(--m-space-2) var(--m-space-3); border-radius: 14px; font-size: var(--m-text-subheadline); font-weight: 600; color: var(--m-hero-tx2); }
+  .m-asist-rail li small { font-weight: 500; }
+  .m-rail-actual { background: var(--m-bg-grouped); color: var(--m-label) !important; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+  .m-rail-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-size: var(--m-text-footnote); font-weight: 800; background: var(--m-hero-chip); flex-shrink: 0; }
+  .m-rail-actual .m-rail-num { background: var(--m-tint); color: var(--m-on-tint); }
+  .m-rail-hecho .m-rail-num { background: var(--m-p-menta); color: var(--m-p-menta-tx); }
+  .m-rail-num .m-icon { width: 16px; height: 16px; stroke-width: 2.4; }
+  .m-asist-main { min-width: 0; max-width: 620px; }
+  .m-asist-acciones { max-width: 620px; }
+  .m-asist-barra .m-btn-texto:first-child, .m-tramos { }
+}
+@media (min-width: 1240px) {
+  .m-asist-3col { grid-template-columns: 260px minmax(0, 1fr) 320px; }
+  .m-asist-prev { display: block; position: sticky; top: var(--m-space-5); }
+  .m-prev-cab { margin: 0 0 var(--m-space-2); font-size: var(--m-text-footnote); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--m-label-2); }
+  .m-prev-hero { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--m-space-3); padding: var(--m-space-4) var(--m-space-5); border-radius: 22px; background: var(--m-hero); color: var(--m-hero-tx); }
+  .m-prev-hero small { font-size: var(--m-text-footnote); font-weight: 700; color: var(--m-hero-tx2); }
+  .m-prev-hero strong { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .m-prev-suelto { color: var(--m-label-2); }
+}
+</style>
