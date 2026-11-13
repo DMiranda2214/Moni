@@ -35,7 +35,11 @@ if [ "$ENTORNO" = "produccion" ]; then
   fi
 fi
 
-if [ "$MODO" = "--armar" ]; then echo "$PAQUETE"; exit 0; fi
+if [ "$MODO" = "--armar" ]; then
+  # En Windows (Git Bash) la ruta de mktemp es /tmp/...; Node necesita la de Windows (C:/Users/...)
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$PAQUETE"; else echo "$PAQUETE"; fi
+  exit 0
+fi
 
 if [ -n "${SCRIPT_ID:-}" ]; then ID="$SCRIPT_ID"
 elif [ -f "$RAIZ/$ARCHIVO" ]; then ID="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['scriptId'])" "$RAIZ/$ARCHIVO")"
