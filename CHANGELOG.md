@@ -1,5 +1,11 @@
 # Cambios
 
+## 1.5.1 — Alertas que caben, nómina más clara y salario mínimo editable (13 nov 2026)
+- **Corregido:** las alertas (por ejemplo "Hay 2 suscripciones…" o "El salario mínimo guardado…") se salían de la pantalla en el celular y dejaban el botón cortado. Ahora el texto y el botón se acomodan en varias líneas.
+- **Corregido:** *Parámetros de nómina*. La alerta del salario mínimo mandaba con *Actualizar* a la misma pantalla en la que ya estabas, así que parecía que no se podía editar. Ahora el **salario mínimo** va arriba, en una tarjeta propia que indica si está al día o por actualizar, con el año ya puesto y el valor listo para escribir, y su propio botón *Guardar salario mínimo*. Los aportes y prestaciones van aparte, cada campo con su explicación.
+- **Cambia:** la pantalla de **Nómina** se ordena por lo importante: arriba cuánto te llega (ganas − descuentos), luego *¿Ya te llegó? Registrar nómina*, y el detalle en *Cómo se calcula* con tres bloques que se abren solo si quieres (Lo que ganas, Prestaciones, Descuentos).
+- **Cambia:** *Registrar nómina* ahora va en tres pasos con títulos: **¿Cuánto te llegó?** (con la diferencia frente a lo estimado), **¿Dónde y cuándo?** y **¿Cómo la contamos?** (con la explicación de sumar o no a los saldos). El mes del presupuesto queda en *Más opciones*.
+
 ## 1.5.0 — Navegación nueva, Inicio pastel y ícono de la app (13 nov 2026)
 - **Nuevo:** cuatro áreas — **Inicio, Dinero, Planear y Deudas** — y un botón **+** central en la barra inferior para registrar un gasto, un ingreso, mover dinero o convertir divisas (con "Repetir uno reciente"). Adiós a *Más*: sus 11 destinos quedaron dentro de Dinero (Bolsillos, Movimientos, Ahorro, CDT) y Planear (Presupuesto, Nómina, Otros ingresos, Servicios, Regalos, Vista anual). *Ajustes* y la *Guía* pasan al pie de la barra lateral y a Ajustes.
 - **Nuevo:** en tablet y computador, **barra lateral contraíble** con *Registrar* (atajo **N**), búsqueda **Ctrl K** para ir a cualquier pantalla, cuenta o bolsillo, y las secciones agrupadas.
