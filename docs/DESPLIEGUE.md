@@ -26,6 +26,7 @@ Se configuran en el editor de Apps Script → Configuración del proyecto → Pr
 | `DEMO_HABILITADO` | `TRUE` | **no debe existir** | Permite crear datos de demostración (y mostrar su pantalla) |
 | `MODO_MULTIUSUARIO` | Opcional: actívalo (función `activarModoMultiusuario`) si quieres probar el flujo de varias personas como en producción | `TRUE` (`activarModoMultiusuario`, una vez) | Cada persona con su propia hoja, caché, bloqueo y activadores |
 | `USUARIOS_PERMITIDOS` | Opcional | Opcional | Lista de correos autorizados (separados por coma) para cerrar el acceso |
+| `ICONO_URL` | Opcional | Opcional | Dirección https de otra imagen para el ícono de la pestaña (por defecto, `assets/icono.png` del repositorio en `main`: la imagen aparece cuando ese archivo ya está en `main`) |
 | `SPREADSHEET_ID` | Solo en modo una hoja (`vincularHojaMoni`) | No se usa: el ID de cada persona está en sus propiedades de usuario | La hoja única del script |
 
 Las marcas del último respaldo (`ULTIMO_RESPALDO*`) las gestiona la app, y en modo multiusuario son de cada persona; no las edites.

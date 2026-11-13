@@ -18,7 +18,7 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
    - **Bancos:** dónde tienes tu dinero (Nequi, Nu, tu banco…), con su rendimiento si es de ahorro.
    - **Cuentas y bolsillos:** cada cuenta y **cómo tienes repartido tu dinero** (casa, mercado, un viaje…), con lo que hay hoy en cada uno.
    - **Tarjetas de crédito** *(opcional)*: con su día de corte y de pago.
-   - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Más → Nómina**.
+   - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Planear → Nómina**.
    - **Otros ingresos** *(opcional)*: otro trabajo, arriendo, ventas…
    - **CDT** *(opcional)*: los que tengas a plazo fijo; aparecen como "Invertido".
    - **Hogar** *(opcional)*: tu casa o apartamento (puedes agregar varios, por ejemplo el de tu mamá).
@@ -37,9 +37,9 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
 | Ver cuánto queda en cada lugar | Pestaña **Bolsillos** |
 | Pagar la luz, el internet, Netflix… | **Inicio → Pagar servicios** |
 | Saber qué te toca pagar | **Inicio → Próximos pagos** |
-| Ver lo que vas a recibir | **Más → Nómina** y **Otros ingresos** (también en *Por recibir*, en Inicio) |
-| Ver en qué gastas | **Más → Gráficos** |
-| Tener cuentas en dólares | Crea el banco en **USD** y usa **Bolsillos → Convertir divisas** |
+| Ver lo que vas a recibir | **Planear → Nómina** y **Otros ingresos** (también en *Por recibir*, en Inicio) |
+| Ver en qué gastas | **Inicio** y **Dinero → Movimientos** (cada módulo trae sus gráficos) |
+| Tener cuentas en dólares | Crea el banco en **USD** y usa **Dinero → Bolsillos → Convertir divisas** |
 | Que te avisen los pagos | **Ajustes → Recordatorios** (Google Calendar) |
 
 Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y la [Guía rápida](GUIA_RAPIDA.md). Junto a cada casilla hay una **"i"** que explica para qué sirve.
@@ -59,5 +59,5 @@ Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y 
 
 ## Limitaciones a tener presentes
 - Los datos se registran **a mano**: Moni no se conecta a los bancos.
-- La **nómina** y el **salario mínimo** son los de Colombia. El salario mínimo se actualiza cada enero en *Más → Nómina → Parámetros*; Moni te avisa cuando el guardado es de un año anterior.
+- La **nómina** y el **salario mínimo** son los de Colombia. El salario mínimo se actualiza cada enero en *Planear → Nómina → Parámetros*; Moni te avisa cuando el guardado es de un año anterior.
 - Mientras la aplicación no esté verificada por Google, cada persona verá el aviso del paso 2.

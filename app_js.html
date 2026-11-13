@@ -1032,7 +1032,7 @@ function htmlLateral(raiz, area, puedeRegistrar) {
     ico(icono) + '<span class="m-lat-txt">' + esc(etiqueta) + '</span></button>';
   const chica = lateralChica();
   const nombre = cfg('Nombre_Usuario') || '';
-  return '<div class="m-lat-cab"><span class="m-logo" aria-hidden="true">M</span><span class="m-lat-txt m-marca">Moni</span>' +
+  return '<div class="m-lat-cab"><span class="m-logo" aria-hidden="true">' + ico('bolsillos') + '</span><span class="m-lat-txt m-marca">Moni</span>' +
     '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
     (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
     '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
@@ -3968,7 +3968,7 @@ function vGuia() {
       seccion('Cada mes',
         paso('Presupuesto', 'Genera el mes desde tu plantilla. Marca como pagado lo que ya cubriste.') +
         paso('Nómina', 'Calcula lo que te llega y repártelo a tus bolsillos una sola vez al mes.') +
-        paso('Servicios y suscripciones', 'En Más → Servicios y suscripciones (o “Pagar servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
+        paso('Servicios y suscripciones', 'En Planear → Servicios y suscripciones (o “Servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
         paso('Tarjetas y créditos', 'En Deudas registras compras con tarjeta y pagas el extracto. Los créditos de autopago se pagan desde tu ahorro y cada cuota regresa a él.')) +
       seccion('Cuando algo no cuadra',
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
@@ -4676,7 +4676,7 @@ function activarViz() {
   });
 }
 
-// ---- Pantalla Más → Gráficos ----
+// ---- Categorías de gasto (las usan Inicio y Movimientos) ----
 
 /** Barras de las categorías con mayor gasto (y "Otras"), con su porcentaje. */
 function itemsCategorias(d, cats) {
@@ -5018,7 +5018,7 @@ const TEXTOS_ASIST = {
   bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
-  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Más → Nómina.' },
+  nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Planear → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
   cdt: { titulo: '¿Tienes CDT?', sub: 'Es opcional. Un CDT es dinero que tienes a plazo fijo en un banco. Regístralo con su capital, tasa y plazo: Moni lo muestra como "Invertido" (no como disponible), calcula lo que ganarás y te avisa cuando vence. Los que ya tenías no descuentan nada de tus bolsillos.' },
   suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; si lo pagas en más de un hogar, elige a cuál pertenece. Moni te recuerda cuándo se cobra.' },
@@ -5100,7 +5100,7 @@ function htmlCabAsist(p) {
 function htmlRailAsist(actual) {
   const estado = {};
   App.boot.estado.pasos.forEach(p => { estado[p.id] = p; });
-  return '<aside class="m-asist-rail" aria-label="Pasos de la configuración"><div class="m-asist-marca"><span class="m-logo" aria-hidden="true">M</span><span>Moni</span></div>' +
+  return '<aside class="m-asist-rail" aria-label="Pasos de la configuración"><div class="m-asist-marca"><span class="m-logo" aria-hidden="true">' + ico('bolsillos') + '</span><span>Moni</span></div>' +
     '<p>Vamos a dejarla lista en unos minutos. Puedes salir y seguir después.</p><ol>' + PASOS_ASIST.map((p, i) => {
       const clase = p.id === actual ? 'actual' : (estado[p.id] && estado[p.id].hecho ? 'hecho' : 'pendiente');
       return '<li class="m-rail-' + clase + '"' + (clase === 'actual' ? ' aria-current="step"' : '') + '><span class="m-rail-num" aria-hidden="true">' + (clase === 'hecho' ? ico('check') : (i + 1)) + '</span>' +
@@ -5189,7 +5189,7 @@ function vPasoAsistente(id) {
   } else if (id === 'nomina') {
     const yaHay = activos('Nomina_Escenarios').length > 0;
     cuerpo = yaHay
-      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina (sueldo base ' + dinero(activos('Nomina_Escenarios')[0].Sueldo_Base) + '). Puedes ajustarla cuando quieras en Más → Nómina.</p><button type="button" class="m-btn m-btn-secondary" data-acc="asist-sueldo">Cambiar mi sueldo</button></div>'
+      ? '<div class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Ya configuraste tu nómina (sueldo base ' + dinero(activos('Nomina_Escenarios')[0].Sueldo_Base) + '). Puedes ajustarla cuando quieras en Planear → Nómina.</p><button type="button" class="m-btn m-btn-secondary" data-acc="asist-sueldo">Cambiar mi sueldo</button></div>'
       : '<form class="m-group" style="padding:var(--m-space-4)" id="asist-form" data-form="asistente" novalidate>' +
         '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="asist-sueldo">Sueldo base mensual</label>' + htmlInfo('Tu sueldo antes de descuentos. Déjalo vacío si no tienes nómina: puedes omitir este paso.') + '</div>' +
         '<input class="m-input m-num" id="asist-sueldo" data-tipo="dinero" inputmode="decimal" autocomplete="off"><p class="m-ayuda" data-eco="asist-sueldo" aria-live="polite"></p></div>' +

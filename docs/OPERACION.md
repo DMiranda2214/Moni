@@ -42,7 +42,7 @@ Si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: deja un ajust
 | "Falta instalar o actualizar la base de datos" | Falta una pestaña o columna (versión nueva) y es una sola hoja | Pulsar **Instalar** (con varias personas se actualiza sola al entrar) |
 | "La tabla … no existe en la base de datos" | Se publicó una versión con tablas nuevas y la hoja aún no se actualizó | Recargar la página: la app vuelve a revisar la hoja y la actualiza; si no, **Instalar** |
 | "Falta tu hoja de Moni" | La hoja vinculada se borró o ya no tienes acceso | Crear una nueva o vincular otra (la anterior no se toca) |
-| "Actualiza el salario mínimo" en Inicio | El salario mínimo guardado es de un año anterior | *Más → Nómina → Parámetros de nómina* y guardar el nuevo; el aviso se va solo |
+| "Actualiza el salario mínimo" en Inicio | El salario mínimo guardado es de un año anterior | *Planear → Nómina → Parámetros de nómina* y guardar el nuevo; el aviso se va solo |
 | "Google Finance todavía no devolvió la tasa" | La fórmula de la hoja `Tasas_Google` aún no calculó | Esperar unos segundos y reintentar |
 | "Este parámetro lo gestiona la app" | Se intentó editar un parámetro reservado (tasas, recordatorios…) | Cámbialo desde su pantalla (Divisas, Recordatorios) |
 | Una pantalla queda en esqueleto | Respuesta lenta de Google | Esperar 45 s: avisa con un error y **Reintentar**. Si se repite, revisa la conexión |

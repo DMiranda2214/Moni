@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.5.0 — Navegación nueva, Inicio pastel y ícono de la app (13 nov 2026)
+- **Nuevo:** cuatro áreas — **Inicio, Dinero, Planear y Deudas** — y un botón **+** central en la barra inferior para registrar un gasto, un ingreso, mover dinero o convertir divisas (con "Repetir uno reciente"). Adiós a *Más*: sus 11 destinos quedaron dentro de Dinero (Bolsillos, Movimientos, Ahorro, CDT) y Planear (Presupuesto, Nómina, Otros ingresos, Servicios, Regalos, Vista anual). *Ajustes* y la *Guía* pasan al pie de la barra lateral y a Ajustes.
+- **Nuevo:** en tablet y computador, **barra lateral contraíble** con *Registrar* (atajo **N**), búsqueda **Ctrl K** para ir a cualquier pantalla, cuenta o bolsillo, y las secciones agrupadas.
+- **Nuevo:** **Inicio** con saldo total en tarjeta pastel (y ojo para ocultar cifras), **Este mes** (entró, gastado y te queda con un anillo de avance), accesos pastel y tarjetas de colores suaves.
+- **Nuevo:** **primeros pasos** como tarjeta de avance con el siguiente paso, y el **asistente** con barra de tramos, panel de pasos y vista previa de la cuenta en pantallas anchas.
+- **Cambia:** se quita la pantalla *Gráficos*. Cada módulo trae los suyos; nuevos en Movimientos (en qué gastaste), Nómina (a dónde va lo descontado), Servicios y suscripciones (lo que más pesa al mes), Regalos (gastado frente a estimado) y CDT (capital y avance del plazo).
+- **Nuevo:** ícono propio de Moni en la pestaña del navegador (billetera sobre fondo pastel), en lugar del de Apps Script. Se sirve desde `assets/icono.png` y se puede cambiar con la propiedad de script `ICONO_URL`.
+
 ## 1.4.0 — Mes del presupuesto de la nómina (11 nov 2026)
 - **Nuevo:** al registrar la nómina eliges **en qué mes del presupuesto cuenta** (por defecto, el que paga). Una nómina recibida a fin de mes para el mes siguiente suma en el presupuesto y la vista anual de ese mes; los saldos y el historial siguen la fecha real. Vale para toda nómina, afecte o no los saldos.
 - **Nuevo:** en una nómina ya registrada, **Cambiar** junto a *Cuenta en el presupuesto de* corrige ese mes sin tocar saldos. Las registradas antes cuentan en el mes que pagan. Nueva columna `Nomina_Pagos.Mes_Presupuesto` (`ESQUEMA_VERSION` 8; se agrega sola).

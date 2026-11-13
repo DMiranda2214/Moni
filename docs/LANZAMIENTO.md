@@ -29,7 +29,8 @@ Lista para pasar a producción y compartir la app. Sirve para cada versión nuev
 - [ ] **Dólar de Google Finance:** en *Ajustes → Divisas*, *Actualizar ahora* trae la tasa (puede tardar unos segundos la primera vez); con la actualización diaria activa, al día siguiente la fecha cambia.
 - [ ] **Recordatorios:** activarlos pide el permiso de Calendar, crea el calendario "Moni" con los pagos de los próximos 45 días y, al pagar algo, el evento viejo se va y aparece el siguiente.
 - [ ] **Divisas:** un banco en USD, una conversión con tasa del banco y comisión aparte (se deshace todo junto); el Inicio muestra *Otras monedas*.
-- [ ] **Gráficos:** *Más → Gráficos* y los de Inicio, Presupuesto, Deudas, Ahorro, Vista anual y un bolsillo cargan sin errores en el celular.
+- [ ] **Gráficos:** los de Inicio, Movimientos, Presupuesto, Nómina, Servicios, Regalos, CDT, Deudas, Ahorro, Vista anual y un bolsillo cargan sin errores en el celular.
+- [ ] **Navegación:** las 4 pestañas y el botón **+** en el celular; barra lateral (contraer, Registrar, Ctrl K) en el computador; el ícono de Moni en la pestaña del navegador.
 - [ ] **Registro de errores:** *Ajustes → Registro de errores* abre y *Copiar el registro* funciona (también tras provocar un aviso).
 - [ ] **Respaldos automáticos:** el disparador diario crea la copia (revisa "Moni Respaldos" al día siguiente).
 - [ ] **Borrar todos mis datos** (en una cuenta de prueba): deja la app como recién instalada y quita el calendario.

@@ -110,7 +110,8 @@ Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la person
 - **Cargas:** cada pantalla tiene `{ data, cargando, error }`; si una respuesta llega vieja se descarta **y se apaga `cargando`** (un `return` anticipado dejaba la pantalla esperando para siempre).
 - **Errores** en lenguaje llano (`mensajeLlano`) y tope de 45 s por llamada.
 - **Diseño:** tokens en `tokens.html` (claro/oscuro, 6 acentos con contraste AA verificado por `tests/contraste.js`); Apple HIG: objetivos de 44 px, `Deshacer` en lugar de `confirm()`, esqueletos de carga, barra de progreso tras 400 ms.
-- **Responsivo:** pestañas abajo en el celular; barra lateral desde 768 px; Inicio en dos columnas desde 900 px.
+- **Navegación y responsivo:** cuatro áreas (`TABS` y `AREA_DE_RUTA` en `app_js.html`: Inicio, Dinero, Planear, Deudas). En el celular, barra inferior con el botón **+** central (`abrirMenuRegistrar`); desde 768 px, barra lateral contraíble (preferencia en `localStorage`), búsqueda **Ctrl K** (`abrirBuscador`) y atajo **N**. Inicio en dos columnas desde 900 px; el asistente suma un panel de pasos y una vista previa de la cuenta desde 900 y 1240 px.
+- **Ícono de la pestaña:** `doGet` llama a `setFaviconUrl` con `assets/icono.png` del repositorio (propiedad de script opcional `ICONO_URL` para cambiarlo; solo https).
 - **Asistente de primeros pasos:** `PASOS_ASIST` define los pasos (tú, bancos, cuentas, bolsillos, tarjetas, nómina, ingresos, CDT, hogar, servicios, suscripciones y dólar); reutiliza los campos de los catálogos (`CAT`) y se retoma desde Inicio.
 - **Gráficos:** SVG sin librerías. Los componentes (`vizLinea`, `vizColumnas`, `vizBarrasH`, `vizMedidores`) se registran en `VIZ` al armar el HTML y `render()` llama a `activarViz()` para el hover, el foco y las flechas. Una sola moneda por gráfico y una tabla alternativa en cada uno.
 - **Errores del navegador** se reportan al registro del servidor (`logClientError`) con un tope por sesión.
