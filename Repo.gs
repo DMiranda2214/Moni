@@ -21,6 +21,14 @@ function esVerdadero(v) {
   return t === 'TRUE' || t === 'VERDADERO' || t === 'SI' || t === 'SÍ';
 }
 
+/**
+ * ¿Este movimiento (o nómina) mueve dinero en los saldos? Los registrados antes de existir la columna, o con la celda
+ * vacía, sí lo movieron. Un registro "histórico" (Afecta_Saldos = FALSE) cuenta en los informes pero no en los saldos.
+ */
+function afectaSaldos_(fila) {
+  return fila.Afecta_Saldos === undefined || fila.Afecta_Saldos === '' || fila.Afecta_Saldos === null || esVerdadero(fila.Afecta_Saldos);
+}
+
 /** Un registro está activo si su columna Activo no es falsa (o si no tiene esa columna). */
 function estaActivo(fila) {
   if (fila.Activo === undefined || fila.Activo === '') return true;

@@ -37,6 +37,8 @@ Toca **Registrar** o un acceso rápido y elige:
 - **Ingreso:** dinero que entra a un bolsillo.
 - **Mover:** de un bolsillo a otro (los dos movimientos quedan ligados).
 
+La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo y cómo se cuenta?*. En el último, **Sumar a mis saldos** viene encendido. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Se puede cambiar después con **Editar**.
+
 Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para corregir un movimiento, ábrelo y **Editar** (los traslados y los pagos automáticos se anulan y se vuelven a registrar).
 
 ## 4. Bolsillos

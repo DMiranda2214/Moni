@@ -43,7 +43,7 @@ function instalarVistas() {
     'FILTER({' + rangoColumna_('Cuentas', 'ID_Cuenta') + ',' + rangoColumna_('Cuentas', 'Nombre') + '},' + rangoColumna_('Cuentas', 'ID_Cuenta') + '<>""),2,FALSE)),"")');
   hb.getRange('B2').setFormula('=IFERROR(FILTER(' + rangoColumna_('Bolsillos', 'Nombre') + ',' + idB + '<>""),"")');
   hb.getRange('C2').setFormula('=IFERROR(MAP(FILTER(' + idB + ',' + idB + '<>""),FILTER(' + rangoColumna_('Bolsillos', 'Saldo_Apertura') + ',' + idB + '<>""),' +
-    'LAMBDA(id,ap,N(ap)+SUMIFS(' + mov('Valor') + ',' + mov('ID_Bolsillo') + ',id,' + mov('Anulado') + ',"<>TRUE"))),"")');
+    'LAMBDA(id,ap,N(ap)+SUMIFS(' + mov('Valor') + ',' + mov('ID_Bolsillo') + ',id,' + mov('Anulado') + ',"<>TRUE",' + mov('Afecta_Saldos') + ',"<>FALSE"))),"")');
   hb.getRange('D2').setFormula('=IFERROR(FILTER(' + rangoColumna_('Bolsillos', 'Activo') + ',' + idB + '<>""),"")');
   hb.getRange('C:C').setNumberFormat('#,##0');
   hb.setFrozenRows(1); hb.getRange(1, 1, 1, 4).setFontWeight('bold');

@@ -218,7 +218,7 @@ function obtenerNominaMes(periodo, idEsc, opciones) {
 
 /** Las nóminas registradas antes de existir la columna (o con la celda vacía) sí afectaron los saldos. */
 function afectaSaldosNomina_(pago) {
-  return pago.Afecta_Saldos === undefined || pago.Afecta_Saldos === '' || esVerdadero(pago.Afecta_Saldos);
+  return afectaSaldos_(pago);
 }
 
 /**

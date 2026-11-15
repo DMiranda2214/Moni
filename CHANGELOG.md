@@ -1,5 +1,10 @@
 # Cambios
 
+## 1.6.0 — Movimientos históricos y hoja de registrar en pasos (15 nov 2026)
+- **Nuevo:** al registrar un **gasto o un ingreso**, el interruptor **Sumar a mis saldos** (encendido por defecto). Apagado, el movimiento es **histórico**: cuenta en el resumen del mes, las categorías, *Entró y salió*, el presupuesto y la vista anual, pero **no cambia ningún saldo**. Pensado para quien empieza a usar Moni a mitad de mes y quiere anotar lo que ya pasó. Si la fecha es de un mes anterior, Moni sugiere apagarlo. Se ve con la marca *Histórico* y se puede cambiar después con *Editar*.
+- **Cambia:** la hoja **Registrar** va en tres pasos con título (*¿Cuánto y por qué?*, *¿En qué bolsillo?*, *¿Cuándo y cómo se cuenta?*) y las notas quedan en *Más opciones*.
+- Nueva columna `Movimientos.Afecta_Saldos` (`ESQUEMA_VERSION` 9; se agrega sola y los movimientos anteriores siguen afectando saldos). Los saldos, el saldo al cierre de cada mes, los rendimientos del ahorro, el cuadre y la hoja `Vista_Bolsillos` la respetan.
+
 ## 1.5.1 — Alertas que caben, nómina más clara y salario mínimo editable (13 nov 2026)
 - **Corregido:** las alertas (por ejemplo "Hay 2 suscripciones…" o "El salario mínimo guardado…") se salían de la pantalla en el celular y dejaban el botón cortado. Ahora el texto y el botón se acomodan en varias líneas.
 - **Corregido:** *Parámetros de nómina*. La alerta del salario mínimo mandaba con *Actualizar* a la misma pantalla en la que ya estabas, así que parecía que no se podía editar. Ahora el **salario mínimo** va arriba, en una tarjeta propia que indica si está al día o por actualizar, con el año ya puesto y el valor listo para escribir, y su propio botón *Guardar salario mínimo*. Los aportes y prestaciones van aparte, cada campo con su explicación.

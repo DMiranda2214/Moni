@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '8';
+const ESQUEMA_VERSION = '9';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -59,8 +59,8 @@ const SCHEMAS = {
 
   // ---- Operación ----
   Movimientos: tabla_(
-    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado'],
-    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80]),
+    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos'],
+    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110]),
   Compras_TC: tabla_(
     ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado'],
     [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80]),
@@ -279,7 +279,8 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Presupuesto_Mes', columna: 'ID_Suscripcion', valor: '' },
   { tabla: 'Suscripciones', columna: 'ID_Inmueble', valor: '' },
   { tabla: 'Nomina_Pagos', columna: 'Afecta_Saldos', valor: true },
-  { tabla: 'Nomina_Pagos', columna: 'Mes_Presupuesto', valor: '' }
+  { tabla: 'Nomina_Pagos', columna: 'Mes_Presupuesto', valor: '' },
+  { tabla: 'Movimientos', columna: 'Afecta_Saldos', valor: true }
 ];
 
 function migrarColumnas_(ss) {

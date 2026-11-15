@@ -1,7 +1,7 @@
 /**
  * Saldos.gs — Moni
  * Saldos de bolsillos y cuentas calculados desde el libro de movimientos.
- *   Saldo de bolsillo = Saldo_Apertura + Σ Valor de sus movimientos no anulados (hasta una fecha).
+ *   Saldo de bolsillo = Saldo_Apertura + Σ Valor de sus movimientos no anulados que afectan saldos (hasta una fecha).
  *   Saldo de cuenta   = Σ saldos de sus bolsillos.
  */
 
@@ -22,6 +22,7 @@ function mapaSaldosBolsillos_(hastaFecha) {
   const suma = {};
   movimientos.forEach(m => {
     if (hastaFecha && m.Fecha && m.Fecha > hastaFecha) return;
+    if (!afectaSaldos_(m)) return; // un movimiento histórico cuenta en los informes, no en los saldos
     suma[m.ID_Bolsillo] = (suma[m.ID_Bolsillo] || 0) + (Number(m.Valor) || 0);
   });
 
