@@ -107,7 +107,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 ## 2. Operación
 
 **Movimientos** (libro mayor de bolsillos) —
-`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado`
+`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos`
+- `Afecta_Saldos`: `FALSE` = movimiento **histórico** (cuenta en informes, no en saldos); vacío o `TRUE` = afecta saldos (los anteriores a la columna).
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
 - `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion` (dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`).
 - `ID_Grupo`: une las filas de una misma operación (transferencia, pago de extracto, pago de cuota). **La suma de un grupo de transferencia interna es 0.**

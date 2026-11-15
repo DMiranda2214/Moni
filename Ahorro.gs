@@ -122,7 +122,7 @@ function obtenerAhorro() {
   const divisas = mapaDivisas_().cuentas;
   const cuentas = getTableData('Cuentas').filter(c => estaActivo(c) && c.Tipo === 'Ahorro' && divisas[c.ID_Cuenta] === DIVISA_BASE);
   const bolsillos = getTableData('Bolsillos');
-  const movs = getTableData('Movimientos', { excludeAnulados: true });
+  const movs = getTableData('Movimientos', { excludeAnulados: true }).filter(afectaSaldos_); // el ahorro y sus rendimientos siguen el dinero real
   const saldos = mapaSaldosBolsillos_();
   const creditos = listarCreditos();
   const bancos = getTableData('Bancos');

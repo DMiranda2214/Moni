@@ -54,11 +54,12 @@ function obtenerGraficos(o) {
     if (!ids[m.ID_Bolsillo] || !m.Fecha) return;
     const mm = String(m.Fecha).slice(0, 7);
     const v = Number(m.Valor) || 0;
-    if (mm < lista[0]) { saldoInicial += v; return; }
+    const mueve = afectaSaldos_(m); // un movimiento histórico cuenta en entró/salió y categorías, pero no en el saldo
+    if (mm < lista[0]) { if (mueve) saldoInicial += v; return; }
     const fila = porMes[mm];
     if (!fila) return; // posterior al mes elegido
     hayDatos = true;
-    fila.movido += v; // todo cambia el saldo, también los traslados y las conversiones
+    if (mueve) fila.movido += v; // todo cambia el saldo, también los traslados y las conversiones
     // El pago de un extracto liquida una deuda: el gasto ya se contó el día de cada compra.
     if (m.Tipo_Mov === 'Transferencia' || m.Subtipo === 'Pago_TC') return;
     if (v >= 0) { fila.ingresos += v; return; }
@@ -106,7 +107,7 @@ function saldosMensuales_(ids, mesFin, n, movs) {
   let saldo = getTableData('Bolsillos').filter(b => ids[b.ID_Bolsillo]).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
   const porMes = {};
   (movs || getTableData('Movimientos', { excludeAnulados: true })).forEach(m => {
-    if (!ids[m.ID_Bolsillo] || !m.Fecha) return;
+    if (!ids[m.ID_Bolsillo] || !m.Fecha || !afectaSaldos_(m)) return;
     const mm = String(m.Fecha).slice(0, 7), v = Number(m.Valor) || 0;
     if (mm < lista[0]) saldo += v; // lo anterior al rango forma el saldo de partida
     else if (lista.indexOf(mm) !== -1) porMes[mm] = (porMes[mm] || 0) + v;

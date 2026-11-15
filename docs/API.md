@@ -44,12 +44,12 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 
 | Función | Parámetros |
 |---|---|
-| `addMovimiento` | `m, vista` |
+| `addMovimiento` | `m, vista` — `m.Afecta_Saldos = false` lo registra como histórico (cuenta en informes, no en saldos) |
 | `addTransferencia` | `t, vista` |
 | `voidMovimiento` | `idMov, vista` |
 | `voidVarios` | `ids, vista` |
 | `restoreMovimiento` | `idMov, vista` |
-| `editMovimiento` | `idMov, cambios, vista` |
+| `editMovimiento` | `idMov, cambios, vista` — `cambios.Afecta_Saldos` pasa un movimiento a histórico o de vuelta |
 | `getMovimientos` | `filtro` |
 | `getDetalleBolsillo` | `idBolsillo, mes, incluirAnulados` |
 | `cuadre` | `idCuenta, saldoReal, idBolsilloAjuste, vista` |

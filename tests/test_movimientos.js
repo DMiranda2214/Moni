@@ -303,6 +303,54 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('mapaSaldosBolsillos_')[mercado.ID_Bolsillo], 0);
   });
 
+  // ---------------------------------------------------------------- movimientos históricos
+  prueba('histórico: no cambia ningún saldo, pero cuenta en gráficos, presupuesto y vista anual', () => {
+    const { e, casa, mercado, saldo } = escenario();
+    const viejo = dias(40), mesViejo = viejo.slice(0, 7), mesHoy = hoy().slice(0, 7);
+    const saldoAntes = saldo(casa.ID_Bolsillo), total = e.llamar('obtenerSaldos').total;
+    const gr0 = e.llamar('obtenerGraficos', { mes: mesViejo, meses: 3 });
+    const ing0 = e.llamar('obtenerPresupuestoMes', mesHoy).totales.ingresos;
+
+    const g = e.llamar('registrarMovimiento', { Concepto: 'Arriendo de inicio de mes', ID_Bolsillo: casa.ID_Bolsillo, Valor: 70000, Tipo_Mov: 'Gasto', Fecha: viejo, Afecta_Saldos: false });
+    e.llamar('registrarMovimiento', { Concepto: 'Nómina ya recibida', ID_Bolsillo: mercado.ID_Bolsillo, Valor: 400000, Tipo_Mov: 'Ingreso', Fecha: hoy(), Afecta_Saldos: false });
+    assert.strictEqual(g.Afecta_Saldos, false);
+
+    assert.strictEqual(saldo(casa.ID_Bolsillo), saldoAntes, 'el saldo no cambia');
+    assert.strictEqual(e.llamar('obtenerSaldos').total, total);
+
+    const gr1 = e.llamar('obtenerGraficos', { mes: mesViejo, meses: 3 });
+    const mv = gr1.serie.find(x => x.mes === mesViejo), mv0 = gr0.serie.find(x => x.mes === mesViejo);
+    assert.strictEqual(mv.gastos, mv0.gastos + 70000, 'cuenta como gasto del mes');
+    assert.strictEqual(mv.saldo, mv0.saldo, 'pero el saldo de la línea no cambia');
+    assert.strictEqual(gr1.serie[gr1.serie.length - 1].saldo, gr0.serie[gr0.serie.length - 1].saldo);
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mesHoy).totales.ingresos, ing0 + 400000, 'cuenta como ingreso del mes en el presupuesto');
+
+    const lista = e.llamar('listarMovimientos', { mes: mesViejo });
+    const item = lista.items.find(i => i.Concepto === 'Arriendo de inicio de mes');
+    assert.strictEqual(item.Afecta_Saldos, false);
+    assert.strictEqual(lista.totales.gastos, 70000, 'y suma en el resumen del mes');
+    const anual = e.llamar('obtenerVistaAnual', Number(mesHoy.slice(0, 4))).meses.find(m => m.mes === mesHoy);
+    assert.ok(anual.ingreso >= 400000);
+  });
+
+  prueba('histórico: se puede cambiar después y un ajuste nunca es histórico', () => {
+    const { e, casa, saldo } = escenario();
+    const m = e.llamar('registrarMovimiento', { Concepto: 'Cena', ID_Bolsillo: casa.ID_Bolsillo, Valor: 30000, Tipo_Mov: 'Gasto', Fecha: dias(3), Afecta_Saldos: false });
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 1000000);
+    e.llamar('editarMovimiento', m.ID_Mov, { Afecta_Saldos: true });
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 970000, 'al afectar saldos, resta');
+    e.llamar('editarMovimiento', m.ID_Mov, { Afecta_Saldos: false });
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 1000000, 'y al volver a histórico, se devuelve');
+    e.llamar('anularMovimiento', m.ID_Mov);
+    e.llamar('restaurarMovimiento', m.ID_Mov);
+    assert.strictEqual(e.llamar('listarMovimientos', {}).items.find(i => i.ID_Mov === m.ID_Mov).Afecta_Saldos, false, 'anular y restaurar no lo cambia');
+    assert.throws(e.falla('registrarMovimiento', { Concepto: 'x', ID_Bolsillo: casa.ID_Bolsillo, Valor: 5, Tipo_Mov: 'Ajuste', Afecta_Saldos: false }), /siempre lo cambia/);
+    // los que ya existían antes de la columna siguen afectando saldos
+    const viejo = e.llamar('registrarMovimiento', { Concepto: 'Normal', ID_Bolsillo: casa.ID_Bolsillo, Valor: 1000, Tipo_Mov: 'Gasto' });
+    assert.strictEqual(viejo.Afecta_Saldos, true);
+    assert.strictEqual(e.llamar('afectaSaldos_', { Afecta_Saldos: '' }), true);
+  });
+
   // ---------------------------------------------------------------- API
   prueba('API: cada escritura devuelve los movimientos afectados y los saldos nuevos', () => {
     const { e, casa, mercado } = escenario();

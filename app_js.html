@@ -2068,7 +2068,7 @@ function filaMov(i, enBolsillo) {
     sub = (enBolsillo ? '' : esc(i.Bolsillo)) + (i.Categoria ? (enBolsillo ? '' : ' · ') + esc(i.Categoria) : '');
   }
   return fila({
-    titulo: esc(i.Concepto), sub: sub + (i.Anulado ? (sub ? ' · ' : '') + 'Anulado' : ''),
+    titulo: esc(i.Concepto) + (i.Afecta_Saldos === false && !i.esTransferencia ? ' <span class="m-insignia" title="No cambió tus saldos">Histórico</span>' : ''), sub: sub + (i.Anulado ? (sub ? ' · ' : '') + 'Anulado' : ''),
     final: '<span class="m-monto ' + m.clase + '">' + m.texto + '</span>',
     clase: i.Anulado ? 'm-anulado' : '', attrs: 'data-acc="mov" data-id="' + esc(i.ID_Mov) + '"'
   });
@@ -2218,7 +2218,7 @@ function recordarBolsillo(id) { try { localStorage.setItem('moni.ultimoBolsillo'
 const CAMPOS_REGISTRO = [
   { k: 'Valor', tipo: 'dinero' }, { k: 'Concepto', tipo: 'texto' }, { k: 'ID_Bolsillo', tipo: 'select' },
   { k: 'Origen', tipo: 'select' }, { k: 'Destino', tipo: 'select' }, { k: 'ID_Categoria', tipo: 'select' },
-  { k: 'Fecha', tipo: 'texto' }, { k: 'Notas', tipo: 'texto' }, { k: 'ID_Item_Ppto', tipo: 'select' }
+  { k: 'Fecha', tipo: 'texto' }, { k: 'Notas', tipo: 'texto' }, { k: 'ID_Item_Ppto', tipo: 'select' }, { k: 'Afecta', tipo: 'interruptor' }
 ];
 
 function categoriasPara(tipo) {
@@ -2248,26 +2248,49 @@ async function abrirRegistrar(o) {
     todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + grupoTarjetas(k) + '</select>' +
     (k === 'ID_Bolsillo' && conTarjetas ? '<p class="m-ayuda" id="reg-tc-ayuda" hidden></p>' : '') + '</div>';
 
+  const paso = (n, titulo) => '<h3 class="m-reg-paso"><span class="m-nom-num" aria-hidden="true">' + n + '</span>' + esc(titulo) + '</h3>';
   const segmento = ['Gasto', 'Ingreso', 'Mover'].map(t => '<label><input type="radio" name="tipo" value="' + t + '"' + (t === tipoInicial ? ' checked' : '') + '><span>' + (t === 'Mover' ? 'Mover' : t) + '</span></label>').join('');
   const valorInicial = edit ? (edit.Tipo_Mov === 'Ajuste' ? edit.Valor : Math.abs(edit.Valor)) : (o.valor || '');
 
   const cuerpo = '<form novalidate data-form="registro">' +
     (edit ? '' : '<div class="m-campo"><div class="m-segmentado" role="radiogroup" aria-label="Qué quieres registrar">' + segmento + '</div></div>') +
+    paso(1, '¿Cuánto y por qué?') +
     htmlCampo({ k: 'Valor', label: edit && edit.Tipo_Mov === 'Ajuste' ? 'Valor (negativo si resta)' : 'Valor', tipo: 'dinero', requerido: true }, valorInicial) +
     htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, edit ? edit.Concepto : (o.concepto || '')).replace('data-campo="Concepto"', 'data-campo="Concepto" data-etiqueta="1"') +
+    paso(2, '¿En qué bolsillo?') +
     selBolsillo('ID_Bolsillo', 'Bolsillo', bolsilloInicial, 'Gasto,Ingreso,Ajuste') +
     selBolsillo('Origen', 'Sale de', bolsilloInicial, 'Mover') +
     selBolsillo('Destino', 'Llega a', destinoInicial, 'Mover') +
     (renglones.length ? '<div class="m-campo" data-campo="ID_Item_Ppto" data-solo="Gasto,Ajuste,Mover"><div class="m-label-fila"><label class="m-label" for="f-ID_Item_Ppto">Renglón del presupuesto (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Item_Ppto) + '</div><select class="m-input" id="f-ID_Item_Ppto" name="ID_Item_Ppto"><option value="">Ninguno</option>' +
       renglones.map(r => '<option value="' + esc(r.ID_Item) + '"' + (r.ID_Item === itemInicial ? ' selected' : '') + '>' + esc(r.Concepto) + '</option>').join('') + '</select><p class="m-ayuda">Así el gasto cuenta como lo "real" de ese renglón.</p></div>' : '') +
     '<div class="m-campo" data-campo="ID_Categoria" data-solo="Gasto,Ingreso,Ajuste"><div class="m-label-fila"><label class="m-label" for="f-ID_Categoria">Categoría (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Categoria) + '</div><select class="m-input" id="f-ID_Categoria" name="ID_Categoria"></select></div>' +
+    paso(3, '¿Cuándo y cómo se cuenta?') +
     '<div class="m-campo" data-campo="Fecha"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo(INFO_GENERAL.Fecha) + '</div><input class="m-input" id="f-Fecha" name="Fecha" type="date" max="' + hoy + '" value="' + esc(edit ? edit.Fecha : hoy) + '"></div>' +
-    htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, edit ? edit.Notas : '') +
+    htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
+      info: 'Apágalo para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, un gasto de la primera semana del mes, antes de empezar con Moni). Queda en tus movimientos y en los gráficos, pero no cambia ningún saldo.' },
+      edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso"') +
+    '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso" aria-live="polite"></p>' +
+    '<details class="m-nom-mas"><summary>Más opciones</summary>' + htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, edit ? edit.Notas : '') + '</details>' +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
 
   const tipoActual = raiz => {
     if (edit) return edit.Tipo_Mov;
     const r = $('input[name="tipo"]:checked', raiz); return r ? r.value : 'Gasto';
+  };
+  // Debajo de "Sumar a mis saldos": qué va a pasar, y una sugerencia si la fecha es de un mes anterior.
+  const actualizarHist = raiz => {
+    const t = tipoActual(raiz), caja = $('#reg-hist-ayuda', raiz), sw = $('#f-Afecta', raiz), medio = $('#f-ID_Bolsillo', raiz);
+    if (!caja || !sw) return;
+    const conTarjeta = !!(medio && medio.value.indexOf('T:') === 0 && t === 'Gasto');
+    const visible = (t === 'Gasto' || t === 'Ingreso') && !conTarjeta;
+    const campo = sw.closest('[data-campo]');
+    if (campo) campo.hidden = !visible;
+    caja.hidden = !visible;
+    if (!visible) return;
+    const fecha = ($('#f-Fecha', raiz) || {}).value || hoy;
+    if (!sw.checked) caja.textContent = 'Queda en tus movimientos y en los gráficos, pero tus saldos no cambian.';
+    else if (fecha < hoy.slice(0, 7) + '-01') caja.textContent = 'Esta fecha es de un mes anterior. Si ya tenías este movimiento contado en tus saldos iniciales, apaga “Sumar a mis saldos”.';
+    else caja.textContent = t === 'Gasto' ? 'El dinero sale del bolsillo ahora.' : 'El dinero entra al bolsillo ahora.';
   };
   const actualizar = raiz => {
     const t = tipoActual(raiz);
@@ -2287,6 +2310,7 @@ async function abrirRegistrar(o) {
       if (lbl) lbl.textContent = t === 'Gasto' && conTarjetas ? 'Con qué pagaste' : 'Bolsillo';
     }
     ayudaTarjeta(raiz);
+    actualizarHist(raiz);
   };
   // Qué pasará con el dinero cuando se paga con tarjeta, dicho antes de guardar.
   const ayudaTarjeta = raiz => {
@@ -2328,12 +2352,14 @@ async function abrirRegistrar(o) {
         if (ev.target.id === 'f-ID_Item_Ppto') { proponerMedio(); ayudaTarjeta(raiz); }
         if (ev.target.id === 'f-ID_Bolsillo') ayudaTarjeta(raiz);
         monedaDelValor();
+        actualizarHist(raiz);
       });
       const v = $('#f-Valor', raiz); if (v) v.focus();
     },
     alGuardar: async raiz => {
       const t = tipoActual(raiz);
       const v = leerFormulario(raiz, CAMPOS_REGISTRO);
+      const afectaSaldos = !((t === 'Gasto' || t === 'Ingreso') && v.Afecta === false); // histórico: cuenta en los informes, no en los saldos
       const fecha = $('#f-Fecha', raiz).value;
       const notas = ($('#f-Notas', raiz) || {}).value || '';
       if (v.Valor === '' || v.Valor === undefined || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el valor.');
@@ -2341,7 +2367,7 @@ async function abrirRegistrar(o) {
 
       let res;
       if (edit) {
-        res = await api('editMovimiento', edit.ID_Mov, { Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
+        res = await api('editMovimiento', edit.ID_Mov, { Afecta_Saldos: afectaSaldos, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
         aplicarEscritura(res); render(); aviso('Cambios guardados');
         return;
       }
@@ -2357,12 +2383,12 @@ async function abrirRegistrar(o) {
         aviso(res.aparto ? 'Gasto con tarjeta registrado y dinero apartado' : 'Gasto con tarjeta registrado', { deshacer: () => anularGastoTarjeta(res.idCompra, res.idItem) });
         return;
       } else {
-        res = await api('addMovimiento', { Tipo_Mov: t, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
+        res = await api('addMovimiento', { Afecta_Saldos: afectaSaldos, Tipo_Mov: t, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
         recordarBolsillo(v.ID_Bolsillo);
       }
       aplicarEscritura(res); render();
       const id = res.items[0] && res.items[0].ID_Mov;
-      aviso(t === 'Mover' ? 'Dinero movido' : (t === 'Gasto' ? 'Gasto registrado' : 'Ingreso registrado'), { deshacer: () => anularYAvisar(id) });
+      aviso(t === 'Mover' ? 'Dinero movido' : (t === 'Gasto' ? 'Gasto registrado' : 'Ingreso registrado') + (afectaSaldos ? '' : ' (tus saldos no cambiaron)'), { deshacer: () => anularYAvisar(id) });
     }
   });
 }
@@ -2423,6 +2449,7 @@ async function abrirDetalleMov(id) {
   if (it.Categoria) filas.push(['Categoría', esc(it.Categoria)]);
   if (it.Subtipo) filas.push(['Origen', esc(it.Subtipo.replace(/_/g, ' '))]);
   if (it.Notas) filas.push(['Notas', esc(it.Notas)]);
+  if (it.Afecta_Saldos === false && !it.esTransferencia) filas.push(['Saldos', 'No cambió tus saldos (movimiento histórico): cuenta en gráficos y presupuesto']);
   if (it.Anulado) filas.push(['Estado', 'Anulado']);
 
   let siguiente = null;

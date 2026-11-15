@@ -49,14 +49,17 @@ function valorConSigno_(valor, tipo) {
 
 /**
  * Registra un gasto, un ingreso o un ajuste en un bolsillo.
- * @param {Object} m { Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, ID_Categoria, Subtipo, Notas, Origen, ID_Item_Ppto, ID_Grupo }
+ * @param {Object} m { Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, ID_Categoria, Subtipo, Notas, Origen, ID_Item_Ppto, ID_Grupo, Afecta_Saldos }
  *   Para Gasto e Ingreso el valor se escribe positivo; el signo lo pone la app.
+ *   Con `Afecta_Saldos: false` el movimiento es "histórico": cuenta en gráficos, presupuesto y vista anual, pero no cambia
+ *   ningún saldo (para quien empieza a usar Moni a mitad de mes y anota lo que ya había pasado). Un ajuste siempre afecta.
  * @returns {Object} la fila creada
  */
 function registrarMovimiento(m) {
   if (!m || typeof m !== 'object') throw new Error('Faltan los datos del movimiento.');
   exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', m.ID_Bolsillo, 'El bolsillo');
   const tipo = opcion_(m.Tipo_Mov || 'Gasto', TIPOS_MANUALES, 'El tipo de movimiento');
+  const afecta = quiereAfectarSaldos_(m.Afecta_Saldos, tipo);
 
   const fila = {
     ID_Mov: nuevoId_('mov'),
@@ -71,10 +74,18 @@ function registrarMovimiento(m) {
     ID_Item_Ppto: renglonMovimiento_(texto_(m.ID_Item_Ppto)),
     Notas: texto_(m.Notas).slice(0, 500),
     Origen: opcion_(m.Origen || 'App', ENUMS.Movimientos.Origen, 'El origen'),
-    Anulado: false
+    Anulado: false,
+    Afecta_Saldos: afecta
   };
   insertRow('Movimientos', fila);
   return fila;
+}
+
+/** Interpreta la casilla "afecta saldos" (por defecto sí). Un ajuste corrige un saldo, así que no puede ser histórico. */
+function quiereAfectarSaldos_(valor, tipo) {
+  const afecta = !(valor === false || String(valor).toLowerCase() === 'false');
+  if (!afecta && tipo === 'Ajuste') throw new Error('Un ajuste corrige un saldo, así que siempre lo cambia.');
+  return afecta;
 }
 
 /**
@@ -227,6 +238,7 @@ function editarMovimiento(idMov, cambios) {
     ID_Item_Ppto: c.ID_Item_Ppto !== undefined ? renglonMovimiento_(texto_(c.ID_Item_Ppto)) : mov.ID_Item_Ppto,
     Notas: c.Notas !== undefined ? texto_(c.Notas).slice(0, 500) : mov.Notas
   };
+  if (c.Afecta_Saldos !== undefined) datos.Afecta_Saldos = quiereAfectarSaldos_(c.Afecta_Saldos, tipo);
   updateRow('Movimientos', mov._rowIndex, datos);
   return Object.assign({}, mov, datos, { bolsilloAnterior: mov.ID_Bolsillo });
 }
@@ -286,7 +298,7 @@ function listarMovimientos(f) {
       ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Tipo_Mov: m.Tipo_Mov, Subtipo: m.Subtipo || '',
       ID_Bolsillo: m.ID_Bolsillo, Bolsillo: nombreBolsillo(m.ID_Bolsillo), Cuenta: nombreCuenta(m.ID_Bolsillo), Divisa: divisas.bolsillos[m.ID_Bolsillo] || DIVISA_BASE,
       ID_Categoria: m.ID_Categoria || '', Categoria: catPorId[m.ID_Categoria] ? catPorId[m.ID_Categoria].Nombre : '',
-      ID_Grupo: m.ID_Grupo || '', ID_Item_Ppto: m.ID_Item_Ppto || '', Notas: m.Notas || '', Anulado: esVerdadero(m.Anulado),
+      ID_Grupo: m.ID_Grupo || '', ID_Item_Ppto: m.ID_Item_Ppto || '', Notas: m.Notas || '', Anulado: esVerdadero(m.Anulado), Afecta_Saldos: afectaSaldos_(m),
       Creado_En: m.Creado_En || '', _fila: m._rowIndex, Valor: Number(m.Valor) || 0,
       esTransferencia: m.Tipo_Mov === 'Transferencia', Editable: !m.ID_Grupo && !m.Subtipo
     };

@@ -4,7 +4,8 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 
 ## 1. Libro de movimientos y saldos
 - Todo es un **movimiento** con signo: lo que entra es positivo y lo que sale, negativo.
-- **Saldo de un bolsillo = saldo de apertura + suma de sus movimientos no anulados.** Se puede consultar a una fecha.
+- **Saldo de un bolsillo = saldo de apertura + suma de sus movimientos no anulados que afectan saldos.** Se puede consultar a una fecha.
+- **Movimientos históricos** (`Afecta_Saldos = FALSE`): un gasto o ingreso que se anota con la casilla *Sumar a mis saldos* apagada. Sirve a quien empieza a usar Moni a mitad de mes (o más tarde) y quiere registrar lo que ya pasó sin mover dinero: **cuenta** en el resumen del mes, las categorías, *Entró y salió*, el presupuesto (real e ingresos del mes) y la vista anual, pero **no cambia ningún saldo**, ni el saldo al cierre de cada mes, ni los rendimientos del ahorro, ni el cuadre. Se puede cambiar después (editar el movimiento) y se ve con la marca *Histórico*. Solo vale para gastos e ingresos: un ajuste corrige un saldo, un traslado mueve dinero y una compra con tarjeta no es un movimiento de bolsillo. Los movimientos anteriores a esta opción siguen afectando saldos.
 - Un **traslado** son dos movimientos que comparten `ID_Grupo` y suman cero.
 - **Anular** marca el movimiento (o el grupo completo); no borra. Se puede restaurar si los bolsillos siguen activos.
 - La fecha de un movimiento no puede ser futura. Las fechas se guardan como texto `AAAA-MM-DD`.
