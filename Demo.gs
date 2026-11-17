@@ -142,8 +142,11 @@ function sembrarDatosDemo() {
   insertRows('Nomina_Conceptos', [{ ID_Concepto: 'demo-nco-1', ID_Nomina_Esc: 'demo-nes-1', Tipo: 'Devengo', Concepto: 'Auxilio de conectividad (demo)', Activo: true, Tipo_Calculo: 'Subsidio', ID_Subsidio: 'demo-sub-1' }]);
 
   // Compras de tarjeta y un crédito de autopago en marcha
+  // Todas van al extracto en curso: con fechas relativas, según el día del mes algunas cruzarían el corte (día 15) y el
+  // extracto de demostración quedaría con un total distinto cada día.
+  const mesExtractoDemo = calcularMesExtracto_(hoyIso_(), 15);
   const compraDemo = (concepto, valor, dias, fuente) => registrarCompraTC({
-    ID_Tarjeta: 'demo-tar-1', Concepto: concepto, Valor: valor, Fecha: fechaRelativa_(dias), Fuente: fuente, Origen: 'Demo'
+    ID_Tarjeta: 'demo-tar-1', Concepto: concepto, Valor: valor, Fecha: fechaRelativa_(dias), Fuente: fuente, Origen: 'Demo', Mes_Extracto: mesExtractoDemo
   });
   compraDemo('Ropa (demo)', 180000, 5, 'Personal');
   compraDemo('Cena (demo)', 65000, 3, 'Guardar');

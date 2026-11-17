@@ -1,5 +1,8 @@
 # Cambios
 
+## 1.6.1 — Datos de demostración estables (17 nov 2026)
+- **Corregido:** el extracto de la tarjeta de demostración mostraba un total distinto según el día del mes (entre el 16 y el 20 algunas compras cruzaban el corte del día 15) y la prueba *"demo: incluye compras y un crédito…"* fallaba. Ahora las compras de demostración van siempre al extracto en curso. Solo afecta a desarrollo.
+
 ## 1.6.0 — Movimientos históricos y hoja de registrar en pasos (15 nov 2026)
 - **Nuevo:** al registrar un **gasto o un ingreso**, el interruptor **Sumar a mis saldos** (encendido por defecto). Apagado, el movimiento es **histórico**: cuenta en el resumen del mes, las categorías, *Entró y salió*, el presupuesto y la vista anual, pero **no cambia ningún saldo**. Pensado para quien empieza a usar Moni a mitad de mes y quiere anotar lo que ya pasó. Si la fecha es de un mes anterior, Moni sugiere apagarlo. Se ve con la marca *Histórico* y se puede cambiar después con *Editar*.
 - **Cambia:** la hoja **Registrar** va en tres pasos con título (*¿Cuánto y por qué?*, *¿En qué bolsillo?*, *¿Cuándo y cómo se cuenta?*) y las notas quedan en *Más opciones*.
