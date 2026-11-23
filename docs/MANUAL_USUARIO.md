@@ -74,6 +74,8 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 ## 7. Deudas
 ### Tarjetas de crédito
 - **Agregar una compra:** desde **Registrar** (elige la tarjeta en *Con qué pagaste*) o desde la tarjeta. Si la compra está en un renglón de tu presupuesto, elígelo: **cuenta como gasto de ese renglón el día de la compra** y Moni aparta el dinero de su bolsillo a la **reserva** de la tarjeta. Si no está en el presupuesto, no se aparta nada: al pagar el extracto indicas de qué bolsillo sale.
+- La tarjeta se muestra **por cortes**: arriba ves cada corte con sus fechas (del día siguiente al corte anterior hasta el corte), lo gastado, si ya se pagó o hasta cuándo pagarlo; toca uno para ver sus compras. Si queda un corte anterior sin pagar, un aviso te lo recuerda.
+- Al crear la tarjeta, la **reserva** puede ser un bolsillo nuevo o **uno que ya tengas** (en pesos).
 - El **mes del extracto** se decide por el día de corte.
 - **Pagar el extracto:** una sola acción, todo o nada: si a la reserva le falta, **eliges de qué bolsillo sale** lo que falta; luego se paga el total desde la reserva y se marcan el extracto y las compras como pagados. Se puede **deshacer**.
 ### Créditos de autopago

@@ -84,7 +84,10 @@ function armarBootstrap_() {
 
     // Datos que una versión nueva necesita en hojas ya creadas: toda cuenta tiene su saldo interno ("Sin asignar").
     // Solo corre cuando la revisión del esquema no viene de la memoria (una vez por versión), y no cambia ningún saldo.
-    if (!verificacion.desdeCache) { try { if (asegurarBolsillosInternos_()) invalidateCache(); } catch (e) {} }
+    if (!verificacion.desdeCache) {
+      try { if (asegurarBolsillosInternos_()) invalidateCache(); } catch (e) {}
+      try { if (repararFormatosMes_(getSpreadsheet())) invalidateCache(); } catch (e) {}
+    }
 
     precargarTablas_(Object.keys(SCHEMAS)); // todo lo que esté en caché, en 2 llamadas
     const config = {};

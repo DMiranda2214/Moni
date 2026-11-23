@@ -146,7 +146,7 @@ const COLUMNAS_TEXTO = {
   Extractos: ['Mes', 'Fecha_Pago'],
   Presupuesto_Mes: ['Mes'],
   Subsidios: ['Vigente_Desde', 'Vigente_Hasta'],
-  Nomina_Pagos: ['Periodo', 'Fecha_Pago'],
+  Nomina_Pagos: ['Periodo', 'Fecha_Pago', 'Mes_Presupuesto'],
   Creditos: ['Fecha_Inicio'],
   Creditos_Cronograma: ['Fecha_Prevista'],
   Creditos_Pagos: ['Fecha'],
@@ -282,6 +282,35 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Nomina_Pagos', columna: 'Mes_Presupuesto', valor: '' },
   { tabla: 'Movimientos', columna: 'Afecta_Saldos', valor: true }
 ];
+
+/**
+ * Repara hojas donde Sheets convirtió un mes "2026-11" en fecha (por ejemplo en filas más allá de las 1000 con formato de
+ * texto, o en columnas agregadas después): vuelve a poner la columna como texto y reescribe el mes como "AAAA-MM".
+ * No cambia ningún dato más. Devuelve cuántas celdas corrigió.
+ */
+function repararFormatosMes_(ss) {
+  let corregidas = 0;
+  ['Compras_TC', 'Extractos', 'Presupuesto_Mes', 'Nomina_Pagos'].forEach(tabla => {
+    const sheet = ss.getSheetByName(tabla);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const filas = sheet.getLastRow() - 1;
+    headers.forEach((h, i) => {
+      if (COLUMNAS_MES.indexOf(h) === -1) return;
+      const rango = sheet.getRange(2, i + 1, filas, 1);
+      const valores = rango.getValues();
+      const hayFechas = valores.some(f => f[0] instanceof Date);
+      rango.setNumberFormat('@'); // lo próximo que se escriba aquí queda como texto
+      if (!hayFechas) return;
+      rango.setValues(valores.map(f => {
+        if (!(f[0] instanceof Date)) return [f[0]];
+        corregidas++;
+        return [Utilities.formatDate(f[0], 'America/Bogota', 'yyyy-MM')];
+      }));
+    });
+  });
+  return corregidas;
+}
 
 function migrarColumnas_(ss) {
   const migradas = [];
