@@ -82,7 +82,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | Función | Parámetros |
 |---|---|
 | `getDeudas` | — |
-| `getTarjeta` | `idTarjeta, mes` |
+| `getTarjeta` | `idTarjeta, mes` (devuelve `meses[]` con `mes, total, pagado, numCompras, abierto, desde, hasta, pago`, y `corte` del mes pedido) |
 | `addCompraTC` | `c` |
 | `addGastoTarjeta` | `c, vista` — gasto pagado con tarjeta desde Registrar; con renglón aparta el dinero de su bolsillo, sin renglón no aparta nada |
 | `voidGastoTarjeta` | `idCompra, idItem, vista` |

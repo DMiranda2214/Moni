@@ -343,7 +343,7 @@ const CATALOGOS = {
       const bolsillos = leer_('Bolsillos');
       const idReserva = item.ID_Bolsillo_Reserva !== undefined ? item.ID_Bolsillo_Reserva : actual && actual.ID_Bolsillo_Reserva;
       const reserva = exigirActivo_(bolsillos, 'ID_Bolsillo', idReserva, 'El bolsillo de reserva');
-      if (reserva.Rol !== 'Reserva_Tarjeta') throw new Error('El bolsillo de reserva debe tener el rol "Reserva de tarjeta".');
+      if (esVerdadero(reserva.Es_Interno)) throw new Error('La reserva no puede ser el saldo "Sin asignar" de una cuenta: elige o crea un bolsillo.');
       exigirPesos_(idReserva, 'El bolsillo de reserva');
 
       const idPersonal = item.ID_Bolsillo_Personal !== undefined ? item.ID_Bolsillo_Personal : actual && actual.ID_Bolsillo_Personal;

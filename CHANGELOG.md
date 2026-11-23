@@ -1,5 +1,12 @@
 # Cambios
 
+## 1.7.0 — Tarjeta por cortes, calendario y reserva a tu gusto (23 nov 2026)
+- **Cambia:** la pantalla de una tarjeta ahora muestra **cada corte** con sus fechas, lo gastado, si está pagado o hasta cuándo pagarlo, y un aviso si hay cortes anteriores sin pagar. Tocas un corte para ver sus compras.
+- **Corregido:** "El mes debe tener formato AAAA-MM" en la tarjeta (y compras que no aparecían): Google Sheets convertía algunos meses en fechas. Ahora se leen siempre como mes, la hoja se repara sola al abrir la app y todas las columnas de mes quedan como texto.
+- **Corregido:** el ícono de calendario de los campos de fecha no abría nada dentro de la app publicada; ahora el calendario nativo se abre al tocar el ícono.
+- **Nuevo:** al crear una tarjeta, la reserva puede ser un **bolsillo que ya tengas** (en pesos) o uno nuevo.
+- **Cambia:** el paso *Bancos* de los primeros pasos explica que puedes agregar los bancos en los que eres cliente y tienes un producto (cuenta de ahorros, corriente o tarjeta de crédito).
+
 ## 1.6.1 — Datos de demostración estables (17 nov 2026)
 - **Corregido:** el extracto de la tarjeta de demostración mostraba un total distinto según el día del mes (entre el 16 y el 20 algunas compras cruzaban el corte del día 15) y la prueba *"demo: incluye compras y un crédito…"* fallaba. Ahora las compras de demostración van siempre al extracto en curso. Solo afecta a desarrollo.
 

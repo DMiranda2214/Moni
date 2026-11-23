@@ -35,6 +35,23 @@ function proximoDiaDelMes_(dia, desde) {
   return p[1] === 12 ? en(p[0] + 1, 1) : en(p[0], p[1] + 1);
 }
 
+/**
+ * Fechas de un corte (extracto) "AAAA-MM": desde el día siguiente al corte del mes anterior hasta el corte de ese mes,
+ * y el día límite de pago (en el mismo mes si el día de pago es posterior al de corte; si no, en el siguiente).
+ */
+function rangoCorte_(mes, diaCorte, diaPago) {
+  const p = mes.split('-').map(Number);
+  const fecha = (anio, m, dia) => {
+    while (m < 1) { m += 12; anio--; }
+    while (m > 12) { m -= 12; anio++; }
+    return anio + '-' + dosDigitos_(m) + '-' + dosDigitos_(Math.min(dia, new Date(Date.UTC(anio, m, 0)).getUTCDate()));
+  };
+  const corte = Number(diaCorte) || 1;
+  const anterior = fecha(p[0], p[1] - 1, corte);
+  const pagoEnMes = (Number(diaPago) || 1) > corte;
+  return { desde: sumarDias_(anterior, 1), hasta: fecha(p[0], p[1], corte), pago: fecha(p[0], pagoEnMes ? p[1] : p[1] + 1, Number(diaPago) || 1) };
+}
+
 /** Extracto pagado (y no anulado) de una tarjeta y un mes, si existe. */
 function extractoPagado_(idTarjeta, mes) {
   return leer_('Extractos').find(x => x.ID_Tarjeta === idTarjeta && x.Mes === mes && !esVerdadero(x.Anulado)) || null;
@@ -211,9 +228,10 @@ function obtenerTarjeta(idTarjeta, mes) {
   const mapaMeses = {};
   todas.forEach(c => { mapaMeses[c.Mes_Extracto] = (mapaMeses[c.Mes_Extracto] || 0) + (Number(c.Valor) || 0); });
   if (!(mesActual in mapaMeses)) mapaMeses[mesActual] = 0;
-  const meses = Object.keys(mapaMeses).sort().reverse().map(k => ({
-    mes: k, total: redondear2_(mapaMeses[k]), pagado: extractos.some(x => x.Mes === k)
-  }));
+  const meses = Object.keys(mapaMeses).sort().reverse().map(k => Object.assign({
+    mes: k, total: redondear2_(mapaMeses[k]), pagado: extractos.some(x => x.Mes === k),
+    numCompras: todas.filter(c => c.Mes_Extracto === k).length, abierto: k === mesActual
+  }, rangoCorte_(k, tarjeta.Dia_Corte, tarjeta.Dia_Pago)));
 
   const compras = todas.filter(c => c.Mes_Extracto === m)
     .sort((a, b) => (b.Fecha > a.Fecha ? 1 : b.Fecha < a.Fecha ? -1 : 0))
@@ -237,7 +255,7 @@ function obtenerTarjeta(idTarjeta, mes) {
     tarjeta: { ID_Tarjeta: tarjeta.ID_Tarjeta, Nombre: tarjeta.Nombre, Banco: banco.Nombre || '', Cupo: cupo, Dia_Corte: Number(tarjeta.Dia_Corte), Dia_Pago: Number(tarjeta.Dia_Pago) },
     reserva: { ID_Bolsillo: tarjeta.ID_Bolsillo_Reserva, Nombre: nombreBolsillo(tarjeta.ID_Bolsillo_Reserva), Saldo: saldoReserva },
     personal: tarjeta.ID_Bolsillo_Personal ? { ID_Bolsillo: tarjeta.ID_Bolsillo_Personal, Nombre: nombreBolsillo(tarjeta.ID_Bolsillo_Personal) } : null,
-    mes: m, mesActual: mesActual, meses: meses, compras: compras,
+    mes: m, mesActual: mesActual, meses: meses, corte: rangoCorte_(m, tarjeta.Dia_Corte, tarjeta.Dia_Pago), compras: compras,
     totales: { total: total, porFuente: porFuente, faltaParaPagar: extracto ? 0 : Math.max(0, redondear2_(total - saldoReserva)), sobranteReserva: Math.max(0, redondear2_(saldoReserva - total)) },
     extracto: extracto ? { ID_Extracto: extracto.ID_Extracto, Total: Number(extracto.Total) || 0, Fecha_Pago: extracto.Fecha_Pago } : null,
     cupo: { usado: usado, disponible: redondear2_(cupo - usado) },

@@ -55,6 +55,29 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(f(15, '2026-12-20'), '2027-01-15');
   });
 
+  prueba('cortes: fechas de cada extracto y mes leído como fecha por Sheets', () => {
+    const e = E();
+    const r = (mes, c, p) => e.llamar('rangoCorte_', mes, c, p);
+    assert.deepStrictEqual(r('2026-11', 15, 28), { desde: '2026-10-16', hasta: '2026-11-15', pago: '2026-11-28' });
+    assert.deepStrictEqual(r('2026-11', 25, 10), { desde: '2026-10-26', hasta: '2026-11-25', pago: '2026-12-10' }, 'el pago cae en el mes siguiente');
+    assert.strictEqual(r('2026-03', 31, 15).desde, '2026-03-01', 'febrero termina el 28');
+    // Un mes que Sheets convirtió en fecha vuelve a ser "AAAA-MM"
+    assert.strictEqual(e.llamar('normalizarMes_', '2026-11-01'), '2026-11');
+    assert.strictEqual(e.llamar('normalizarMes_', '2026-11'), '2026-11');
+    assert.strictEqual(e.llamar('normalizarMes_', ''), '');
+  });
+
+  prueba('tarjeta: la vista trae cada corte con sus fechas y su total', () => {
+    const x = escenario();
+    const c = compra(x, { Concepto: 'Ropa', Valor: 100000, Fuente: 'Personal' });
+    const v = x.e.llamar('obtenerTarjeta', x.t.ID_Tarjeta, c.Mes_Extracto);
+    const corte = v.meses.find(m => m.mes === c.Mes_Extracto);
+    assert.strictEqual(corte.total, 100000);
+    assert.strictEqual(corte.numCompras, 1);
+    assert.ok(corte.desde < corte.hasta && corte.hasta < corte.pago || corte.hasta <= corte.pago);
+    assert.deepStrictEqual(v.corte, { desde: corte.desde, hasta: corte.hasta, pago: corte.pago });
+  });
+
   prueba('compra Personal: no mueve dinero; aparece en el extracto y en el cupo', () => {
     const x = escenario();
     const antes = x.e.llamar('obtenerSaldos').total;

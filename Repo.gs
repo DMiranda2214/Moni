@@ -168,7 +168,8 @@ function leerTabla_(sheetName, forzar) {
       headers.forEach((header, colIdx) => {
         let cellVal = row[colIdx];
         // Normalizar fechas de Apps Script a formato ISO YYYY-MM-DD
-        if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, 'America/Bogota', 'yyyy-MM-dd');
+        if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, 'America/Bogota', COLUMNAS_MES.indexOf(header) !== -1 ? 'yyyy-MM' : 'yyyy-MM-dd');
+        else if (COLUMNAS_MES.indexOf(header) !== -1) cellVal = normalizarMes_(cellVal);
         rowObj[header] = cellVal;
       });
       filas.push(rowObj);
@@ -177,6 +178,15 @@ function leerTabla_(sheetName, forzar) {
 
   guardarEnCache_(cache, sheetName, filas);
   return { filas: filas, fresco: true };
+}
+
+/** Columnas que guardan un mes "AAAA-MM". Sheets puede volverlas fechas ("2026-11" → 1/11/2026); al leer se devuelven como texto. */
+const COLUMNAS_MES = ['Mes_Extracto', 'Mes', 'Periodo', 'Mes_Presupuesto'];
+
+/** "2026-11-01" (una fecha leída de una celda convertida) → "2026-11". Lo demás se deja igual. */
+function normalizarMes_(valor) {
+  const t = String(valor === null || valor === undefined ? '' : valor);
+  return /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(t) ? t.slice(0, 7) : valor;
 }
 
 /**

@@ -259,12 +259,14 @@ function mejorarCamposFecha(raiz) {
     const txt = document.createElement('input');
     txt.type = 'text'; txt.className = orig.className; txt.inputMode = 'numeric'; txt.maxLength = 10; txt.autocomplete = 'off';
     txt.placeholder = 'AAAA/MM/DD'; txt.id = orig.id ? orig.id + '-txt' : '';
-    const boton = document.createElement('button');
-    boton.type = 'button'; boton.className = 'm-btn-texto m-fecha-boton'; boton.setAttribute('aria-label', 'Elegir en el calendario');
+    // El calendario se abre al tocar el ícono: el campo de fecha nativo (transparente) va encima de él. showPicker() no sirve
+    // aquí porque la app corre dentro de un iframe de Apps Script y el navegador lo bloquea.
+    const boton = document.createElement('span');
+    boton.className = 'm-fecha-boton';
     boton.innerHTML = ico('calendario', 'm-icon-sm');
     orig.parentNode.insertBefore(caja, orig);
-    caja.appendChild(txt); caja.appendChild(boton); caja.appendChild(orig);
-    orig.classList.add('m-fecha-oculto'); orig.tabIndex = -1; orig.setAttribute('aria-hidden', 'true');
+    caja.appendChild(txt); caja.appendChild(boton); boton.appendChild(orig);
+    orig.classList.add('m-fecha-nativo'); orig.setAttribute('aria-label', 'Elegir en el calendario');
     if (orig.id) { const lb = document.querySelector('label[for="' + orig.id + '"]'); if (lb) lb.setAttribute('for', txt.id); }
 
     const mostrar = () => { txt.value = natural.get.call(orig) ? fechaTxt(natural.get.call(orig)) : incompleto; };
@@ -290,7 +292,6 @@ function mejorarCamposFecha(raiz) {
     });
     // Elegida en el calendario nativo
     orig.addEventListener('change', ev => { if (ev.isTrusted) { incompleto = ''; mostrar(); txt.classList.remove('m-invalido'); } });
-    boton.addEventListener('click', () => { try { if (orig.showPicker) orig.showPicker(); else orig.focus(); } catch (e) { orig.focus(); } });
   });
 }
 
@@ -1353,8 +1354,14 @@ const CAT = {
       { k: 'Dia_Corte', label: 'Día de corte', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'Dia_Pago', label: 'Día límite de pago', tipo: 'entero', requerido: true, min: 1, max: 31 },
       { k: 'reserva', label: 'Reserva para pagar el extracto', tipo: 'select', requerido: true,
-        opciones: () => activos('Bolsillos').filter(b => b.Rol === 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => [b.ID_Bolsillo, b.Nombre]).concat([['__nueva', 'Crear una reserva nueva…']]),
-        defecto: '__nueva', ayuda: 'Es el bolsillo donde apartas el dinero para pagar esta tarjeta.' },
+        opciones: () => {
+          // Cualquier bolsillo en pesos sirve de reserva (no el saldo interno "Sin asignar"); las reservas de tarjeta van primero.
+          const libres = activos('Bolsillos').filter(b => !esVerdad(b.Es_Interno) && divisaDeBolsillo(b.ID_Bolsillo) === 'COP');
+          const nombreCta = b => { const c = (App.boot.catalogos.Cuentas || []).find(x => x.ID_Cuenta === b.ID_Cuenta); return c ? ' · ' + c.Nombre : ''; };
+          const orden = b => b.Rol === 'Reserva_Tarjeta' ? 0 : 1;
+          return libres.slice().sort((a, b) => orden(a) - orden(b)).map(b => [b.ID_Bolsillo, b.Nombre + nombreCta(b)]).concat([['__nueva', 'Crear una reserva nueva…']]);
+        },
+        defecto: '__nueva', ayuda: 'Es el bolsillo donde apartas el dinero para pagar esta tarjeta: puedes usar uno que ya tengas o crear uno nuevo.' },
       { k: 'cuentaReserva', label: 'Cuenta de la reserva nueva', tipo: 'select', requerido: true,
         visible: v => v.reserva === '__nueva',
         opciones: () => activos('Cuentas').filter(c => divisaDeCuenta(c.ID_Cuenta) === 'COP').map(c => [c.ID_Cuenta, c.Nombre + (esVerdad(c.Permite_Bolsillos) ? '' : ' (pasará a usar bolsillos)')]) },
@@ -3336,10 +3343,20 @@ function htmlTarjeta(d) {
   else if (t.faltaParaPagar > 0) estado = 'Falta apartar ' + dinero(t.faltaParaPagar) + (d.personal ? ' (se toma de ' + esc(d.personal.Nombre) + ')' : '');
   else estado = 'La reserva ya alcanza para pagarlo';
 
-  let h = '<div class="m-campo"><label class="m-label" for="tar-mes">Extracto</label><select class="m-input" id="tar-mes">' +
-    d.meses.map(m => '<option value="' + esc(m.mes) + '"' + (m.mes === d.mes ? ' selected' : '') + '>' + esc(mesTexto(m.mes)) + ' — ' + dinero(m.total) + (m.pagado ? ' · pagado' : '') + '</option>').join('') + '</select></div>';
+  // Cortes: cada extracto con sus fechas, lo gastado y si ya se pagó. Tocar uno muestra sus compras.
+  const sinPagar = d.meses.filter(m => !m.pagado && m.total > 0 && m.mes < d.mesActual);
+  let h = sinPagar.length ? '<div class="m-banner" role="status"><span>Tienes ' + (sinPagar.length === 1 ? 'un corte anterior sin pagar' : sinPagar.length + ' cortes anteriores sin pagar') + ': ' + sinPagar.map(m => esc(mesTexto(m.mes)) + ' (' + dinero(m.total) + ')').join(', ') + '.</span></div>' : '';
+  h += '<h3 class="m-seccion-titulo">Cortes</h3><div class="m-group m-cortes">' + d.meses.map(m => {
+    const rango = esc(fechaCorta(m.desde)) + ' – ' + esc(fechaCorta(m.hasta));
+    const estadoCorte = m.pagado ? 'Pagado' : m.abierto ? 'Abierto' : m.total > 0 ? 'Por pagar hasta el ' + esc(fechaCorta(m.pago)) : 'Sin compras';
+    return fila({
+      titulo: esc(mesTexto(m.mes)) + (m.mes === d.mes ? ' <span class="m-insignia">Viendo</span>' : ''),
+      sub: rango + ' · ' + estadoCorte + (m.numCompras ? ' · ' + m.numCompras + (m.numCompras === 1 ? ' compra' : ' compras') : ''),
+      final: '<span class="m-monto">' + dinero(m.total) + '</span>', attrs: 'data-acc="tar-corte" data-id="' + esc(m.mes) + '"' + (m.mes === d.mes ? ' aria-current="true"' : '')
+    });
+  }).join('') + '</div><div style="height:var(--m-space-4)"></div>';
 
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(d.tarjeta.Banco) + ' · extracto de ' + esc(mesTexto(d.mes).toLowerCase()) + '</div>' +
+  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(d.tarjeta.Banco) + ' · corte de ' + esc(mesTexto(d.mes).toLowerCase()) + ' (' + esc(fechaCorta(d.corte.desde)) + ' – ' + esc(fechaCorta(d.corte.hasta)) + ')</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(t.total) + '</div><p class="m-ayuda">' + estado + '</p>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">En la reserva</div><strong class="m-num">' + dinero(d.reserva.Saldo) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Cupo disponible</div><strong class="m-num">' + dinero(d.cupo.disponible) + '</strong></div></div>' +
@@ -5087,7 +5104,7 @@ const CAMPOS_ASIST = {
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
-  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Es donde tienes tu dinero: Nequi, Nu, tu banco de siempre… Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
+  bancos: { titulo: 'Agrega tu banco o billetera', sub: 'Agrega los bancos o billeteras de los que eres cliente y en los que tienes algún producto: cuenta de ahorros, cuenta corriente o tarjeta de crédito (Nequi, Nu, tu banco de siempre…). Puedes agregar varios. Si ahorras en dólares, crea ese banco en USD.' },
   cuentas: { titulo: 'Crea tus cuentas', sub: 'Una cuenta es donde está tu dinero: una billetera, una cuenta de ahorros o un débito. Si ya la tienes repartida en bolsillos (casa, mercado, un viaje…), anótalos aquí mismo con lo que hay hoy en cada uno.' },
   bolsillos: { titulo: '¿Falta algún bolsillo?', sub: 'Repasa lo que ya agregaste y suma los bolsillos que falten. Escribe cuánto dinero hay hoy en cada uno.' },
   nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Planear → Nómina.' },
@@ -5680,6 +5697,7 @@ const ACCIONES = {
   'recargar-tar': () => { App.tar.error = null; App.tar.data = null; render(); },
   'recargar-cre': () => { App.cre.error = null; App.cre.data = null; render(); },
   'abrir-compra': () => abrirCompra(App.tar.id),
+  'tar-corte': (el) => { App.tar.mes = el.dataset.id; App.tar.data = null; render(); },
   compra: el => abrirDetalleCompra(el.dataset.id),
   'pagar-extracto': () => abrirPagoExtracto(),
   'anular-pago-extracto': async () => {
@@ -5848,7 +5866,6 @@ document.addEventListener('change', async ev => {
     catch (e) { t.checked = !t.checked; aviso(e.message, true); }
     return;
   }
-  if (t.id === 'tar-mes') { App.tar.mes = t.value; App.tar.data = null; render(); return; }
   if (t.dataset.accCambio === 'anulados') {
     const st = t.dataset.vista === 'det' ? App.det : App.mov;
     st.anulados = t.checked; st.data = null;

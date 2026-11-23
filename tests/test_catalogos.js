@@ -254,7 +254,7 @@ module.exports = function (prueba, assert, crearEntorno) {
   });
 
   // ---------------------------------------------------------------- tarjetas
-  prueba('tarjetas: crear con reserva nueva, validar días y rol de la reserva', () => {
+  prueba('tarjetas: crear con reserva nueva, validar días y elegir una reserva existente', () => {
     const e = E();
     const { banco, cuenta } = conBancoYCuenta(e);
     const t = e.llamar('guardarCatalogo', 'Tarjetas',
@@ -267,7 +267,11 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.throws(e.falla('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Mala', Dia_Corte: 32, Dia_Pago: 5, ID_Bolsillo_Reserva: reserva.ID_Bolsillo }), /no puede ser mayor que 31/);
     assert.throws(e.falla('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Mala', Dia_Corte: 5, ID_Bolsillo_Reserva: reserva.ID_Bolsillo }), /día de pago es obligatorio/);
     const operativo = e.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cuenta.ID_Cuenta, Nombre: 'Casa' });
-    assert.throws(e.falla('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Otra', Dia_Corte: 5, Dia_Pago: 20, ID_Bolsillo_Reserva: operativo.ID_Bolsillo }), /rol "Reserva de tarjeta"/);
+    // Cualquier bolsillo en pesos sirve de reserva (no el saldo interno "Sin asignar")
+    const otra = e.llamar('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Otra', Dia_Corte: 5, Dia_Pago: 20, ID_Bolsillo_Reserva: operativo.ID_Bolsillo });
+    assert.strictEqual(otra.ID_Bolsillo_Reserva, operativo.ID_Bolsillo);
+    const interno = e.llamar('listarCatalogo', 'Bolsillos').find(b => b.Es_Interno === true || String(b.Es_Interno).toUpperCase() === 'TRUE');
+    if (interno) assert.throws(e.falla('guardarCatalogo', 'Tarjetas', { ID_Banco: banco.ID_Banco, Nombre: 'Interna', Dia_Corte: 5, Dia_Pago: 20, ID_Bolsillo_Reserva: interno.ID_Bolsillo }), /Sin asignar/);
   });
 
   prueba('tarjetas: la reserva en una cuenta de un solo saldo la pasa a usar bolsillos', () => {
