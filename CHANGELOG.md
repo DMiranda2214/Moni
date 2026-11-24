@@ -1,5 +1,8 @@
 # Cambios
 
+## 1.9.1 — Corrección de Ajustes (24 nov 2026)
+- **Corregido:** Ajustes mostraba "No se pudo mostrar esta pantalla (reading 'icono')" desde la 1.9.0: faltaba definir la pantalla de *Empresas de servicios*. Ya está, y una prueba nueva revisa que cada catálogo del servidor tenga su pantalla en la app.
+
 ## 1.9.0 — Retención del CDT en pesos y empresas de servicios (24 nov 2026)
 - **Nuevo:** al agregar un CDT eliges si la **retención en la fuente** es un porcentaje de los intereses o un valor en pesos (total del plazo).
 - **Nuevo:** **Empresas de servicios** (Ajustes): guardas una vez cada empresa con su enlace de pago (Enel, Vanti, el acueducto…). Al guardar un servicio eliges la empresa y solo escribes el hogar y el código; el enlace no se repite.

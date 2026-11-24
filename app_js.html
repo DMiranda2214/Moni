@@ -1457,6 +1457,16 @@ const CAT = {
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
+  Empresas_Pago: {
+    plural: 'Empresas de servicios', singular: 'empresa', icono: 'tarjetas', id: 'ID_Empresa',
+    vacio: 'Guarda las empresas a las que les pagas los servicios (Enel, Vanti, el acueducto…) con su enlace de pago, una sola vez.',
+    fila: e => ({ titulo: esc(e.Nombre), sub: e.URL_Pago ? esc(e.URL_Pago.replace(/^https:\/\//, '')) : 'Sin enlace de pago' }),
+    campos: [
+      { k: 'Nombre', label: 'Empresa', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Enel', 'Vanti', 'Acueducto', 'Claro', 'Movistar', 'Tigo', 'Aseo'] },
+      { k: 'URL_Pago', label: 'Enlace de pago', tipo: 'texto', inputmode: 'url', ayuda: 'La página donde se paga. Debe empezar por https://' },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
   Servicios_Publicos: {
     plural: 'Servicios públicos', singular: 'servicio', icono: 'pulso', id: 'ID_Servicio',
     vacio: 'Guarda el código de pago de cada servicio para tenerlo a la mano.',
