@@ -308,7 +308,7 @@ function saveTasaAuto(activar) { return responder_(function () { return configur
 function addTransferencia(t, vista) {
   return responder_(function () {
     const x = t || {};
-    const r = registrarTransferencia(x.origen, x.destino, x.valor, x.fecha, x.concepto, x.notas, 'App', { ID_Item_Ppto: x.itemPpto });
+    const r = registrarTransferencia(x.origen, x.destino, x.valor, x.fecha, x.concepto, x.notas, 'App', { ID_Item_Ppto: x.itemPpto, Afecta_Saldos: x.afectaSaldos });
     return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista);
   });
 }
@@ -421,6 +421,11 @@ function unpayRenglon(idItem, anular, vista) {
     const r = desmarcarRenglonMes(idItem, !!anular);
     return resultadoEscritura_(r.ids, vista, { presupuesto: obtenerPresupuestoMes(r.mes) });
   });
+}
+
+/** Conceptos usados antes (de gastos e ingresos) para autocompletar al registrar. */
+function getSugerenciasConceptos() {
+  return responder_(function () { return sugerirConceptos(); });
 }
 
 function previewDistribucion(mes, idOrigen) {

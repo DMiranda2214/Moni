@@ -31,6 +31,32 @@ module.exports = function (prueba, assert, crearEntorno) {
   const dias = n => bogota(-n * 86400000);
 
   // ---------------------------------------------------------------- registrar
+  prueba('traslado histórico: queda en los movimientos pero no mueve ningún saldo', () => {
+    const { e, casa, mercado, saldo } = escenario();
+    const antes = [saldo(casa.ID_Bolsillo), saldo(mercado.ID_Bolsillo)];
+    const r = e.llamar('registrarTransferencia', casa.ID_Bolsillo, mercado.ID_Bolsillo, 50000, hoy(), 'Traslado de antes', '', 'App', { Afecta_Saldos: false });
+    assert.deepStrictEqual([saldo(casa.ID_Bolsillo), saldo(mercado.ID_Bolsillo)], antes);
+    assert.ok(r.patas.every(p => p.Afecta_Saldos === false));
+    const item = e.llamar('listarMovimientos', {}).items.find(i => i.Concepto === 'Traslado de antes');
+    assert.strictEqual(item.Afecta_Saldos, false);
+    e.llamar('registrarTransferencia', casa.ID_Bolsillo, mercado.ID_Bolsillo, 10000, hoy(), 'Normal', '', 'App');
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), antes[1] + 10000, 'uno normal sí mueve saldos');
+  });
+
+  prueba('sugerencias: conceptos repetidos con lo último que se usó; sin los que genera la app', () => {
+    const { e, casa, mercado } = escenario();
+    const reg = (c, b, v, t, f) => e.llamar('registrarMovimiento', { Concepto: c, ID_Bolsillo: b.ID_Bolsillo, Valor: v, Tipo_Mov: t || 'Gasto', Fecha: f || hoy() });
+    reg('Mercado', casa, 80000, 'Gasto', '2026-01-05'); reg('mercado', mercado, 95000, 'Gasto', '2026-02-05'); reg('Taxi', casa, 12000);
+    reg('Sueldo', casa, 2000000, 'Ingreso');
+    e.llamar('registrarTransferencia', casa.ID_Bolsillo, mercado.ID_Bolsillo, 1000, hoy(), 'Traslado', '', 'App');
+    const s = e.llamar('sugerirConceptos');
+    assert.deepStrictEqual(s.Gasto.map(x => x.Concepto), ['mercado', 'Taxi']);
+    assert.strictEqual(s.Gasto[0].Usos, 2);
+    assert.strictEqual(s.Gasto[0].ID_Bolsillo, mercado.ID_Bolsillo, 'toma lo último usado');
+    assert.strictEqual(s.Gasto[0].Valor, 95000);
+    assert.deepStrictEqual(s.Ingreso.map(x => x.Concepto), ['Sueldo']);
+  });
+
   prueba('registrar: un gasto resta, un ingreso suma y el ajuste conserva su signo', () => {
     const { e, casa, saldo } = escenario();
     e.llamar('registrarMovimiento', { Concepto: 'Mercado', ID_Bolsillo: casa.ID_Bolsillo, Valor: 85500, Tipo_Mov: 'Gasto' });

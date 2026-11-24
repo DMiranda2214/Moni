@@ -37,7 +37,9 @@ Toca **Registrar** o un acceso rápido y elige:
 - **Ingreso:** dinero que entra a un bolsillo.
 - **Mover:** de un bolsillo a otro (los dos movimientos quedan ligados).
 
-La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo y cómo se cuenta?*. En el último, **Sumar a mis saldos** viene encendido. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Se puede cambiar después con **Editar**.
+La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo y cómo se cuenta?*. En el último, **Sumar a mis saldos** viene encendido. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Esto también aplica a **Mover**: si el traslado entre bolsillos ya ocurrió antes de empezar con Moni, apaga *Sumar a mis saldos* y no se moverá ningún saldo. Se puede cambiar después con **Editar** (los gastos e ingresos).
+
+Al escribir el **concepto**, Moni te sugiere los que ya usaste; si eliges uno, completa el valor, el bolsillo, la categoría y el renglón de la última vez (solo lo que no hayas llenado).
 
 Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para corregir un movimiento, ábrelo y **Editar** (los traslados y los pagos automáticos se anulan y se vuelven a registrar).
 
@@ -58,7 +60,7 @@ Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o
 ## 5. Presupuesto
 1. **Plantilla:** Ajustes → Plantilla del presupuesto. Cada renglón tiene concepto, monto, tipo (Gasto, Cuota de un crédito, Ahorro, Fondo) y bolsillo.
 2. **Generar** el mes: elige escenario (Normal, Contingencia…).
-3. El **Real** se calcula solo desde tus movimientos enlazados al renglón. **Marca como pagado** cuando lo cubras: se abre una hoja donde confirmas **de qué bolsillo salió**, el valor y la fecha, y Moni registra el pago por ti (un gasto; una compra con tarjeta; el pago de la cuota de un crédito; o el traslado a tu ahorro o fondo). Si ya lo habías anotado en Movimientos, elige *¿Ya lo registraste?* y se **enlaza** sin duplicar. Al desmarcarlo, Moni pregunta si también anula esos pagos. Con el pago hecho se calcula el **ahorro** (plan − real).
+3. Todo el presupuesto está en **una sola pantalla**: arriba, cuánto te queda; abajo, cada renglón con su **barra de avance** (lo real frente a lo planeado; en rojo si se pasa). El **Real** se calcula solo desde tus movimientos enlazados al renglón. Cuando un renglón ya **no tendrá más movimientos**, toca su casilla: Moni pregunta *¿agregar algún movimiento más o bastan los registrados?*. Si bastan, queda **completo**; si quieres agregar uno, se abre una hoja donde confirmas **de qué bolsillo salió**, el valor y la fecha, y Moni lo registra (un gasto; una compra con tarjeta; el pago de la cuota de un crédito; un traslado a un ahorro o fondo) o enlaza uno que ya anotaste. Desmarcar la casilla solo **reabre** el renglón y no toca sus movimientos; desde el detalle del renglón también puedes *Agregar un movimiento* sin completarlo.
 4. Puedes agregar renglones sueltos del mes, editar o eliminar.
 5. **Repartir la nómina en los bolsillos** (desde Nómina): mueve el dinero desde el bolsillo donde llegó hasta los bolsillos de destino del presupuesto. Los gastos y cuotas se agrupan por bolsillo; el ahorro y los fondos van renglón por renglón. Lo que ya está en el bolsillo de origen no se mueve, y si ya repartiste ese mes la app te pide confirmar antes de repetir.
 
@@ -116,7 +118,7 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 No hay una pantalla aparte de gráficos: **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
 - **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
 - **Movimientos:** *En qué gastaste este mes*, por categoría.
-- **Presupuesto:** *Plan frente a real* de los renglones más avanzados; los que se pasan dicen "excedido".
+- **Presupuesto:** cada renglón trae su barra *real frente a plan*; los que se pasan dicen "excedido".
 - **Nómina:** *A dónde va lo descontado* de tu devengado.
 - **Servicios y suscripciones:** *Lo que más pesa al mes* (los pagos anuales o semestrales se reparten por mes).
 - **Regalos:** lo gastado frente a lo estimado de cada persona.

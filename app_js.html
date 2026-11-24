@@ -854,7 +854,7 @@ function vInicio() {
         htmlAnillo(avance, 96, '<strong>' + Math.round(avance * 100) + ' %</strong><small>gastado</small>', Math.round(avance * 100) + ' % del presupuesto gastado') +
         '<dl class="m-este-lista"><div><dt>Entró</dt><dd class="m-num m-positivo">' + dinero(t.ingresos) + '</dd></div><div><dt>Gastado</dt><dd class="m-num">' + dinero(t.real) + '</dd></div>' +
         '<div class="m-este-total"><dt>Te queda</dt><dd class="m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</dd></div></dl></div>' +
-        '<p class="m-este-pie">Planeado ' + dinero(t.plan) + ' · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</p></section>';
+        '<p class="m-este-pie">Planeado ' + dinero(t.plan) + ' · ' + t.pagados + ' de ' + t.renglones + ' renglones completos</p></section>';
     } else {
       html += '<section class="m-seccion" aria-label="Este mes"><div class="m-group">' +
         fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
@@ -987,7 +987,7 @@ function vPlanear() {
   const mes = mesTexto(App.boot.hoy.slice(0, 7)).toLowerCase();
   const destacada = p.existe
     ? '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
-      '<span class="m-destacada-cifra m-num">' + dinero(t.saldo) + '</span><span class="m-destacada-sub">te queda · ' + t.pagados + ' de ' + t.renglones + ' renglones pagados</span></span>' + ico('der', 'm-chevron') + '</button>'
+      '<span class="m-destacada-cifra m-num">' + dinero(t.saldo) + '</span><span class="m-destacada-sub">te queda · ' + t.pagados + ' de ' + t.renglones + ' renglones completos</span></span>' + ico('der', 'm-chevron') + '</button>'
     : '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
       '<span class="m-destacada-cifra">Aún no lo creas</span><span class="m-destacada-sub">Se arma en un toque desde tu plantilla</span></span>' + ico('der', 'm-chevron') + '</button>';
   const inv = App.boot.invertido && App.boot.invertido.cantidad;
@@ -2075,7 +2075,7 @@ function filaMov(i, enBolsillo) {
     sub = (enBolsillo ? '' : esc(i.Bolsillo)) + (i.Categoria ? (enBolsillo ? '' : ' · ') + esc(i.Categoria) : '');
   }
   return fila({
-    titulo: esc(i.Concepto) + (i.Afecta_Saldos === false && !i.esTransferencia ? ' <span class="m-insignia" title="No cambió tus saldos">Histórico</span>' : ''), sub: sub + (i.Anulado ? (sub ? ' · ' : '') + 'Anulado' : ''),
+    titulo: esc(i.Concepto) + (i.Afecta_Saldos === false ? ' <span class="m-insignia" title="No cambió tus saldos">Histórico</span>' : ''), sub: sub + (i.Anulado ? (sub ? ' · ' : '') + 'Anulado' : ''),
     final: '<span class="m-monto ' + m.clase + '">' + m.texto + '</span>',
     clase: i.Anulado ? 'm-anulado' : '', attrs: 'data-acc="mov" data-id="' + esc(i.ID_Mov) + '"'
   });
@@ -2275,8 +2275,8 @@ async function abrirRegistrar(o) {
     '<div class="m-campo" data-campo="Fecha"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo(INFO_GENERAL.Fecha) + '</div><input class="m-input" id="f-Fecha" name="Fecha" type="date" max="' + hoy + '" value="' + esc(edit ? edit.Fecha : hoy) + '"></div>' +
     htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
       info: 'Apágalo para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, un gasto de la primera semana del mes, antes de empezar con Moni). Queda en tus movimientos y en los gráficos, pero no cambia ningún saldo.' },
-      edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso"') +
-    '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso" aria-live="polite"></p>' +
+      edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso,Mover"') +
+    '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso,Mover" aria-live="polite"></p>' +
     '<details class="m-nom-mas"><summary>Más opciones</summary>' + htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, edit ? edit.Notas : '') + '</details>' +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
 
@@ -2289,14 +2289,15 @@ async function abrirRegistrar(o) {
     const t = tipoActual(raiz), caja = $('#reg-hist-ayuda', raiz), sw = $('#f-Afecta', raiz), medio = $('#f-ID_Bolsillo', raiz);
     if (!caja || !sw) return;
     const conTarjeta = !!(medio && medio.value.indexOf('T:') === 0 && t === 'Gasto');
-    const visible = (t === 'Gasto' || t === 'Ingreso') && !conTarjeta;
+    const visible = (t === 'Gasto' || t === 'Ingreso' || t === 'Mover') && !conTarjeta;
     const campo = sw.closest('[data-campo]');
     if (campo) campo.hidden = !visible;
     caja.hidden = !visible;
     if (!visible) return;
     const fecha = ($('#f-Fecha', raiz) || {}).value || hoy;
-    if (!sw.checked) caja.textContent = 'Queda en tus movimientos y en los gráficos, pero tus saldos no cambian.';
-    else if (fecha < hoy.slice(0, 7) + '-01') caja.textContent = 'Esta fecha es de un mes anterior. Si ya tenías este movimiento contado en tus saldos iniciales, apaga “Sumar a mis saldos”.';
+    if (!sw.checked) caja.textContent = t === 'Mover' ? 'Queda anotado en tus movimientos, pero ninguno de los dos bolsillos cambia de saldo.' : 'Queda en tus movimientos y en los gráficos, pero tus saldos no cambian.';
+    else if (fecha < hoy.slice(0, 7) + '-01') caja.textContent = 'Esta fecha es de un mes anterior. Si ya tenías ' + (t === 'Mover' ? 'este traslado' : 'este movimiento') + ' contado en tus saldos iniciales, apaga “Sumar a mis saldos”.';
+    else if (t === 'Mover') caja.textContent = 'El dinero sale del primer bolsillo y entra al segundo ahora.';
     else caja.textContent = t === 'Gasto' ? 'El dinero sale del bolsillo ahora.' : 'El dinero entra al bolsillo ahora.';
   };
   const actualizar = raiz => {
@@ -2353,8 +2354,27 @@ async function abrirRegistrar(o) {
       };
       proponerMedio(); actualizar(raiz);
       monedaDelValor();
+      // Autocompletado: al elegir un concepto que ya usaste se llenan lo que todavía no hayas tocado.
+      const campoConcepto = $('#f-Concepto', raiz);
+      const buscarSug = edit ? () => null : conectarSugerencias(raiz, campoConcepto, () => tipoActual(raiz));
+      const aplicarSug = () => {
+        const sg = buscarSug();
+        if (!sg) return;
+        const llenos = [];
+        const vv = $('#f-Valor', raiz);
+        if (vv && !vv.value && sg.Valor > 0) { vv.value = String(sg.Valor); vv.dispatchEvent(new Event('input', { bubbles: true })); llenos.push('el valor'); }
+        const medio = $('#f-ID_Bolsillo', raiz);
+        if (medio && !medio.dataset.tocado && sg.ID_Bolsillo && $('option[value="' + sg.ID_Bolsillo + '"]', medio) && !medio.disabled) { medio.value = sg.ID_Bolsillo; llenos.push('el bolsillo'); }
+        const cat = $('#f-ID_Categoria', raiz);
+        if (cat && !cat.value && sg.ID_Categoria && $('option[value="' + sg.ID_Categoria + '"]', cat)) { cat.value = sg.ID_Categoria; llenos.push('la categoría'); }
+        const rg = $('#f-ID_Item_Ppto', raiz);
+        if (rg && !rg.value && sg.ID_Item_Ppto && $('option[value="' + sg.ID_Item_Ppto + '"]', rg)) { rg.value = sg.ID_Item_Ppto; llenos.push('el renglón'); }
+        if (llenos.length) aviso('Completé ' + llenos.join(', ') + ' según tu último “' + sg.Concepto + '”');
+        ayudaTarjeta(raiz); monedaDelValor(); actualizarHist(raiz);
+      };
+      if (campoConcepto) { campoConcepto.addEventListener('change', aplicarSug); campoConcepto.addEventListener('input', ev => { if (ev.inputType === 'insertReplacementText' || !ev.inputType) aplicarSug(); }); }
       raiz.addEventListener('change', ev => {
-        if (ev.target.name === 'tipo') actualizar(raiz);
+        if (ev.target.name === 'tipo') { actualizar(raiz); buscarSug.repintar && buscarSug.repintar(); }
         if (ev.target.id === 'f-ID_Bolsillo') ev.target.dataset.tocado = '1';
         if (ev.target.id === 'f-ID_Item_Ppto') { proponerMedio(); ayudaTarjeta(raiz); }
         if (ev.target.id === 'f-ID_Bolsillo') ayudaTarjeta(raiz);
@@ -2366,7 +2386,7 @@ async function abrirRegistrar(o) {
     alGuardar: async raiz => {
       const t = tipoActual(raiz);
       const v = leerFormulario(raiz, CAMPOS_REGISTRO);
-      const afectaSaldos = !((t === 'Gasto' || t === 'Ingreso') && v.Afecta === false); // histórico: cuenta en los informes, no en los saldos
+      const afectaSaldos = !((t === 'Gasto' || t === 'Ingreso' || t === 'Mover') && v.Afecta === false); // histórico: cuenta en los informes, no en los saldos
       const fecha = $('#f-Fecha', raiz).value;
       const notas = ($('#f-Notas', raiz) || {}).value || '';
       if (v.Valor === '' || v.Valor === undefined || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el valor.');
@@ -2381,7 +2401,7 @@ async function abrirRegistrar(o) {
       if (t === 'Mover') {
         if (v.Origen === v.Destino) throw new Error('Elige dos bolsillos distintos.');
         if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
-        res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '' }, vistaActual());
+        res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '', afectaSaldos: afectaSaldos }, vistaActual());
         recordarBolsillo(v.Origen);
       } else if (t === 'Gasto' && v.ID_Bolsillo.indexOf('T:') === 0) {
         // Gasto con tarjeta: con renglón aparta de su bolsillo; sin renglón no aparta nada.
@@ -2395,7 +2415,7 @@ async function abrirRegistrar(o) {
       }
       aplicarEscritura(res); render();
       const id = res.items[0] && res.items[0].ID_Mov;
-      aviso(t === 'Mover' ? 'Dinero movido' : (t === 'Gasto' ? 'Gasto registrado' : 'Ingreso registrado') + (afectaSaldos ? '' : ' (tus saldos no cambiaron)'), { deshacer: () => anularYAvisar(id) });
+      aviso((t === 'Mover' ? 'Dinero movido' : (t === 'Gasto' ? 'Gasto registrado' : 'Ingreso registrado')) + (afectaSaldos ? '' : ' (tus saldos no cambiaron)'), { deshacer: () => anularYAvisar(id) });
     }
   });
 }
@@ -2456,7 +2476,7 @@ async function abrirDetalleMov(id) {
   if (it.Categoria) filas.push(['Categoría', esc(it.Categoria)]);
   if (it.Subtipo) filas.push(['Origen', esc(it.Subtipo.replace(/_/g, ' '))]);
   if (it.Notas) filas.push(['Notas', esc(it.Notas)]);
-  if (it.Afecta_Saldos === false && !it.esTransferencia) filas.push(['Saldos', 'No cambió tus saldos (movimiento histórico): cuenta en gráficos y presupuesto']);
+  if (it.Afecta_Saldos === false) filas.push(['Saldos', 'No cambió tus saldos (movimiento histórico): cuenta en gráficos y presupuesto']);
   if (it.Anulado) filas.push(['Estado', 'Anulado']);
 
   let siguiente = null;
@@ -2600,14 +2620,16 @@ function htmlGenerarPpto(d) {
 }
 
 function filaRenglon(i) {
-  const rest = i.Restante;
+  const rest = i.Restante, plan = Number(i.Plan) || 0, real = Number(i.Real) || 0;
+  const pct = plan > 0 ? real / plan * 100 : 0, excede = pct > 100.0001;
   const final = i.Pagado
     ? '<strong class="m-num ' + (rest < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(Math.abs(rest)) + '</strong><span class="m-row-sub" style="display:block">' + (rest < 0 ? 'excedido' : 'ahorro') + '</span>'
     : '<strong class="m-num ' + (rest < 0 ? 'm-negativo' : '') + '">' + dinero(Math.abs(rest)) + '</strong><span class="m-row-sub" style="display:block">' + (rest < 0 ? 'excedido' : 'falta') + '</span>';
-  return '<div class="m-row m-renglon' + (i.Pagado ? ' m-hecho' : '') + '">' +
-    '<label class="m-check"><input type="checkbox" data-acc-cambio="pagado" data-id="' + esc(i.ID_Item) + '"' + (i.Pagado ? ' checked' : '') + ' aria-label="Pagado: ' + esc(i.Concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
+  return '<div class="m-row m-renglon m-renglon-viz' + (i.Pagado ? ' m-hecho' : '') + '">' +
+    '<label class="m-check"><input type="checkbox" data-acc-cambio="pagado" data-id="' + esc(i.ID_Item) + '"' + (i.Pagado ? ' checked' : '') + ' aria-label="Completo, sin más movimientos: ' + esc(i.Concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
     '<button class="m-row-main" data-acc="renglon" data-id="' + esc(i.ID_Item) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(i.Concepto) + '</span>' +
-    '<span class="m-row-sub" style="display:block">Plan ' + dinero(i.Plan) + ' · Real ' + dinero(i.Real) + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span>' +
+    '<span class="m-renglon-barra m-progreso' + (excede ? ' m-progreso-excede' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, Math.round(pct)) + '" aria-label="Real frente a lo planeado: ' + esc(i.Concepto) + '"><span style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%"></span></span>' +
+    '<span class="m-row-sub" style="display:block">' + dinero(real) + ' de ' + dinero(plan) + (i.Pagado ? ' · completo' : '') + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span>' +
     (i.ConTarjeta > 0 ? '<span class="m-row-sub" style="display:block">' + ico('tarjetas', 'm-icon-sm') + ' ' + dinero(i.ConTarjeta) + ' con tarjeta' + (i.PendienteTarjeta > 0 ? ' · ' + dinero(i.PendienteTarjeta) + ' por pagar en el extracto' : '') + '</span>' : '') + '</span>' +
     '<span class="m-row-final">' + final + '</span></button></div>';
 }
@@ -2625,9 +2647,12 @@ function htmlPresupuesto(d) {
     '<div><div class="m-resumen-etiqueta">Gastado</div><strong class="m-num">' + dinero(t.real) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Ahorras</div><strong class="m-num">' + pctTexto(t.porcentajeAhorro) + '</strong></div></div>' +
     '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div>' +
-    '<p class="m-ayuda">Gastado ' + dinero(t.real) + ' de ' + dinero(t.plan) + ' planeado · ' + t.pagados + ' de ' + t.renglones + ' pagados' + (d.escenario ? ' · ' + esc(d.escenario.Nombre) : '') + '</p></div>';
+    '<p class="m-ayuda">Gastado ' + dinero(t.real) + ' de ' + dinero(t.plan) + ' planeado · ' + t.pagados + ' de ' + t.renglones + ' completos' + (d.escenario ? ' · ' + esc(d.escenario.Nombre) : '') + '</p></div>';
 
-  h += '<div style="height:var(--m-space-5)"></div>' + htmlPlanVsReal(d) + '<div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
+  // Una sola lista: cada renglón trae su barra (real frente a lo planeado) y su casilla de "completo".
+  h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Plan frente a real</h2>' +
+    '<p class="m-ayuda" style="padding:0 var(--m-space-4) var(--m-space-2)">Marca la casilla cuando un renglón ya no tendrá más movimientos.</p>' +
+    '<div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
   h += '<div class="m-acciones-fila" style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-primary" data-acc="distribuir">Repartir la nómina en los bolsillos</button></div>';
   return h;
 }
@@ -2642,13 +2667,14 @@ async function abrirRenglon(id) {
   if (it.Bolsillo) filas.push([it.Tipo === 'Gasto' ? 'Se paga desde' : 'Se aparta en', esc(it.Bolsillo)]);
   if (it.ConTarjeta > 0) filas.push(['Con tarjeta', dinero(it.ConTarjeta) + (it.PendienteTarjeta > 0 ? ' · ' + dinero(it.PendienteTarjeta) + ' sin pagar' : ' · pagado')]);
   if (it.ID_Tarjeta) { const tj = porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta); if (tj) filas.push(['Se suele pagar con', esc(tj.Nombre)]); }
-  if (it.Pagado) filas.push(['Estado', 'Pagado' + (it.Ahorro ? ' · ahorro ' + dinero(it.Ahorro) : '')]);
+  if (it.Pagado) filas.push(['Estado', 'Completo' + (it.Ahorro ? ' · ahorro ' + dinero(it.Ahorro) : '')]);
 
   let siguiente = null;
   const apartar = it.Tipo !== 'Gasto';
   const cuerpo = '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
     '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
-    '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="pagar">' + (apartar ? 'Apartar dinero' : 'Registrar el pago') + '</button>' +
+    '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="pagar">' + (apartar ? 'Apartar dinero' : 'Agregar un movimiento') + '</button>' +
+    '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="' + (it.Pagado ? 'reabrir' : 'completar') + '">' + (it.Pagado ? 'Reabrir el renglón' : 'Marcar como completo') + '</button>' +
     '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="editar">Editar el renglón</button>' +
     '<button type="button" class="m-accion-peligro" data-hoja-acc="pedir-quitar">Quitar el renglón</button>' +
     '<div id="confirma" hidden class="m-error-form" style="margin-top:var(--m-space-3)"><p style="margin-bottom:var(--m-space-3)">¿Quitar “' + esc(it.Concepto) + '” de este mes? Solo se puede si no tiene movimientos enlazados.</p>' +
@@ -2657,7 +2683,9 @@ async function abrirRenglon(id) {
   await abrirHoja({
     titulo: 'Renglón', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
     extra: {
-      pagar: () => { siguiente = () => abrirPagarRenglon(it.ID_Item); return Promise.resolve(); },
+      pagar: () => { siguiente = () => abrirPagarRenglon(it.ID_Item, { soloAgregar: true }); return Promise.resolve(); },
+      completar: () => { siguiente = () => abrirCompletarRenglon(it.ID_Item); return Promise.resolve(); },
+      reabrir: () => { siguiente = () => reabrirRenglon(it.ID_Item); return Promise.resolve(); },
       editar: () => { siguiente = () => abrirRenglonMes(it); return Promise.resolve(); },
       'pedir-quitar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = true; $('[data-hoja-acc="quitar"]', raiz).focus(); },
       'no-quitar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = false; },
@@ -2668,9 +2696,10 @@ async function abrirRenglon(id) {
 }
 
 /** Confirmación al marcar un renglón como pagado: de qué bolsillo salió, cuánto y cuándo (o enlazar un pago que ya registraste). */
-async function abrirPagarRenglon(id) {
+async function abrirPagarRenglon(id, opciones) {
+  const soloAgregar = !!(opciones && opciones.soloAgregar); // agrega un movimiento sin dar el renglón por completo
   const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
-  if (!it || it.Pagado) return;
+  if (!it || (it.Pagado && !soloAgregar)) return;
   const esCredito = it.Tipo === 'Cuota' && !!it.ID_Credito;
   const esTarjeta = it.Tipo === 'Gasto' && !!it.ID_Tarjeta;
   const mueve = it.Tipo !== 'Gasto' && !esCredito; // ahorro, fondo o cuota sin crédito: un traslado hacia el bolsillo de destino
@@ -2695,7 +2724,7 @@ async function abrirPagarRenglon(id) {
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
 
   await abrirHoja({
-    titulo: 'Marcar como pagado', der: 'Confirmar', cuerpo: cuerpo,
+    titulo: soloAgregar ? 'Agregar un movimiento' : 'Marcar como completo', der: soloAgregar ? 'Agregar' : 'Confirmar', cuerpo: cuerpo,
     alAbrir: async raiz => {
       activarEcoDinero(raiz);
       const sel = $('#f-Existente', raiz);
@@ -2719,15 +2748,47 @@ async function abrirPagarRenglon(id) {
         if (!origen && !esCredito && !(esTarjeta && it.ID_Bolsillo_Destino)) throw new Error('Elige el bolsillo.');
         Object.assign(datos, { Valor: v.Valor, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: origen });
       }
+      if (soloAgregar) datos.Completar = false;
       const res = await api('payRenglonConfirmado', id, datos, vistaActual());
       if (datos.ID_Bolsillo) recordarBolsillo(datos.ID_Bolsillo);
       aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
       if (esCredito) App.cre.data = null;
       if (esCredito || esTarjeta) { App.tar.data = null; App.deudas.data = null; }
       render();
-      aviso('Renglón pagado', { deshacer: () => desmarcarRenglon(id, true) });
+      aviso(soloAgregar ? 'Movimiento agregado' : 'Renglón completo', { deshacer: () => desmarcarRenglon(id, true) });
     }
   });
+}
+
+/** Marcar un renglón como completo: pregunta si falta algún movimiento o si bastan los que ya están registrados. */
+async function abrirCompletarRenglon(id) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it || it.Pagado) return;
+  let accion = '';
+  const lleva = it.Real > 0 ? 'Llevas ' + dinero(it.Real) + ' de ' + dinero(it.Plan) + ' planeados.' : 'Todavía no tiene movimientos (lo planeado es ' + dinero(it.Plan) + ').';
+  await abrirHoja({
+    titulo: 'Marcar como completo', izq: 'Cancelar', sinGuardar: true,
+    cuerpo: '<p class="m-subtitulo" style="padding:0 0 var(--m-space-2);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
+      '<p style="margin-bottom:var(--m-space-4)">' + esc(lleva) + ' ¿Quieres agregar algún movimiento más o con los ya registrados basta?</p>' +
+      '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="basta">Bastan los registrados</button>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="agregar">Agregar un movimiento</button>',
+    extra: { basta: () => { accion = 'basta'; return Promise.resolve(); }, agregar: () => { accion = 'agregar'; return Promise.resolve(); } }
+  });
+  if (accion === 'agregar') return abrirPagarRenglon(id);
+  if (accion !== 'basta') { render(); return; }
+  try {
+    const data = await api('payRenglonMes', id, true);
+    aplicarPresupuesto(data); render();
+    aviso('Renglón completo', { deshacer: () => reabrirRenglon(id) });
+  } catch (e) { aviso(e.message, true); render(); }
+}
+
+/** Reabre un renglón completo (no toca sus movimientos). */
+async function reabrirRenglon(id) {
+  try {
+    const data = await api('payRenglonMes', id, false);
+    aplicarPresupuesto(data); render(); aviso('Renglón reabierto');
+  } catch (e) { aviso(e.message, true); render(); }
 }
 
 /** Desmarca un renglón; si tiene pagos registrados pregunta si también se anulan. */
@@ -3386,6 +3447,37 @@ function aplicarTarjeta(res) {
   if (res.tarjeta && App.tar.id === res.tarjeta.tarjeta.ID_Tarjeta) { App.tar.data = res.tarjeta; App.tar.mes = res.tarjeta.mes; }
 }
 
+// ---- Autocompletado de conceptos: lo que ya registraste, con su bolsillo, categoría y valor de la última vez ----
+const SUG = { datos: null, hasta: 0, pidiendo: null };
+function cargarSugerencias() {
+  if (SUG.datos && Date.now() < SUG.hasta) return Promise.resolve(SUG.datos);
+  if (!SUG.pidiendo) {
+    SUG.pidiendo = api('getSugerenciasConceptos').then(d => { SUG.datos = d; SUG.hasta = Date.now() + 5 * 60000; return d; })
+      .catch(() => SUG.datos || { Gasto: [], Ingreso: [] }).then(d => { SUG.pidiendo = null; return d; });
+  }
+  return SUG.pidiendo;
+}
+/** Pone la lista de conceptos (datalist) del campo y devuelve una función que busca el concepto escrito. */
+function conectarSugerencias(raiz, campo, tipoActual) {
+  if (!campo) return () => null;
+  let lista = $('#sug-conceptos', raiz);
+  if (!lista) { lista = document.createElement('datalist'); lista.id = 'sug-conceptos'; campo.parentNode.appendChild(lista); campo.setAttribute('list', 'sug-conceptos'); }
+  const pintar = () => {
+    const t = tipoActual();
+    const items = ((SUG.datos || {})[t === 'Ingreso' ? 'Ingreso' : 'Gasto']) || [];
+    lista.innerHTML = t === 'Mover' ? '' : items.map(s => '<option value="' + esc(s.Concepto) + '"></option>').join('');
+  };
+  cargarSugerencias().then(pintar);
+  pintar();
+  const buscar = () => {
+    const t = tipoActual(), clave = campo.value.trim().toLowerCase();
+    if (!clave || t === 'Mover') return null;
+    return (((SUG.datos || {})[t === 'Ingreso' ? 'Ingreso' : 'Gasto']) || []).find(s => s.Concepto.toLowerCase() === clave) || null;
+  };
+  buscar.repintar = pintar;
+  return buscar;
+}
+
 async function abrirCompra(idTarjeta) {
   const td = App.tar.data;
   if (!td) return;
@@ -3413,6 +3505,7 @@ async function abrirCompra(idTarjeta) {
     titulo: 'Compra con ' + td.tarjeta.Nombre, cuerpo: cuerpo,
     alAbrir: raiz => {
       activarEcoDinero(raiz);
+      conectarSugerencias(raiz, $('#f-Concepto', raiz), () => 'Gasto');
       const actualizar = () => {
         const f = $('#f-Fuente', raiz).value;
         $$('[data-solo]', raiz).forEach(el => { el.hidden = el.dataset.solo !== '' && el.dataset.solo.split(',').indexOf(f) === -1; });
@@ -4856,12 +4949,6 @@ function htmlNominaGraficos(c) {
 }
 
 /** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
-function htmlPlanVsReal(d) {
-  const items = d.items.filter(i => Number(i.Plan) > 0).map(i => ({ nombre: i.Concepto, valor: Number(i.Real) || 0, tope: Number(i.Plan), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Plan)) }))
-    .sort((a, b) => b.valor / b.tope - a.valor / a.tope).slice(0, 8);
-  return items.length ? '<section class="m-seccion"><h2 class="m-seccion-titulo">Plan frente a real</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>' : '';
-}
-
 /** Deudas: cupo usado de cada tarjeta y avance de pago de cada crédito activo. */
 function htmlMedidoresDeudas(d) {
   let h = '';
@@ -5836,7 +5923,7 @@ document.addEventListener('change', async ev => {
     // Marcar o desmarcar nunca es solo una casilla: se abre la confirmación y la casilla vuelve a su estado hasta que termine.
     const quiereMarcar = t.checked;
     t.checked = !quiereMarcar;
-    if (quiereMarcar) abrirPagarRenglon(t.dataset.id); else desmarcarRenglon(t.dataset.id);
+    if (quiereMarcar) abrirCompletarRenglon(t.dataset.id); else reabrirRenglon(t.dataset.id);
     return;
   }
   if (t.dataset.accCambio === 'nom-incl') {

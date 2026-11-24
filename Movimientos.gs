@@ -81,6 +81,40 @@ function registrarMovimiento(m) {
   return fila;
 }
 
+/**
+ * Conceptos que la persona ya usó, para autocompletar al registrar: por cada tipo (Gasto, Ingreso), los más repetidos
+ * con lo último que se registró bajo ese nombre (bolsillo, categoría, valor y renglón). Solo movimientos hechos a mano:
+ * no los que genera la app (nómina, traslados, pagos de crédito…). Las compras con tarjeta cuentan como gastos con la
+ * tarjeta como medio ("T:<id>").
+ */
+function sugerirConceptos(limite) {
+  const tope = Math.max(1, Math.min(Number(limite) || 60, 200));
+  const grupos = { Gasto: {}, Ingreso: {} };
+  const anotar = (tipo, concepto, fecha, creado, datos) => {
+    const nombre = texto_(concepto);
+    if (!nombre || !grupos[tipo]) return;
+    const clave = nombre.toLowerCase();
+    const g = grupos[tipo][clave] || (grupos[tipo][clave] = { Concepto: nombre, usos: 0, ultima: '' });
+    g.usos++;
+    const marca = String(fecha || '') + '|' + String(creado || '');
+    if (marca >= g.ultima) { g.ultima = marca; g.Concepto = nombre; Object.assign(g, datos); }
+  };
+  getTableData('Movimientos', { excludeAnulados: true }).forEach(m => {
+    if ((m.Tipo_Mov !== 'Gasto' && m.Tipo_Mov !== 'Ingreso') || m.Subtipo || m.ID_Grupo) return;
+    anotar(m.Tipo_Mov, m.Concepto, m.Fecha, m.Creado_En, { ID_Bolsillo: m.ID_Bolsillo, ID_Categoria: m.ID_Categoria || '', ID_Item_Ppto: m.ID_Item_Ppto || '', Valor: Math.abs(Number(m.Valor) || 0) });
+  });
+  getTableData('Compras_TC').filter(c => !esVerdadero(c.Anulado)).forEach(c => {
+    anotar('Gasto', c.Concepto, c.Fecha, c.Creado_En, { ID_Bolsillo: 'T:' + c.ID_Tarjeta, ID_Categoria: c.ID_Categoria || '', ID_Item_Ppto: c.ID_Item_Ppto || '', Valor: Math.abs(Number(c.Valor) || 0) });
+  });
+  const salida = {};
+  Object.keys(grupos).forEach(tipo => {
+    salida[tipo] = Object.keys(grupos[tipo]).map(k => grupos[tipo][k])
+      .sort((a, b) => b.usos - a.usos || (b.ultima > a.ultima ? 1 : -1)).slice(0, tope)
+      .map(g => ({ Concepto: g.Concepto, Usos: g.usos, ID_Bolsillo: g.ID_Bolsillo, ID_Categoria: g.ID_Categoria, ID_Item_Ppto: g.ID_Item_Ppto, Valor: g.Valor }));
+  });
+  return salida;
+}
+
 /** Interpreta la casilla "afecta saldos" (por defecto sí). Un ajuste corrige un saldo, así que no puede ser histórico. */
 function quiereAfectarSaldos_(valor, tipo) {
   const afecta = !(valor === false || String(valor).toLowerCase() === 'false');
@@ -107,9 +141,11 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
   const f = fechaMovimiento_(fecha);
   const desc = texto_(concepto).slice(0, 120) || 'Traslado entre bolsillos';
   const idGrupo = nuevoId_('grp');
-  // extra: { Subtipo, ID_Item_Ppto } para traslados que genera la app (distribución de nómina, pagos…)
+  // extra: { Subtipo, ID_Item_Ppto } para traslados que genera la app (distribución de nómina, pagos…).
+  // `Afecta_Saldos: false` anota un traslado histórico (ya contado en los saldos iniciales): queda en los movimientos, sin mover saldos.
   const ex = extra || {};
-  const comun = { Fecha: f, Concepto: desc, Tipo_Mov: 'Transferencia', Subtipo: opcion_(ex.Subtipo || '', ENUMS.Movimientos.Subtipo, 'El subtipo', ''), ID_Categoria: '', ID_Grupo: idGrupo, ID_Item_Ppto: renglonMovimiento_(texto_(ex.ID_Item_Ppto)), Notas: texto_(notas).slice(0, 500), Origen: origen || 'App', Anulado: false };
+  const afecta = quiereAfectarSaldos_(ex.Afecta_Saldos, 'Transferencia');
+  const comun = { Fecha: f, Concepto: desc, Tipo_Mov: 'Transferencia', Subtipo: opcion_(ex.Subtipo || '', ENUMS.Movimientos.Subtipo, 'El subtipo', ''), ID_Categoria: '', ID_Grupo: idGrupo, ID_Item_Ppto: renglonMovimiento_(texto_(ex.ID_Item_Ppto)), Notas: texto_(notas).slice(0, 500), Origen: origen || 'App', Anulado: false, Afecta_Saldos: afecta };
 
   const salida = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: desde.ID_Bolsillo, Valor: -monto }, comun);
   const entrada = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: hacia.ID_Bolsillo, Valor: monto }, comun);
