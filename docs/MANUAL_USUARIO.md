@@ -80,6 +80,8 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - Al crear la tarjeta, la **reserva** puede ser un bolsillo nuevo o **uno que ya tengas** (en pesos).
 - El **mes del extracto** se decide por el día de corte.
 - **Pagar el extracto:** una sola acción, todo o nada: si a la reserva le falta, **eliges de qué bolsillo sale** lo que falta; luego se paga el total desde la reserva y se marcan el extracto y las compras como pagados. Se puede **deshacer**.
+- **Aportes de otras personas:** al pagar el extracto, **¿Alguien más aporta al pago?** te deja anotar quién (un nombre libre; Moni sugiere los que ya usaste) y cuánto paga, por ejemplo cuando alguien paga una parte desde un banco que no está en Moni. Eso **no mueve ningún bolsillo tuyo**: solo baja lo que tú pagas desde la reserva. Si entre abonos y aportes se cubre todo el extracto, no sale dinero de tus bolsillos.
+- **Registrar un abono:** botón **Registrar un abono** en el corte que estés viendo. Lo paga *yo, desde un bolsillo mío* (sale de ese bolsillo) u *otra persona* (con su nombre; no mueve tus bolsillos). Un abono **baja la deuda del corte y libera cupo**, pero **no aparta dinero en la reserva**. Quedan en *Abonos y aportes* y se pueden anular; al pagar el extracto se descuentan.
 ### Créditos de autopago
 - Un crédito es un préstamo desde tu ahorro hacia ti (o a alguien): monto, plazo, tasa y cuenta de ahorro. Moni calcula la cuota (amortización francesa) y el cronograma antes de guardar.
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
@@ -111,7 +113,7 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Pagar servicio** (botón arriba en esta pantalla): eliges la empresa y luego el hogar; Moni **abre la página de pago en otra ventana y deja el código de pago en el portapapeles** para que lo pegues. Si el navegador no deja abrir la ventana o copiar, muestra el código con los botones *Copiar código* e *Ir a pagar*.
 
 ## 12. Regalos
-**Planear → Regalos.** Lista por año: a quién, idea, estimado. **Registrar la compra** crea el gasto y suma al real. Hay resumen de estimado, gastado y comprados.
+**Planear → Regalos.** Lista por año: a quién, idea, estimado. Al crear un regalo puedes decir **de qué bolsillo planeas pagarlo**. **Registrar la compra** crea el gasto (o una **compra con tarjeta de crédito**) y suma al real. Si lo compras con tarjeta, no sale dinero ahora: Moni te avisa en Regalos y en Inicio que **muevas ese dinero a la reserva de la tarjeta** (*Mover ahora* abre el traslado ya llenado) y el aviso **sigue hasta que registres ese movimiento**. Hay resumen de estimado, gastado y comprados.
 
 ## 13. Vista anual y gráficos
 **Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.

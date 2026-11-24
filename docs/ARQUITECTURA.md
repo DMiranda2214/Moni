@@ -41,7 +41,7 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 30 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
+| `Setup.gs` | Esquema de las 31 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
 | `Repo.gs` | Lectura (memorizada por petición), inserción, actualización, bloqueo, caché y propiedades de la persona (`modoMultiusuario_`, `propiedades_`, `cache_`, `tomarBloqueo`) |
 | `Catalogos.gs` | Definición y CRUD de los catálogos; estado de configuración |
 | `Saldos.gs` | Saldos por bolsillo, cuenta y total |

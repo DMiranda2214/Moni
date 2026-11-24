@@ -58,6 +58,9 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - **Fuente** de una compra (se elige sola): con renglón, *Del presupuesto* (aparta ahora el dinero desde el bolsillo del renglón a la **reserva**); sin renglón, *Sin apartar ahora* (no mueve dinero). También *Apartar de otro bolsillo* y *De otra persona* (no cuenta como gasto tuyo).
 - **Pagar el extracto** es atómico: si algo falla, todo se revierte. Suma las compras del mes, completa la reserva con el bolsillo que **indiques al pagar** (por defecto, el personal de la tarjeta), paga el total desde la reserva y marca extracto y compras como pagados. Si falta dinero y no hay de dónde sacarlo, la app lo dice y no hace nada. Anular el pago los reabre.
 - No se agregan compras a un extracto ya pagado.
+- **Abonos** (`Pagos_Tarjeta`, Tipo `Abono`): bajan la deuda de un corte y liberan cupo (cupo usado = compras sin pagar − abonos sin aplicar); no aparta dinero en la reserva. De la persona: gasto `Pago_TC` desde un bolsillo; de un tercero: sin movimiento. No pueden superar la deuda del corte ni quedar de más al anular una compra. Al pagar el extracto se aplican; al anular ese pago vuelven a quedar pendientes.
+- **Aportes de terceros** al pagar un extracto (Tipo `Aporte`): no mueven bolsillos; lo que sale de la reserva (y, si falta, del bolsillo elegido) es el total − abonos − aportes. Anular el pago anula los aportes.
+- **Regalo con tarjeta:** es una compra sin apartar dinero. Mientras esa compra esté sin pagar en un extracto, `regalosPendientesReserva_` pide mover el valor a la reserva de la tarjeta (desde el bolsillo planeado del regalo, si lo tiene) hasta que haya traslados manuales suficientes; es un aviso *importante* (no se puede ocultar).
 - **Cupo disponible** = cupo − compras no pagadas.
 - **Vista anual:** *TTCC* = compras con tarjeta **sin renglón**, en el mes de la compra; *Saldo* = ingreso − real − TTCC.
 

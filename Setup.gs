@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '10';
+const ESQUEMA_VERSION = '11';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -68,6 +68,10 @@ const SCHEMAS = {
   Extractos: tabla_(
     ['ID_Extracto', 'ID_Tarjeta', 'Mes', 'Total', 'Estado', 'Fecha_Pago', 'ID_Grupo_Pago', 'URL_PDF', 'Notas', 'Anulado'],
     [170, 170, 90, 120, 90, 110, 170, 260, 200, 80]),
+  // Abonos a la deuda de una tarjeta y aportes de terceros al pago de un extracto. Pagador vacío = la persona misma.
+  Pagos_Tarjeta: tabla_(
+    ['ID_Pago', 'ID_Tarjeta', 'Mes', 'Fecha', 'Valor', 'Tipo', 'Pagador', 'ID_Mov', 'ID_Extracto', 'Notas', 'Anulado'],
+    [170, 170, 90, 110, 120, 90, 180, 170, 170, 220, 80]),
   Presupuesto_Plantilla: tabla_(
     ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'Activo', 'Orden'],
     [170, 170, 240, 120, 90, 170, 170, 170, 170, 70, 60]),
@@ -98,7 +102,7 @@ const SCHEMAS = {
     [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80]),
 
   // ---- Otros ----
-  Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas'], [170, 70, 170, 220, 120, 120, 70, 170, 200]),
+  Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas', 'ID_Bolsillo_Plan'], [170, 70, 170, 220, 120, 120, 70, 170, 200, 170]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
   Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400])
 };
@@ -119,6 +123,7 @@ const ENUMS = {
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
   Extractos: { Estado: ['Abierto', 'Pagado'] },
+  Pagos_Tarjeta: { Tipo: ['Abono', 'Aporte'] },
   Presupuesto_Plantilla: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Presupuesto_Mes: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Nomina_Pagos: { Estado: ['Proyectado', 'Recibido'], Origen: ['App', 'Demo', 'Import'] },
@@ -145,6 +150,7 @@ const COLUMNAS_TEXTO = {
   Movimientos: ['Fecha'],
   Compras_TC: ['Fecha', 'Mes_Extracto'],
   Extractos: ['Mes', 'Fecha_Pago'],
+  Pagos_Tarjeta: ['Mes', 'Fecha'],
   Presupuesto_Mes: ['Mes'],
   Subsidios: ['Vigente_Desde', 'Vigente_Hasta'],
   Nomina_Pagos: ['Periodo', 'Fecha_Pago', 'Mes_Presupuesto'],
@@ -282,6 +288,7 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Nomina_Pagos', columna: 'Afecta_Saldos', valor: true },
   { tabla: 'Nomina_Pagos', columna: 'Mes_Presupuesto', valor: '' },
   { tabla: 'Movimientos', columna: 'Afecta_Saldos', valor: true },
+  { tabla: 'Regalos', columna: 'ID_Bolsillo_Plan', valor: '' },
   { tabla: 'Servicios_Publicos', columna: 'ID_Empresa', valor: '' },
   { tabla: 'CDTs', columna: 'Retencion_Tipo', valor: 'Porcentaje' },
   { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 }
@@ -294,7 +301,7 @@ const MIGRACIONES_COLUMNAS = [
  */
 function repararFormatosMes_(ss) {
   let corregidas = 0;
-  ['Compras_TC', 'Extractos', 'Presupuesto_Mes', 'Nomina_Pagos'].forEach(tabla => {
+  ['Compras_TC', 'Extractos', 'Presupuesto_Mes', 'Nomina_Pagos', 'Pagos_Tarjeta'].forEach(tabla => {
     const sheet = ss.getSheetByName(tabla);
     if (!sheet || sheet.getLastRow() < 2) return;
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());

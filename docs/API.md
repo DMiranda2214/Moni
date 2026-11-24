@@ -89,7 +89,9 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `voidGastoTarjeta` | `idCompra, idItem, vista` |
 | `voidCompraTC` | `idCompra` |
 | `restoreCompraTC` | `idCompra` |
-| `payExtracto` | `idTarjeta, mes, fecha, idOrigen` |
+| `payExtracto` | `idTarjeta, mes, fecha, idOrigen, aportes?` (`aportes`: `[{ Pagador, Valor }]` de terceros; descuenta además lo ya abonado) |
+| `addAbonoTarjeta` | `{ ID_Tarjeta, Mes, Valor, Fecha, Pagador?, ID_Bolsillo? }` — sin `Pagador` sale de `ID_Bolsillo`; con `Pagador` es de un tercero y no mueve bolsillos |
+| `voidAbonoTarjeta` | `idPago` |
 | `voidPagoExtracto` | `idExtracto` |
 | `previewCredito` | `c` |
 | `addCredito` | `c` |
@@ -113,7 +115,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getRegalos` | `anio` |
 | `saveRegalo` | `r` |
 | `deleteRegalo` | `idRegalo` |
-| `payRegalo` | `idRegalo, valor, idBolsillo, fecha` |
+| `payRegalo` | `idRegalo, valor, idBolsillo, fecha` (con `idBolsillo` = `"T:<idTarjeta>"` es una compra con tarjeta; `getRegalos` trae `pendientes[]`: lo que falta mover a la reserva) |
 | `getAnual` | `anio` |
 
 ## Servicios y suscripciones
