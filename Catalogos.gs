@@ -416,17 +416,36 @@ const CATALOGOS = {
     }
   },
 
+  // Empresas con las que se pagan los servicios (Enel, Vanti, el acueducto…): su enlace se guarda una sola vez.
+  Empresas_Pago: {
+    id: 'ID_Empresa', prefijo: 'emp', etiqueta: 'La empresa',
+    normalizar: function (item, actual, filas) {
+      const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Empresa');
+      const url = urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago);
+      return { Nombre: nombre, URL_Pago: url, Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
+    },
+    bloqueos: function (reg) {
+      const n = leer_('Servicios_Publicos').filter(s => s.ID_Empresa === reg.ID_Empresa && estaActivo(s)).length;
+      return n ? [n + ' servicio(s) activo(s) usan esta empresa; cámbialos o desactívalos primero'] : [];
+    }
+  },
+
   Servicios_Publicos: {
     id: 'ID_Servicio', prefijo: 'srv', etiqueta: 'El servicio',
     normalizar: function (item, actual) {
       const idInmueble = item.ID_Inmueble !== undefined ? item.ID_Inmueble : actual && actual.ID_Inmueble;
       exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El inmueble');
+      // Con una empresa registrada, el nombre y el enlace salen de ella; sin empresa, se escriben aquí (como antes).
+      const idEmpresa = texto_(item.ID_Empresa !== undefined ? item.ID_Empresa : actual && actual.ID_Empresa);
+      const empresa = idEmpresa ? exigirActivo_(leer_('Empresas_Pago'), 'ID_Empresa', idEmpresa, 'La empresa') : null;
       return {
         ID_Inmueble: idInmueble,
+        ID_Empresa: idEmpresa,
         Tipo: textoRequerido_(item.Tipo !== undefined ? item.Tipo : actual && actual.Tipo, 'El tipo de servicio'),
-        Empresa: texto_(item.Empresa !== undefined ? item.Empresa : actual && actual.Empresa),
+        Empresa: empresa ? empresa.Nombre : texto_(item.Empresa !== undefined ? item.Empresa : actual && actual.Empresa),
         Codigo_Pago: textoRequerido_(item.Codigo_Pago !== undefined ? item.Codigo_Pago : actual && actual.Codigo_Pago, 'El código de pago'),
-        URL_Pago: urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago),
+        URL_Pago: empresa ? '' : urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago),
         Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas)
       };
     },
@@ -494,6 +513,15 @@ const CATALOGOS = {
       const pctCrudo = pick('Retencion_Pct');
       const pct = pctCrudo === '' || pctCrudo === undefined || pctCrudo === null ? 0 : Number(String(pctCrudo).replace(',', '.'));
       if (!isFinite(pct) || pct < 0 || pct >= 1) throw new Error('La retención debe estar entre 0 % y 100 %.');
+      // La retención puede darse en pesos (el total de todo el plazo): se guarda el valor y el % equivalente.
+      const tipoRet = opcion_(pick('Retencion_Tipo'), ENUMS.CDTs.Retencion_Tipo, 'El tipo de retención', 'Porcentaje');
+      const interesCdtTotal = interesCdt_(capital, ea, plazo);
+      let valorRet = 0, pctFinal = pct;
+      if (tipoRet === 'Valor') {
+        valorRet = numero_(pick('Retencion_Valor'), 'La retención en pesos', { min: 0, max: VALOR_MAXIMO, defecto: 0 });
+        if (valorRet > interesCdtTotal) throw new Error('La retención (' + valorRet + ') no puede superar los intereses estimados del CDT (' + redondear2_(interesCdtTotal) + ').');
+        pctFinal = interesCdtTotal > 0 ? valorRet / interesCdtTotal : 0;
+      }
       const idDestino = texto_(pick('ID_Bolsillo_Destino'));
       if (idDestino) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idDestino, 'El bolsillo de destino'); exigirPesos_(idDestino, 'El bolsillo de destino'); }
 
@@ -507,7 +535,7 @@ const CATALOGOS = {
       const vencimiento = sumarDias_(inicio, plazo);
       const datos = {
         Nombre: nombre, ID_Banco: idBanco, Capital: capital, Tasa_EA: Math.round(ea * 100000) / 100000, Fecha_Inicio: inicio, Plazo_Dias: plazo,
-        Fecha_Vencimiento: vencimiento, Pago_Intereses: pago, Retencion_Pct: Math.round(pct * 100000) / 100000,
+        Fecha_Vencimiento: vencimiento, Pago_Intereses: pago, Retencion_Pct: Math.round(pctFinal * 100000) / 100000, Retencion_Tipo: tipoRet, Retencion_Valor: valorRet,
         ID_Bolsillo_Destino: idDestino, Renovar: item.Renovar !== undefined ? esVerdadero(item.Renovar) : (actual ? esVerdadero(actual.Renovar) : false),
         Notas: texto_(pick('Notas')).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
       };

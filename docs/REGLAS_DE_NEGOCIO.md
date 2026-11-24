@@ -72,6 +72,7 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 ## 6. Ahorro
 - **Rendimiento por banco:** cada banco puede tener una tasa efectiva anual (`Rendimiento_EA`) y una forma de pago (`Rendimiento_Pago`: cada día o cada mes). Aplica a sus cuentas de tipo Ahorro. Además `Rendimiento_Base` indica sobre qué saldo se paga: `Todo` (por defecto) o `Bolsillos` (hay bancos que solo pagan sobre el dinero guardado en bolsillos; el saldo suelto de una cuenta sin bolsillos no rinde).
 - **Estimación:** rinde cada día sobre el saldo con que empezó, a la tasa diaria (1 + EA)^(1/365) − 1. Si el banco paga a diario, lo ganado se suma al saldo día a día; si paga cada mes, se suma al cerrar el mes. Se calcula desde el último rendimiento registrado (o el inicio del mes) hasta ayer; "Registrar este rendimiento" lo anota (se puede corregir con el valor del banco). La retención y el GMF se siguen registrando a mano.
+- **Retención** del CDT: en porcentaje (`Retencion_Pct`) o en pesos (`Retencion_Tipo = Valor`, `Retencion_Valor` = total del plazo). En pesos se convierte en el % equivalente sobre los intereses estimados, así los cobros periódicos la reparten en proporción; no puede superar los intereses. Al renovar se pasa a su % equivalente.
 - Subtipos de movimiento: *Interes* (+), *Retencion* (−), *GMF* (−), *Para_Gastos* (retiro), *Reposicion*.
 - **Deuda con el ahorro** = máx(0, Para_Gastos − Reposicion) + saldo de los créditos activos. El desembolso de un crédito no cuenta dos veces.
 - **Si repones todo**, el saldo sería: saldo + deuda.

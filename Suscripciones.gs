@@ -38,13 +38,19 @@ function resumenSuscripcion_(s, hoy, ctx) {
     Proximo_Cobro: s.Proximo_Cobro, dias: dias, estado: dias < 0 ? 'vencida' : (dias <= DIAS_PRONTO ? 'pronto' : 'ok'),
     mensual: costoMensual_(valor, s.Periodicidad), anual: redondear2_(valor * 12 / (MESES_PERIODO[s.Periodicidad] || 1)),
     ID_Bolsillo: s.ID_Bolsillo || '', ID_Tarjeta: s.ID_Tarjeta || '', medio: tar ? tar.Nombre : (bol ? bol.Nombre : ''),
-    ID_Servicio: s.ID_Servicio || '', ID_Inmueble: s.ID_Inmueble || '', Hogar: hog ? hog.Nombre : '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || '' : ''),
+    ID_Servicio: s.ID_Servicio || '', ID_Inmueble: s.ID_Inmueble || '', Hogar: hog ? hog.Nombre : '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || urlEmpresaServicio_(srv, ctx) : ''),
     Ultimo_Pago: s.Ultimo_Pago || '', Notas: s.Notas || ''
   };
 }
 
+/** El enlace de pago de un servicio: el propio o, si tiene una empresa registrada, el de la empresa. */
+function urlEmpresaServicio_(srv, ctx) {
+  const emp = srv && srv.ID_Empresa ? buscarPorId_(ctx.empresas || [], 'ID_Empresa', srv.ID_Empresa) : null;
+  return emp ? emp.URL_Pago || '' : '';
+}
+
 function contextoSuscripciones_() {
-  return { servicios: getTableData('Servicios_Publicos'), tarjetas: getTableData('Tarjetas'), bolsillos: getTableData('Bolsillos'), inmuebles: getTableData('Inmuebles') };
+  return { empresas: getTableData('Empresas_Pago'), servicios: getTableData('Servicios_Publicos'), tarjetas: getTableData('Tarjetas'), bolsillos: getTableData('Bolsillos'), inmuebles: getTableData('Inmuebles') };
 }
 
 /** Pantalla de suscripciones y servicios, en una sola llamada. */

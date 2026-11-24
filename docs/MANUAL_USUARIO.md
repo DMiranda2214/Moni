@@ -97,7 +97,7 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Reponer:** devuelve dinero al ahorro y baja la deuda.
 
 ## 10. CDT
-**Dinero → CDT.** Registra cada CDT con su banco, capital, tasa (% EA), fecha de inicio, plazo en días, cuándo paga los intereses y la retención que te aplica el banco. Si el dinero sale hoy de un bolsillo, activa *Descontar el capital de un bolsillo*; si ya lo tenías antes de usar Moni, déjalo apagado. El capital aparece como **Invertido** (no como disponible). En el detalle ves cuánto ganarás (bruto, retención y neto) y cuánto del plazo ha pasado, y puedes **Registrar intereses** (si los paga por periodos), **Cobrar** o **Cancelar antes de tiempo** (con la opción de **renovar**), **Editar** o **Anular**. Los vencimientos salen en *Por recibir* de Inicio y en Google Calendar.
+**Dinero → CDT.** Registra cada CDT con su banco, capital, tasa (% EA), fecha de inicio, plazo en días, cuándo paga los intereses y la retención que te aplica el banco, que puedes dar como **un porcentaje de los intereses o como un valor en pesos** (el total de todo el plazo; si paga intereses cada mes o trimestre, se reparte en proporción a cada pago). Si el dinero sale hoy de un bolsillo, activa *Descontar el capital de un bolsillo*; si ya lo tenías antes de usar Moni, déjalo apagado. El capital aparece como **Invertido** (no como disponible). En el detalle ves cuánto ganarás (bruto, retención y neto) y cuánto del plazo ha pasado, y puedes **Registrar intereses** (si los paga por periodos), **Cobrar** o **Cancelar antes de tiempo** (con la opción de **renovar**), **Editar** o **Anular**. Los vencimientos salen en *Por recibir* de Inicio y en Google Calendar.
 
 ## 11. Servicios y suscripciones
 **Planear → Servicios y suscripciones** (o *Pagar servicios* en Inicio).
@@ -107,6 +107,8 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - Al pagar, el próximo cobro avanza un período y se mantiene el día. En un **servicio**, el valor guardado pasa a ser el último que pagaste.
 - **Agregar:** botón **+**. Elige si es *Suscripción* (valor fijo) o *Servicio* (valor variable, con código y enlace opcionales), cada cuánto se cobra, el próximo cobro y con qué se paga.
 - Abajo: **Códigos y enlaces de pago** de tus servicios públicos (Ajustes → Servicios públicos).
+- **Empresas de servicios** (Ajustes → Empresas de servicios): guarda una sola vez cada empresa con quien pagas (Enel, Vanti, el acueducto…) y su enlace de pago. Al guardar un servicio eliges la empresa y solo escribes el hogar y el código de pago; el enlace no se repite.
+- **Pagar servicio** (botón arriba en esta pantalla): eliges la empresa y luego el hogar; Moni **abre la página de pago en otra ventana y deja el código de pago en el portapapeles** para que lo pegues. Si el navegador no deja abrir la ventana o copiar, muestra el código con los botones *Copiar código* e *Ir a pagar*.
 
 ## 12. Regalos
 **Planear → Regalos.** Lista por año: a quién, idea, estimado. **Registrar la compra** crea el gasto y suma al real. Hay resumen de estimado, gastado y comprados.

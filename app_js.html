@@ -1147,7 +1147,7 @@ function vAjustes() {
         (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
-        ['Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Categorias', 'Personas', 'Inmuebles', 'Empresas_Pago', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
         fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +
@@ -1409,7 +1409,9 @@ const CAT = {
       { k: 'Fecha_Inicio', label: 'Fecha de inicio', tipo: 'fecha', requerido: true, ayuda: 'Si ya lo tenías antes de usar Moni, pon la fecha en que lo abriste.' },
       { k: 'Plazo_Dias', label: 'Plazo (días)', tipo: 'entero', requerido: true, min: 1, max: 3650, ayuda: 'Por ejemplo 90, 180 o 360 días.' },
       { k: 'Pago_Intereses', label: 'Paga los intereses', tipo: 'select', defecto: 'Vencimiento', opciones: () => [['Vencimiento', 'Al vencimiento'], ['Mensual', 'Cada mes'], ['Trimestral', 'Cada trimestre']] },
-      { k: 'Retencion_Pct', label: 'Retención en la fuente (%)', tipo: 'porcentaje', ayuda: 'El porcentaje que el banco retiene de los intereses. Déjalo vacío si no te retienen.' },
+      { k: 'Retencion_Tipo', label: 'La retención en la fuente es…', tipo: 'select', defecto: 'Porcentaje', opciones: () => [['Porcentaje', 'Un porcentaje de los intereses'], ['Valor', 'Un valor en pesos']] },
+      { k: 'Retencion_Valor', label: 'Retención en pesos (total del CDT)', tipo: 'dinero', visible: v => v.Retencion_Tipo === 'Valor', ayuda: 'Lo que el banco te retiene en total durante todo el plazo. Si paga intereses cada mes, se reparte en proporción a cada pago.' },
+      { k: 'Retencion_Pct', label: 'Retención en la fuente (%)', tipo: 'porcentaje', visible: v => v.Retencion_Tipo !== 'Valor', ayuda: 'El porcentaje que el banco retiene de los intereses. Déjalo vacío si no te retienen.' },
       { k: 'ID_Bolsillo_Destino', label: 'Al cobrar, el dinero llega a (opcional)', tipo: 'select', opciones: () => opcionesDestino(true) },
       { k: 'descontar', label: 'Descontar el capital de un bolsillo', tipo: 'interruptor', soloAlCrear: true,
         ayuda: 'Actívalo si el dinero sale hoy de uno de tus bolsillos. Si el CDT ya existía antes de usar Moni, déjalo apagado.' },
@@ -1466,9 +1468,11 @@ const CAT = {
     campos: [
       { k: 'ID_Inmueble', label: 'Inmueble', tipo: 'select', requerido: true, opciones: optsActivas('Inmuebles', 'ID_Inmueble') },
       { k: 'Tipo', label: 'Servicio', tipo: 'texto', requerido: true, maxlength: 40, lista: ['Luz', 'Agua', 'Gas', 'Internet', 'Teléfono', 'Aseo'] },
-      { k: 'Empresa', label: 'Empresa', tipo: 'texto', maxlength: 60 },
+      { k: 'ID_Empresa', label: 'Empresa', tipo: 'select', opciones: () => [['', 'Otra (la escribo yo)']].concat(activos('Empresas_Pago').map(e => [e.ID_Empresa, e.Nombre])),
+        ayuda: 'Si la empresa ya está guardada (Ajustes → Empresas de servicios), el enlace de pago sale de ella y no se repite.' },
+      { k: 'Empresa', label: 'Nombre de la empresa', tipo: 'texto', maxlength: 60, visible: v => !v.ID_Empresa },
       { k: 'Codigo_Pago', label: 'Código de pago', tipo: 'texto', requerido: true, maxlength: 40, inputmode: 'text' },
-      { k: 'URL_Pago', label: 'Enlace de pago (opcional)', tipo: 'texto', inputmode: 'url', ayuda: 'Debe empezar por https://' },
+      { k: 'URL_Pago', label: 'Enlace de pago (opcional)', tipo: 'texto', inputmode: 'url', visible: v => !v.ID_Empresa, ayuda: 'Debe empezar por https://' },
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
@@ -1590,6 +1594,7 @@ const INFO_CAMPOS = {
   Servicios_Publicos: {
     ID_Inmueble: 'A qué casa o apartamento pertenece el servicio.',
     Tipo: 'Luz, agua, gas, internet… Puedes escribir el que quieras.',
+    ID_Empresa: 'La empresa con la que pagas este servicio. Se guarda una sola vez en Ajustes → Empresas de servicios, con su enlace de pago.',
     Empresa: 'Quién lo cobra.',
     Codigo_Pago: 'El número de referencia con el que pagas (matrícula, contrato o referencia de pago).',
     URL_Pago: 'La página donde se paga. Debe empezar por https://',
@@ -1625,6 +1630,7 @@ const INFO_CAMPOS = {
     Tasa_EA: 'La tasa efectiva anual pactada. Moni estima los intereses como capital × ((1 + tasa)^(días/365) − 1).',
     Plazo_Dias: 'Cuántos días dura el CDT. El vencimiento se calcula desde la fecha de inicio.',
     Pago_Intereses: 'Al vencimiento: recibes todo al final. Cada mes o trimestre: el banco te paga los intereses por periodos y tú los registras.',
+    Retencion_Tipo: 'Elige si el banco te dice la retención como un porcentaje de los intereses o como un valor en pesos.',
     Retencion_Pct: 'La retención en la fuente sobre los intereses. Depende de tu producto y de la norma vigente: escribe la que te aplica el banco.',
     ID_Bolsillo_Destino: 'El bolsillo donde llegan los intereses y el capital al cobrar. Puedes elegirlo después, al cobrar.',
     descontar: 'Si el dinero sale hoy de un bolsillo, Moni lo resta de ahí y lo muestra como invertido. Si ya lo tenías antes de usar Moni, déjalo apagado.'
@@ -1915,7 +1921,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -4220,7 +4226,7 @@ async function abrirDetalleCdt(id) {
     ['Inicio', esc(fechaTxt(x.Fecha_Inicio))], ['Vence', esc(fechaTxt(x.Fecha_Vencimiento)) + ' · ' + x.Plazo_Dias + ' días'],
     ['Paga los intereses', esc({ Vencimiento: 'Al vencimiento', Mensual: 'Cada mes', Trimestral: 'Cada trimestre' }[x.Pago_Intereses])],
     ['Intereses estimados', '<span class="m-num">' + dinero(x.interesTotal) + '</span>'],
-    ['Retención (' + pct(x.Retencion_Pct) + ')', '<span class="m-num">−' + dinero(x.retencionTotal) + '</span>'],
+    ['Retención (' + (x.Retencion_Tipo === 'Valor' ? 'valor fijo' : pct(x.Retencion_Pct)) + ')', '<span class="m-num">−' + dinero(x.retencionTotal) + '</span>'],
     ['Recibirías (neto)', '<strong class="m-num m-positivo">' + dinero(x.netoTotal) + '</strong>']
   ];
   if (x.cobrados) filas.push(['Intereses ya cobrados', '<span class="m-num">' + dinero(x.cobrados) + '</span>']);
@@ -4459,7 +4465,7 @@ function vPagos() {
   }
   return {
     titulo: 'Servicios y suscripciones', html: html,
-    acciones: '<button class="m-btn-texto" data-acc="nuevo" data-tabla="Suscripciones" aria-label="Agregar un cobro">' + ico('plus') + '</button>',
+    acciones: (activos('Servicios_Publicos').length ? '<button class="m-btn-texto" data-acc="pagar-servicio">Pagar servicio</button>' : '') + '<button class="m-btn-texto" data-acc="nuevo" data-tabla="Suscripciones" aria-label="Agregar un cobro">' + ico('plus') + '</button>',
     despues: () => { if (!p.data && !p.cargando && !p.error) cargarEn(p, 'pagos', 'getSuscripciones', []); }
   };
 }
@@ -4551,6 +4557,72 @@ async function abrirPagarCobro(s) {
   });
 }
 
+/** El enlace de pago de un servicio: el propio o, si tiene una empresa registrada, el de la empresa. */
+function urlDeServicio(x) {
+  if (x.URL_Pago) return x.URL_Pago;
+  const emp = x.ID_Empresa ? porId('Empresas_Pago', 'ID_Empresa', x.ID_Empresa) : null;
+  return emp ? emp.URL_Pago || '' : '';
+}
+
+/**
+ * Pagar un servicio: se elige la empresa, luego el hogar, y Moni abre la página de pago en otra ventana y deja el código
+ * de pago en el portapapeles. Si el navegador no deja abrir la ventana o copiar, la hoja muestra el código y el enlace.
+ */
+async function abrirPagarServicio() {
+  const srvs = activos('Servicios_Publicos');
+  if (!srvs.length) { aviso('Primero guarda un servicio en Ajustes → Servicios públicos.', true); return; }
+  // Se agrupan por empresa registrada; los servicios sin empresa registrada, por el nombre que se escribió.
+  const grupos = [];
+  srvs.forEach(s => {
+    const clave = s.ID_Empresa || ('n:' + (s.Empresa || '').toLowerCase());
+    let g = grupos.find(x => x.clave === clave);
+    if (!g) { g = { clave: clave, nombre: s.Empresa || 'Sin empresa', servicios: [] }; grupos.push(g); }
+    g.servicios.push(s);
+  });
+  grupos.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const filaSrv = s => { const i = porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble); return { s: s, titulo: (i ? i.Nombre : 'Sin hogar') + ' · ' + s.Tipo, sub: 'Código ' + s.Codigo_Pago }; };
+  const botones = (items, attr) => '<div class="m-group">' + items.map((x, k) => fila({ titulo: esc(x.titulo), sub: esc(x.sub), chevron: true, attrs: attr + '="' + k + '"' })).join('') + '</div>';
+  const cuerpo = '<div id="ps-emp"><p class="m-ayuda" style="margin-bottom:var(--m-space-3)">¿A qué empresa le vas a pagar?</p>' +
+      botones(grupos.map(g => ({ titulo: g.nombre, sub: g.servicios.length + (g.servicios.length === 1 ? ' servicio' : ' servicios') })), 'data-ps-emp') + '</div>' +
+    '<div id="ps-hogar" hidden><p class="m-ayuda" id="ps-hogar-tit" style="margin-bottom:var(--m-space-3)"></p><div id="ps-hogar-lista"></div>' +
+      '<button type="button" class="m-btn-texto" id="ps-atras" style="margin-top:var(--m-space-3)">Elegir otra empresa</button></div>' +
+    '<div id="ps-fallo" hidden></div>';
+  await abrirHoja({
+    titulo: 'Pagar un servicio', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    alAbrir: raiz => {
+      let items = [];
+      const mostrar = g => {
+        items = g.servicios.map(filaSrv);
+        $('#ps-hogar-tit', raiz).textContent = g.nombre + ': ¿de cuál hogar?';
+        $('#ps-hogar-lista', raiz).innerHTML = botones(items, 'data-ps-srv');
+        $('#ps-emp', raiz).hidden = true; $('#ps-hogar', raiz).hidden = false;
+      };
+      // Todo ocurre dentro del toque del botón (el navegador solo deja abrir ventanas y copiar así).
+      const pagar = s => {
+        const url = urlDeServicio(s);
+        const ventana = url ? window.open(url, '_blank', 'noopener,noreferrer') : null;
+        const copiado = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(s.Codigo_Pago).then(() => true, () => false) : Promise.resolve(false);
+        copiado.then(ok => {
+          if (url && ventana && ok) { $('[data-hoja-acc="cerrar"]', raiz.closest('dialog') || document).click(); aviso('Código ' + s.Codigo_Pago + ' copiado: pégalo en la página de pago'); return; }
+          // Algo no se pudo: se deja todo a mano
+          $('#ps-hogar', raiz).hidden = true; $('#ps-emp', raiz).hidden = true;
+          const caja = $('#ps-fallo', raiz); caja.hidden = false;
+          caja.innerHTML = '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(s.Codigo_Pago) + '</div></div>' +
+            '<p class="m-ayuda" style="margin-bottom:var(--m-space-3)">' + (ok ? 'El código ya está copiado.' : 'No pude copiarlo solo: toca “Copiar código”.') + (url && !ventana ? ' El navegador bloqueó la ventana: usa “Ir a pagar”.' : '') + (url ? '' : ' Este servicio no tiene enlace de pago guardado.') + '</p>' +
+            '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)"><button type="button" class="m-btn m-btn-primary" id="ps-copiar">Copiar código</button>' + (url ? enlaceExterno(url, 'Ir a pagar') : '') + '</div>';
+          $('#ps-copiar', raiz).addEventListener('click', () => copiar(s.Codigo_Pago, 'Código copiado'));
+        });
+      };
+      raiz.addEventListener('click', ev => {
+        const e = ev.target.closest('[data-ps-emp]'), h = ev.target.closest('[data-ps-srv]');
+        if (e) { const g = grupos[Number(e.dataset.psEmp)]; if (g.servicios.length === 1) { items = [filaSrv(g.servicios[0])]; pagar(g.servicios[0]); } else mostrar(g); }
+        else if (h) pagar(items[Number(h.dataset.psSrv)].s);
+        else if (ev.target.closest('#ps-atras')) { $('#ps-hogar', raiz).hidden = true; $('#ps-emp', raiz).hidden = false; }
+      });
+    }
+  });
+}
+
 async function abrirCodigoServicio(id) {
   const x = porId('Servicios_Publicos', 'ID_Servicio', id);
   if (!x) return;
@@ -4558,7 +4630,7 @@ async function abrirCodigoServicio(id) {
     titulo: x.Tipo + (x.Empresa ? ' · ' + x.Empresa : ''), sinGuardar: true, izq: 'Cerrar',
     cuerpo: '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(x.Codigo_Pago) + '</div></div>' +
       '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)"><button type="button" class="m-btn m-btn-primary" data-hoja-acc="copiar">Copiar código</button>' +
-      (x.URL_Pago ? enlaceExterno(x.URL_Pago, 'Ir a pagar') : '<p class="m-ayuda" style="text-align:center">No tiene enlace de pago guardado.</p>') + '</div>',
+      (urlDeServicio(x) ? enlaceExterno(urlDeServicio(x), 'Ir a pagar') : '<p class="m-ayuda" style="text-align:center">No tiene enlace de pago guardado.</p>') + '</div>',
     extra: { copiar: async () => { await copiar(x.Codigo_Pago, 'Código copiado'); } }
   });
 }
@@ -5185,7 +5257,7 @@ const CAMPOS_ASIST = {
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
   Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo'],
   Suscripciones: ['Nombre', 'Tipo', 'ID_Inmueble', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'URL_Pago'],
-  CDTs: ['Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Pago_Intereses', 'Retencion_Pct'],
+  CDTs: ['Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Pago_Intereses', 'Retencion_Tipo', 'Retencion_Valor', 'Retencion_Pct'],
   Inmuebles: ['Nombre'],
   Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago']
 };
@@ -5761,6 +5833,7 @@ const ACCIONES = {
   'recargar-pag': () => { App.pag.error = null; App.pag.data = null; render(); },
   susc: el => abrirDetalleCobro(el.dataset.id),
   codigo: el => abrirCodigoServicio(el.dataset.id),
+  'pagar-servicio': () => abrirPagarServicio(),
   rapido: el => abrirRegistrar({ tipo: el.dataset.tipo }),
   'recargar-aho': () => { App.aho.error = null; App.aho.data = null; render(); },
   'recargar-ahoc': () => { App.ahoC.error = null; App.ahoC.data = null; render(); },

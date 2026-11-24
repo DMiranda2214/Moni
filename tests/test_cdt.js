@@ -47,6 +47,22 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('obtenerCdts').vigentes.find(v => v.ID_CDT === y.ID_CDT).interesTotal, esperado);
   });
 
+  prueba('cdt: la retención se puede dar en pesos (total del plazo) en vez de en porcentaje', () => {
+    const { e, base } = escenario();
+    const c = e.llamar('guardarCatalogo', 'CDTs', Object.assign({}, base, { Retencion_Pct: '', Retencion_Tipo: 'Valor', Retencion_Valor: 25000 }));
+    assert.strictEqual(c.Retencion_Tipo, 'Valor');
+    assert.strictEqual(c.Retencion_Pct, 0.05, '25.000 sobre 500.000 de intereses');
+    const x = e.llamar('obtenerCdts').vigentes[0];
+    assert.strictEqual(x.retencionTotal, 25000);
+    assert.strictEqual(x.netoTotal, 475000);
+    assert.strictEqual(x.Retencion_Tipo, 'Valor');
+    assert.throws(e.falla('guardarCatalogo', 'CDTs', Object.assign({}, base, { Nombre: 'Otro', Retencion_Tipo: 'Valor', Retencion_Valor: 600000 })), /no puede superar/);
+    // Por defecto sigue siendo un porcentaje
+    const d = e.llamar('guardarCatalogo', 'CDTs', Object.assign({}, base, { Nombre: 'CDT 3' }));
+    assert.strictEqual(d.Retencion_Tipo, 'Porcentaje');
+    assert.strictEqual(e.llamar('obtenerCdts').vigentes.find(v => v.ID_CDT === d.ID_CDT).retencionTotal, 20000);
+  });
+
   prueba('cdt: validaciones (banco en pesos, tasa, plazo, fecha futura, nombre único)', () => {
     const { e, banco, base } = escenario();
     const usd = e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Dólares', Divisa: 'USD' });

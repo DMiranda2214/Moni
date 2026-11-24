@@ -1,5 +1,11 @@
 # Cambios
 
+## 1.9.0 — Retención del CDT en pesos y empresas de servicios (24 nov 2026)
+- **Nuevo:** al agregar un CDT eliges si la **retención en la fuente** es un porcentaje de los intereses o un valor en pesos (total del plazo).
+- **Nuevo:** **Empresas de servicios** (Ajustes): guardas una vez cada empresa con su enlace de pago (Enel, Vanti, el acueducto…). Al guardar un servicio eliges la empresa y solo escribes el hogar y el código; el enlace no se repite.
+- **Nuevo:** botón **Pagar servicio**: eliges la empresa y el hogar, y Moni abre la página de pago en otra ventana y deja el código de pago en el portapapeles.
+- **Cambia:** el esquema pasa a **30 tablas** (`Empresas_Pago`) y se agregan columnas a `CDTs` y `Servicios_Publicos`; las hojas existentes se actualizan solas al abrir la app, sin perder datos.
+
 ## 1.8.0 — Presupuesto en una sola pantalla, traslados históricos y autocompletado (24 nov 2026)
 - **Cambia:** el presupuesto une la gráfica y la lista: cada renglón trae su **barra de avance** (real frente a plan) y su casilla de **completo**. Al marcarla, Moni pregunta si quieres agregar algún movimiento más o si bastan los registrados. Desmarcar solo reabre el renglón; en el detalle puedes agregar un movimiento sin completarlo.
 - **Nuevo:** **Mover** dinero también tiene el interruptor *Sumar a mis saldos*: apágalo para anotar un traslado anterior a Moni sin que se muevan los saldos.

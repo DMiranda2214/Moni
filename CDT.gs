@@ -34,8 +34,11 @@ function proximoPagoInteresCdt_(inicio, meses, vencimiento, desde) {
 /** Un CDT con sus cifras calculadas. */
 function resumenCdt_(c, hoy, bancos) {
   const capital = Number(c.Capital) || 0, ea = Number(c.Tasa_EA) || 0, plazo = Number(c.Plazo_Dias) || 0;
-  const pct = Number(c.Retencion_Pct) || 0;
   const interesTotal = interesCdt_(capital, ea, plazo);
+  // La retención se puede dar en % o en pesos (el total de todo el plazo). En pesos se vuelve un % de los intereses y el resto del cálculo no cambia.
+  const tipoRet = c.Retencion_Tipo === 'Valor' ? 'Valor' : 'Porcentaje';
+  const valorRet = Number(c.Retencion_Valor) || 0;
+  const pct = tipoRet === 'Valor' ? (interesTotal > 0 ? Math.min(valorRet / interesTotal, 0.99999) : 0) : (Number(c.Retencion_Pct) || 0);
   const dias = diasEntre_(hoy, c.Fecha_Vencimiento);
   const transcurridos = Math.max(0, Math.min(plazo, plazo - dias));
   const vigente = c.Estado === 'Vigente';
@@ -56,13 +59,13 @@ function resumenCdt_(c, hoy, bancos) {
   return {
     ID_CDT: c.ID_CDT, Nombre: c.Nombre, ID_Banco: c.ID_Banco, Banco: banco ? banco.Nombre : '',
     Capital: capital, Tasa_EA: ea, Fecha_Inicio: c.Fecha_Inicio, Plazo_Dias: plazo, Fecha_Vencimiento: c.Fecha_Vencimiento,
-    Pago_Intereses: c.Pago_Intereses || 'Vencimiento', Retencion_Pct: pct, Estado: c.Estado || 'Vigente',
+    Pago_Intereses: c.Pago_Intereses || 'Vencimiento', Retencion_Pct: pct, Retencion_Tipo: tipoRet, Retencion_Valor: valorRet, Estado: c.Estado || 'Vigente',
     ID_Bolsillo_Origen: c.ID_Bolsillo_Origen || '', ID_Bolsillo_Destino: c.ID_Bolsillo_Destino || '',
     Renovar: esVerdadero(c.Renovar), Fecha_Cierre: c.Fecha_Cierre || '', Notas: c.Notas || '',
     descontado: !!c.ID_Mov_Apertura, cobrados: cobrados,
     dias: dias, avance: plazo > 0 ? Math.round(transcurridos / plazo * 1000) / 1000 : 0,
     estado: !vigente ? 'cerrado' : (dias < 0 ? 'vencido' : (dias <= DIAS_RECORDATORIO ? 'pronto' : 'ok')),
-    interesTotal: interesTotal, retencionTotal: redondear2_(interesTotal * pct), netoTotal: redondear2_(interesTotal * (1 - pct)),
+    interesTotal: interesTotal, retencionTotal: tipoRet === 'Valor' ? redondear2_(Math.min(valorRet, interesTotal)) : redondear2_(interesTotal * pct), netoTotal: redondear2_(interesTotal * (1 - pct)),
     sugerencia: { interes: interesHoy, retencion: redondear2_(interesHoy * pct) },
     proximoPago: proximoPago,
     editableCifras: vigente && !c.ID_Mov_Apertura && !cobrados
@@ -184,7 +187,7 @@ function cerrarCdt(id, d) {
     renovado = guardarCatalogo('CDTs', {
       Nombre: nombre, ID_Banco: c.ID_Banco, Capital: capital || c.Capital, Tasa_EA: x.Tasa_EA !== undefined && x.Tasa_EA !== '' ? x.Tasa_EA : c.Tasa_EA,
       Fecha_Inicio: fecha, Plazo_Dias: x.Plazo_Dias !== undefined && x.Plazo_Dias !== '' ? x.Plazo_Dias : c.Plazo_Dias,
-      Pago_Intereses: c.Pago_Intereses, Retencion_Pct: c.Retencion_Pct, ID_Bolsillo_Destino: c.ID_Bolsillo_Destino, Renovar: true, Notas: 'Renovación de ' + c.Nombre
+      Pago_Intereses: c.Pago_Intereses, Retencion_Tipo: 'Porcentaje', Retencion_Pct: r.Retencion_Pct, ID_Bolsillo_Destino: c.ID_Bolsillo_Destino, Renovar: true, Notas: 'Renovación de ' + c.Nombre
     });
   }
   return { ids: ids, interes: m.interes, retencion: m.retencion, renovado: renovado };
