@@ -1457,6 +1457,16 @@ const CAT = {
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
+  Empresas_Pago: {
+    plural: 'Empresas de servicios', singular: 'empresa', icono: 'tarjetas', id: 'ID_Empresa',
+    vacio: 'Guarda las empresas a las que les pagas los servicios (Enel, Vanti, el acueducto…) con su enlace de pago, una sola vez.',
+    fila: e => ({ titulo: esc(e.Nombre), sub: e.URL_Pago ? esc(e.URL_Pago.replace(/^https:\/\//, '')) : 'Sin enlace de pago' }),
+    campos: [
+      { k: 'Nombre', label: 'Empresa', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Enel', 'Vanti', 'Acueducto', 'Claro', 'Movistar', 'Tigo', 'Aseo'] },
+      { k: 'URL_Pago', label: 'Enlace de pago', tipo: 'texto', inputmode: 'url', ayuda: 'La página donde se paga. Debe empezar por https://' },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
   Servicios_Publicos: {
     plural: 'Servicios públicos', singular: 'servicio', icono: 'pulso', id: 'ID_Servicio',
     vacio: 'Guarda el código de pago de cada servicio para tenerlo a la mano.',
@@ -1921,7 +1931,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -3424,13 +3434,16 @@ function htmlTarjeta(d) {
   }).join('') + '</div><div style="height:var(--m-space-4)"></div>';
 
   h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(d.tarjeta.Banco) + ' · corte de ' + esc(mesTexto(d.mes).toLowerCase()) + ' (' + esc(fechaCorta(d.corte.desde)) + ' – ' + esc(fechaCorta(d.corte.hasta)) + ')</div>' +
-    '<div class="m-resumen-cifra m-num">' + dinero(t.total) + '</div><p class="m-ayuda">' + estado + '</p>' +
+    '<div class="m-resumen-cifra m-num">' + dinero(t.total) + '</div>' +
+    (!pagado && t.abonado > 0 ? '<p class="m-ayuda">Abonado ' + dinero(t.abonado) + ' · <strong>debes ' + dinero(t.saldo) + '</strong> de este corte</p>' : '') +
+    '<p class="m-ayuda">' + estado + '</p>' +
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">En la reserva</div><strong class="m-num">' + dinero(d.reserva.Saldo) + '</strong></div>' +
     '<div><div class="m-resumen-etiqueta">Cupo disponible</div><strong class="m-num">' + dinero(d.cupo.disponible) + '</strong></div></div>' +
     '<div class="m-acciones-fila">' +
     (pagado ? '<button class="m-btn m-btn-secondary" data-acc="anular-pago-extracto">Anular el pago</button>'
       : '<button class="m-btn m-btn-primary" data-acc="pagar-extracto"' + (t.total === 0 ? ' disabled' : '') + '>Pagar el extracto</button>') +
     '<button class="m-btn m-btn-secondary" data-acc="abrir-compra">Nueva compra</button></div>' +
+    (!pagado && t.total > 0 ? '<div class="m-acciones-fila" style="margin-top:var(--m-space-2)"><button class="m-btn m-btn-secondary" data-acc="abrir-abono">Registrar un abono</button></div>' : '') +
     '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Corte el día ' + d.tarjeta.Dia_Corte + ' · pago el día ' + d.tarjeta.Dia_Pago + ' (próximo: ' + esc(fechaCorta(d.proximoPago)) + ')</p></div>';
 
   h += '<div style="height:var(--m-space-4)"></div>';
@@ -3444,7 +3457,53 @@ function htmlTarjeta(d) {
     const pf = t.porFuente;
     h += '<p class="m-seccion-pie">' + FUENTES.filter(f => pf[f[0]]).map(f => esc(f[1]) + ' ' + dinero(pf[f[0]])).join(' · ') + '</p>';
   }
+  if (d.pagos && d.pagos.length) {
+    h += seccion('Abonos y aportes', d.pagos.map(p => fila({
+      titulo: esc(p.Pagador || 'Tú') + ' · ' + (p.Tipo === 'Abono' ? 'abono' : 'aporte al pago'),
+      sub: esc(fechaCorta(p.Fecha)) + (p.Pagador ? ' · no movió tus bolsillos' : (p.Bolsillo ? ' · sale de ' + esc(p.Bolsillo) : '')),
+      final: '<span class="m-monto">' + dinero(p.Valor) + '</span>', clase: p.Editable ? '' : 'm-inactivo',
+      attrs: p.Editable ? 'data-acc="abono" data-id="' + esc(p.ID_Pago) + '"' : '', deshabilitada: !p.Editable
+    })).join(''), 'Un abono baja la deuda y libera cupo; no aparta dinero en la reserva. Toca uno para anularlo.');
+  }
   return h;
+}
+
+/** Registra un abono a la deuda del corte que se está viendo: lo paga la persona (desde un bolsillo) u otra persona. */
+async function abrirAbonoTarjeta() {
+  const td = App.tar.data;
+  if (!td || td.extracto || !(td.totales.saldo > 0)) return;
+  const grupos = opcionesDestino(false);
+  const cuerpo = '<form novalidate data-form="abono"><p class="m-hoja-mensaje">Un abono baja lo que debes de este corte y libera cupo. No aparta dinero en la reserva. Hoy debes ' + dinero(td.totales.saldo) + '.</p>' +
+    htmlCampo({ k: 'Valor', label: 'Valor del abono', tipo: 'dinero', requerido: true }, td.totales.saldo, {}) +
+    '<div class="m-campo"><label class="m-label" for="f-Quien">¿Quién lo paga?</label><select class="m-input" id="f-Quien"><option value="yo">Yo, desde un bolsillo mío</option><option value="otro">Otra persona (desde un banco que no está en Moni)</option></select></div>' +
+    '<div class="m-campo" id="ab-bolsillo"><label class="m-label" for="f-Origen">Sale del bolsillo</label><select class="m-input" id="f-Origen">' +
+      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (td.personal && x[0] === td.personal.ID_Bolsillo ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<div class="m-campo" id="ab-nombre" hidden><label class="m-label" for="f-Pagador">Nombre de quien paga</label><input class="m-input" id="f-Pagador" maxlength="60" list="ab-sug" autocomplete="off" placeholder="Por ejemplo, Mamá"><datalist id="ab-sug">' + (td.pagadores || []).map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist><p class="m-ayuda">No se mueve ningún bolsillo tuyo: solo queda anotado quién abonó.</p></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  await abrirHoja({
+    titulo: 'Abono a la tarjeta', der: 'Abonar', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const sync = () => { const otro = $('#f-Quien', raiz).value === 'otro'; $('#ab-bolsillo', raiz).hidden = otro; $('#ab-nombre', raiz).hidden = !otro; };
+      $('#f-Quien', raiz).addEventListener('change', sync); sync();
+    },
+    alGuardar: async raiz => {
+      const v = leerDinero($('#f-Valor', raiz).value);
+      if (v === '' || isNaN(v) || v <= 0) throw new Error('Escribe el valor del abono.');
+      const otro = $('#f-Quien', raiz).value === 'otro';
+      const pagador = otro ? $('#f-Pagador', raiz).value.trim() : '';
+      if (otro && !pagador) throw new Error('Escribe el nombre de quien paga.');
+      const res = await api('addAbonoTarjeta', { ID_Tarjeta: td.tarjeta.ID_Tarjeta, Mes: td.mes, Valor: v, Fecha: $('#f-Fecha', raiz).value, Pagador: pagador, ID_Bolsillo: otro ? '' : $('#f-Origen', raiz).value });
+      aplicarEscritura(res); aplicarTarjeta(res); render();
+      aviso('Abono registrado', { deshacer: () => anularAbonoYAvisar(res.idPago) });
+    }
+  });
+}
+
+async function anularAbonoYAvisar(idPago) {
+  try { const res = await api('voidAbonoTarjeta', idPago); aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Abono anulado'); }
+  catch (e) { aviso(e.message, true); }
 }
 
 /** Aplica el resultado de una escritura sobre la tarjeta que se está viendo. */
@@ -3580,27 +3639,51 @@ async function abrirDetalleCompra(id) {
 async function abrirPagoExtracto() {
   const td = App.tar.data;
   if (!td || td.extracto) return;
-  const falta = td.totales.faltaParaPagar;
+  const saldo = td.totales.saldo, enReserva = td.reserva.Saldo;
   const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => x[0] !== td.reserva.ID_Bolsillo) })).filter(g => g.opciones.length);
   const preferido = td.personal ? td.personal.ID_Bolsillo : '';
+  const filaAporte = () => '<div class="m-aporte" style="display:flex;gap:var(--m-space-2);margin-bottom:var(--m-space-2)"><input class="m-input" data-ap="nombre" maxlength="60" list="ap-sug" autocomplete="off" placeholder="Quién (nombre)" style="flex:2;min-width:0"><input class="m-input" data-ap="valor" inputmode="decimal" placeholder="Valor" style="flex:1;min-width:0"><button type="button" class="m-btn-texto" data-ap="quitar" aria-label="Quitar">✕</button></div>';
   const cuerpo = '<form novalidate data-form="extracto"><dl class="m-detalle">' +
     '<div><dt>Total del extracto</dt><dd class="m-num"><strong>' + dinero(td.totales.total) + '</strong></dd></div>' +
-    '<div><dt>Ya apartado en la reserva</dt><dd class="m-num">' + dinero(Math.min(td.reserva.Saldo, td.totales.total)) + '</dd></div>' +
-    '<div><dt>Falta completar</dt><dd class="m-num">' + dinero(falta) + '</dd></div></dl>' +
-    (falta > 0
-      ? '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="f-Origen">¿De qué bolsillo sale lo que falta?</label>' + htmlInfo('Lo que falta en la reserva (compras que no apartaron dinero) sale del bolsillo que elijas, y así queda registrado de dónde salió el dinero.') + '</div>' +
-        '<select class="m-input" id="f-Origen">' + (preferido ? '' : '<option value="" disabled selected>Elegir…</option>') +
-        grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>'
-      : '') +
-    '<p class="m-hoja-mensaje">Se paga el total desde la reserva y las compras quedan marcadas como pagadas.</p>' +
+    (td.totales.abonado > 0 ? '<div><dt>Ya abonado</dt><dd class="m-num">' + dinero(td.totales.abonado) + '</dd></div>' : '') +
+    '<div><dt>Falta por pagar</dt><dd class="m-num"><strong>' + dinero(saldo) + '</strong></dd></div>' +
+    '<div><dt>Aportan otras personas</dt><dd class="m-num" id="px-terceros">' + dinero(0) + '</dd></div>' +
+    '<div><dt>Ya apartado en la reserva</dt><dd class="m-num">' + dinero(Math.min(enReserva, saldo)) + '</dd></div>' +
+    '<div><dt>Falta completar</dt><dd class="m-num" id="px-falta">' + dinero(td.totales.faltaParaPagar) + '</dd></div></dl>' +
+    '<div class="m-campo"><div class="m-label-fila"><label class="m-label">¿Alguien más aporta al pago?</label>' + htmlInfo('Si otra persona paga una parte del extracto desde un banco que no tienes en Moni, anota quién y cuánto. No se mueve ningún bolsillo tuyo: solo baja lo que tú pagas.') + '</div>' +
+      '<div id="px-aportes"></div><datalist id="ap-sug">' + (td.pagadores || []).map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist>' +
+      '<button type="button" class="m-btn-texto" id="px-mas">' + ico('plus', 'm-icon-sm') + ' Agregar a alguien</button></div>' +
+    '<div class="m-campo" id="px-origen"><div class="m-label-fila"><label class="m-label" for="f-Origen">¿De qué bolsillo sale lo que falta?</label>' + htmlInfo('Lo que falta en la reserva (compras que no apartaron dinero) sale del bolsillo que elijas, y así queda registrado de dónde salió.') + '</div>' +
+      '<select class="m-input" id="f-Origen">' + (preferido ? '' : '<option value="" disabled selected>Elegir…</option>') +
+      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<p class="m-hoja-mensaje">Lo tuyo se paga desde la reserva y las compras quedan marcadas como pagadas.</p>' +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha del pago</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  const aportes = raiz => $$('.m-aporte', raiz).map(f => ({ Pagador: $('[data-ap="nombre"]', f).value.trim(), Valor: leerDinero($('[data-ap="valor"]', f).value) }))
+    .filter(x => x.Pagador || (x.Valor !== '' && !isNaN(x.Valor) && x.Valor > 0));
   await abrirHoja({
     titulo: 'Pagar extracto', der: 'Pagar', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      const calcular = () => {
+        const terceros = aportes(raiz).reduce((a, x) => a + (typeof x.Valor === 'number' && !isNaN(x.Valor) ? x.Valor : 0), 0);
+        const mia = Math.max(0, saldo - terceros), falta = Math.max(0, Math.round((mia - enReserva) * 100) / 100);
+        $('#px-terceros', raiz).textContent = dinero(terceros);
+        $('#px-falta', raiz).textContent = dinero(falta);
+        $('#px-origen', raiz).hidden = !(falta > 0);
+      };
+      $('#px-mas', raiz).addEventListener('click', () => { $('#px-aportes', raiz).insertAdjacentHTML('beforeend', filaAporte()); const n = $$('.m-aporte [data-ap="nombre"]', raiz); n[n.length - 1].focus(); });
+      raiz.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.ap) calcular(); });
+      raiz.addEventListener('click', ev => { const q = ev.target.closest('[data-ap="quitar"]'); if (q) { q.closest('.m-aporte').remove(); calcular(); } });
+      calcular();
+    },
     alGuardar: async raiz => {
+      const lista = aportes(raiz);
+      lista.forEach(x => { if (!x.Pagador) throw new Error('Escribe el nombre de quien aporta.'); if (typeof x.Valor !== 'number' || isNaN(x.Valor) || x.Valor <= 0) throw new Error('Escribe cuánto aporta ' + x.Pagador + '.'); });
+      const terceros = lista.reduce((a, x) => a + x.Valor, 0);
+      const falta = Math.max(0, saldo - terceros - enReserva);
       const origen = $('#f-Origen', raiz);
       if (falta > 0 && (!origen || !origen.value)) throw new Error('Elige de qué bolsillo sale lo que falta.');
-      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, origen ? origen.value : '');
+      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, falta > 0 && origen ? origen.value : '', lista);
       aplicarEscritura(res); aplicarTarjeta(res); render();
       aviso('Extracto pagado', { deshacer: () => anularPagoExtractoYAvisar(res.idExtracto) });
     }
@@ -4020,9 +4103,12 @@ function htmlRegalos(d) {
     '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Diferencia</div><strong class="m-num ' + (t.diferencia < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(t.diferencia) + '</strong></div><div><div class="m-resumen-etiqueta">Comprados</div><strong class="m-num">' + t.comprados + ' de ' + t.total + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
   if (!d.items.length) return h + vacio('hogar', 'Sin regalos en ' + d.anio, 'Anota a quién le vas a regalar y cuánto calculas gastar. Cuando compres, registra el gasto y se calcula la diferencia.',
     '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar un regalo</button>');
-  return h + htmlRegalosGraficos(d) + '<div class="m-group">' + d.items.map(i => fila({
+  const banner = (d.pendientes || []).map((p, k) => '<div class="m-banner m-pendiente m-pendiente-importante" role="note">' + ico('alerta') +
+    '<span class="m-pendiente-texto"><strong>Mueve ' + dinero(p.falta) + ' a la reserva de ' + esc(p.Tarjeta) + '</strong> ' + esc('Regalo de ' + p.Persona + (p.BolsilloPlan ? ': de “' + p.BolsilloPlan + '” a “' + p.Reserva + '”' : ' → “' + p.Reserva + '”') + '. Sigue este aviso hasta que lo registres.') + '</span>' +
+    '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="regalo-mover" data-i="' + k + '">Mover ahora</button></span></div>').join('');
+  return banner + h + htmlRegalosGraficos(d) + '<div class="m-group">' + d.items.map(i => fila({
     titulo: esc(i.Persona) + (i.Aplica ? '' : ' <span class="m-insignia">no aplica</span>'), sub: (i.Idea ? esc(i.Idea) + ' · ' : '') + 'estimado ' + dinero(i.Estimado),
-    final: i.Comprado ? '<strong class="m-num">' + dinero(i.Real) + '</strong><span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>' : '<span class="m-row-sub">pendiente</span>',
+    final: i.Comprado ? '<strong class="m-num">' + dinero(i.Real) + '</strong>' + (i.PendienteReserva && i.PendienteReserva.length ? '<span class="m-row-sub" style="display:block;color:var(--m-danger)">mover a la reserva</span>' : '<span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>') : '<span class="m-row-sub">pendiente</span>',
     clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"'
   })).join('') + '</div>';
 }
@@ -4036,6 +4122,8 @@ async function abrirRegalo(item) {
     { k: 'ID_Persona', label: 'Para quién', tipo: 'select', requerido: true, opciones: () => personas.map(p => [p.ID_Persona, p.Nombre]) },
     { k: 'Idea', label: 'Idea de regalo', tipo: 'texto', maxlength: 120 },
     { k: 'Estimado', label: 'Cuánto calculas gastar', tipo: 'dinero', requerido: true },
+    { k: 'ID_Bolsillo_Plan', label: '¿De qué bolsillo planeas pagarlo? (opcional)', tipo: 'select', opciones: () => opcionesDestino(true),
+      ayuda: 'Si lo compras con tarjeta de crédito, Moni te recordará pasar ese dinero de este bolsillo a la reserva de la tarjeta.' },
     { k: 'Aplica', label: 'Aplica este año', tipo: 'interruptor', ayuda: 'Desactívalo si este año no le vas a regalar; no cuenta en los totales.' }
   ];
   const v0 = item || { Aplica: true };
@@ -4076,19 +4164,33 @@ async function abrirDetalleRegalo(id) {
 
 async function abrirCompraRegalo(it) {
   const grupos = opcionesDestino(false);
-  const pref = grupos.map(g => g.opciones.find(x => /regalo/i.test(x[1]))).find(Boolean);
+  const tarjetas = activos('Tarjetas');
+  const pref = it.ID_Bolsillo_Plan || (grupos.map(g => (g.opciones.find(x => /regalo/i.test(x[1])) || [])[0]).find(Boolean) || '');
   await abrirHoja({
     titulo: 'Compra de regalo',
     cuerpo: '<form novalidate data-form="compra-regalo"><p class="m-hoja-mensaje">Para ' + esc(it.Persona) + (it.Idea ? ' · ' + esc(it.Idea) : '') + '. Se registra como un gasto.</p>' +
       htmlCampo({ k: 'Valor', label: 'Cuánto costó', tipo: 'dinero', requerido: true }, it.Estimado - it.Real > 0 ? it.Estimado - it.Real : '', {}) +
-      '<div class="m-campo"><label class="m-label" for="f-Bolsillo">Sale de</label><select class="m-input" id="f-Bolsillo">' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (pref && x[0] === pref[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+      '<div class="m-campo"><label class="m-label" for="f-Bolsillo">' + (tarjetas.length ? 'Con qué pagaste' : 'Sale de') + '</label><select class="m-input" id="f-Bolsillo">' +
+        grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === pref ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') +
+        (tarjetas.length ? '<optgroup label="Con tarjeta de crédito">' + tarjetas.map(t => '<option value="T:' + esc(t.ID_Tarjeta) + '">' + esc(t.Nombre) + '</option>').join('') + '</optgroup>' : '') + '</select>' +
+        '<p class="m-ayuda" id="rg-tc-ayuda" hidden></p></div>' +
       '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
+    alAbrir: raiz => {
+      activarEcoDinero(raiz); $('#f-Valor', raiz).focus();
+      const sel = $('#f-Bolsillo', raiz), ayuda = $('#rg-tc-ayuda', raiz);
+      const sync = () => {
+        const tc = sel.value.indexOf('T:') === 0;
+        ayuda.hidden = !tc;
+        if (tc) ayuda.textContent = 'No sale dinero ahora. Moni te recordará pasar el valor ' + (it.BolsilloPlan ? 'de “' + it.BolsilloPlan + '” ' : '') + 'a la reserva de la tarjeta, y el aviso sigue hasta que registres ese movimiento.';
+      };
+      sel.addEventListener('change', sync); sync();
+    },
     alGuardar: async raiz => {
       const v = leerDinero($('#f-Valor', raiz).value);
       if (v === '' || isNaN(v)) throw new Error('Escribe cuánto costó.');
       const res = await api('payRegalo', it.ID_Regalo, v, $('#f-Bolsillo', raiz).value, $('#f-Fecha', raiz).value);
-      aplicarEscritura(res); aplicarRegalos(res.regalos); render(); aviso('Compra registrada');
+      aplicarEscritura(res); aplicarRegalos(res.regalos); App.tar.data = null; App.deudas.data = null; render();
+      aviso(res.regalos.pendientes && res.regalos.pendientes.some(p => p.ID_Regalo === it.ID_Regalo) ? 'Compra registrada · falta mover el dinero a la reserva' : 'Compra registrada');
     }
   });
 }
@@ -5847,6 +5949,7 @@ const ACCIONES = {
   'reponer-ahorro': () => abrirMovimientoAhorro('reponer'),
   'nuevo-regalo': () => abrirRegalo(null),
   regalo: el => abrirDetalleRegalo(el.dataset.id),
+  'regalo-mover': el => { const p = (App.reg.data && App.reg.data.pendientes || [])[Number(el.dataset.i)]; if (p) abrirRegistrar({ tipo: 'Mover', idBolsillo: p.ID_Bolsillo_Plan || undefined, destino: p.ID_Bolsillo_Reserva, valor: p.falta, concepto: 'Reserva ' + p.Tarjeta + ': regalo de ' + p.Persona }); },
   'mes-anual': el => { App.ppto.mes = el.dataset.mes; App.ppto.data = null; navegar('presupuesto'); },
   'crear-respaldo': async el => {
     el.disabled = true; el.textContent = 'Creando…';
@@ -5860,6 +5963,11 @@ const ACCIONES = {
   'tar-corte': (el) => { App.tar.mes = el.dataset.id; App.tar.data = null; render(); },
   compra: el => abrirDetalleCompra(el.dataset.id),
   'pagar-extracto': () => abrirPagoExtracto(),
+  'abrir-abono': () => abrirAbonoTarjeta(),
+  abono: async el => {
+    const ok = await confirmar({ titulo: 'Anular el abono', accion: 'Anular', mensaje: 'La deuda de ese corte vuelve a subir y, si salió de un bolsillo tuyo, el dinero regresa a él.' });
+    if (ok) anularAbonoYAvisar(el.dataset.id);
+  },
   'anular-pago-extracto': async () => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero a la reserva y a tu bolsillo personal, y las compras quedan pendientes otra vez.' });
     if (ok && App.tar.data && App.tar.data.extracto) anularPagoExtractoYAvisar(App.tar.data.extracto.ID_Extracto);

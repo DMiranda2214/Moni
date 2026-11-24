@@ -548,10 +548,25 @@ function restoreCompraTC(idCompra) {
   });
 }
 
-function payExtracto(idTarjeta, mes, fecha, idOrigen) {
+function payExtracto(idTarjeta, mes, fecha, idOrigen, aportes) {
   return responder_(function () {
-    const r = pagarExtracto(idTarjeta, mes, fecha, idOrigen);
+    const r = pagarExtracto(idTarjeta, mes, fecha, idOrigen, aportes);
     return Object.assign(resultadoTarjeta_(r.tarjeta, r.mes, r.ids), { idExtracto: r.idExtracto, completado: r.falta, total: r.total });
+  });
+}
+
+/** Abono a la deuda de un corte de la tarjeta (de la persona o de un tercero). */
+function addAbonoTarjeta(a) {
+  return responder_(function () {
+    const r = registrarAbonoTarjeta(a);
+    return Object.assign(resultadoTarjeta_(r.tarjeta, r.mes, r.ids), { idPago: r.idPago });
+  });
+}
+
+function voidAbonoTarjeta(idPago) {
+  return responder_(function () {
+    const r = anularAbonoTarjeta(idPago);
+    return resultadoTarjeta_(r.tarjeta, r.mes, r.ids);
   });
 }
 
@@ -679,7 +694,7 @@ function deleteRegalo(idRegalo) {
 function payRegalo(idRegalo, valor, idBolsillo, fecha) {
   return responder_(function () {
     const r = registrarGastoRegalo(idRegalo, valor, idBolsillo, fecha);
-    return resultadoEscritura_([r.idMov], undefined, { regalos: obtenerRegalos(r.anio) });
+    return resultadoEscritura_(r.idMov ? [r.idMov] : [], undefined, { regalos: obtenerRegalos(r.anio) });
   });
 }
 

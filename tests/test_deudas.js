@@ -78,6 +78,115 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.deepStrictEqual(v.corte, { desde: corte.desde, hasta: corte.hasta, pago: corte.pago });
   });
 
+  prueba('abonos: un tercero baja la deuda y libera cupo sin mover ningún bolsillo; la persona lo paga desde un bolsillo', () => {
+    const x = escenario();
+    const c = compra(x, { Concepto: 'Ropa', Valor: 300000, Fuente: 'Personal' });
+    const mes = c.Mes_Extracto, id = x.t.ID_Tarjeta;
+    const total0 = x.e.llamar('obtenerSaldos').total;
+    // Un tercero abona 100.000: no se mueve ningún saldo
+    const a1 = x.e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: id, Mes: mes, Valor: 100000, Fecha: hoy(), Pagador: 'Mamá' });
+    assert.strictEqual(x.e.llamar('obtenerSaldos').total, total0);
+    let v = x.e.llamar('obtenerTarjeta', id, mes);
+    assert.strictEqual(v.totales.abonado, 100000);
+    assert.strictEqual(v.totales.saldo, 200000);
+    assert.strictEqual(v.cupo.disponible, 2000000 - 200000, 'libera cupo');
+    assert.strictEqual(v.totales.faltaParaPagar, 200000, 'no cuenta como apartado en la reserva');
+    assert.deepStrictEqual(v.pagadores, ['Mamá']);
+    assert.strictEqual(v.pagos[0].Pagador, 'Mamá');
+    // La persona abona 50.000 desde Casa
+    const casaAntes = x.saldo(x.casa.ID_Bolsillo);
+    x.e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: id, Mes: mes, Valor: 50000, Fecha: hoy(), ID_Bolsillo: x.casa.ID_Bolsillo });
+    assert.strictEqual(x.saldo(x.casa.ID_Bolsillo), casaAntes - 50000);
+    assert.strictEqual(x.e.llamar('obtenerTarjeta', id, mes).totales.saldo, 150000);
+    // Validaciones
+    assert.throws(x.e.falla('registrarAbonoTarjeta', { ID_Tarjeta: id, Mes: mes, Valor: 999999, Fecha: hoy(), Pagador: 'Mamá' }), /mayor que lo que se debe/);
+    assert.throws(x.e.falla('registrarAbonoTarjeta', { ID_Tarjeta: id, Mes: mes, Valor: 1000, Fecha: hoy() }), /Elige de qué bolsillo/);
+    // No se puede anular una compra que dejaría abonos de más
+    assert.throws(x.e.falla('anularCompraTC', c.ID_Compra), /abonos/);
+    // Anular un abono lo deshace (y devuelve el dinero si salió de un bolsillo)
+    x.e.llamar('anularAbonoTarjeta', a1.idPago);
+    assert.strictEqual(x.e.llamar('obtenerTarjeta', id, mes).totales.saldo, 250000);
+  });
+
+  prueba('pagar el extracto con aportes de terceros y abonos previos: solo sale de la reserva lo que falta por pagar', () => {
+    const x = escenario();
+    const c = compra(x, { Concepto: 'Nevera', Valor: 400000, Fuente: 'Personal' });
+    const mes = c.Mes_Extracto, id = x.t.ID_Tarjeta;
+    x.e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: id, Mes: mes, Valor: 100000, Fecha: hoy(), Pagador: 'Papá' });
+    // Aportes de más que lo que falta → error y no queda nada a medias
+    assert.throws(x.e.falla('pagarExtracto', id, mes, hoy(), x.personal.ID_Bolsillo, [{ Pagador: 'Tía', Valor: 400000 }]), /superan/);
+    assert.strictEqual(x.e.llamar('obtenerTarjeta', id, mes).extracto, null);
+    // Falta 300.000: la tía pone 120.000 y la persona 180.000 desde Personal (la reserva está vacía)
+    const personalAntes = x.saldo(x.personal.ID_Bolsillo);
+    const r = x.e.llamar('pagarExtracto', id, mes, hoy(), x.personal.ID_Bolsillo, [{ Pagador: 'Tía', Valor: 120000 }]);
+    assert.strictEqual(r.total, 400000);
+    assert.strictEqual(r.falta, 180000);
+    assert.strictEqual(x.saldo(x.personal.ID_Bolsillo), personalAntes - 180000);
+    assert.strictEqual(x.saldo(x.reserva.ID_Bolsillo), 0);
+    let v = x.e.llamar('obtenerTarjeta', id, mes);
+    assert.ok(v.extracto);
+    assert.deepStrictEqual(v.pagos.map(p => p.Pagador + ':' + p.Tipo + ':' + p.Valor).sort(), ['Papá:Abono:100000', 'Tía:Aporte:120000']);
+    assert.strictEqual(v.cupo.disponible, 2000000, 'todo pagado');
+    // Anular el pago: vuelve el dinero, el aporte se anula y el abono queda otra vez pendiente
+    x.e.llamar('anularPagoExtracto', r.idExtracto);
+    assert.strictEqual(x.saldo(x.personal.ID_Bolsillo), personalAntes);
+    v = x.e.llamar('obtenerTarjeta', id, mes);
+    assert.strictEqual(v.extracto, null);
+    assert.deepStrictEqual(v.pagos.map(p => p.Pagador + ':' + p.Tipo), ['Papá:Abono']);
+    assert.strictEqual(v.totales.saldo, 300000);
+  });
+
+  prueba('pagar el extracto: si terceros y abonos lo cubren todo, no se mueve ningún bolsillo', () => {
+    const x = escenario();
+    const c = compra(x, { Concepto: 'Celular', Valor: 200000, Fuente: 'Personal' });
+    const antes = x.e.llamar('obtenerSaldos').total;
+    const r = x.e.llamar('pagarExtracto', x.t.ID_Tarjeta, c.Mes_Extracto, hoy(), '', [{ Pagador: 'Hermano', Valor: 200000 }]);
+    assert.strictEqual(r.falta, 0);
+    assert.strictEqual(x.e.llamar('obtenerSaldos').total, antes);
+    assert.ok(x.e.llamar('obtenerTarjeta', x.t.ID_Tarjeta, c.Mes_Extracto).extracto);
+  });
+
+  prueba('regalo con tarjeta: cuenta como gastado, avisa que se mueva el dinero a la reserva y el aviso dura hasta registrar el traslado', () => {
+    const x = escenario();
+    const persona = x.e.llamar('guardarCatalogo', 'Personas', { Nombre: 'Ana' });
+    const r = x.e.llamar('guardarRegalo', { Anio: Number(hoy().slice(0, 4)), ID_Persona: persona.ID_Persona, Idea: 'Libro', Estimado: 80000, ID_Bolsillo_Plan: x.casa.ID_Bolsillo });
+    assert.strictEqual(r.ID_Bolsillo_Plan, x.casa.ID_Bolsillo);
+    const antes = x.e.llamar('obtenerSaldos').total;
+    const g = x.e.llamar('registrarGastoRegalo', r.ID_Regalo, 70000, 'T:' + x.t.ID_Tarjeta, hoy());
+    assert.ok(g.idCompra);
+    assert.strictEqual(x.e.llamar('obtenerSaldos').total, antes, 'comprar con tarjeta no mueve dinero');
+    let v = x.e.llamar('obtenerRegalos', Number(hoy().slice(0, 4)));
+    const it = v.items.find(i => i.ID_Regalo === r.ID_Regalo);
+    assert.strictEqual(it.Real, 70000);
+    assert.strictEqual(it.Comprado, true);
+    assert.strictEqual(it.PendienteReserva.length, 1);
+    assert.strictEqual(it.PendienteReserva[0].falta, 70000);
+    assert.strictEqual(it.PendienteReserva[0].BolsilloPlan, 'Casa');
+    const aviso = () => x.e.llamar('obtenerAvisos_').find(a => a.id.indexOf('regalo_reserva_') === 0);
+    assert.ok(aviso(), 'aviso importante');
+    assert.strictEqual(aviso().nivel, 'importante');
+    assert.throws(x.e.falla('ocultarAviso', aviso().id), /resuelvas/);
+    // Un traslado desde otro bolsillo no lo resuelve; uno parcial lo reduce; el completo lo quita
+    x.e.llamar('registrarTransferencia', x.servicios.ID_Bolsillo, x.reserva.ID_Bolsillo, 70000, hoy(), 'otro', '', 'App');
+    assert.strictEqual(aviso().detalle.indexOf('Casa') > 0, true);
+    x.e.llamar('registrarTransferencia', x.casa.ID_Bolsillo, x.reserva.ID_Bolsillo, 20000, hoy(), 'parcial', '', 'App');
+    assert.strictEqual(x.e.llamar('obtenerRegalos', Number(hoy().slice(0, 4))).pendientes[0].falta, 50000);
+    x.e.llamar('registrarTransferencia', x.casa.ID_Bolsillo, x.reserva.ID_Bolsillo, 50000, hoy(), 'resto', '', 'App');
+    assert.strictEqual(aviso(), undefined);
+    assert.strictEqual(x.e.llamar('obtenerRegalos', Number(hoy().slice(0, 4))).pendientes.length, 0);
+  });
+
+  prueba('regalo con tarjeta: si el extracto se paga o la compra se anula, ya no hay aviso', () => {
+    const x = escenario();
+    const persona = x.e.llamar('guardarCatalogo', 'Personas', { Nombre: 'Luis' });
+    const r = x.e.llamar('guardarRegalo', { Anio: Number(hoy().slice(0, 4)), ID_Persona: persona.ID_Persona, Estimado: 50000 });
+    const g = x.e.llamar('registrarGastoRegalo', r.ID_Regalo, 50000, 'T:' + x.t.ID_Tarjeta, hoy());
+    assert.strictEqual(x.e.llamar('regalosPendientesReserva_').length, 1, 'también sin bolsillo planeado');
+    x.e.llamar('anularCompraTC', g.idCompra);
+    assert.strictEqual(x.e.llamar('regalosPendientesReserva_').length, 0);
+    assert.strictEqual(x.e.llamar('obtenerRegalos', Number(hoy().slice(0, 4))).items[0].Real, 0);
+  });
+
   prueba('compra Personal: no mueve dinero; aparece en el extracto y en el cupo', () => {
     const x = escenario();
     const antes = x.e.llamar('obtenerSaldos').total;

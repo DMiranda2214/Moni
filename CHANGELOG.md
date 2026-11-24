@@ -1,5 +1,14 @@
 # Cambios
 
+## 1.10.0 — Abonos y terceros en la tarjeta, y regalos con tarjeta (24 nov 2026)
+- **Nuevo:** al pagar un extracto puedes anotar **quién más aporta** (nombre libre, con sugerencias) y cuánto. No mueve tus bolsillos: solo baja lo que tú pagas.
+- **Nuevo:** **Registrar un abono** a un corte de la tarjeta, de ti (desde un bolsillo) o de otra persona. Baja la deuda y libera cupo, sin apartar dinero en la reserva. Se descuenta al pagar el extracto y se puede anular.
+- **Nuevo:** en un regalo puedes elegir **de qué bolsillo planeas pagarlo**, y al registrar la compra puedes usar una **tarjeta de crédito**. En ese caso Moni avisa (en Regalos y en Inicio) que muevas el dinero a la reserva de la tarjeta, con un botón *Mover ahora*, y el aviso sigue hasta que registres ese movimiento.
+- **Cambia:** el esquema pasa a **31 tablas** (`Pagos_Tarjeta`) y `Regalos` gana `ID_Bolsillo_Plan`; las hojas existentes se actualizan solas.
+
+## 1.9.1 — Corrección de Ajustes (24 nov 2026)
+- **Corregido:** Ajustes mostraba "No se pudo mostrar esta pantalla (reading 'icono')" desde la 1.9.0: faltaba definir la pantalla de *Empresas de servicios*. Ya está, y una prueba nueva revisa que cada catálogo del servidor tenga su pantalla en la app.
+
 ## 1.9.0 — Retención del CDT en pesos y empresas de servicios (24 nov 2026)
 - **Nuevo:** al agregar un CDT eliges si la **retención en la fuente** es un porcentaje de los intereses o un valor en pesos (total del plazo).
 - **Nuevo:** **Empresas de servicios** (Ajustes): guardas una vez cada empresa con su enlace de pago (Enel, Vanti, el acueducto…). Al guardar un servicio eliges la empresa y solo escribes el hogar y el código; el enlace no se repite.

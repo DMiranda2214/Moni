@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
-El script de instalación (`setupDatabase`) crea estas 30 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`) crea estas 31 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -125,6 +125,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - `Mes_Extracto` se calcula con el `Dia_Corte` de la tarjeta si no se indica.
 
 **Extractos** — `ID_Extracto, ID_Tarjeta, Mes, Total, Estado, Fecha_Pago, ID_Grupo_Pago, URL_PDF, Notas, Anulado`
+
+**Pagos_Tarjeta** — `ID_Pago, ID_Tarjeta, Mes, Fecha, Valor, Tipo, Pagador, ID_Mov, ID_Extracto, Notas, Anulado`. `Tipo` = `Abono` (baja la deuda de un corte y libera cupo; sin `ID_Extracto` mientras el corte no se pague) o `Aporte` (lo que un tercero puso al pagar un extracto, con ese `ID_Extracto`). `Pagador` vacío = la persona (el abono sale de un bolsillo: `ID_Mov` es su gasto `Pago_TC`); con nombre = un tercero (no hay movimiento). `Mes` y `Fecha` son texto.
 `Estado`: `Abierto`, `Pagado`.
 
 **Presupuesto_Plantilla** —
@@ -163,7 +165,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 
 ## 5. Otros
 
-**Regalos** — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas`
+**Regalos** — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas, ID_Bolsillo_Plan` (`ID_Bolsillo_Plan`: el bolsillo del que se planea pagar; el real sale de los gastos y de las compras con tarjeta marcadas «Regalo <ID>»)
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
 
