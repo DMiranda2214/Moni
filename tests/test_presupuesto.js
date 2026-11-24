@@ -173,6 +173,23 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(item('Ahorro mensual').Pagado, false);
   });
 
+  prueba('completo: agregar un movimiento sin completar, completar a mano y reabrir', () => {
+    const { e, esc, casa } = conPlantilla();
+    e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);
+    const luz = () => e.llamar('obtenerPresupuestoMes', hoy()).items.find(i => i.Concepto === 'Luz');
+    e.llamar('pagarRenglonMes', luz().ID_Item, { Valor: 40000, ID_Bolsillo: casa.ID_Bolsillo, Completar: false });
+    assert.strictEqual(luz().Pagado, false, 'agregar no completa');
+    assert.strictEqual(luz().Real, 40000);
+    e.llamar('marcarRenglonPagado', luz().ID_Item, true);
+    assert.strictEqual(luz().Pagado, true, 'bastan los registrados');
+    e.llamar('pagarRenglonMes', luz().ID_Item, { Valor: 5000, ID_Bolsillo: casa.ID_Bolsillo, Completar: false });
+    assert.strictEqual(luz().Real, 45000, 'también se puede agregar a uno completo');
+    assert.throws(e.falla('pagarRenglonMes', luz().ID_Item, { Valor: 1000, ID_Bolsillo: casa.ID_Bolsillo }), /ya está pagado/);
+    e.llamar('desmarcarRenglonMes', luz().ID_Item, false);
+    assert.strictEqual(luz().Pagado, false);
+    assert.strictEqual(luz().Real, 45000, 'reabrir no toca los movimientos');
+  });
+
   prueba('real: un movimiento anulado deja de contar; el ajuste y el sobregasto se reflejan', () => {
     const { e, esc, casa } = conPlantilla();
     e.llamar('generarPresupuestoMes', hoy(), esc.ID_Escenario);

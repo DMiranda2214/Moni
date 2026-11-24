@@ -45,7 +45,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | Función | Parámetros |
 |---|---|
 | `addMovimiento` | `m, vista` — `m.Afecta_Saldos = false` lo registra como histórico (cuenta en informes, no en saldos) |
-| `addTransferencia` | `t, vista` |
+| `addTransferencia` | `t { origen, destino, valor, fecha, concepto, notas, itemPpto, afectaSaldos }, vista` (con `afectaSaldos: false` es un traslado histórico) |
 | `voidMovimiento` | `idMov, vista` |
 | `voidVarios` | `ids, vista` |
 | `restoreMovimiento` | `idMov, vista` |
@@ -62,8 +62,9 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `generarPresupuesto` | `mes, idEscenario, reemplazar` |
 | `saveRenglonMes` | `item` |
 | `deleteRenglonMes` | `idItem` |
-| `payRenglonMes` | `idItem, pagado` (solo la marca; la app usa las tres siguientes) |
-| `payRenglonConfirmado` | `idItem, datos { Valor, Fecha, ID_Bolsillo, ID_Mov }, vista?` — registra el pago según el tipo del renglón (gasto, tarjeta, cuota de crédito, traslado a ahorro/fondo) o enlaza un movimiento existente (`ID_Mov`), y lo marca pagado |
+| `payRenglonMes` | `idItem, pagado` (solo la marca de "completo"; la app la usa al decir "bastan los registrados" y al reabrir) |
+| `getSugerenciasConceptos` | — → `{ Gasto: [...], Ingreso: [...] }` con `Concepto, Usos, ID_Bolsillo, ID_Categoria, ID_Item_Ppto, Valor` de lo último registrado |
+| `payRenglonConfirmado` | `idItem, datos { Valor, Fecha, ID_Bolsillo, ID_Mov, Completar? }, vista?` (con `Completar: false` solo agrega el movimiento, sin completar el renglón) — registra el pago según el tipo del renglón (gasto, tarjeta, cuota de crédito, traslado a ahorro/fondo) o enlaza un movimiento existente (`ID_Mov`), y lo marca pagado |
 | `listMovimientosParaRenglon` | `idItem` — movimientos sueltos que se pueden enlazar a ese renglón |
 | `unpayRenglon` | `idItem, anular, vista?` — desmarca; con `anular` también anula los pagos sencillos que registró |
 | `previewDistribucion` | `mes, idOrigen` |

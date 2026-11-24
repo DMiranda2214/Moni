@@ -1,5 +1,10 @@
 # Cambios
 
+## 1.8.0 — Presupuesto en una sola pantalla, traslados históricos y autocompletado (24 nov 2026)
+- **Cambia:** el presupuesto une la gráfica y la lista: cada renglón trae su **barra de avance** (real frente a plan) y su casilla de **completo**. Al marcarla, Moni pregunta si quieres agregar algún movimiento más o si bastan los registrados. Desmarcar solo reabre el renglón; en el detalle puedes agregar un movimiento sin completarlo.
+- **Nuevo:** **Mover** dinero también tiene el interruptor *Sumar a mis saldos*: apágalo para anotar un traslado anterior a Moni sin que se muevan los saldos.
+- **Nuevo:** **autocompletado de conceptos** al registrar un gasto, un ingreso o una compra con tarjeta; al elegir uno, se llenan el valor, el bolsillo, la categoría y el renglón de la última vez.
+
 ## 1.7.0 — Tarjeta por cortes, calendario y reserva a tu gusto (23 nov 2026)
 - **Cambia:** la pantalla de una tarjeta ahora muestra **cada corte** con sus fechas, lo gastado, si está pagado o hasta cuándo pagarlo, y un aviso si hay cortes anteriores sin pagar. Tocas un corte para ver sus compras.
 - **Corregido:** "El mes debe tener formato AAAA-MM" en la tarjeta (y compras que no aparecían): Google Sheets convertía algunos meses en fechas. Ahora se leen siempre como mes, la hoja se repara sola al abrir la app y todas las columnas de mes quedan como texto.

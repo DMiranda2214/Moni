@@ -322,8 +322,10 @@ function movimientosParaVincular(idItem) {
 function pagarRenglonMes(idItem, d) {
   const item = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
   if (!item) throw new Error('El renglón no existe.');
-  if (esVerdadero(item.Pagado)) throw new Error('Este renglón ya está pagado.');
   const x = d || {};
+  // Con `Completar: false` solo se agrega un movimiento al renglón, sin darlo por completo (aunque ya lo esté).
+  const completar = x.Completar !== false;
+  if (completar && esVerdadero(item.Pagado)) throw new Error('Este renglón ya está pagado (completo).');
   const tipo = item.Tipo || 'Gasto';
   const ids = [];
 
@@ -352,7 +354,7 @@ function pagarRenglonMes(idItem, d) {
         .patas.forEach(p => ids.push(p.ID_Mov));
     }
   }
-  updateRow('Presupuesto_Mes', item._rowIndex, { Pagado: true });
+  if (completar) updateRow('Presupuesto_Mes', item._rowIndex, { Pagado: true });
   return { mes: item.Mes, ids: ids };
 }
 
