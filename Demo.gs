@@ -92,9 +92,13 @@ function sembrarDatosDemo() {
   ];
 
   const inmuebles = [{ ID_Inmueble: 'demo-inm-1', Nombre: 'Casa (demo)', Activo: true, Orden: 1 }];
+  const empresas = [
+    { ID_Empresa: 'demo-emp-1', Nombre: 'Energía Demo', URL_Pago: 'https://example.com/energia', Notas: 'Dato ficticio', Activo: true, Orden: 1 },
+    { ID_Empresa: 'demo-emp-2', Nombre: 'Acueducto Demo', URL_Pago: 'https://example.com/acueducto', Notas: 'Dato ficticio', Activo: true, Orden: 2 }
+  ];
   const servicios = [
-    { ID_Servicio: 'demo-srv-1', ID_Inmueble: 'demo-inm-1', Tipo: 'Luz', Empresa: 'Energía Demo', Codigo_Pago: '0000-DEMO-1', URL_Pago: '', Notas: 'Dato ficticio', Activo: true },
-    { ID_Servicio: 'demo-srv-2', ID_Inmueble: 'demo-inm-1', Tipo: 'Agua', Empresa: 'Acueducto Demo', Codigo_Pago: '0000-DEMO-2', URL_Pago: '', Notas: 'Dato ficticio', Activo: true }
+    { ID_Servicio: 'demo-srv-1', ID_Inmueble: 'demo-inm-1', Tipo: 'Luz', ID_Empresa: 'demo-emp-1', Empresa: 'Energía Demo', Codigo_Pago: '0000-DEMO-1', URL_Pago: '', Notas: 'Dato ficticio', Activo: true },
+    { ID_Servicio: 'demo-srv-2', ID_Inmueble: 'demo-inm-1', Tipo: 'Agua', ID_Empresa: 'demo-emp-2', Empresa: 'Acueducto Demo', Codigo_Pago: '0000-DEMO-2', URL_Pago: '', Notas: 'Dato ficticio', Activo: true }
   ];
 
   const mov = (id, dias, concepto, bolsillo, valor, tipo, subtipo, grupo) => ({
@@ -117,6 +121,7 @@ function sembrarDatosDemo() {
   insertRows('Tarjetas', tarjetas);
   insertRows('Personas', personas);
   insertRows('Inmuebles', inmuebles);
+  insertRows('Empresas_Pago', empresas);
   insertRows('Servicios_Publicos', servicios);
   insertRows('Movimientos', movimientos);
 

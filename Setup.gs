@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '9';
+const ESQUEMA_VERSION = '10';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -43,15 +43,16 @@ const SCHEMAS = {
   Categorias: tabla_(['ID_Categoria', 'Nombre', 'Tipo', 'Icono', 'Color', 'Activo', 'Orden'], [170, 220, 120, 90, 90, 70, 60]),
   Personas: tabla_(['ID_Persona', 'Nombre', 'Rol', 'Activo'], [170, 220, 110, 70]),
   Inmuebles: tabla_(['ID_Inmueble', 'Nombre', 'Activo', 'Orden'], [170, 220, 70, 60]),
+  Empresas_Pago: tabla_(['ID_Empresa', 'Nombre', 'URL_Pago', 'Notas', 'Activo', 'Orden'], [170, 200, 280, 220, 70, 60]),
   Servicios_Publicos: tabla_(
-    ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
-    [170, 170, 110, 180, 150, 260, 200, 70]),
+    ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'ID_Empresa', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
+    [170, 170, 110, 170, 180, 150, 260, 200, 70]),
   Suscripciones: tabla_(
     ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
     [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
   CDTs: tabla_(
-    ['ID_CDT', 'Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Fecha_Vencimiento', 'Pago_Intereses', 'Retencion_Pct', 'Estado', 'ID_Bolsillo_Origen', 'ID_Bolsillo_Destino', 'Renovar', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Intereses_Cobrados', 'ID_Mov_Apertura', 'Fecha_Cierre', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 170, 130, 90, 110, 90, 120, 120, 100, 90, 170, 170, 80, 120, 120, 130, 170, 110, 220, 70, 60]),
+    ['ID_CDT', 'Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Fecha_Vencimiento', 'Pago_Intereses', 'Retencion_Pct', 'Retencion_Tipo', 'Retencion_Valor', 'Estado', 'ID_Bolsillo_Origen', 'ID_Bolsillo_Destino', 'Renovar', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Intereses_Cobrados', 'ID_Mov_Apertura', 'Fecha_Cierre', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 170, 130, 90, 110, 90, 120, 120, 100, 110, 120, 90, 170, 170, 80, 120, 120, 130, 170, 110, 220, 70, 60]),
   Ingresos_Recurrentes: tabla_(
     ['ID_Ingreso', 'Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Categoria', 'Ultimo_Cobro', 'Notas', 'Activo', 'Orden'],
     [170, 220, 120, 110, 120, 80, 170, 170, 120, 220, 70, 60]),
@@ -105,7 +106,7 @@ const SCHEMAS = {
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
 const ENUMS = {
   Bancos: { Divisa: DIVISAS, Rendimiento_Pago: ['', 'Diario', 'Mensual'], Rendimiento_Base: ['', 'Todo', 'Bolsillos'] },
-  CDTs: { Pago_Intereses: ['Vencimiento', 'Mensual', 'Trimestral'], Estado: ['Vigente', 'Cerrado'] },
+  CDTs: { Pago_Intereses: ['Vencimiento', 'Mensual', 'Trimestral'], Retencion_Tipo: ['Porcentaje', 'Valor'], Estado: ['Vigente', 'Cerrado'] },
   Ingresos_Recurrentes: { Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Cuentas: { Tipo: ['Billetera', 'Debito', 'Ahorro', 'Otra'] },
   Bolsillos: { Rol: ['Operativo', 'Reserva_Tarjeta', 'Fondo', 'General'] },
@@ -280,7 +281,10 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Suscripciones', columna: 'ID_Inmueble', valor: '' },
   { tabla: 'Nomina_Pagos', columna: 'Afecta_Saldos', valor: true },
   { tabla: 'Nomina_Pagos', columna: 'Mes_Presupuesto', valor: '' },
-  { tabla: 'Movimientos', columna: 'Afecta_Saldos', valor: true }
+  { tabla: 'Movimientos', columna: 'Afecta_Saldos', valor: true },
+  { tabla: 'Servicios_Publicos', columna: 'ID_Empresa', valor: '' },
+  { tabla: 'CDTs', columna: 'Retencion_Tipo', valor: 'Porcentaje' },
+  { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 }
 ];
 
 /**

@@ -26,11 +26,11 @@ module.exports = function (prueba, assert, crearEntorno) {
   }
 
   // ---------------------------------------------------------------- instalación
-  prueba('setupDatabase crea las 29 tablas con sus encabezados', () => {
+  prueba('setupDatabase crea las 30 tablas con sus encabezados', () => {
     const e = E(false);
     const r = e.llamar('setupDatabase');
-    assert.strictEqual(r.tablas, 29);
-    assert.strictEqual(r.creadas.length, 29);
+    assert.strictEqual(r.tablas, 30);
+    assert.strictEqual(r.creadas.length, 30);
     assert.strictEqual(r.ok, true);
     assert.strictEqual(e.hojas.Movimientos.filas[0][0], 'ID_Mov');
     assert.strictEqual(e.hojas.Movimientos.filas[0].slice(-2).join(), 'Creado_En,Actualizado_En');
@@ -61,7 +61,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const e = E();
     assert.strictEqual(e.hojas.Presupuesto_Mes.formatos[2], '@');
     assert.strictEqual(e.hojas.Config.formatos[2], '@');
-    assert.strictEqual(e.hojas.Servicios_Publicos.formatos[5], '@');
+    assert.strictEqual(e.hojas.Servicios_Publicos.formatos[6], '@');
   });
 
   // ---------------------------------------------------------------- auditoría
@@ -297,6 +297,24 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(e.llamar('guardarCatalogo', 'Categorias', { Nombre: 'Mercado', Tipo: 'Ingreso' }).ID_Categoria);
   });
 
+  prueba('empresas de pago: el servicio toma su nombre y su enlace; no se desactiva con servicios usándola', () => {
+    const e = E();
+    const inm = e.llamar('guardarCatalogo', 'Inmuebles', { Nombre: 'Casa' });
+    assert.throws(e.falla('guardarCatalogo', 'Empresas_Pago', { Nombre: 'Mala', URL_Pago: 'javascript:alert(1)' }), /http/);
+    const emp = e.llamar('guardarCatalogo', 'Empresas_Pago', { Nombre: 'Enel', URL_Pago: 'https://pagos.enel.example' });
+    assert.throws(e.falla('guardarCatalogo', 'Empresas_Pago', { Nombre: 'enel' }), /Ya existe/);
+    const s = e.llamar('guardarCatalogo', 'Servicios_Publicos', { ID_Inmueble: inm.ID_Inmueble, Tipo: 'Luz', ID_Empresa: emp.ID_Empresa, Codigo_Pago: '123' });
+    assert.strictEqual(s.Empresa, 'Enel');
+    assert.strictEqual(s.ID_Empresa, emp.ID_Empresa);
+    assert.throws(e.falla('desactivarCatalogo', 'Empresas_Pago', emp.ID_Empresa), /servicio\(s\)/);
+    assert.throws(e.falla('guardarCatalogo', 'Servicios_Publicos', { ID_Inmueble: inm.ID_Inmueble, Tipo: 'Gas', ID_Empresa: 'no-existe', Codigo_Pago: '9' }), /empresa/i);
+    // El cobro de un servicio hereda el enlace de la empresa
+    const sus = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Luz', Tipo: 'Servicio', Valor: 90000, Periodicidad: 'Mensual', Proximo_Cobro: bogota(), ID_Servicio: s.ID_Servicio, ID_Inmueble: inm.ID_Inmueble });
+    assert.ok(sus.ID_Suscripcion);
+    const cobro = e.llamar('obtenerSuscripciones').items.find(x => x.ID_Suscripcion === sus.ID_Suscripcion);
+    assert.strictEqual(cobro.url, 'https://pagos.enel.example');
+  });
+
   prueba('servicios públicos: exige inmueble activo y rechaza enlaces peligrosos', () => {
     const e = E();
     const inm = e.llamar('guardarCatalogo', 'Inmuebles', { Nombre: 'Casa' });
@@ -456,7 +474,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const antes = e.llamar('getBootstrap');
     assert.strictEqual(antes.ok, true);
     assert.strictEqual(antes.data.instalado, false);
-    assert.strictEqual(antes.data.faltantes.length, 29);
+    assert.strictEqual(antes.data.faltantes.length, 30);
 
     assert.strictEqual(e.llamar('instalarBaseDatos').ok, true);
     const d = e.llamar('getBootstrap').data;
