@@ -176,63 +176,202 @@ function categoriasPara(tipo) {
   return [['', 'Sin categoría']].concat(activos('Categorias').filter(c => tipo === 'Ajuste' || c.Tipo === t).map(c => [c.ID_Categoria, c.Nombre]));
 }
 
+/**
+ * Cómo se comporta el formulario de registro en cada caso. Sin `o.para` es el registro libre (gasto, ingreso o mover);
+ * con `o.para` es pagar un cobro, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto,
+ * una compra con una tarjeta concreta o sacar/reponer dinero del ahorro. Cada modo fija lo que ya se sabe y dice cómo
+ * se guarda; los campos, los cargos y las validaciones son los mismos para todos.
+ */
+function modoRegistro(o) {
+  const p = o.para || {};
+  const libre = { tipos: ['Gasto', 'Ingreso', 'Mover'], conTarjetas: true, renglon: true, categoria: true, afecta: true, notas: true, cargos: true, moneda: true, fuente: true };
+  if (o.edit) return Object.assign({}, libre, { titulo: 'Editar movimiento', tipos: [o.edit.Tipo_Mov], conTarjetas: false, cargos: false, moneda: false, fuente: false });
+  if (!p.tipo) return Object.assign({}, libre, { titulo: 'Registrar' });
+
+  const comun = { conTarjetas: false, renglon: false, categoria: false, afecta: false, notas: false, cargos: false, moneda: false, fuente: false };
+  if (p.tipo === 'compra') {
+    const t = porId('Tarjetas', 'ID_Tarjeta', p.idTarjeta);
+    return Object.assign({}, libre, { titulo: 'Compra con ' + (t ? t.Nombre : 'la tarjeta'), tipos: ['Gasto'], medio: 'T:' + p.idTarjeta });
+  }
+  if (p.tipo === 'cobro') {
+    const s = p.item;
+    return Object.assign({}, comun, {
+      titulo: 'Pagar ' + s.Nombre, der: 'Pagar', tipos: ['Gasto'], conTarjetas: true, cargos: true, conceptoFijo: s.Nombre,
+      valor: s.Valor || '', valorEtiqueta: s.Tipo === 'Servicio' ? 'Cuánto pagaste' : 'Valor',
+      medio: s.ID_Tarjeta ? 'T:' + s.ID_Tarjeta : (s.ID_Bolsillo || ''), soloPesos: true,
+      nota: s.Tipo === 'Servicio' ? 'El valor que escribas queda como el estimado para el próximo cobro.' : '',
+      guardar: async (v, raiz) => {
+        const res = await api('paySuscripcion', s.ID_Suscripcion, { Valor: v.Valor, Fecha: v.Fecha, ID_Bolsillo: v.medioTarjeta ? '' : v.ID_Bolsillo, ID_Tarjeta: v.medioTarjeta || '', cargos: leerCargos(raiz) });
+        aplicarEscritura(res); App.pag.data = res.suscripciones; App.proximosViejos = true; render();
+        aviso('Pago registrado' + (res.proximo ? ' · próximo cobro ' + res.proximo : ''), { deshacer: async () => {
+          try { const u = await api('undoPagoSuscripcion', s.ID_Suscripcion, res.anterior, res.idMov, res.idCompra, res.idItem || ''); aplicarEscritura(u); App.pag.data = u.suscripciones; render(); aviso('Pago deshecho'); }
+          catch (e) { aviso(e.message, true); }
+        } });
+      }
+    });
+  }
+  if (p.tipo === 'ingreso') {
+    const i = p.item;
+    return Object.assign({}, comun, {
+      titulo: 'Recibí ' + i.Nombre, tipos: ['Ingreso'], conceptoFijo: i.Nombre, valor: i.Valor || '', valorEtiqueta: 'Cuánto recibiste',
+      medio: i.ID_Bolsillo || '', medioEtiqueta: 'Llegó a', soloPesos: true, nota: 'Por defecto, el monto esperado. Escribe el valor real si fue otro.',
+      guardar: async v => {
+        const res = await api('receiveIngreso', i.ID_Ingreso, { Valor: v.Valor, Fecha: v.Fecha, ID_Bolsillo: v.ID_Bolsillo });
+        aplicarEscritura(res); App.ing.data = res.ingresos; render();
+        aviso('Ingreso registrado · próximo ' + res.proximo, { deshacer: async () => {
+          try { const u = await api('undoIngreso', i.ID_Ingreso, res.anterior, res.idMov); aplicarEscritura(u); App.ing.data = u.ingresos; render(); aviso('Ingreso deshecho'); }
+          catch (e) { aviso(e.message, true); }
+        } });
+      }
+    });
+  }
+  if (p.tipo === 'regalo') {
+    const it = p.item;
+    const pref = it.ID_Bolsillo_Plan || (opcionesDestino(false).map(g => (g.opciones.find(x => /regalo/i.test(x[1])) || [])[0]).find(Boolean) || '');
+    return Object.assign({}, comun, {
+      titulo: 'Compra de regalo', tipos: ['Gasto'], conTarjetas: true, soloPesos: true, valor: it.Estimado - it.Real > 0 ? it.Estimado - it.Real : '', valorEtiqueta: 'Cuánto costó',
+      conceptoFijo: 'Regalo para ' + it.Persona + (it.Idea ? ' · ' + it.Idea : ''), medio: pref,
+      ayudaTarjeta: 'No sale dinero ahora. Moni te recordará pasar el valor ' + (it.BolsilloPlan ? 'de “' + it.BolsilloPlan + '” ' : '') + 'a la reserva de la tarjeta, y el aviso sigue hasta que registres ese traslado.',
+      guardar: async v => {
+        const res = await api('payRegalo', it.ID_Regalo, v.Valor, v.medioTarjeta ? 'T:' + v.medioTarjeta : v.ID_Bolsillo, v.Fecha);
+        aplicarEscritura(res); aplicarRegalos(res.regalos); App.tar.data = null; App.deudas.data = null; render();
+        aviso(res.regalos.pendientes && res.regalos.pendientes.some(x => x.ID_Regalo === it.ID_Regalo) ? 'Compra registrada · falta mover el dinero a la reserva' : 'Compra registrada');
+      }
+    });
+  }
+  if (p.tipo === 'renglon') {
+    const it = p.item, soloAgregar = !!p.soloAgregar;
+    const esCredito = it.Tipo === 'Cuota' && !!it.ID_Credito, esTarjeta = it.Tipo === 'Gasto' && !!it.ID_Tarjeta;
+    const mueve = it.Tipo !== 'Gasto' && !esCredito; // ahorro, fondo o cuota sin crédito: un traslado hacia el bolsillo del renglón
+    const tj = esTarjeta ? porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta) : null;
+    return Object.assign({}, comun, {
+      titulo: soloAgregar ? 'Agregar un movimiento' : 'Marcar como completo', der: soloAgregar ? 'Agregar' : 'Confirmar',
+      tipos: [mueve ? 'Mover' : 'Gasto'], conceptoFijo: it.Concepto, existentes: it.ID_Item, soloPesos: true,
+      valor: Math.max(it.Restante, 0) || it.Plan, valorAyuda: 'Lo planeado es ' + dinero(it.Plan) + (it.Real > 0 ? ' y ya llevas ' + dinero(it.Real) : '') + '.',
+      medio: esCredito ? '' : (mueve ? (ultimoBolsillo() !== it.ID_Bolsillo_Destino ? ultimoBolsillo() : '') : (it.ID_Bolsillo_Destino || ultimoBolsillo())),
+      medioEtiqueta: esTarjeta ? 'Se aparta de' : (mueve ? 'Sale de' : (esCredito ? 'Pagas desde' : 'Pagaste desde')),
+      medioVacio: esCredito ? 'El de siempre de este crédito' : (esTarjeta ? 'El bolsillo del renglón' : ''),
+      destinoFijo: mueve ? it.ID_Bolsillo_Destino : '', destinoTexto: it.Bolsillo || 'el bolsillo del renglón',
+      nota: esCredito ? 'Se registra como el pago de la cuota del crédito, con su cronograma.'
+        : (esTarjeta ? 'Se registra como una compra con ' + (tj ? tj.Nombre : 'la tarjeta') + '. El dinero se aparta del bolsillo que elijas.'
+        : (mueve ? 'El dinero se traslada al bolsillo “' + (it.Bolsillo || 'de destino') + '”.' : 'Se registra como un gasto de ese bolsillo.')),
+      guardar: async (v, raiz) => {
+        const existente = ($('#f-Existente', raiz) || {}).value || '';
+        const datos = {};
+        if (existente) datos.ID_Mov = existente;
+        else {
+          const origen = mueve ? v.Origen : v.ID_Bolsillo;
+          if (!origen && !esCredito && !(esTarjeta && it.ID_Bolsillo_Destino)) throw new Error('Elige el bolsillo.');
+          Object.assign(datos, { Valor: v.Valor, Fecha: v.Fecha, ID_Bolsillo: origen || '' });
+        }
+        if (soloAgregar) datos.Completar = false;
+        const res = await api('payRenglonConfirmado', it.ID_Item, datos, vistaActual());
+        if (datos.ID_Bolsillo) recordarBolsillo(datos.ID_Bolsillo);
+        aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
+        if (esCredito) App.cre.data = null;
+        if (esCredito || esTarjeta) { App.tar.data = null; App.deudas.data = null; }
+        render();
+        aviso(soloAgregar ? 'Movimiento agregado' : 'Renglón completo', { deshacer: () => desmarcarRenglon(it.ID_Item, true) });
+      }
+    });
+  }
+  if (p.tipo === 'ahorro') {
+    const d = p.datos, retirar = p.modo === 'retirar';
+    return Object.assign({}, comun, {
+      titulo: retirar ? 'Sacar para gastos' : 'Reponer al ahorro', tipos: ['Mover'], soloPesos: true,
+      conceptoFijo: retirar ? 'Sacas dinero de ' + d.cuenta.Nombre + ' para gastarlo' : 'Devuelves dinero a ' + d.cuenta.Nombre,
+      nota: retirar ? 'Queda anotado como algo que debes reponer.' : 'Baja lo que debes a tu ahorro.',
+      valor: retirar ? '' : (d.cuenta.deuda.manual || ''),
+      origenFijo: retirar ? d.ID_Bolsillo : '', destinoFijo: retirar ? '' : d.ID_Bolsillo, destinoTexto: d.cuenta.Nombre, origenTexto: d.cuenta.Nombre,
+      guardar: async v => {
+        const res = await api(retirar ? 'withdrawAhorro' : 'repayAhorro', d.cuenta.ID_Cuenta, retirar ? v.Destino : v.Origen, v.Valor, v.Fecha, '');
+        aplicarEscritura(res); aplicarAhorro(res); render(); aviso(retirar ? 'Dinero sacado del ahorro' : 'Dinero repuesto');
+      }
+    });
+  }
+  return Object.assign({}, libre, { titulo: 'Registrar' });
+}
+
+/**
+ * EL formulario de registro de Moni (un solo formulario para todo lo que entra, sale o se mueve). Ver modoRegistro.
+ * @param {Object} o { tipo, edit, idBolsillo, destino, medio, concepto, valor, idItem, para: { tipo, item, … } }
+ */
 async function abrirRegistrar(o) {
+  o = o || {};
   const edit = o.edit || null;
-  const tipoInicial = edit ? edit.Tipo_Mov : (o.tipo || 'Gasto');
+  const modo = modoRegistro(o);
+  const tipoInicial = edit ? edit.Tipo_Mov : (modo.tipos.indexOf(o.tipo) !== -1 ? o.tipo : modo.tipos[0]);
   const hoy = App.boot.hoy;
-  const todos = opcionesBolsillos();
+  const enPesos = g => !modo.soloPesos || !/\((USD|EUR|[A-Z]{3})\)$/.test(g.grupo);
+  const todos = opcionesBolsillos().filter(enPesos);
   const idsValidos = [].concat.apply([], todos.map(g => g.opciones.map(x => x[0])));
-  const preferido = o.idBolsillo || ultimoBolsillo();
-  const bolsilloInicial = edit ? edit.ID_Bolsillo : (idsValidos.indexOf(preferido) !== -1 ? preferido : (idsValidos[0] || ''));
+  const preferido = modo.medio !== undefined && (modo.medio === '' || modo.medio.indexOf('T:') === 0 || idsValidos.indexOf(modo.medio) !== -1) ? modo.medio : (o.medio || o.idBolsillo || ultimoBolsillo());
+  const bolsilloInicial = edit ? edit.ID_Bolsillo : (idsValidos.indexOf(preferido) !== -1 || String(preferido).indexOf('T:') === 0 || (preferido === '' && modo.medioVacio) ? preferido : (idsValidos[0] || ''));
   const destinoInicial = o.destino && idsValidos.indexOf(o.destino) !== -1 ? o.destino : (idsValidos.find(i => i !== bolsilloInicial) || '');
   const renglones = App.boot.renglones || [];
   const itemInicial = edit ? (edit.ID_Item_Ppto || '') : (o.idItem || '');
 
   // Un gasto se puede pagar con un bolsillo o con una tarjeta: se elige en la misma lista ("Con qué pagaste").
-  const conTarjetas = !edit && activos('Tarjetas').length > 0;
+  const conTarjetas = !edit && modo.conTarjetas && activos('Tarjetas').length > 0;
   const grupoTarjetas = k => k === 'ID_Bolsillo' && conTarjetas
-    ? '<optgroup label="Con tarjeta de crédito" data-tarjetas>' + activos('Tarjetas').map(t => '<option value="T:' + esc(t.ID_Tarjeta) + '"' + (o.medio === 'T:' + t.ID_Tarjeta ? ' selected' : '') + '>' + esc(t.Nombre) + '</option>').join('') + '</optgroup>' : '';
-  const selBolsillo = (k, label, valor, solo) =>
+    ? '<optgroup label="Con tarjeta de crédito" data-tarjetas>' + activos('Tarjetas').map(t => '<option value="T:' + esc(t.ID_Tarjeta) + '"' + (bolsilloInicial === 'T:' + t.ID_Tarjeta ? ' selected' : '') + '>' + esc(t.Nombre) + '</option>').join('') + '</optgroup>' : '';
+  const sinOrigen = id => g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => x[0] !== id) });
+  const selBolsillo = (k, label, valor, solo, grupos, vacio) =>
     '<div class="m-campo" data-campo="' + k + '" data-solo="' + solo + '"><div class="m-label-fila"><label class="m-label" for="' + idCampo(k) + '">' + esc(label) + '</label>' + htmlInfo(INFO_GENERAL[k]) + '</div>' +
-    '<select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' +
-    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + grupoTarjetas(k) + '</select>' +
+    '<select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' + (vacio ? '<option value=""' + (valor === '' ? ' selected' : '') + '>' + esc(vacio) + '</option>' : '') +
+    (grupos || todos).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + grupoTarjetas(k) + '</select>' +
     (k === 'ID_Bolsillo' && conTarjetas ? '<p class="m-ayuda" id="reg-tc-ayuda" hidden></p>' : '') + '</div>';
+  const fijo = (label, texto) => '<div class="m-campo"><div class="m-label">' + esc(label) + '</div><div class="m-input m-input-fijo">' + esc(texto) + '</div></div>';
 
   const paso = (n, titulo) => '<h3 class="m-reg-paso"><span class="m-nom-num" aria-hidden="true">' + n + '</span>' + esc(titulo) + '</h3>';
-  const segmento = ['Gasto', 'Ingreso', 'Mover'].map(t => '<label><input type="radio" name="tipo" value="' + t + '"' + (t === tipoInicial ? ' checked' : '') + '><span>' + (t === 'Mover' ? 'Mover' : t) + '</span></label>').join('');
-  const valorInicial = edit ? (edit.Tipo_Mov === 'Ajuste' ? edit.Valor : Math.abs(edit.Valor)) : (o.valor || '');
+  const conSegmento = !edit && modo.tipos.length > 1;
+  const segmento = modo.tipos.map(t => '<label><input type="radio" name="tipo" value="' + t + '"' + (t === tipoInicial ? ' checked' : '') + '><span>' + t + '</span></label>').join('');
+  const valorInicial = edit ? (edit.Tipo_Mov === 'Ajuste' ? edit.Valor : Math.abs(edit.Valor)) : (o.valor || modo.valor || '');
+  const campoValor = { k: 'Valor', label: edit && edit.Tipo_Mov === 'Ajuste' ? 'Valor (negativo si resta)' : (modo.valorEtiqueta || 'Valor'), tipo: 'dinero', requerido: true, ayuda: modo.valorAyuda };
+  const medioEtiqueta = modo.medioEtiqueta || 'Bolsillo';
 
   const cuerpo = '<form novalidate data-form="registro">' +
-    (edit ? '' : '<div class="m-campo"><div class="m-segmentado" role="radiogroup" aria-label="Qué quieres registrar">' + segmento + '</div></div>') +
-    paso(1, '¿Cuánto y por qué?') +
-    htmlCampo({ k: 'Valor', label: edit && edit.Tipo_Mov === 'Ajuste' ? 'Valor (negativo si resta)' : 'Valor', tipo: 'dinero', requerido: true }, valorInicial) +
-    htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, edit ? edit.Concepto : (o.concepto || '')).replace('data-campo="Concepto"', 'data-campo="Concepto" data-etiqueta="1"') +
-    paso(2, '¿En qué bolsillo?') +
-    selBolsillo('ID_Bolsillo', 'Bolsillo', bolsilloInicial, 'Gasto,Ingreso,Ajuste') +
-    selBolsillo('Origen', 'Sale de', bolsilloInicial, 'Mover') +
-    selBolsillo('Destino', 'Llega a', destinoInicial, 'Mover') +
-    (renglones.length ? '<div class="m-campo" data-campo="ID_Item_Ppto" data-solo="Gasto,Ajuste,Mover"><div class="m-label-fila"><label class="m-label" for="f-ID_Item_Ppto">Renglón del presupuesto (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Item_Ppto) + '</div><select class="m-input" id="f-ID_Item_Ppto" name="ID_Item_Ppto"><option value="">Ninguno</option>' +
+    (conSegmento ? '<div class="m-campo"><div class="m-segmentado" role="radiogroup" aria-label="Qué quieres registrar">' + segmento + '</div></div>' : '') +
+    (modo.conceptoFijo ? '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(modo.conceptoFijo) + '</p>' : '') +
+    (modo.existentes ? '<div class="m-campo" id="pr-existente" hidden><label class="m-label" for="f-Existente">¿Ya lo registraste?</label><select class="m-input" id="f-Existente"><option value="">No, registrar el pago ahora</option></select>' +
+      '<p class="m-ayuda">Si ya anotaste este pago en Movimientos, enlázalo aquí y no se duplica.</p></div>' : '') +
+    '<div id="reg-nuevo">' +
+    (modo.conceptoFijo ? '' : paso(1, '¿Cuánto y por qué?')) +
+    htmlCampo(campoValor, valorInicial) +
+    (modo.conceptoFijo ? '' : htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, edit ? edit.Concepto : (o.concepto || '')).replace('data-campo="Concepto"', 'data-campo="Concepto" data-etiqueta="1"')) +
+    (modo.conceptoFijo ? '' : paso(2, '¿En qué bolsillo?')) +
+    selBolsillo('ID_Bolsillo', medioEtiqueta, bolsilloInicial, 'Gasto,Ingreso,Ajuste', null, modo.medioVacio) +
+    (modo.origenFijo ? fijo('Sale de', modo.origenTexto) : selBolsillo('Origen', modo.medioEtiqueta && tipoInicial === 'Mover' ? modo.medioEtiqueta : 'Sale de', bolsilloInicial, 'Mover', modo.destinoFijo ? todos.map(sinOrigen(modo.destinoFijo)) : null)) +
+    (modo.destinoFijo ? fijo('Llega a', modo.destinoTexto) : selBolsillo('Destino', 'Llega a', destinoInicial, 'Mover', modo.origenFijo ? todos.map(sinOrigen(modo.origenFijo)) : null)) +
+    (modo.nota ? '<p class="m-ayuda">' + esc(modo.nota) + '</p>' : '') +
+    (modo.renglon && renglones.length ? '<div class="m-campo" data-campo="ID_Item_Ppto" data-solo="Gasto,Ajuste,Mover"><div class="m-label-fila"><label class="m-label" for="f-ID_Item_Ppto">Renglón del presupuesto (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Item_Ppto) + '</div><select class="m-input" id="f-ID_Item_Ppto" name="ID_Item_Ppto"><option value="">Ninguno</option>' +
       renglones.map(r => '<option value="' + esc(r.ID_Item) + '"' + (r.ID_Item === itemInicial ? ' selected' : '') + '>' + esc(r.Concepto) + '</option>').join('') + '</select><p class="m-ayuda">Así el gasto cuenta como lo "real" de ese renglón.</p></div>' : '') +
-    '<div class="m-campo" data-campo="ID_Categoria" data-solo="Gasto,Ingreso,Ajuste"><div class="m-label-fila"><label class="m-label" for="f-ID_Categoria">Categoría (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Categoria) + '</div><select class="m-input" id="f-ID_Categoria" name="ID_Categoria"></select></div>' +
+    (modo.categoria ? '<div class="m-campo" data-campo="ID_Categoria" data-solo="Gasto,Ingreso,Ajuste"><div class="m-label-fila"><label class="m-label" for="f-ID_Categoria">Categoría (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Categoria) + '</div><select class="m-input" id="f-ID_Categoria" name="ID_Categoria"></select></div>' : '') +
     // Compra con tarjeta en otra moneda: cuánto costó allá (la deuda queda en la moneda de la tarjeta)
-    (conTarjetas ? '<div class="m-campo" id="reg-moneda" hidden><div class="m-label-fila"><span class="m-label">¿Pagaste en otra moneda? (opcional)</span></div>' +
+    (conTarjetas && modo.moneda ? '<div class="m-campo" id="reg-moneda" hidden><div class="m-label-fila"><span class="m-label">¿Pagaste en otra moneda? (opcional)</span></div>' +
       '<div class="m-cargo-fila" style="grid-template-columns:7.5rem minmax(0,1fr)"><select class="m-input" id="f-Divisa_Original" aria-label="Moneda de la compra"><option value="">No, en la de la tarjeta</option>' +
       ['USD', 'EUR', 'GBP', 'MXN', 'CAD', 'BRL', 'CLP', 'PEN', 'ARS'].map(d => '<option value="' + d + '">' + d + '</option>').join('') + '</select>' +
       '<input class="m-input m-num" id="f-Valor_Original" inputmode="decimal" aria-label="Valor en esa moneda" placeholder="Valor en esa moneda" disabled></div>' +
       '<p class="m-ayuda">Escribe arriba lo que te cobró la tarjeta en tu moneda. Si tu tarjeta cobra un recargo por compras en otra moneda, aparece abajo.</p></div>' : '') +
-    (edit ? '' : htmlCargos('Gasto,Mover')) +
-    paso(3, '¿Cuándo y cómo se cuenta?') +
+    (!edit && modo.cargos ? htmlCargos(modo.tipos.length > 1 ? 'Gasto,Mover' : '') : '') +
+    (modo.conceptoFijo ? '' : paso(3, '¿Cuándo y cómo se cuenta?')) +
     '<div class="m-campo" data-campo="Fecha"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo(INFO_GENERAL.Fecha) + '</div><input class="m-input" id="f-Fecha" name="Fecha" type="date" max="' + hoy + '" value="' + esc(edit ? edit.Fecha : hoy) + '"></div>' +
-    htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
+    (modo.afecta ? htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
       info: 'Apágalo para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, un gasto de la primera semana del mes, antes de empezar con Moni). Queda en tus movimientos y en los gráficos, pero no cambia ningún saldo.' },
       edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso,Mover"') +
-    '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso,Mover" aria-live="polite"></p>' +
-    '<details class="m-nom-mas"><summary>Más opciones</summary>' + htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, edit ? edit.Notas : '') + '</details>' +
-    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+      '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso,Mover" aria-live="polite"></p>' : '') +
+    (modo.notas || (conTarjetas && modo.fuente) ? '<details class="m-nom-mas"><summary>Más opciones</summary>' +
+      // Con tarjeta: qué hacer con el dinero ahora (lo de la antigua hoja "Compra con tarjeta")
+      (conTarjetas && modo.fuente ? '<div class="m-campo" id="reg-fuente" hidden><label class="m-label" for="f-Fuente">¿Qué hacer con el dinero? (tarjeta)</label><select class="m-input" id="f-Fuente"><option value="">Automático: según el renglón</option>' +
+        FUENTES.map(f => '<option value="' + f[0] + '">' + esc(f[1]) + '</option>').join('') + '</select><p class="m-ayuda" id="fuente-ayuda">Con renglón, el dinero se aparta de su bolsillo; sin renglón, no se aparta nada.</p></div>' +
+        '<div class="m-campo" id="reg-fuente-origen" hidden><label class="m-label" for="f-FuenteOrigen">Se aparta de</label><select class="m-input" id="f-FuenteOrigen"><option value="">El del renglón (o el personal de la tarjeta)</option>' +
+        opcionesDestino(false).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' : '') +
+      (modo.notas ? htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, edit ? edit.Notas : '') : '') + '</details>' : '') +
+    '</div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
 
   const tipoActual = raiz => {
     if (edit) return edit.Tipo_Mov;
-    const r = $('input[name="tipo"]:checked', raiz); return r ? r.value : 'Gasto';
+    const r = $('input[name="tipo"]:checked', raiz); return r ? r.value : tipoInicial;
   };
   // Debajo de "Sumar a mis saldos": qué va a pasar, y una sugerencia si la fecha es de un mes anterior.
   const actualizarHist = raiz => {
@@ -252,20 +391,21 @@ async function abrirRegistrar(o) {
   };
   const actualizar = raiz => {
     const t = tipoActual(raiz);
-    $$('[data-solo]', raiz).forEach(el => { el.hidden = el.dataset.solo.split(',').indexOf(t) === -1; });
+    $$('[data-solo]', raiz).forEach(el => { if (el.dataset.solo) el.hidden = el.dataset.solo.split(',').indexOf(t) === -1; });
     const sel = $('#f-ID_Categoria', raiz);
-    const previa = sel.value;
-    const cat = categoriasPara(t);
-    sel.innerHTML = cat.map(c => '<option value="' + esc(c[0]) + '"' + (c[0] === (previa || (edit && edit.ID_Categoria) || '') ? ' selected' : '') + '>' + esc(c[1]) + '</option>').join('');
+    if (sel) {
+      const previa = sel.value;
+      sel.innerHTML = categoriasPara(t).map(c => '<option value="' + esc(c[0]) + '"' + (c[0] === (previa || (edit && edit.ID_Categoria) || '') ? ' selected' : '') + '>' + esc(c[1]) + '</option>').join('');
+    }
     const etq = $('[data-etiqueta] label', raiz);
     if (etq) etq.textContent = t === 'Mover' ? 'Concepto (opcional)' : 'Concepto';
     // La tarjeta solo sirve para gastos; en un ingreso o un ajuste se vuelve al primer bolsillo.
     const medio = $('#f-ID_Bolsillo', raiz);
     if (medio) {
       $$('optgroup[data-tarjetas]', raiz).forEach(g => { g.disabled = t !== 'Gasto'; });
-      if (t !== 'Gasto' && medio.value.indexOf('T:') === 0) medio.value = bolsilloInicial;
+      if (t !== 'Gasto' && medio.value.indexOf('T:') === 0) medio.value = idsValidos[0] || '';
       const lbl = $('label[for="f-ID_Bolsillo"]', raiz);
-      if (lbl) lbl.textContent = t === 'Gasto' && conTarjetas ? 'Con qué pagaste' : 'Bolsillo';
+      if (lbl) lbl.textContent = modo.medioEtiqueta || (t === 'Gasto' && conTarjetas ? 'Con qué pagaste' : 'Bolsillo');
     }
     ayudaTarjeta(raiz);
     actualizarHist(raiz);
@@ -274,28 +414,37 @@ async function abrirRegistrar(o) {
   const ayudaTarjeta = raiz => {
     const caja = $('#reg-tc-ayuda', raiz), medio = $('#f-ID_Bolsillo', raiz);
     if (!caja || !medio) return;
-    const esTarjeta = medio.value.indexOf('T:') === 0;
+    const esTarjeta = medio.value.indexOf('T:') === 0 && tipoActual(raiz) === 'Gasto';
     caja.hidden = !esTarjeta;
-    const mon = $('#reg-moneda', raiz);
-    if (mon) mon.hidden = !(esTarjeta && tipoActual(raiz) === 'Gasto');
+    const mon = $('#reg-moneda', raiz); if (mon) mon.hidden = !esTarjeta;
+    const fu = $('#reg-fuente', raiz); if (fu) fu.hidden = !esTarjeta;
+    const fuo = $('#reg-fuente-origen', raiz), fuente = ($('#f-Fuente', raiz) || {}).value || '';
+    if (fuo) fuo.hidden = !(esTarjeta && (fuente === 'Ppto' || fuente === 'Guardar'));
+    const fa = $('#fuente-ayuda', raiz);
+    if (fa) fa.textContent = fuente ? ((FUENTES.find(x => x[0] === fuente) || [])[2] || '') : 'Con renglón, el dinero se aparta de su bolsillo; sin renglón, no se aparta nada.';
     if (!esTarjeta) return;
+    if (modo.ayudaTarjeta) { caja.textContent = modo.ayudaTarjeta; return; }
+    const t = porId('Tarjetas', 'ID_Tarjeta', medio.value.slice(2));
+    const fecha = ($('#f-Fecha', raiz) || {}).value || hoy;
+    const extracto = t ? ' Entra al extracto de ' + mesTexto(mesExtractoDe(fecha, t.Dia_Corte)).toLowerCase() + '.' : '';
     const r = renglones.find(x => x.ID_Item === ($('#f-ID_Item_Ppto', raiz) || {}).value);
     const b = r && r.ID_Bolsillo_Destino ? porId('Bolsillos', 'ID_Bolsillo', r.ID_Bolsillo_Destino) : null;
-    caja.textContent = r && b
-      ? 'Cuenta como gasto de “' + r.Concepto + '” y se aparta el dinero de “' + b.Nombre + '” en la reserva de la tarjeta.'
-      : 'No se aparta dinero ahora: cuando pagues el extracto indicarás de qué bolsillo sale.';
+    caja.textContent = (fuente === 'Otro' ? 'Es una compra de otra persona: no cuenta como tu gasto.'
+      : (fuente === 'Guardar' ? 'Se aparta ahora el dinero del bolsillo que elijas, en la reserva de la tarjeta.'
+      : (fuente === 'Personal' ? 'No se aparta dinero ahora: cuando pagues el extracto indicarás de qué bolsillo sale.'
+      : (r && b ? 'Cuenta como gasto de “' + r.Concepto + '” y se aparta el dinero de “' + b.Nombre + '” en la reserva de la tarjeta.'
+      : 'No se aparta dinero ahora: cuando pagues el extracto indicarás de qué bolsillo sale.')))) + extracto;
   };
 
   await abrirHoja({
-    titulo: edit ? 'Editar movimiento' : 'Registrar',
-    der: edit ? 'Guardar' : 'Guardar',
+    titulo: modo.titulo, der: modo.der || 'Guardar',
     cuerpo: cuerpo,
-    alAbrir: raiz => {
+    alAbrir: async raiz => {
       activarEcoDinero(raiz); actualizar(raiz);
       // El valor se escribe en la moneda del bolsillo elegido (en un traslado, la del que sale)
       const monedaDelValor = () => {
         const sel = $(tipoActual(raiz) === 'Mover' ? '#f-Origen' : '#f-ID_Bolsillo', raiz), v = $('#f-Valor', raiz);
-        if (sel && v) { v.dataset.divisa = sel.value.indexOf('T:') === 0 ? 'COP' : divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
+        if (sel && v && sel.value) { v.dataset.divisa = sel.value.indexOf('T:') === 0 ? 'COP' : divisaDeBolsillo(sel.value); v.dispatchEvent(new Event('input')); }
       };
       // Un renglón que se paga con tarjeta propone la tarjeta (si todavía no se eligió el medio a mano).
       const proponerMedio = () => {
@@ -310,7 +459,7 @@ async function abrirRegistrar(o) {
       const divOrig = $('#f-Divisa_Original', raiz);
       if (divOrig) divOrig.addEventListener('change', () => { const v = $('#f-Valor_Original', raiz); v.disabled = !divOrig.value; if (!divOrig.value) v.value = ''; else v.focus(); });
       // Comisiones e impuestos propuestos según las reglas del medio de pago
-      if (!edit) activarCargos(raiz, () => {
+      if (!edit && modo.cargos) activarCargos(raiz, () => {
         const t = tipoActual(raiz), n = leerDinero(($('#f-Valor', raiz) || {}).value || ''), valor = typeof n === 'number' && !isNaN(n) ? n : 0;
         if (t === 'Gasto') {
           const medio = ($('#f-ID_Bolsillo', raiz) || {}).value || '';
@@ -318,10 +467,10 @@ async function abrirRegistrar(o) {
           return medio ? { operacion: 'Pago', ctx: { idBolsillo: medio, valor: valor } } : null;
         }
         if (t === 'Mover') {
-          const o = ($('#f-Origen', raiz) || {}).value, d = ($('#f-Destino', raiz) || {}).value;
-          const bo = porId('Bolsillos', 'ID_Bolsillo', o), bd = porId('Bolsillos', 'ID_Bolsillo', d);
+          const or = ($('#f-Origen', raiz) || {}).value || modo.origenFijo, de = ($('#f-Destino', raiz) || {}).value || modo.destinoFijo;
+          const bo = porId('Bolsillos', 'ID_Bolsillo', or), bd = porId('Bolsillos', 'ID_Bolsillo', de);
           // Entre bolsillos de la misma cuenta no hay cobros; a otra cuenta, sí puede haberlos
-          return bo && bd && bo.ID_Cuenta !== bd.ID_Cuenta ? { operacion: 'Transferencia', ctx: { idBolsillo: o, valor: valor } } : null;
+          return bo && bd && bo.ID_Cuenta !== bd.ID_Cuenta ? { operacion: 'Transferencia', ctx: { idBolsillo: or, valor: valor } } : null;
         }
         return null;
       });
@@ -347,12 +496,24 @@ async function abrirRegistrar(o) {
       raiz.addEventListener('change', ev => {
         if (ev.target.name === 'tipo') { actualizar(raiz); buscarSug.repintar && buscarSug.repintar(); }
         if (ev.target.id === 'f-ID_Bolsillo') ev.target.dataset.tocado = '1';
-        if (ev.target.id === 'f-ID_Item_Ppto') { proponerMedio(); ayudaTarjeta(raiz); }
-        if (ev.target.id === 'f-ID_Bolsillo') ayudaTarjeta(raiz);
+        if (ev.target.id === 'f-ID_Item_Ppto') proponerMedio();
+        ayudaTarjeta(raiz);
         monedaDelValor();
         actualizarHist(raiz);
       });
       const v = $('#f-Valor', raiz); if (v) v.focus();
+      // Completar un renglón: si ya registraste ese pago, se enlaza en vez de duplicarlo
+      if (modo.existentes) {
+        const sel = $('#f-Existente', raiz);
+        sel.addEventListener('change', () => { $('#reg-nuevo', raiz).hidden = !!sel.value; });
+        try {
+          const lista = await api('listMovimientosParaRenglon', modo.existentes);
+          if (lista.length) {
+            sel.insertAdjacentHTML('beforeend', lista.map(m => '<option value="' + esc(m.ID_Mov) + '">' + esc(fechaCorta(m.Fecha) + ' · ' + m.Concepto + ' · ' + dinero(m.Valor)) + '</option>').join(''));
+            $('#pr-existente', raiz).hidden = false;
+          }
+        } catch (e) { /* sin lista, se registra el pago normalmente */ }
+      }
     },
     alGuardar: async raiz => {
       const t = tipoActual(raiz);
@@ -360,8 +521,20 @@ async function abrirRegistrar(o) {
       const afectaSaldos = !((t === 'Gasto' || t === 'Ingreso' || t === 'Mover') && v.Afecta === false); // histórico: cuenta en los informes, no en los saldos
       const fecha = $('#f-Fecha', raiz).value;
       const notas = ($('#f-Notas', raiz) || {}).value || '';
-      if (v.Valor === '' || v.Valor === undefined || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el valor.');
-      if (t !== 'Mover' && !v.Concepto) throw new Error('Escribe el concepto: por ejemplo "Mercado" o "Nómina".');
+      const existente = ($('#f-Existente', raiz) || {}).value || '';
+      if (!existente && (v.Valor === '' || v.Valor === undefined || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0 && t !== 'Ajuste')) throw new Error('Escribe el valor.');
+      if (!modo.conceptoFijo && t !== 'Mover' && !v.Concepto) throw new Error('Escribe el concepto: por ejemplo "Mercado" o "Nómina".');
+      if (t === 'Mover' && !existente) {
+        const or = v.Origen || modo.origenFijo, de = v.Destino || modo.destinoFijo;
+        if (or && or === de) throw new Error('Elige dos bolsillos distintos.');
+        if (or && de && divisaDeBolsillo(or) !== divisaDeBolsillo(de)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
+      }
+      const medio = v.ID_Bolsillo || '';
+      // Los modos (pagar un cobro, recibir un ingreso, un regalo, un renglón, el ahorro) guardan con su propia operación
+      if (modo.guardar) {
+        await modo.guardar(Object.assign({}, v, { Fecha: fecha, medioTarjeta: medio.indexOf('T:') === 0 ? medio.slice(2) : '', ID_Bolsillo: medio.indexOf('T:') === 0 ? '' : medio }), raiz);
+        return;
+      }
 
       let res;
       if (edit) {
@@ -370,17 +543,18 @@ async function abrirRegistrar(o) {
         return;
       }
       if (t === 'Mover') {
-        if (v.Origen === v.Destino) throw new Error('Elige dos bolsillos distintos.');
-        if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
         res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '', afectaSaldos: afectaSaldos, cargos: leerCargos(raiz) }, vistaActual());
         recordarBolsillo(v.Origen);
-      } else if (t === 'Gasto' && v.ID_Bolsillo.indexOf('T:') === 0) {
-        // Gasto con tarjeta: con renglón aparta de su bolsillo; sin renglón no aparta nada.
+      } else if (t === 'Gasto' && medio.indexOf('T:') === 0) {
+        // Gasto con tarjeta: con renglón aparta de su bolsillo; sin renglón no aparta nada (o lo que se elija en "Más opciones").
         const divOrig = ($('#f-Divisa_Original', raiz) || {}).value || '';
         const valOrig = divOrig ? leerDinero($('#f-Valor_Original', raiz).value) : '';
         if (divOrig && (valOrig === '' || isNaN(valOrig) || valOrig <= 0)) throw new Error('Escribe cuánto costó en ' + divOrig + ', o elige “No, en la de la tarjeta”.');
-        res = await api('addGastoTarjeta', { ID_Tarjeta: v.ID_Bolsillo.slice(2), Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas,
-          Divisa_Original: divOrig, Valor_Original: valOrig, cargos: leerCargos(raiz) }, vistaActual());
+        const fuente = ($('#f-Fuente', raiz) || {}).value || '';
+        const envio = { ID_Tarjeta: medio.slice(2), Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas,
+          Divisa_Original: divOrig, Valor_Original: valOrig, cargos: leerCargos(raiz) };
+        if (fuente) { envio.Fuente = fuente; if (fuente === 'Ppto' || fuente === 'Guardar') envio.ID_Bolsillo_Origen = ($('#f-FuenteOrigen', raiz) || {}).value || ''; }
+        res = await api('addGastoTarjeta', envio, vistaActual());
         aplicarEscritura(res); App.tar.data = null; App.deudas.data = null; render();
         aviso(res.aparto ? 'Gasto con tarjeta registrado y dinero apartado' : 'Gasto con tarjeta registrado', { deshacer: () => anularGastoTarjeta(res.idCompra, res.idItem) });
         return;

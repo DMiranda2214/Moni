@@ -242,72 +242,9 @@ function conectarSugerencias(raiz, campo, tipoActual) {
   return buscar;
 }
 
-async function abrirCompra(idTarjeta) {
-  const td = App.tar.data;
-  if (!td) return;
-  const hoy = App.boot.hoy;
-  const grupos = opcionesDestino(true);
-  const renglones = App.boot.renglones || [];
-  const fuenteSel = (v) => FUENTES.map(f => '<option value="' + f[0] + '"' + (f[0] === v ? ' selected' : '') + '>' + esc(f[1]) + '</option>').join('');
-  const campoSel = (k, label, opcionesHtml, solo, extra) => '<div class="m-campo" data-campo="' + k + '"' + (solo ? ' data-solo="' + solo + '"' : '') + '><label class="m-label" for="f-' + k + '">' + esc(label) + '</label><select class="m-input" id="f-' + k + '">' + opcionesHtml + '</select>' + (extra || '') + '</div>';
-  const optsBolsillo = '<option value="">Elegir…</option>' + grupos.filter(g => g.grupo).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (td.personal && x[0] === td.personal.ID_Bolsillo ? ' data-personal="1"' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('');
-  const cats = [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre]));
+/** Compra con una tarjeta: el formulario de registro con la tarjeta ya elegida. */
+const abrirCompra = idTarjeta => abrirRegistrar({ para: { tipo: 'compra', idTarjeta: idTarjeta } });
 
-  const cuerpo = '<form novalidate data-form="compra">' +
-    htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true }, '') +
-    htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, '') +
-    campoSel('Renglon', 'Renglón del presupuesto (opcional)', '<option value="">Ninguno</option>' + renglones.map(r => '<option value="' + esc(r.ID_Item) + '">' + esc(r.Concepto) + '</option>').join(''), '',
-      '<p class="m-ayuda">Si la compra está en tu presupuesto, elígelo: el gasto cuenta en ese renglón y el dinero se aparta de su bolsillo.</p>') +
-    campoSel('Fuente', '¿Qué hacer con el dinero?', fuenteSel('Personal'), '', '<p class="m-ayuda" id="fuente-ayuda"></p>') +
-    campoSel('Origen', 'Sale de (bolsillo)', optsBolsillo, 'Ppto,Guardar') +
-    campoSel('Categoria', 'Categoría (opcional)', cats.map(c => '<option value="' + esc(c[0]) + '">' + esc(c[1]) + '</option>').join(''), '') +
-    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + hoy + '"><p class="m-ayuda" id="mes-extracto"></p></div>' +
-    htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
-    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-
-  await abrirHoja({
-    titulo: 'Compra con ' + td.tarjeta.Nombre, cuerpo: cuerpo,
-    alAbrir: raiz => {
-      activarEcoDinero(raiz);
-      conectarSugerencias(raiz, $('#f-Concepto', raiz), () => 'Gasto');
-      const actualizar = () => {
-        const f = $('#f-Fuente', raiz).value;
-        $$('[data-solo]', raiz).forEach(el => { el.hidden = el.dataset.solo !== '' && el.dataset.solo.split(',').indexOf(f) === -1; });
-        $('#fuente-ayuda', raiz).textContent = (FUENTES.find(x => x[0] === f) || [])[2] || '';
-        if (f === 'Guardar' && td.personal && !$('#f-Origen', raiz).value) $('#f-Origen', raiz).value = td.personal.ID_Bolsillo;
-        const fecha = $('#f-Fecha', raiz).value;
-        $('#mes-extracto', raiz).textContent = fecha ? 'Entra al extracto de ' + mesTexto(mesExtractoDe(fecha, td.tarjeta.Dia_Corte)).toLowerCase() + '.' : '';
-      };
-      // Con renglón, lo natural es apartar de su bolsillo; sin renglón, no apartar nada. Solo mientras no se haya elegido a mano.
-      raiz.addEventListener('change', ev => {
-        if (ev.target.id === 'f-Fuente') ev.target.dataset.tocado = '1';
-        if (ev.target.id === 'f-Renglon') {
-          const r = renglones.find(x => x.ID_Item === ev.target.value), fu = $('#f-Fuente', raiz);
-          if (fu && !fu.dataset.tocado) fu.value = r && r.ID_Bolsillo_Destino ? 'Ppto' : 'Personal';
-          if (r && r.ID_Bolsillo_Destino && fu.value === 'Ppto') $('#f-Origen', raiz).value = r.ID_Bolsillo_Destino;
-        }
-        actualizar();
-      });
-      actualizar();
-      $('#f-Valor', raiz).focus();
-    },
-    alGuardar: async raiz => {
-      const valor = leerDinero($('#f-Valor', raiz).value);
-      const concepto = $('#f-Concepto', raiz).value.trim();
-      if (valor === '' || isNaN(valor)) throw new Error('Escribe el valor.');
-      if (!concepto) throw new Error('Escribe el concepto.');
-      const fuente = $('#f-Fuente', raiz).value;
-      const envio = { ID_Tarjeta: idTarjeta, Valor: valor, Concepto: concepto, Fuente: fuente, Fecha: $('#f-Fecha', raiz).value, ID_Categoria: $('#f-Categoria', raiz).value, Notas: ($('#f-Notas', raiz) || {}).value || '' };
-      if (fuente === 'Ppto' || fuente === 'Guardar') envio.ID_Bolsillo_Origen = $('#f-Origen', raiz).value;
-      envio.ID_Item_Ppto = $('#f-Renglon', raiz).value;
-      const res = await api('addCompraTC', envio);
-      aplicarEscritura(res); aplicarTarjeta(res); render();
-      aviso('Compra registrada', { deshacer: () => anularCompraYAvisar(res.idCompra) });
-    }
-  });
-}
-
-const anularCompraYAvisar = idCompra => escribirYAvisar('voidCompraTC', [idCompra], { mensaje: 'Compra anulada', aplicar: [aplicarTarjeta], deshacer: () => restaurarCompraYAvisar(idCompra) });
 const restaurarCompraYAvisar = idCompra => escribirYAvisar('restoreCompraTC', [idCompra], { mensaje: 'Compra restaurada', aplicar: [aplicarTarjeta] });
 
 async function abrirDetalleCompra(id) {

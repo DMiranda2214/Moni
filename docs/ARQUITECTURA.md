@@ -72,7 +72,7 @@
 
 ## Modelo de datos (resumen)
 32 tablas en cinco grupos:
-- **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Servicios_Publicos, Suscripciones, CDTs, Ingresos_Recurrentes, Escenarios.
+- **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Suscripciones (con los servicios y empresas de pago desde 1.15; `Servicios_Publicos` y `Empresas_Pago` quedan como pestañas viejas sin uso), CDTs, Ingresos_Recurrentes, Escenarios.
 - **Operación:** Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes.
 - **Nómina:** Subsidios, Nomina_Escenarios, Nomina_Conceptos, Nomina_Pagos, Nomina_Pagos_Detalle.
 - **Créditos:** Creditos, Creditos_Cronograma, Creditos_Pagos.
@@ -110,6 +110,7 @@ Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la person
 
 ## Frontend
 - JavaScript sin frameworks, incluido desde `index.html`. El código está repartido en partes (`app_js.html` = núcleo: utilidades, datos y navegación; `js_pantallas`, `js_formularios`, `js_movimientos`, `js_planear`, `js_deudas`, `js_ahorro`, `js_graficos`, `js_analisis`, `js_divisas`, `js_asistente`, `js_eventos`) que `include('app_js')` en `Code.gs` une en el orden de `PARTES_JS`. **Cada parte es su propio bloque `<script>`**: Apps Script exige que todo archivo `.html` incluido sea HTML válido (un JavaScript suelto falla con "Contenido HTML con formato incorrecto"); una prueba lo comprueba.
+- **Un solo formulario de registro** (`abrirRegistrar` en `js_movimientos`, desde 1.15): gasto, ingreso, mover, compra con tarjeta, pagar un servicio o suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto y sacar o reponer dinero del ahorro. `modoRegistro(o)` dice, para cada caso (`o.para.tipo`), qué se fija, qué campos se muestran y con qué operación del servidor se guarda; campos, cargos, validaciones y avisos son los mismos. `abrirCompra`, `abrirPagarCobro`, `abrirRecibirIngreso`, `abrirCompraRegalo`, `abrirPagarRenglon` y `abrirMovimientoAhorro` son llamadas a él. Siguen aparte, por tener su propia lógica, la nómina, el pago del extracto y de la cuota de un crédito, los abonos a tarjeta, convertir divisas, los CDT, los rendimientos y cuadrar.
 - **Estado** en el objeto `App`; **pantallas** son funciones `vXxx()` que devuelven `{ titulo, html, acciones, despues }`; `render()` las pinta.
 - **Delegación de eventos** con `data-acc` (clic), `data-acc-cambio` (cambio) y `data-hoja-acc` (dentro de una hoja modal). Las acciones viven en el objeto `ACCIONES`.
 - **Hojas modales** con `<dialog>` y un único registro de oyentes (`hojaActual`).

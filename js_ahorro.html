@@ -114,26 +114,10 @@ async function abrirRendimiento(pre) {
   });
 }
 
-/** Sacar dinero del ahorro para gastos, o reponerlo. */
-async function abrirMovimientoAhorro(modo) {
+/** Sacar dinero del ahorro para gastos, o reponerlo: el formulario de registro como traslado desde o hacia el ahorro. */
+function abrirMovimientoAhorro(modo) {
   const d = App.ahoC.data;
-  if (!d) return;
-  const retirar = modo === 'retirar';
-  const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => x[0] !== d.ID_Bolsillo) })).filter(g => g.opciones.length);
-  const cuerpo = '<form novalidate data-form="ahorro-mov"><p class="m-hoja-mensaje">' + (retirar ? 'Sacas dinero del ahorro para gastarlo. Queda anotado como algo que debes reponer.' : 'Devuelves dinero al ahorro. Baja lo que debes reponer (hoy: ' + dinero(d.cuenta.deuda.manual) + ').') + '</p>' +
-    htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true }, retirar ? '' : d.cuenta.deuda.manual, {}) +
-    '<div class="m-campo"><label class="m-label" for="f-Bolsillo">' + (retirar ? 'El dinero llega a' : 'El dinero sale de') + '</label><select class="m-input" id="f-Bolsillo">' +
-    grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
-    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-  await abrirHoja({
-    titulo: retirar ? 'Sacar para gastos' : 'Reponer al ahorro', cuerpo: cuerpo, alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
-    alGuardar: async raiz => {
-      const v = leerDinero($('#f-Valor', raiz).value);
-      if (v === '' || isNaN(v)) throw new Error('Escribe el valor.');
-      const res = await api(retirar ? 'withdrawAhorro' : 'repayAhorro', d.cuenta.ID_Cuenta, $('#f-Bolsillo', raiz).value, v, $('#f-Fecha', raiz).value, '');
-      aplicarEscritura(res); aplicarAhorro(res); render(); aviso(retirar ? 'Dinero sacado del ahorro' : 'Dinero repuesto');
-    }
-  });
+  if (d) return abrirRegistrar({ para: { tipo: 'ahorro', modo: modo, datos: d } });
 }
 
 // ---------- Regalos ----------
@@ -219,38 +203,8 @@ async function abrirDetalleRegalo(id) {
   if (siguiente) siguiente();
 }
 
-async function abrirCompraRegalo(it) {
-  const grupos = opcionesDestino(false);
-  const tarjetas = activos('Tarjetas');
-  const pref = it.ID_Bolsillo_Plan || (grupos.map(g => (g.opciones.find(x => /regalo/i.test(x[1])) || [])[0]).find(Boolean) || '');
-  await abrirHoja({
-    titulo: 'Compra de regalo',
-    cuerpo: '<form novalidate data-form="compra-regalo"><p class="m-hoja-mensaje">Para ' + esc(it.Persona) + (it.Idea ? ' · ' + esc(it.Idea) : '') + '. Se registra como un gasto.</p>' +
-      htmlCampo({ k: 'Valor', label: 'Cuánto costó', tipo: 'dinero', requerido: true }, it.Estimado - it.Real > 0 ? it.Estimado - it.Real : '', {}) +
-      '<div class="m-campo"><label class="m-label" for="f-Bolsillo">' + (tarjetas.length ? 'Con qué pagaste' : 'Sale de') + '</label><select class="m-input" id="f-Bolsillo">' +
-        grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === pref ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') +
-        (tarjetas.length ? '<optgroup label="Con tarjeta de crédito">' + tarjetas.map(t => '<option value="T:' + esc(t.ID_Tarjeta) + '">' + esc(t.Nombre) + '</option>').join('') + '</optgroup>' : '') + '</select>' +
-        '<p class="m-ayuda" id="rg-tc-ayuda" hidden></p></div>' +
-      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => {
-      activarEcoDinero(raiz); $('#f-Valor', raiz).focus();
-      const sel = $('#f-Bolsillo', raiz), ayuda = $('#rg-tc-ayuda', raiz);
-      const sync = () => {
-        const tc = sel.value.indexOf('T:') === 0;
-        ayuda.hidden = !tc;
-        if (tc) ayuda.textContent = 'No sale dinero ahora. Moni te recordará pasar el valor ' + (it.BolsilloPlan ? 'de “' + it.BolsilloPlan + '” ' : '') + 'a la reserva de la tarjeta, y el aviso sigue hasta que registres ese movimiento.';
-      };
-      sel.addEventListener('change', sync); sync();
-    },
-    alGuardar: async raiz => {
-      const v = leerDinero($('#f-Valor', raiz).value);
-      if (v === '' || isNaN(v)) throw new Error('Escribe cuánto costó.');
-      const res = await api('payRegalo', it.ID_Regalo, v, $('#f-Bolsillo', raiz).value, $('#f-Fecha', raiz).value);
-      aplicarEscritura(res); aplicarRegalos(res.regalos); App.tar.data = null; App.deudas.data = null; render();
-      aviso(res.regalos.pendientes && res.regalos.pendientes.some(p => p.ID_Regalo === it.ID_Regalo) ? 'Compra registrada · falta mover el dinero a la reserva' : 'Compra registrada');
-    }
-  });
-}
+/** Registrar la compra de un regalo (con un bolsillo o con tarjeta): el formulario de registro. */
+const abrirCompraRegalo = it => abrirRegistrar({ para: { tipo: 'regalo', item: it } });
 
 // ---------- Vista anual ----------
 
@@ -614,38 +568,8 @@ async function abrirDetalleIngreso(id) {
   });
 }
 
-async function abrirRecibirIngreso(i) {
-  const grupos = opcionesDestino(false);
-  await abrirHoja({
-    titulo: 'Recibí ' + i.Nombre,
-    cuerpo: '<form novalidate data-form="recibir-ingreso">' + htmlCampo({ k: 'Valor', label: 'Cuánto recibiste', tipo: 'dinero', requerido: true, info: 'Por defecto, el monto esperado. Escribe el valor real si fue otro.' }, i.Valor, {}) +
-      '<div class="m-campo"><label class="m-label" for="f-Bolsillo">Llegó a</label><select class="m-input" id="f-Bolsillo">' +
-      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === i.ID_Bolsillo ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
-      htmlCargos() +
-      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
-      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => {
-      activarEcoDinero(raiz); $('#f-Valor', raiz).focus();
-      // Comisión del pago o el 4x1000 desde un bolsillo; con tarjeta, lo que cobre la tarjeta por la compra
-      activarCargos(raiz, () => {
-        const m = ($('#f-Medio', raiz) || {}).value || '', n = leerDinero($('#f-Valor', raiz).value), valor = typeof n === 'number' && !isNaN(n) ? n : 0;
-        if (m[0] === 'B') return { operacion: 'Pago', ctx: { idBolsillo: m.slice(2), valor: valor } };
-        if (m[0] === 'T') return { operacion: 'Compra', ctx: { idTarjeta: m.slice(2), valor: valor } };
-        return null;
-      });
-    },
-    alGuardar: async raiz => {
-      const v = leerDinero($('#f-Valor', raiz).value);
-      if (v === '' || isNaN(v)) throw new Error('Escribe cuánto recibiste.');
-      const res = await api('receiveIngreso', i.ID_Ingreso, { Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: $('#f-Bolsillo', raiz).value });
-      aplicarEscritura(res); App.ing.data = res.ingresos; render();
-      aviso('Ingreso registrado · próximo ' + res.proximo, { deshacer: async () => {
-        try { const u = await api('undoIngreso', i.ID_Ingreso, res.anterior, res.idMov); aplicarEscritura(u); App.ing.data = u.ingresos; render(); aviso('Ingreso deshecho'); }
-        catch (e) { aviso(e.message, true); }
-      } });
-    }
-  });
-}
+/** Recibir un ingreso recurrente: el formulario de registro con el ingreso ya elegido. */
+const abrirRecibirIngreso = i => abrirRegistrar({ para: { tipo: 'ingreso', item: i } });
 
 // ---------- Servicios y suscripciones ----------
 
@@ -750,41 +674,8 @@ async function abrirDetalleCobro(id) {
   });
 }
 
-async function abrirPagarCobro(s) {
-  const campos = [{ k: 'Valor', label: s.Tipo === 'Servicio' ? 'Cuánto pagaste' : 'Valor', tipo: 'dinero', requerido: true }];
-  const medio = s.ID_Tarjeta ? 'T:' + s.ID_Tarjeta : (s.ID_Bolsillo ? 'B:' + s.ID_Bolsillo : '');
-  const grupos = opcionesDestino(false);
-  const delBolsillo = [].concat.apply([], grupos.map(g => g.opciones.map(o => ['B:' + o[0], o[1] + ' · ' + g.grupo.split(' · ').pop()])));
-  const opts = [{ grupo: 'Desde un bolsillo', opciones: delBolsillo }]
-    .concat(activos('Tarjetas').length ? [{ grupo: 'Con una tarjeta', opciones: activos('Tarjetas').map(t => ['T:' + t.ID_Tarjeta, t.Nombre]) }] : []);
-  await abrirHoja({
-    titulo: 'Pagar ' + s.Nombre,
-    cuerpo: '<form novalidate data-form="pago-cobro">' + htmlCampo(campos[0], s.Valor, {}) +
-      '<div class="m-campo"><label class="m-label" for="f-Medio">Con qué lo pagas</label><select class="m-input" id="f-Medio">' +
-      (medio ? '' : '<option value="" disabled selected>Elegir…</option>') +
-      opts.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(o => '<option value="' + esc(o[0]) + '"' + (o[0] === medio ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
-      '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
-      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
-    alGuardar: async raiz => {
-      const v = leerDinero($('#f-Valor', raiz).value);
-      if (v === '' || isNaN(v)) throw new Error('Escribe el valor.');
-      const m = $('#f-Medio', raiz).value;
-      if (!m) throw new Error('Elige con qué lo pagas.');
-      const datos = { Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: m[0] === 'B' ? m.slice(2) : '', ID_Tarjeta: m[0] === 'T' ? m.slice(2) : '', cargos: leerCargos(raiz) };
-      const res = await api('paySuscripcion', s.ID_Suscripcion, datos);
-      aplicarEscritura(res); App.pag.data = res.suscripciones; render();
-      aviso('Pago registrado · próximo cobro ' + res.proximo, {
-        deshacer: async () => {
-          try {
-            const u = await api('undoPagoSuscripcion', s.ID_Suscripcion, res.anterior, res.idMov, res.idCompra, res.idItem || '');
-            aplicarEscritura(u); App.pag.data = u.suscripciones; render(); aviso('Pago deshecho');
-          } catch (e) { aviso(e.message, true); }
-        }
-      });
-    }
-  });
-}
+/** Pagar un servicio o una suscripción: el formulario de registro con el cobro ya elegido (con comisiones e impuestos). */
+const abrirPagarCobro = s => abrirRegistrar({ para: { tipo: 'cobro', item: s } });
 
 /** Un dato de pago (de la lista de códigos y enlaces de la pantalla de pagos). */
 const buscarCodigo = id => ((App.pag.data && App.pag.data.codigos) || []).find(x => x.ID_Suscripcion === id) || null;

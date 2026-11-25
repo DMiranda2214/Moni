@@ -147,69 +147,12 @@ async function abrirRenglon(id) {
   if (siguiente) siguiente();
 }
 
-/** Confirmación al marcar un renglón como pagado: de qué bolsillo salió, cuánto y cuándo (o enlazar un pago que ya registraste). */
-async function abrirPagarRenglon(id, opciones) {
+/** Confirmación al marcar un renglón como pagado (o agregarle un movimiento): el formulario de registro para ese renglón. */
+function abrirPagarRenglon(id, opciones) {
   const soloAgregar = !!(opciones && opciones.soloAgregar); // agrega un movimiento sin dar el renglón por completo
   const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
   if (!it || (it.Pagado && !soloAgregar)) return;
-  const esCredito = it.Tipo === 'Cuota' && !!it.ID_Credito;
-  const esTarjeta = it.Tipo === 'Gasto' && !!it.ID_Tarjeta;
-  const mueve = it.Tipo !== 'Gasto' && !esCredito; // ahorro, fondo o cuota sin crédito: un traslado hacia el bolsillo de destino
-  const tj = esTarjeta ? porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta) : null;
-  const falta = Math.max(it.Restante, 0) || it.Plan;
-  const etiqueta = esTarjeta ? 'Se aparta de' : (mueve ? 'Sale de' : (esCredito ? 'Pagas desde' : 'Pagaste desde'));
-  const preferido = esCredito ? '' : (mueve ? (ultimoBolsillo() !== it.ID_Bolsillo_Destino ? ultimoBolsillo() : '') : (it.ID_Bolsillo_Destino || ultimoBolsillo()));
-  const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => !mueve || x[0] !== it.ID_Bolsillo_Destino) }));
-  const nota = esCredito ? 'Se registra como el pago de la cuota del crédito, con su cronograma.'
-    : (esTarjeta ? 'Se registra como una compra con ' + (tj ? tj.Nombre : 'la tarjeta') + '. El dinero se aparta del bolsillo que elijas.'
-    : (mueve ? 'El dinero se traslada al bolsillo “' + (it.Bolsillo || 'de destino') + '”.' : 'Se registra como un gasto de ese bolsillo.'));
-  const opts = (esCredito || esTarjeta ? '<option value="">' + (esCredito ? 'El de siempre de este crédito' : 'El bolsillo del renglón') + '</option>' : '') +
-    grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('');
-  const campoValor = { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, ayuda: 'Lo planeado es ' + dinero(it.Plan) + (it.Real > 0 ? ' y ya llevas ' + dinero(it.Real) : '') + '.' };
-  const cuerpo = '<form novalidate data-form="pagar-renglon">' +
-    '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
-    '<div class="m-campo" id="pr-existente" hidden><label class="m-label" for="f-Existente">¿Ya lo registraste?</label><select class="m-input" id="f-Existente"><option value="">No, registrar el pago ahora</option></select>' +
-    '<p class="m-ayuda">Si ya anotaste este pago en Movimientos, enlázalo aquí y no se duplica.</p></div>' +
-    '<div id="pr-nuevo">' + htmlCampo(campoValor, falta, {}) +
-    '<div class="m-campo"><label class="m-label" for="f-Origen">' + etiqueta + '</label><select class="m-input" id="f-Origen">' + opts + '</select><p class="m-ayuda">' + esc(nota) + '</p></div>' +
-    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div></div>' +
-    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
-
-  await abrirHoja({
-    titulo: soloAgregar ? 'Agregar un movimiento' : 'Marcar como completo', der: soloAgregar ? 'Agregar' : 'Confirmar', cuerpo: cuerpo,
-    alAbrir: async raiz => {
-      activarEcoDinero(raiz);
-      const sel = $('#f-Existente', raiz);
-      sel.addEventListener('change', () => { $('#pr-nuevo', raiz).hidden = !!sel.value; });
-      try {
-        const lista = await api('listMovimientosParaRenglon', id);
-        if (lista.length) {
-          sel.insertAdjacentHTML('beforeend', lista.map(m => '<option value="' + esc(m.ID_Mov) + '">' + esc(fechaCorta(m.Fecha) + ' · ' + m.Concepto + ' · ' + dinero(m.Valor)) + '</option>').join(''));
-          $('#pr-existente', raiz).hidden = false;
-        }
-      } catch (e) { /* sin lista, se registra el pago normalmente */ }
-    },
-    alGuardar: async raiz => {
-      const existente = $('#f-Existente', raiz).value;
-      const datos = {};
-      if (existente) datos.ID_Mov = existente;
-      else {
-        const v = leerFormulario(raiz, [campoValor]);
-        if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe el valor.');
-        const origen = $('#f-Origen', raiz).value;
-        if (!origen && !esCredito && !(esTarjeta && it.ID_Bolsillo_Destino)) throw new Error('Elige el bolsillo.');
-        Object.assign(datos, { Valor: v.Valor, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: origen });
-      }
-      if (soloAgregar) datos.Completar = false;
-      const res = await api('payRenglonConfirmado', id, datos, vistaActual());
-      if (datos.ID_Bolsillo) recordarBolsillo(datos.ID_Bolsillo);
-      aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
-      if (esCredito) App.cre.data = null;
-      if (esCredito || esTarjeta) { App.tar.data = null; App.deudas.data = null; }
-      render();
-      aviso(soloAgregar ? 'Movimiento agregado' : 'Renglón completo', { deshacer: () => desmarcarRenglon(id, true) });
-    }
-  });
+  return abrirRegistrar({ para: { tipo: 'renglon', item: it, soloAgregar: soloAgregar } });
 }
 
 /** Marcar un renglón como completo: pregunta si falta algún movimiento o si bastan los que ya están registrados. */

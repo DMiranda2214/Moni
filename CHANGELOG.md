@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.15.0 — Un solo formulario de registro y servicios en un solo lugar (25 nov 2026)
+- **Cambia:** **un solo formulario** para registrar todo lo que entra, sale o se mueve. Pagar un servicio o una suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta y sacar o reponer dinero del ahorro abren la misma hoja de *Registrar*, con lo que ya se sabe llenado. Se ve y se usa igual en todos los casos.
+- **Nuevo:** al **pagar un servicio o una suscripción** aparecen las **comisiones e impuestos** del medio de pago (antes no se podían anotar ahí). Al comprar con tarjeta desde *Registrar*, en *Más opciones* eliges qué hacer con el dinero (lo que antes solo estaba en la compra desde la tarjeta) y ves a qué extracto entra.
+- **Cambia:** **servicios, empresas de pago y suscripciones en un solo lugar** (*Servicios y suscripciones*): cada uno guarda su empresa, su código de pago y su enlace. Se quitan de Ajustes las listas *Servicios públicos* y *Empresas de servicios*, y el asistente tiene un paso menos.
+- **Tus datos:** al actualizar, Moni copia tus servicios públicos y empresas de pago a *Servicios y suscripciones* **tal como los tenías** (hogar, código, enlace y notas). Los que no tenían cobro quedan como "solo datos de pago": siguen en *Códigos y enlaces de pago* y en *Pagar servicio*, sin contar en lo que pagas al mes ni en el presupuesto, como antes. Las pestañas viejas de la hoja **no se borran ni se modifican**, y ninguna celda existente cambia (comprobado con la prueba de migración desde la 1.10.0). Es repetible: no duplica nada.
+- **Corregido:** recibir un ingreso recurrente mostraba una sección de comisiones que no se guardaba.
+- **Interno:** `modoRegistro()` define cada caso del formulario; las hojas `abrirCompra`, `abrirPagarCobro`, `abrirRecibirIngreso`, `abrirCompraRegalo`, `abrirPagarRenglon` y `abrirMovimientoAhorro` son llamadas a `abrirRegistrar`. Esquema `14` (columnas `Empresa`, `Codigo_Pago`, `ID_Empresa` en `Suscripciones`).
+
 ## 1.14.1 — Corrige la carga en Google (25 nov 2026)
 - **Corregido:** desde la 1.11, la app publicada en Apps Script no abría ("Exception: Contenido HTML con formato incorrecto"). Las partes del JavaScript eran archivos de código suelto y Apps Script exige que cada archivo `.html` incluido sea HTML válido. Ahora cada parte es su propio bloque `<script>`. La vista previa local arma la página igual que Apps Script, y una prueba nueva comprueba que ningún archivo incluido tenga código suelto.
 

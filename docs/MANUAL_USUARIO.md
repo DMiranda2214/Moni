@@ -42,6 +42,8 @@ La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cu
 
 Al escribir el **concepto**, Moni te sugiere los que ya usaste; si eliges uno, completa el valor, el bolsillo, la categoría y el renglón de la última vez (solo lo que no hayas llenado).
 
+Es **el mismo formulario** para todo lo que entra, sale o se mueve: al pagar un servicio, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta o sacar dinero del ahorro, se abre esta misma hoja con lo que ya se sabe llenado (por ejemplo, el nombre del servicio y su medio de pago). Al pagar un servicio o una suscripción también aparecen **Comisiones e impuestos**. Al comprar con tarjeta, en *Más opciones* puedes elegir qué hacer con el dinero (apartarlo del presupuesto o de otro bolsillo, no apartar nada, o anotar que es una compra de otra persona).
+
 Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para corregir un movimiento, ábrelo y **Editar** (los traslados y los pagos automáticos se anulan y se vuelven a registrar).
 
 ## 4. Bolsillos
@@ -127,9 +129,10 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 - **Por pagar:** vencidas o en los próximos 7 días.
 - Toca un cobro: **Registrar el pago** (desde un bolsillo o con una tarjeta), **Ir a pagar** (enlace), **Copiar código**, **Saltar este cobro** o **Editar**.
 - Al pagar, el próximo cobro avanza un período y se mantiene el día. En un **servicio**, el valor guardado pasa a ser el último que pagaste.
-- **Agregar:** botón **+**. Elige si es *Suscripción* (valor fijo) o *Servicio* (valor variable, con código y enlace opcionales), cada cuánto se cobra, el próximo cobro y con qué se paga.
-- Abajo: **Códigos y enlaces de pago** de tus servicios públicos (Ajustes → Servicios públicos).
-- **Empresas de servicios** (Ajustes → Empresas de servicios): guarda una sola vez cada empresa con quien pagas (Enel, Vanti, el acueducto…) y su enlace de pago. Al guardar un servicio eliges la empresa y solo escribes el hogar y el código de pago; el enlace no se repite.
+- **Agregar:** botón **+**. Elige si es *Suscripción* (valor fijo) o *Servicio* (valor variable), el hogar, la **empresa**, el **código de pago** y el enlace, cada cuánto se cobra, el próximo cobro y con qué se paga. Todo en un solo lugar: ya no hay listas aparte de servicios públicos ni de empresas.
+- Un servicio **sin próximo cobro** guarda solo sus datos de pago (código y enlace): no cuenta en lo que pagas al mes ni en el presupuesto. Ponle fecha y valor cuando quieras que Moni te lo recuerde.
+- Abajo: **Códigos y enlaces de pago** de tus servicios y suscripciones.
+- **Si venías de una versión anterior,** tus servicios públicos y empresas de pago aparecen aquí tal como los tenías (mismo hogar, código y enlace); nada se borra.
 - **Pagar servicio** (botón arriba en esta pantalla): eliges la empresa y luego el hogar; Moni **abre la página de pago en otra ventana y deja el código de pago en el portapapeles** para que lo pegues. Si el navegador no deja abrir la ventana o copiar, muestra el código con los botones *Copiar código* e *Ir a pagar*.
 
 ## 12. Regalos
@@ -174,7 +177,7 @@ Menú **Ajustes** (desde *Más*):
 - **Tú:** **Perfil** (nombre) y **Apariencia** (claro/oscuro/automático y color).
 - **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, y **Divisas** (tasa de referencia del dólar y el euro). Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 - **Presupuesto y nómina:** plantilla del presupuesto, escenarios del presupuesto, mi nómina, subsidios y parámetros de nómina.
-- **Organización:** categorías, personas, hogares (inmuebles) y servicios públicos.
+- **Organización:** categorías, personas, hogares (inmuebles) y servicios y suscripciones.
 - **Mantenimiento:** *Avisos de Inicio* (volver a mostrar los ocultos), *Actualizar desde la hoja* (si editaste la hoja a mano), **Recordatorios**, **Mi cuenta**, **Respaldos**, **Registro de errores**, **Diagnóstico** y, solo en desarrollo, *Datos de demostración*.
 - **Privacidad:** **Borrar todos mis datos**.
 
