@@ -346,6 +346,12 @@ function vBolsillos() {
   return { titulo: 'Bolsillos', html: html };
 }
 
+/** Una línea sobre las metas para la pantalla de Planear (con lo que ya se sabe, sin pedir nada al servidor). */
+function resumenMetasPlanear() {
+  const metas = activos('Metas').filter(m => (m.Estado || 'Activa') === 'Activa');
+  return metas.length ? metas.length + (metas.length === 1 ? ' meta en curso' : ' metas en curso') + ' · Navidad, viaje, moto…' : 'Ahorra para la Navidad, un viaje, la moto…';
+}
+
 /** Pantalla de entrada del área Planear: lo que entra y lo que se decidió gastar. */
 function vPlanear() {
   const p = App.boot.ppto || {};
@@ -360,30 +366,44 @@ function vPlanear() {
   return {
     titulo: 'Planear', subtitulo: 'Lo que entra y lo que decidiste gastar',
     html: destacada +
-      '<section class="m-seccion" aria-label="Cada mes"><h2 class="m-seccion-titulo">Cada mes</h2><div class="m-group">' +
-      fila({ icono: 'presupuesto', titulo: 'Presupuesto', sub: 'Plan frente a lo real, renglón por renglón', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
-      fila({ icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' }) +
-      fila({ icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos" data-tono="menta"' }) +
-      fila({ icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos" data-tono="durazno"' }) +
-      '</div></section>' +
-      '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
-      fila({ icono: 'pulso', titulo: 'Análisis', sub: 'Patrimonio, en qué gastas, lo que debes y tu dinero en 90 días', chevron: true, attrs: 'data-acc="ir" data-ruta="analisis" data-tono="celeste"' }) +
-      fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
-      fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
-      '</div></section>' +
-      // En el celular, la guía y los ajustes (en el computador están en la barra lateral)
-      '<section class="m-seccion m-solo-movil" aria-label="Ayuda y ajustes"><h2 class="m-seccion-titulo">Ayuda y ajustes</h2><div class="m-group">' +
-      irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso, y qué significa cada palabra' }) +
-      irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Tus cuentas, tarjetas, cargos, apariencia y respaldos' }) + '</div></section>'
+      seccion('Este mes',
+        fila({ icono: 'presupuesto', titulo: 'Presupuesto', sub: 'Plan frente a lo real, renglón por renglón', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+        fila({ icono: 'usuario', titulo: 'Ingresos', sub: 'Tu nómina y lo demás que recibes', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' })) +
+      seccion('Ahorrar y comprar',
+        fila({ icono: 'meta', titulo: 'Metas', sub: resumenMetasPlanear(), chevron: true, attrs: 'data-acc="ir" data-ruta="metas" data-tono="menta"' }) +
+        fila({ icono: 'regalo', titulo: 'Lista de deseos', sub: 'Regalos y cosas que quieres comprar', chevron: true, attrs: 'data-acc="ir" data-ruta="deseos" data-tono="lila"' })) +
+      // En el celular, Analizar se abre desde aquí (en el computador tiene su sección en la barra lateral)
+      seccion('Analizar',
+        fila({ icono: 'pulso', titulo: 'Análisis', sub: 'Patrimonio, en qué gastas y tu dinero en 90 días', chevron: true, attrs: 'data-acc="ir" data-ruta="analisis" data-tono="celeste"' }) +
+        fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
+        fila({ icono: 'calculadora', titulo: 'Calculadora', sub: 'Préstamos, ahorro, CDT y tasas', chevron: true, attrs: 'data-acc="ir" data-ruta="calculadora" data-tono="celeste"' })) +
+      // En el celular, Ajustes (en el computador está al pie de la barra lateral). La Guía de uso está dentro de Ajustes.
+      '<div class="m-solo-movil">' + seccion('Ajustes', irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Cuentas, tarjetas, apariencia, guía de uso y respaldos' })) + '</div>'
   };
 }
 
-/** Pestañas internas del área Dinero (solo en sus pantallas de entrada). */
-function pildorasDinero(ruta) {
-  if (App.pila.length !== 1 || AREA_DE_RUTA[ruta] !== 'dinero') return '';
-  const grupo = GRUPOS_NAV[0];
-  return '<div class="m-pildoras" role="tablist" aria-label="Dinero">' + grupo.items.map(it =>
-    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + it[0] + '" aria-selected="' + (it[0] === ruta) + '">' + esc(it[1]) + '</button>').join('') + '</div>';
+/**
+ * En el celular, las pantallas de cada sección en pestañas arriba (Mi dinero, Pagos, Analizar). En el computador no hacen
+ * falta: están en la barra lateral. Planear tiene su propia pantalla de entrada.
+ */
+function pildorasArea(ruta) {
+  const area = AREA_DE_RUTA[ruta];
+  if (App.pila.length !== 1 || ['dinero', 'pagos', 'analizar'].indexOf(area) === -1) return '';
+  const grupo = GRUPOS_NAV.find(g => g.area === area);
+  return '<div class="m-pildoras m-solo-movil" role="tablist" aria-label="' + esc(grupo.titulo) + '">' + grupo.items.map(it =>
+    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + it[0] + '" aria-selected="' + esDelItem(it, ruta) + '">' + esc(it[1]) + '</button>').join('') + '</div>';
+}
+
+/** Pestañas dentro de una pantalla que reúne dos (Ingresos: nómina y otros; Inversiones: acciones y CDT). Se ven en todo tamaño. */
+function subPestanas(etiqueta, opciones, actual) {
+  return '<div class="m-pildoras m-subpestanas" role="tablist" aria-label="' + esc(etiqueta) + '">' + opciones.map(o =>
+    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + o[0] + '" aria-selected="' + (o[0] === actual) + '">' + esc(o[1]) + '</button>').join('') + '</div>';
+}
+function conPestanasIngresos(vista, actual) {
+  return Object.assign({}, vista, { titulo: 'Ingresos', subtitulo: '', html: subPestanas('Ingresos', [['nomina', 'Nómina'], ['ingresos', 'Otros ingresos']], actual) + vista.html });
+}
+function conPestanasInversion(vista, actual) {
+  return Object.assign({}, vista, { titulo: 'Inversiones', html: subPestanas('Inversiones', [['inversiones', 'Acciones, ETF y cripto'], ['cdt', 'CDT']], actual) + vista.html });
 }
 
 // ---------- Barra lateral ----------
@@ -399,6 +419,18 @@ function alternarLateral() {
   $('#lateral').innerHTML = htmlLateral(App.pila[0], AREA_DE_RUTA[App.pila[0]] || '', !!(App.boot && App.boot.instalado && hayBolsillos()));
 }
 
+/** Secciones de la barra lateral que la persona plegó (se recuerdan en este dispositivo). */
+function seccionesPlegadas() {
+  try { return JSON.parse(localStorage.getItem('moni.lat.plegadas') || '[]') || []; } catch (e) { return []; }
+}
+function alternarSeccionLateral(area) {
+  const p = seccionesPlegadas(), k = p.indexOf(area);
+  if (k === -1) p.push(area); else p.splice(k, 1);
+  try { localStorage.setItem('moni.lat.plegadas', JSON.stringify(p)); } catch (e) {}
+  $('#lateral').innerHTML = htmlLateral(App.pila[0], AREA_DE_RUTA[App.pila[0]] || '', !!(App.boot && App.boot.instalado && hayBolsillos()));
+  const b = $('#lateral [data-acc="lat-plegar"][data-area="' + area + '"]'); if (b) b.focus();
+}
+
 function htmlLateral(raiz, area, puedeRegistrar) {
   const item = (ruta, etiqueta, icono) => '<button class="m-lat-item" data-acc="ir" data-ruta="' + ruta + '" title="' + esc(etiqueta) + '"' + (ruta === raiz ? ' aria-current="page"' : '') + '>' +
     ico(icono) + '<span class="m-lat-txt">' + esc(etiqueta) + '</span></button>';
@@ -408,9 +440,19 @@ function htmlLateral(raiz, area, puedeRegistrar) {
     '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
     (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
     '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
+    // Secciones por intención (Mi dinero, Pagos, Planear, Analizar): una lista plana bajo encabezados que se pliegan, como en
+    // Mail. Lo plegado se recuerda en este dispositivo; la sección de la pantalla abierta nunca se pliega.
     '<div class="m-lat-nav">' + item('inicio', 'Inicio', 'inicio') +
-    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</div>' +
-    '<div class="m-lat-pie">' + item('guia', 'Guía de uso', 'etiqueta') + item('ajustes', 'Ajustes', 'ajustes') +
+    GRUPOS_NAV.map(g => {
+      const plegada = seccionesPlegadas().indexOf(g.area) !== -1 && g.area !== area;
+      const idLista = 'lat-sec-' + g.area;
+      return '<button class="m-lat-grupo m-lat-txt" data-acc="lat-plegar" data-area="' + g.area + '" aria-expanded="' + !plegada + '" aria-controls="' + idLista + '">' +
+          '<span>' + esc(g.titulo) + '</span>' + ico(plegada ? 'der' : 'abajo', 'm-icon-sm') + '</button><div class="m-lat-sep"></div>' +
+        '<div id="' + idLista + '" class="m-lat-lista"' + (plegada ? ' hidden' : '') + '>' +
+        g.items.map(it => '<button class="m-lat-item" data-acc="ir" data-ruta="' + it[0] + '" title="' + esc(it[1]) + '"' + (esDelItem(it, raiz) ? ' aria-current="page"' : '') + '>' +
+          ico(it[2]) + '<span class="m-lat-txt">' + esc(it[1]) + '</span></button>').join('') + '</div>';
+    }).join('') + '</div>' +
+    '<div class="m-lat-pie">' + item('ajustes', 'Ajustes', 'ajustes') +
     '<div class="m-lat-usuario"><span class="m-avatar" aria-hidden="true">' + esc((nombre.charAt(0) || 'M').toUpperCase()) + '</span><span class="m-lat-txt">' + esc(nombre || 'Mi cuenta') + '</span></div></div>';
 }
 
@@ -447,6 +489,7 @@ const sinTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').
 function destinosBuscables() {
   const lista = [['inicio', 'Inicio', 'Pantalla principal', 'inicio'], ['planear', 'Planear', 'Área', 'calendario']];
   GRUPOS_NAV.forEach(g => g.items.forEach(it => lista.push([it[0], it[1], g.titulo, it[2]])));
+  lista.push(['ingresos', 'Otros ingresos', 'Planear · Ingresos', 'usuario'], ['cdt', 'CDT', 'Mi dinero · Inversiones', 'capas']);
   lista.push(['guia', 'Guía de uso', 'Ayuda', 'etiqueta'], ['ajustes', 'Ajustes', 'Configuración', 'ajustes'],
     ['ajustes/perfil', 'Perfil', 'Ajustes', 'usuario'], ['ajustes/apariencia', 'Apariencia', 'Ajustes', 'paleta'],
     ['ajustes/Bancos', 'Bancos', 'Ajustes', 'banco'], ['ajustes/Cuentas', 'Cuentas', 'Ajustes', 'cuenta'], ['ajustes/Tarjetas', 'Tarjetas (ajustes)', 'Ajustes', 'tarjetas'],
@@ -519,7 +562,7 @@ function vAjustes() {
         (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
-        ['Categorias', 'Personas', 'Inmuebles', 'Suscripciones'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Categorias', 'Personas', 'Inmuebles', 'Suscripciones', 'Metas', 'Inversiones'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
         fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +

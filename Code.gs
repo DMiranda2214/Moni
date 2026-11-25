@@ -70,7 +70,7 @@ function include(filename) {
 }
 
 /** Partes del JavaScript de la app, en el orden en que se cargan (cada una envuelta en su <script>). app_js es el núcleo (utilidades, datos, navegación). */
-const PARTES_JS = ['app_js', 'js_pantallas', 'js_formularios', 'js_movimientos', 'js_planear', 'js_deudas', 'js_ahorro', 'js_graficos', 'js_analisis', 'js_divisas', 'js_asistente', 'js_eventos'];
+const PARTES_JS = ['app_js', 'js_pantallas', 'js_formularios', 'js_movimientos', 'js_planear', 'js_deudas', 'js_ahorro', 'js_graficos', 'js_analisis', 'js_divisas', 'js_metas', 'js_inversiones', 'js_herramientas', 'js_asistente', 'js_eventos'];
 
 /**
  * Menú contextual superior al abrir el Google Sheet para mantenimiento y acceso rápido.

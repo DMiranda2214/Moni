@@ -183,7 +183,8 @@ function crearEntorno(hojasIniciales, opciones) {
     Logger: { log() {} },
     Utilities: {
       getUuid: () => String(++uuid).padStart(8, '0') + '-0000-0000-0000-000000000000',
-      formatDate: (d, tz, patron) => formatearFecha(d, patron, tz)
+      formatDate: (d, tz, patron) => formatearFecha(d, patron, tz),
+      sleep() {}
     },
     CacheService: {
       getScriptCache: () => (opc.cache ? cacheReal : { get: () => null, put() {}, remove() {}, getAll: () => ({}), putAll() {} }),

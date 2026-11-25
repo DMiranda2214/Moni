@@ -124,6 +124,7 @@ function patrimonioMensual_(mesFin, n) {
   const ids = {};
   getTableData('Bolsillos').forEach(b => { if (activas[b.ID_Cuenta] && (divisas[b.ID_Bolsillo] || DIVISA_BASE) === DIVISA_BASE) ids[b.ID_Bolsillo] = true; });
   const caja = saldosMensuales_(ids, mesFin, n);
+  const enInversiones = valorInversionesMensual_(caja.map(p => p.mes));
 
   const cdts = getTableData('CDTs').filter(estaActivo);
   const compras = getTableData('Compras_TC').filter(c => !esVerdadero(c.Anulado) && c.Fuente !== 'Otro');
@@ -134,9 +135,9 @@ function patrimonioMensual_(mesFin, n) {
   const creditos = getTableData('Creditos').filter(c => c.Estado !== 'Anulado' && esBancario_(c));
   const pagosCred = getTableData('Creditos_Pagos').filter(p => !esVerdadero(p.Anulado));
 
-  return caja.map(p => {
+  return caja.map((p, k) => {
     const fin = finDeMes_(p.mes);
-    const invertido = cdts.filter(c => c.Fecha_Inicio <= fin && (c.Estado === 'Vigente' || texto_(c.Fecha_Vencimiento) > fin)).reduce((a, c) => a + (Number(c.Capital) || 0), 0);
+    const invertido = cdts.filter(c => c.Fecha_Inicio <= fin && (c.Estado === 'Vigente' || texto_(c.Fecha_Vencimiento) > fin)).reduce((a, c) => a + (Number(c.Capital) || 0), 0) + enInversiones[k];
     const comprado = compras.filter(c => c.Fecha <= fin && !pagadoAntes(c.ID_Extracto, fin)).reduce((a, c) => a + (Number(c.Valor) || 0), 0);
     const abonado = abonos.filter(a => a.Fecha <= fin && !pagadoAntes(a.ID_Extracto, fin)).reduce((a, x) => a + (Number(x.Valor) || 0), 0);
     const tarjetas = Math.max(0, comprado - abonado);

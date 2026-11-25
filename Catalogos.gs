@@ -611,6 +611,71 @@ const CATALOGOS = {
     bloqueos: function () { return []; }
   },
 
+  // 1.16: metas de ahorro (el plan por mes y el avance viven en Metas.gs)
+  Metas: {
+    id: 'ID_Meta', prefijo: 'meta', etiqueta: 'La meta',
+    normalizar: function (item, actual, filas) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre de la meta').slice(0, 80);
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Meta');
+      const objetivo = numero_(pick('Monto_Objetivo'), 'El monto de la meta', { requerido: true, min: 1, max: VALOR_MAXIMO });
+      const inicial = numero_(pick('Ahorro_Inicial'), 'Lo que ya tienes ahorrado', { min: 0, max: VALOR_MAXIMO }) || 0;
+      const inicio = fechaIso_(pick('Fecha_Inicio'), 'La fecha de inicio') || hoyIso_();
+      const fin = fechaIso_(pick('Fecha_Fin'), 'La fecha final');
+      if (!fin) throw new Error('Indica para cuándo quieres lograr la meta.');
+      if (fin.slice(0, 7) < inicio.slice(0, 7)) throw new Error('La fecha final debe ser después de la fecha de inicio.');
+      if (mesesEntre_(inicio, fin) >= MAX_MESES_META) throw new Error('Una meta puede durar hasta 20 años.');
+      const idBolsillo = texto_(pick('ID_Bolsillo'));
+      if (!idBolsillo) throw new Error('Elige el bolsillo donde guardas el dinero de esta meta (puedes crear uno en Bolsillos).');
+      exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo');
+      exigirPesos_(idBolsillo, 'El bolsillo de la meta');
+      const datos = {
+        Nombre: nombre, Motivo: opcion_(pick('Motivo'), ENUMS.Metas.Motivo, 'El motivo', 'Otro'),
+        Monto_Objetivo: objetivo, Ahorro_Inicial: inicial, Fecha_Inicio: inicio, Fecha_Fin: fin, ID_Bolsillo: idBolsillo,
+        Estado: opcion_(pick('Estado'), ENUMS.Metas.Estado, 'El estado', 'Activa'),
+        Notas: texto_(pick('Notas')).slice(0, 300),
+        Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+      // El plan a mano se conserva (solo los meses que sigan dentro de las fechas)
+      const plan = item.Plan_Mensual !== undefined ? (typeof item.Plan_Mensual === 'string' ? planGuardado_({ Plan_Mensual: item.Plan_Mensual }) : item.Plan_Mensual) : planGuardado_(actual);
+      datos.Plan_Mensual = normalizarPlanMeta_(plan, datos);
+      return datos;
+    },
+    bloqueos: function () { return []; },
+    despues: function () { actualizarRenglonesDeMetas_(); },
+    alDesactivar: function () { actualizarRenglonesDeMetas_(); }
+  },
+
+  // 1.16: inversiones (las operaciones, el precio y el valor viven en Inversiones.gs)
+  Inversiones: {
+    id: 'ID_Inversion', prefijo: 'inv', etiqueta: 'La inversión',
+    normalizar: function (item, actual, filas) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre').slice(0, 80);
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Inversion');
+      const simbolo = simboloInversion_(pick('Simbolo'));
+      const datos = {
+        Nombre: nombre, Tipo: opcion_(pick('Tipo'), ENUMS.Inversiones.Tipo, 'El tipo', 'Otro'), Simbolo: simbolo,
+        Divisa: opcion_(pick('Divisa'), ENUMS.Inversiones.Divisa, 'La moneda del precio', simbolo && /^(NASDAQ|NYSE|NYSEARCA|NYSEAMERICAN|BATS|CURRENCY):/.test(simbolo) ? 'USD' : DIVISA_BASE),
+        Notas: texto_(pick('Notas')).slice(0, 300),
+        Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+      // Un precio escrito a mano lleva su fecha (si cambia, es de hoy)
+      if (item.Precio_Manual !== undefined) {
+        const p = item.Precio_Manual === '' || item.Precio_Manual === null ? '' : numero_(item.Precio_Manual, 'El precio', { min: 0, max: VALOR_MAXIMO, decimales: 8 });
+        datos.Precio_Manual = p;
+        if (!actual || Number(actual.Precio_Manual) !== Number(p)) datos.Fecha_Precio_Manual = p === '' ? '' : hoyIso_();
+      }
+      // Si cambia el símbolo, el precio de Google de antes ya no aplica
+      if (actual && texto_(actual.Simbolo) !== simbolo) { datos.Precio_Google = ''; datos.Fecha_Precio_Google = ''; }
+      return datos;
+    },
+    bloqueos: function (reg) {
+      const pos = posicionInversion_(operacionesDe_(reg.ID_Inversion));
+      return pos.cantidad > 0 ? ['todavía tienes ' + pos.cantidad + ' unidades (registra la venta primero)'] : [];
+    }
+  },
+
   Presupuesto_Plantilla: {
     id: 'ID_Plantilla', prefijo: 'ppl', etiqueta: 'El renglón',
     normalizar: function (item, actual, filas) {

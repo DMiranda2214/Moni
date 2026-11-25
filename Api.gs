@@ -411,7 +411,8 @@ function saveRenglonMes(item) {
 function addSuscripcionesPpto(mes) {
   return responder_(function () {
     const r = agregarSuscripcionesAlMes(mes);
-    return Object.assign({ presupuesto: obtenerPresupuestoMes(mes) }, r);
+    const m = agregarMetasAlMes(mes);
+    return { presupuesto: obtenerPresupuestoMes(mes), agregados: r.agregados + m.agregados, actualizados: r.actualizados + m.actualizados, metas: m.agregados };
   });
 }
 
@@ -739,6 +740,115 @@ function deleteRegalo(idRegalo) {
   return responder_(function () {
     const r = eliminarRegalo(idRegalo);
     return obtenerRegalos(r.anio);
+  });
+}
+
+// Lluvia de ideas de un deseo (Lista de deseos)
+function saveIdeaDeseo(idea) {
+  return responder_(function () { return obtenerRegalos(guardarIdeaDeseo(idea).anio); });
+}
+
+function deleteIdeaDeseo(idIdea) {
+  return responder_(function () { return obtenerRegalos(eliminarIdeaDeseo(idIdea).anio); });
+}
+
+function chooseIdeaDeseo(idIdea) {
+  return responder_(function () { return obtenerRegalos(elegirIdeaDeseo(idIdea).anio); });
+}
+
+// ==========================================================================
+// Metas de ahorro
+// ==========================================================================
+
+function getMetas() {
+  return responder_(function () { return obtenerMetas(); });
+}
+
+function saveMeta(meta) {
+  return responder_(function () {
+    const m = guardarCatalogo('Metas', meta);
+    return { meta: obtenerMeta(m.ID_Meta), metas: obtenerMetas() };
+  });
+}
+
+function archiveMeta(idMeta) {
+  return responder_(function () { desactivarCatalogo('Metas', idMeta); return obtenerMetas(); });
+}
+
+function restoreMeta(idMeta) {
+  return responder_(function () { reactivarCatalogo('Metas', idMeta); return obtenerMetas(); });
+}
+
+function saveMetaPlan(idMeta, plan) {
+  return responder_(function () {
+    guardarPlanMeta(idMeta, plan);
+    return { meta: obtenerMeta(idMeta), metas: obtenerMetas() };
+  });
+}
+
+function addAporteMeta(idMeta, idOrigen, valor, fecha) {
+  return responder_(function () {
+    const r = transaccion_(() => aportarMeta(idMeta, idOrigen, valor, fecha));
+    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), { idItem: r.patas[1].ID_Item_Ppto || '' }, { meta: obtenerMeta(idMeta), metas: obtenerMetas() });
+  });
+}
+
+function addUsoMeta(idMeta, valor, fecha, concepto, idCategoria) {
+  return responder_(function () {
+    const mov = usarMeta(idMeta, valor, fecha, concepto, idCategoria);
+    return resultadoEscritura_([mov.ID_Mov], undefined, { meta: obtenerMeta(idMeta), metas: obtenerMetas() });
+  });
+}
+
+// ==========================================================================
+// Inversiones
+// ==========================================================================
+
+function getInversiones() {
+  return responder_(function () { return obtenerInversiones(); });
+}
+
+function saveInversion(inv) {
+  return responder_(function () {
+    const r = guardarCatalogo('Inversiones', inv);
+    return { id: r.ID_Inversion, inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() };
+  });
+}
+
+function archiveInversion(id) {
+  return responder_(function () { desactivarCatalogo('Inversiones', id); return { inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() }; });
+}
+
+function addOperacionInversion(op) {
+  return responder_(function () {
+    const r = registrarOperacionInversion(op);
+    return resultadoEscritura_(r.ID_Mov ? [r.ID_Mov] : [], undefined, { idOperacion: r.ID_Operacion, inversiones: obtenerInversiones() });
+  });
+}
+
+function voidOperacionInversion(idOperacion) {
+  return responder_(function () {
+    const r = anularOperacionInversion(idOperacion);
+    return resultadoEscritura_(r.ids, undefined, { inversiones: obtenerInversiones() });
+  });
+}
+
+function savePrecioManual(idInversion, precio, fecha) {
+  return responder_(function () {
+    guardarPrecioManual(idInversion, precio, fecha);
+    return { inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() };
+  });
+}
+
+/** Busca un símbolo en Google Finance (por la hoja auxiliar Buscar_Google). */
+function searchSimbolo(texto) {
+  return responder_(function () { return buscarSimbolosGoogle(texto); });
+}
+
+function updatePreciosGoogle() {
+  return responder_(function () {
+    const r = actualizarPreciosGoogle();
+    return Object.assign(r, { inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() });
   });
 }
 

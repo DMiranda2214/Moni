@@ -26,11 +26,11 @@ module.exports = function (prueba, assert, crearEntorno) {
   }
 
   // ---------------------------------------------------------------- instalación
-  prueba('setupDatabase crea las 32 tablas con sus encabezados', () => {
+  prueba('setupDatabase crea las 37 tablas con sus encabezados', () => {
     const e = E(false);
     const r = e.llamar('setupDatabase');
-    assert.strictEqual(r.tablas, 32);
-    assert.strictEqual(r.creadas.length, 32);
+    assert.strictEqual(r.tablas, 37);
+    assert.strictEqual(r.creadas.length, 37);
     assert.strictEqual(r.ok, true);
     assert.strictEqual(e.hojas.Movimientos.filas[0][0], 'ID_Mov');
     assert.strictEqual(e.hojas.Movimientos.filas[0].slice(-2).join(), 'Creado_En,Actualizado_En');
@@ -527,7 +527,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     const antes = e.llamar('getBootstrap');
     assert.strictEqual(antes.ok, true);
     assert.strictEqual(antes.data.instalado, false);
-    assert.strictEqual(antes.data.faltantes.length, 32);
+    assert.strictEqual(antes.data.faltantes.length, 37);
 
     assert.strictEqual(e.llamar('instalarBaseDatos').ok, true);
     const d = e.llamar('getBootstrap').data;

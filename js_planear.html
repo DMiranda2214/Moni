@@ -81,15 +81,20 @@ function filaRenglon(i) {
     '<label class="m-check"><input type="checkbox" data-acc-cambio="pagado" data-id="' + esc(i.ID_Item) + '"' + (i.Pagado ? ' checked' : '') + ' aria-label="Completo, sin más movimientos: ' + esc(i.Concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
     '<button class="m-row-main" data-acc="renglon" data-id="' + esc(i.ID_Item) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(i.Concepto) + '</span>' +
     '<span class="m-renglon-barra m-progreso' + (excede ? ' m-progreso-excede' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, Math.round(pct)) + '" aria-label="Real frente a lo planeado: ' + esc(i.Concepto) + '"><span style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%"></span></span>' +
-    '<span class="m-row-sub" style="display:block">' + dinero(real) + ' de ' + dinero(plan) + (i.Pagado ? ' · completo' : '') + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span>' +
+    '<span class="m-row-sub" style="display:block">' + dinero(real) + ' de ' + dinero(plan) + (i.Pagado ? ' · completo' : '') + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + (i.ID_Meta ? ' · meta' : '') + '</span>' +
     (i.ConTarjeta > 0 ? '<span class="m-row-sub" style="display:block">' + ico('tarjetas', 'm-icon-sm') + ' ' + dinero(i.ConTarjeta) + ' con tarjeta' + (i.PendienteTarjeta > 0 ? ' · ' + dinero(i.PendienteTarjeta) + ' por pagar en el extracto' : '') + '</span>' : '') + '</span>' +
     '<span class="m-row-final">' + final + '</span></button></div>';
 }
 
 function htmlPresupuesto(d) {
   const t = d.totales;
-  const faltan = d.faltanSuscripciones
-    ? '<div class="m-banner" role="note">' + ico('tarjetas') + '<span>' + (d.faltanSuscripciones === 1 ? 'Hay 1 suscripción o servicio de este mes que no está en el presupuesto.' : 'Hay ' + d.faltanSuscripciones + ' suscripciones o servicios de este mes que no están en el presupuesto.') + '</span>' +
+  // Suscripciones, servicios y metas de este mes que todavía no están en el presupuesto (un solo botón las agrega)
+  const fs = d.faltanSuscripciones || 0, fm = d.faltanMetas || 0;
+  const partesFalta = [];
+  if (fs) partesFalta.push(fs === 1 ? '1 suscripción o servicio' : fs + ' suscripciones o servicios');
+  if (fm) partesFalta.push(fm === 1 ? '1 meta' : fm + ' metas');
+  const faltan = partesFalta.length
+    ? '<div class="m-banner" role="note">' + ico(fs ? 'tarjetas' : 'meta') + '<span>' + (fs + fm === 1 ? 'Hay ' : 'Hay ') + esc(partesFalta.join(' y ')) + ' de este mes que no ' + (fs + fm === 1 ? 'está' : 'están') + ' en el presupuesto.</span>' +
       '<button class="m-btn-texto" data-acc="ppto-susc">Agregar</button></div>'
     : '';
   const avance = t.plan > 0 ? Math.min(100, Math.round(t.real / t.plan * 100)) : 0;

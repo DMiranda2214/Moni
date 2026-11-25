@@ -42,13 +42,15 @@ function obtenerAvisos_() {
   const itemsMes = getTableData('Presupuesto_Mes').filter(i => i.Mes === mes);
   if (itemsMes.length) {
     const faltan = suscripcionesFaltantes_(mes, itemsMes).length;
+    const faltanMetas = metasFaltantes_(mes, itemsMes).length;
+    if (faltanMetas) agregar('metas_ppto', 'sugerencia', faltanMetas === 1 ? 'Una meta no está en el presupuesto del mes' : faltanMetas + ' metas no están en el presupuesto del mes', 'Agrégalas para apartar este mes lo que planeaste ahorrar.', 'presupuesto');
     if (faltan) agregar('susc_ppto', 'importante', faltan === 1 ? 'Falta 1 suscripción o servicio en el presupuesto' : 'Faltan ' + faltan + ' suscripciones o servicios en el presupuesto', 'Toca este mes pagarlos: agrégalos al presupuesto del mes.', 'presupuesto');
   }
 
   // Regalos comprados con tarjeta: el dinero hay que moverlo a la reserva de la tarjeta; el aviso sigue hasta que se registre
   regalosPendientesReserva_().forEach(x => {
     agregar('regalo_reserva_' + x.ID_Regalo + '_' + x.ID_Tarjeta, 'importante', 'Mueve ' + pesos_(x.falta) + ' a la reserva de ' + x.Tarjeta,
-      'Compraste el regalo de ' + x.Persona + ' con la tarjeta' + (x.BolsilloPlan ? ': pasa ese dinero de “' + x.BolsilloPlan + '” a “' + x.Reserva + '”' : ': pasa ese dinero a “' + x.Reserva + '”') + ' para tenerlo apartado. Se quita cuando registres el movimiento.', 'regalos');
+      'Compraste ' + (x.ParaMi ? '“' + (x.Idea || 'algo de tu lista de deseos') + '”' : 'el regalo de ' + x.Persona) + ' con la tarjeta' + (x.BolsilloPlan ? ': pasa ese dinero de “' + x.BolsilloPlan + '” a “' + x.Reserva + '”' : ': pasa ese dinero a “' + x.Reserva + '”') + ' para tenerlo apartado. Se quita cuando registres el movimiento.', 'regalos');
   });
 
   // Créditos creados cuando las tasas se redondeaban a 2 decimales: la persona confirma o corrige la tasa (nada cambia solo)

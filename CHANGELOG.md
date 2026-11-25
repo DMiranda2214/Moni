@@ -1,5 +1,67 @@
 # Cambios
 
+## 1.18.1 — Ayudas en los módulos nuevos (25 nov 2026)
+- **Mejora:** Metas, Lista de deseos, Inversiones y la Calculadora tienen el botón de ayuda **i**, como el resto de la app:
+  - en cada campo de sus formularios (crear y editar, plan por mes, lluvia de ideas, comprar, vender, dividendo, precio y buscar una inversión);
+  - en sus cifras clave y títulos de sección;
+  - en los resultados de la Calculadora que usan palabras técnicas (tasa EA, mensual vencida, nominal, retención, neto).
+- **Corregido:** el globo de ayuda de un botón al lado derecho de la pantalla se salía por el borde en el celular. Ahora se corre hacia adentro (en toda la app).
+
+## 1.18.0 — Navegación por intención (25 nov 2026)
+Elegida entre cuatro propuestas, siguiendo las Human Interface Guidelines: secciones planas con nombres de tarea, dos niveles como máximo y las mismas secciones en el celular y en el computador.
+- **Cambia: cuatro secciones según lo que quieres hacer.**
+  - **Mi dinero:** Bolsillos, Movimientos, Ahorro e Inversiones.
+  - **Pagos:** Servicios y suscripciones, Tarjetas y Créditos.
+  - **Planear:** Presupuesto, Ingresos, Metas y Lista de deseos.
+  - **Analizar:** Análisis, Vista anual y Calculadora.
+- **Cambia: la barra lateral** muestra todas las pantallas, a un clic, bajo encabezados que se **pliegan** como en Mail. Lo plegado se recuerda y la sección de la pantalla abierta siempre está a la vista. Contraída, deja solo los íconos.
+- **Cambia: en el celular**, las pestañas son Inicio, Mi dinero, Pagos y Planear (con el **+** en el centro). Arriba de cada pantalla, unas pestañas llevan a las demás de su sección. *Analizar* se abre desde Planear.
+- **Cambia: pantallas que se unen o se separan.**
+  - Los **CDT** viven dentro de **Inversiones** (pestaña *CDT*).
+  - **Nómina** y **Otros ingresos** son **Ingresos**, con una pestaña cada uno.
+  - **Deudas** se separa en **Tarjetas** y **Créditos**, junto a Servicios y suscripciones.
+- **Tus datos no cambian:** las mismas pantallas, ahora en otro lugar.
+
+## 1.17.0 — Navegación más simple y pantallas más claras (25 nov 2026)
+- **Cambia: la barra lateral** muestra solo las cuatro áreas (Inicio, Dinero, Planear, Deudas) y Ajustes al pie. El área abierta despliega sus pantallas debajo, y la pantalla de entrada de cada área está organizada por secciones, como Ajustes. Planear queda en *Cada mes*, *Ahorrar y comprar*, *Mirar el año* y *Herramientas*.
+- **Cambia:** la *Guía de uso* sale de la barra lateral y de Planear: está en Ajustes.
+- **Cambia: Registrar.** *Sumar a mis saldos* pasa al primer paso, justo debajo del valor, para decidir de una vez si el movimiento cambia tus saldos. El último paso es solo *¿Cuándo?*.
+- **Mejora: Metas, Lista de deseos e Inversiones** tienen una cabecera con la cifra principal y su avance, y tres cifras clave:
+  - **Metas:** cada meta tiene su barra y lo de este mes. El detalle tiene una acción principal (*Aportar …*) y *Lo que viene* (los próximos meses del plan, en palabras).
+  - **Lista de deseos:** año y filtro en una sola línea, estado de cada cosa (idea, decidido, comprado), lo pendiente antes de lo comprado, y cuánto te ahorraste en lo comprado frente a lo estimado.
+- **Nuevo: buscar una inversión al agregarla.** Por nombre o símbolo, con sugerencias al instante (acciones de EE. UU. y de la BVC, ADR colombianos, ETF y cripto). Lo que no esté se busca **en Google Finance** con la misma fórmula de los precios (hoja auxiliar `Buscar_Google`), que muestra el nombre y el precio de hoy. **No pide permisos nuevos.** Al elegir, se llena el formulario.
+- **Se quita: Pensiones y cesantías.** Necesitaba demasiados parámetros para dar un resultado confiable. Quedan la Calculadora y el cálculo de prima y cesantías dentro de la Nómina.
+
+## 1.16.0 — Metas, Lista de deseos, Inversiones, Calculadora, y Pensiones y cesantías (25 nov 2026)
+Estudio de mercado, información legal y plan en `docs/PLAN_1.16.md`.
+- **Nuevo: Metas de ahorro** (Planear → Metas):
+  - Para la Navidad, un viaje, la moto…, con monto, fechas y bolsillo.
+  - **Plan por mes editable:** no todos los meses se ahorra lo mismo, así que escribes los meses que quieras (incluso en 0) y el resto se reparte solo.
+  - Cada meta activa entra al **presupuesto** como un renglón de tipo Fondo, igual que las suscripciones.
+  - *Aportar ahora* y *Usar el dinero* usan el formulario único.
+  - Avance, aviso de atraso con cuánto apartar para llegar, y gráficos de plan frente a aportes y del acumulado frente a la meta.
+- **Cambia: Regalos ahora es la Lista de deseos** (Planear → Lista de deseos):
+  - Regalos para otros y cosas para ti (skincare, ropa, tecnología…), con categoría, ocasión, prioridad, fecha, enlace y **lluvia de ideas**.
+  - Es informativa: registrar el gasto es opcional y puedes marcar algo como comprado sin mover saldos.
+  - Totales para ti y para otros, y gráfico por categoría.
+- **Nuevo: Inversiones** (Dinero → Inversiones):
+  - Acciones, ETF, cripto, fondos.
+  - Compras, ventas y dividendos con **costo promedio**. El dinero sale o vuelve a un bolsillo si lo eliges, sin contar como gasto ni ingreso.
+  - Precio de **Google Finance** (hoja auxiliar `Precios_Google`, que se actualiza a diario con la tasa automática) o escrito a mano.
+  - Valor en pesos con la tasa del dólar, historial, distribución y evolución.
+  - Suman al **patrimonio neto** y a Análisis.
+- **Nuevo: Calculadora** (Planear → Herramientas): préstamo con tabla y gráfico del saldo, ahorro en el tiempo, cuánto ahorrar para una meta (con *Crear esta meta*), CDT y conversión de tasas.
+- **Nuevo: Pensiones y cesantías** (Planear → Herramientas), con la legislación colombiana:
+  - **Cesantías:** con auxilio de transporte hasta 2 SMMLV, intereses del 12 %, prima del semestre, fechas límite y retiros permitidos.
+  - **Pensión:** semanas que pide Colpensiones (C-197 de 2023 para las mujeres), fecha estimada, mesada y tasa de reemplazo (Ley 797), fondo privado con saldo proyectado y garantía de pensión mínima, aporte mensual con el Fondo de Solidaridad, y qué cambiaría con la reforma (Ley 2381 de 2024, que todavía no rige).
+  - Tus datos se pueden guardar.
+- **Cambia:** las hojas nuevas traen el salario mínimo 2026 ($ 1.750.905) y el auxilio de transporte ($ 249.095). En las hojas existentes **no se cambia** el salario mínimo guardado; el auxilio se agrega como parámetro nuevo.
+- **Tus datos:**
+  - Las tablas nuevas (`Metas`, `Deseos_Ideas`, `Inversiones`, `Inversiones_Operaciones`, `Inversiones_Precios`) se crean solas.
+  - Los regalos ganan columnas: los que ya tenías quedan como categoría *Regalo* y se ven igual.
+  - `Presupuesto_Mes` gana `ID_Meta`.
+  - Ninguna celda existente cambia. Esquema `15`, 37 tablas.
+
 ## 1.15.0 — Un solo formulario de registro y servicios en un solo lugar (25 nov 2026)
 - **Cambia:** **un solo formulario** para registrar todo lo que entra, sale o se mueve. Pagar un servicio o una suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta y sacar o reponer dinero del ahorro abren la misma hoja de *Registrar*, con lo que ya se sabe llenado. Se ve y se usa igual en todos los casos.
 - **Nuevo:** al **pagar un servicio o una suscripción** aparecen las **comisiones e impuestos** del medio de pago (antes no se podían anotar ahí). Al comprar con tarjeta desde *Registrar*, en *Más opciones* eliges qué hacer con el dinero (lo que antes solo estaba en la compra desde la tarjeta) y ves a qué extracto entra.

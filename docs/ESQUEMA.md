@@ -141,7 +141,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - `ID_Tarjeta`: con qué se suele pagar un gasto (vacío = el bolsillo del renglón). Solo en renglones de tipo `Gasto`.
 - No hay "Continuar/Congelar": un gasto "congelado" simplemente no existe, o vale 0, en el escenario `Contingencia`. Se crea un escenario copiando otro.
 
-**Presupuesto_Mes** — (incluye `ID_Suscripcion`, el enlace con la suscripción o servicio que lo originó; se agrega sola al instalar) 
+**Presupuesto_Mes** — (incluye `ID_Suscripcion`, el enlace con la suscripción o servicio que lo originó, e `ID_Meta` (1.16), el de la meta cuyo aporte del mes es ese renglón; se agregan solas al instalar) 
 `ID_Item, Mes, ID_Escenario, ID_Plantilla, Concepto, Tipo, Plan, Pagado, ID_Bolsillo_Destino, ID_Credito, ID_Tarjeta, Notas`
 - **No existe la columna `Real`: se calcula** = Σ `Movimientos` con ese `ID_Item_Ppto` + Σ `Compras_TC` (Fuente `Ppto`) con ese `ID_Item_Ppto`.
 - `Ahorro` del renglón = `Plan − Real` solo si `Pagado`.
@@ -173,7 +173,43 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 
 ## 5. Otros
 
-**Regalos** — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas, ID_Bolsillo_Plan` (`ID_Bolsillo_Plan`: el bolsillo del que se planea pagar; el real sale de los gastos y de las compras con tarjeta marcadas «Regalo <ID>»)
+**Regalos** (la **Lista de deseos** desde 1.16) — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas, ID_Bolsillo_Plan, Para, Categoria, Ocasion, Prioridad, Estado, Enlace, Fecha_Objetivo, Precio_Pagado`
+- `ID_Bolsillo_Plan`: el bolsillo del que se planea pagar. Lo gastado sale de los gastos y de las compras con tarjeta marcadas «Regalo <ID>».
+- 1.16 agrega columnas con `MIGRACIONES_COLUMNAS`. Las filas que ya existían reciben `Categoria = Regalo` y las demás columnas vacías, así que se ven igual que antes.
+- `Para = Yo` (o `ID_Persona` vacío) marca algo para la persona misma.
+- `Categoria`: `Regalo`, `Cuidado_Personal`, `Ropa`, `Tecnologia`, `Hogar`, `Experiencia` u `Otro`.
+- `Prioridad`: `Alta`, `Media` o `Baja`.
+- `Estado`: `Idea`, `Decidido`, `Comprado` o `Descartado`. Si está vacío, se calcula: `Comprado` si tiene gastos y, si no, `Idea`. Lo descartado no suma en los totales.
+- `Precio_Pagado`: lo que costó cuando se marcó como comprado sin registrar el gasto. La lista es informativa: lo gastado es el de los movimientos y, si no hay, este valor.
+
+**Deseos_Ideas** (desde 1.16) — `ID_Idea, ID_Regalo, Texto, Precio, Enlace, Elegida, Orden`. Es la lluvia de ideas de cada deseo. Al elegir una idea, su texto pasa a `Regalos.Idea`, su enlace a `Regalos.Enlace` y su precio a `Estimado` si este estaba en 0.
+
+**Metas** (desde 1.16) — `ID_Meta, Nombre, Motivo, Monto_Objetivo, Ahorro_Inicial, Fecha_Inicio, Fecha_Fin, ID_Bolsillo, Plan_Mensual, Estado, Notas, Activo, Orden`
+- `Motivo`: `Navidad`, `Viaje`, `Moto`, `Carro`, `Casa`, `Estudio`, `Emergencias`, `Tecnologia`, `Celebracion` u `Otro`.
+- `Estado`: `Activa`, `Pausada` o `Cumplida`. Solo las activas entran al presupuesto.
+- `Plan_Mensual` es texto JSON `{ "AAAA-MM": valor }` y guarda solo los meses que la persona escribió a mano. Los demás meses que quedan se reparten en partes iguales lo que faltaba al empezar el mes actual, así el plan del mes no cambia al aportar.
+- **Ahorrado** = `Ahorro_Inicial` + lo real de los renglones `Presupuesto_Mes` con su `ID_Meta` + los traslados con `Ref = "Meta <ID>"` (subtipo `Aporte_Meta`) que no están en un renglón.
+- **Usado**: los gastos con esa misma `Ref`. Se muestra aparte y no baja lo ahorrado.
+- Cada meta activa con plan en un mes agrega a ese presupuesto un renglón de tipo `Fondo` hacia su bolsillo (`agregarMetasAlMes`, repetible y sin duplicar).
+
+**Inversiones** (desde 1.16) — `ID_Inversion, Nombre, Tipo, Simbolo, Divisa, Precio_Manual, Fecha_Precio_Manual, Precio_Google, Fecha_Precio_Google, Notas, Activo, Orden`
+- `Tipo`: `Accion`, `ETF`, `Cripto`, `Fondo`, `Bono` u `Otro`.
+- `Simbolo`: el de Google Finance, por ejemplo `NASDAQ:AAPL` o `CURRENCY:BTCUSD`.
+- `Divisa`: la moneda del precio (COP, USD o EUR). Se pasa a pesos con `Config.Tasa_<divisa>`.
+- El precio vigente es el más reciente entre el de Google, el manual y el de la última operación.
+
+**Inversiones_Operaciones** (desde 1.16) — `ID_Operacion, ID_Inversion, Fecha, Tipo, Cantidad, Precio, Valor, Comision, ID_Bolsillo, ID_Mov, Notas, Anulado`
+- `Tipo`: `Compra`, `Venta` o `Dividendo`.
+- `Valor` va en pesos y `Precio` en la `Divisa` de la inversión.
+- La posición se calcula con el **costo promedio**.
+- Movimientos de dinero, solo si la operación tiene bolsillo:
+  - Una compra es un `Ajuste` negativo con subtipo `Inversion_Compra`.
+  - Una venta es un `Ajuste` positivo con subtipo `Inversion_Venta`.
+  - Ninguno de los dos es ingreso ni gasto (`SUBTIPOS_INVERSION`).
+  - Un dividendo es un `Ingreso` con subtipo `Dividendo`.
+- Todos llevan `Ref = "Inversión <ID_Operacion>"`.
+
+**Inversiones_Precios** (desde 1.16) — `ID_Precio, Fecha, ID_Inversion, Precio, Divisa, Fuente`. Historial con un precio por día y fuente (`Google` o `Manual`) para los gráficos. Lo escriben `actualizarPreciosGoogle` (hoja auxiliar `Precios_Google`, que no es una tabla) y `guardarPrecioManual`.
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
 

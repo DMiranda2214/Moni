@@ -39,7 +39,7 @@ function htmlAnalisis(d) {
   // 1. Patrimonio neto, 12 meses
   h += tarjetaViz('ana-patr', 'Patrimonio neto · últimos 12 meses',
     vizLinea({ puntos: puntosMeses(pm.map(p => p.mes)), series: [{ nombre: 'Patrimonio', clave: 'viz-acento', valores: pm.map(p => p.neto) }], divisa: dv, delta: true, alto: 180, etiqueta: 'Patrimonio neto al cierre de cada mes' }) +
-      '<p class="m-ayuda">Lo que tenías al cierre de cada mes (bolsillos + CDT) menos lo que debías (tarjetas sin pagar y créditos con un banco). Es un estimado reconstruido desde tus movimientos.</p>',
+      '<p class="m-ayuda">Lo que tenías al cierre de cada mes (bolsillos, CDT e inversiones) menos lo que debías (tarjetas sin pagar y créditos con un banco). Es un estimado reconstruido desde tus movimientos.</p>',
     tablaViz(['Mes', 'Bolsillos', 'Invertido', 'Tarjetas', 'Créditos', 'Neto'], pm.map(p => [mesTexto(p.mes), dinero(p.caja, dv), dinero(p.invertido, dv), dinero(-p.tarjetas, dv), dinero(-p.creditos, dv), dinero(p.neto, dv)])));
 
   // 2. Entró y salió cada mes
@@ -58,7 +58,7 @@ function htmlAnalisis(d) {
 
   // 4. Dónde está lo que tienes
   const act = d.patrimonio.activos;
-  const dist = [['Disponible', act.disponible], ['Ahorro', act.ahorro], ['Invertido (CDT)', act.invertido]].filter(x => x[1] > 0);
+  const dist = [['Disponible', act.disponible], ['Ahorro', act.ahorro], ['Invertido (CDT e inversiones)', act.invertido]].filter(x => x[1] > 0);
   if (dist.length) {
     h += tarjetaViz('ana-dist', 'Dónde está lo que tienes',
       vizBarrasH({ items: dist.map(x => ({ nombre: x[0], valor: x[1], detalle: porcentajeDe(x[1], act.total) + ' de lo que tienes' })), divisa: dv }) +

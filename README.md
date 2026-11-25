@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.15.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones, metas de ahorro, inversiones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.18.1**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -16,7 +16,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Presupuesto** | Plantilla por escenario, mes generado (con tus suscripciones y servicios), "real" calculado de tus movimientos |
 | **Nómina** | Tu sueldo y descuentos fijos, más lo de cada mes (horas extras, cesantías, prima, descuentos de la empresa); estimado con salud, pensión y prestaciones, y reparto a bolsillos |
 | **Otros ingresos** | Ingresos recurrentes (otro trabajo, arriendo, ventas…) con su cuenta de destino |
-| **Deudas** | Tarjetas de crédito (reserva, extracto, pago, compras en otra moneda) y créditos con un banco o de autopago, con amortización francesa y seguros por cuota |
+| **Pagos: tarjetas y créditos** | Tarjetas de crédito (reserva, extracto, pago, compras en otra moneda) y créditos con un banco o de autopago, con amortización francesa y seguros por cuota |
 | **Cargos y comisiones** | Lo que cobra cada banco, cuenta, tarjeta o crédito (comisiones, 4x1000, cambio de divisa, cuota de manejo, seguros): Moni lo propone al registrar y se puede cambiar |
 | **CDT** | Lo que tienes a plazo fijo: capital "invertido" (no disponible), lo que ganarás, vencimientos, cobro y renovación |
 | **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |

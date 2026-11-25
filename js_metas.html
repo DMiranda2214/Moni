@@ -1,0 +1,410 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Metas de ahorro (Planear → Metas) y Lista de deseos (Planear → Lista de deseos, antes "Regalos")
+// ---------------------------------------------------------------------------
+
+App.metas = { data: null, cargando: false, error: null };
+
+const MOTIVOS_META = { Navidad: 'Navidad', Viaje: 'Viaje', Moto: 'Moto', Carro: 'Carro', Casa: 'Casa o vivienda', Estudio: 'Estudio', Emergencias: 'Fondo de emergencias', Tecnologia: 'Tecnología', Celebracion: 'Celebración', Otro: 'Otro' };
+const ESTADOS_META = {
+  al_dia: ['Al día', ''], atrasada: ['Vas atrasado', 'm-negativo'], vencida: ['Pasó la fecha', 'm-negativo'],
+  lograda: ['¡Lograda!', 'm-positivo'], cumplida: ['Cumplida', 'm-positivo'], pausada: ['En pausa', '']
+};
+
+function aplicarMetas(res) { if (res && res.metas) App.metas.data = res.metas; }
+const buscarMeta = id => App.metas.data && App.metas.data.items.find(m => m.ID_Meta === id);
+const pct = v => Math.round((v || 0) * 100) + ' %';
+
+function vMetas() {
+  const g = App.metas;
+  let html = bannerDemo();
+  if (g.error) html += bloqueError(g.error, 'recargar-metas');
+  else if (!g.data) html += esqueleto(4);
+  else html += htmlMetas(g.data);
+  return {
+    titulo: 'Metas', html: html,
+    acciones: g.data ? '<button class="m-btn-texto" data-acc="nueva-meta" aria-label="Agregar una meta">' + ico('plus') + '</button>' : '',
+    despues: () => { if (!g.data && !g.cargando && !g.error) cargarEn(g, 'metas', 'getMetas', []); }
+  };
+}
+
+/** Piezas comunes: una cabecera destacada y una fila de cifras clave (como en Análisis). */
+function cabeceraDestacada(etq, cifra, sub, barra) {
+  return '<div class="m-destacada m-destacada-info"><span><span class="m-destacada-etq">' + esc(etq) + '</span><span class="m-destacada-cifra m-num">' + cifra + '</span>' +
+    (sub ? '<span class="m-destacada-sub">' + sub + '</span>' : '') +
+    (barra !== undefined ? '<span class="m-destacada-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(barra * 100) + '" aria-label="Avance"><i style="width:' + Math.min(100, Math.max(0, barra * 100)).toFixed(1) + '%"></i></span>' : '') +
+    '</span></div>';
+}
+/** Dinero para una cifra clave: desde un millón, abreviado para que quepa en tres columnas en el celular ($ 2,6 M). */
+const dk = v => Math.abs(v) >= 1e6 ? esc(compactoMoneda(v, 'COP')) : dinero(v);
+/** Qué significa cada cifra clave (el botón "i" junto a su nombre). */
+const INFO_CIFRAS = {
+  'Este mes': 'Lo que llevas apartado este mes frente a lo que planeaste apartar.',
+  'En curso': 'Metas activas: cada una entra a tu presupuesto del mes con lo que planeaste.',
+  'Atrasadas': 'Metas en las que llevas menos de lo que decía su plan hasta el mes pasado.',
+  'Faltan': 'Lo que te falta para llegar a la meta (el monto menos lo ahorrado).',
+  'Quedan': 'Meses que quedan hasta la fecha final de la meta, contando este.',
+  'Por comprar': 'Lo que piensas gastar en lo que todavía no has comprado.',
+  'Ya gastado': 'Lo que pagaste por lo que ya compraste, registrado como gasto o anotado a mano.',
+  'Te ahorraste': 'La diferencia entre lo que pensabas gastar y lo que pagaste, solo en lo ya comprado.',
+  'Te pasaste': 'Lo que pagaste de más frente a lo que pensabas gastar, solo en lo ya comprado.',
+  'Ganancia': 'Lo que valen hoy tus inversiones menos lo que pagaste por ellas. Es ganancia en papel hasta que vendas.',
+  'Al vender': 'Lo que ganaste (o perdiste) en tus ventas, frente a lo que te costaron esas unidades.',
+  'Dividendos': 'Lo que te pagaron las empresas o los fondos por tener sus acciones o unidades.',
+  'Pagaste': 'Lo que te costaron las unidades que tienes hoy, con sus comisiones (costo promedio: al vender, sale la parte proporcional).',
+  'Ganado al vender': 'Lo que ganaste (o perdiste) en tus ventas, frente a lo que te costaron esas unidades.'
+};
+function cifrasClave(items) {
+  return '<div class="m-kpis">' + items.map(k => '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(k[0]) + htmlInfo(INFO_CIFRAS[k[0]]) + '</div><div class="m-kpi-valor m-num ' + (k[3] || '') + '">' + k[1] + '</div><div class="m-kpi-pie">' + (k[2] || '') + '</div></div>').join('') + '</div>';
+}
+const chipEstadoMeta = m => {
+  const e = ESTADOS_META[m.estado] || ['', ''];
+  const clase = m.estado === 'lograda' || m.estado === 'cumplida' ? ' m-insignia-ok' : (m.estado === 'atrasada' || m.estado === 'vencida' ? ' m-insignia-alerta' : '');
+  return '<span class="m-insignia' + clase + '">' + esc(e[0]) + '</span>';
+};
+
+/** Una meta en la lista: nombre y estado, barra de avance, cuánto lleva y lo de este mes. */
+function filaMeta(m) {
+  const fin = m.Fecha_Fin ? mesTexto(m.Fecha_Fin.slice(0, 7)) : '';
+  const linea2 = m.estado === 'lograda' ? 'Ya tienes lo que necesitabas'
+    : m.Estado === 'Pausada' ? 'En pausa: no entra al presupuesto'
+    : (m.mesesRestantes ? 'Este mes: ' + dinero(m.aportadoMes) + ' de ' + dinero(m.planMes) + ' · hasta ' + fin.toLowerCase() : 'Pasó la fecha: ' + fin.toLowerCase());
+  return '<div class="m-row m-renglon m-renglon-viz' + (m.Estado === 'Pausada' ? ' m-inactivo' : '') + '">' +
+    '<button class="m-row-main" data-acc="meta" data-id="' + esc(m.ID_Meta) + '"><span class="m-row-texto">' +
+    '<span class="m-row-titulo" style="display:block">' + esc(m.Nombre) + ' ' + chipEstadoMeta(m) + '</span>' +
+    '<span class="m-renglon-barra m-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(m.avance * 100) + '" aria-label="Avance de ' + esc(m.Nombre) + '"><span style="width:' + Math.min(100, m.avance * 100).toFixed(1) + '%"></span></span>' +
+    '<span class="m-row-sub" style="display:block">' + dinero(m.ahorrado) + ' de ' + dinero(m.Monto_Objetivo) + '</span>' +
+    '<span class="m-row-sub" style="display:block">' + esc(linea2) + '</span></span>' +
+    '<span class="m-row-final"><strong class="m-num">' + pct(m.avance) + '</strong></span>' + ico('der', 'm-icon-sm m-chevron') + '</button></div>';
+}
+
+function htmlMetas(d) {
+  const t = d.totales;
+  const archivadas = d.archivadas.length ? seccion('Archivadas', d.archivadas.map(a => fila({ titulo: esc(a.Nombre), sub: dinero(a.ahorrado) + ' de ' + dinero(a.Monto_Objetivo), clase: 'm-inactivo', chevron: true, attrs: 'data-acc="meta-archivada" data-id="' + esc(a.ID_Meta) + '"' })).join('')) : '';
+  if (!d.items.length) {
+    return vacio('meta', 'Aún no tienes metas', 'Una meta es algo para lo que ahorras: la Navidad, un viaje, la moto, la cuota inicial. Dices cuánto y para cuándo, y Moni te dice cuánto apartar cada mes (puedes cambiarlo mes a mes) y lo pone en tu presupuesto.',
+      '<button class="m-btn m-btn-primary" data-acc="nueva-meta">Crear mi primera meta</button>') + archivadas;
+  }
+  const activas = d.items.filter(m => m.Estado === 'Activa' && m.estado !== 'lograda');
+  const otras = d.items.filter(m => !(m.Estado === 'Activa' && m.estado !== 'lograda'));
+  const avance = t.objetivo > 0 ? t.ahorrado / t.objetivo : 0;
+  return cabeceraDestacada('Ahorrado para tus metas', dinero(t.ahorrado), 'de ' + dinero(t.objetivo) + ' · faltan ' + dinero(t.falta), avance) +
+    cifrasClave([
+      ['Este mes', dk(t.aportadoMes), 'de ' + dinero(t.planMes) + ' planeado', t.planMes > 0 && t.aportadoMes >= t.planMes ? 'm-positivo' : ''],
+      ['En curso', String(t.cantidad), t.cantidad === 1 ? 'meta activa' : 'metas activas'],
+      ['Atrasadas', String(activas.filter(m => m.estado === 'atrasada' || m.estado === 'vencida').length), 'frente a su plan']
+    ]) +
+    (activas.length ? seccion('En curso', activas.map(filaMeta).join(''), 'Cada meta activa entra a tu presupuesto del mes con lo que planeaste apartar.', 'La barra muestra cuánto llevas del total. Toca una meta para ver su plan mes a mes, aportar o usar el dinero.') : '') +
+    (otras.length ? seccion('Logradas, cumplidas o en pausa', otras.map(filaMeta).join(''), '', 'Las metas en pausa no entran al presupuesto. Las logradas ya tienen todo el dinero; márcalas como cumplidas cuando lo uses.') : '') + archivadas;
+}
+
+function vMeta(id) {
+  const g = App.metas;
+  let html = '';
+  const m = buscarMeta(id);
+  if (g.error) html = bloqueError(g.error, 'recargar-metas');
+  else if (!g.data) html = esqueleto(5);
+  else if (!m) html = vacio('meta', 'La meta no existe', 'Puede que la hayas archivado.');
+  else html = htmlMeta(m);
+  return {
+    titulo: m ? m.Nombre : 'Meta', html: html,
+    acciones: m ? '<button class="m-btn-texto" data-acc="editar-meta" data-id="' + esc(m.ID_Meta) + '">Editar</button>' : '',
+    despues: () => { if (!g.data && !g.cargando && !g.error) cargarEn(g, 'meta/' + id, 'getMetas', []); }
+  };
+}
+
+function htmlMeta(m) {
+  const id = esc(m.ID_Meta);
+  const fin = m.Fecha_Fin ? mesTexto(m.Fecha_Fin.slice(0, 7)) : '';
+  let h = cabeceraDestacada((MOTIVOS_META[m.Motivo] || 'Meta') + ' · ' + (ESTADOS_META[m.estado] || [''])[0], dinero(m.ahorrado),
+    'de ' + dinero(m.Monto_Objetivo) + ' · para ' + esc(fin.toLowerCase()) + (m.Bolsillo ? ' · en “' + esc(m.Bolsillo) + '”' : ''), m.avance);
+  h += cifrasClave([
+    ['Faltan', dk(m.falta), pct(m.avance) + ' logrado'],
+    ['Este mes', dk(m.aportadoMes), 'de ' + dinero(m.planMes), m.planMes > 0 && m.aportadoMes >= m.planMes ? 'm-positivo' : ''],
+    ['Quedan', String(m.mesesRestantes), m.mesesRestantes === 1 ? 'mes' : 'meses']
+  ]);
+
+  // Qué hacer ahora
+  if (m.estado === 'atrasada') h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Vas atrasado frente a tu plan. Para llegar a tiempo, aparta unos <strong>' + dinero(m.porMesParaLlegar) + '</strong> al mes desde ahora (Moni ya repartió lo que falta en los meses que quedan).</span></div>';
+  if (m.estado === 'vencida') h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Pasó la fecha y faltan ' + dinero(m.falta) + '. Edita la meta para darle más tiempo o márcala como cumplida.</span></div>';
+  if (m.sinCubrir > 0) h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Tu plan por mes no alcanza: faltan <strong>' + dinero(m.sinCubrir) + '</strong>. Súbele a algún mes o deja alguno en automático.</span></div>';
+  if (m.estado === 'lograda') h += '<div class="m-banner" role="note">' + ico('check') + '<span>¡Lo lograste! Ya tienes lo que necesitabas. Cuando lo uses, regístralo con “Usar el dinero”.</span></div>';
+  h += '<div style="display:flex;flex-direction:column;gap:var(--m-space-2);margin:var(--m-space-2) 0 var(--m-space-5)">' +
+    (m.Estado !== 'Cumplida' && m.estado !== 'lograda' ? '<button class="m-btn m-btn-primary" data-acc="aportar-meta" data-id="' + id + '">Aportar ' + (m.planMes > m.aportadoMes ? dinero(m.planMes - m.aportadoMes) + ' ahora' : 'ahora') + '</button>' : '') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--m-space-2)"><button class="m-btn m-btn-secondary" data-acc="plan-meta" data-id="' + id + '">Plan por mes</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="usar-meta" data-id="' + id + '">Usar el dinero</button></div></div>';
+
+  // Lo que viene: los próximos meses del plan, en palabras
+  const viene = m.plan.filter(p => !p.pasado).slice(0, 4);
+  if (viene.length) h += seccion('Lo que viene', viene.map(p => fila({ titulo: esc(mesTexto(p.mes)), sub: p.manual ? 'Lo escribiste tú' : 'Automático: Moni reparte lo que falta',
+    final: '<strong class="m-num">' + dinero(p.plan) + '</strong>' + (p.aportado > 0 ? '<span class="m-row-sub" style="display:block">llevas ' + dinero(p.aportado) + '</span>' : '') })).join('') +
+    (m.plan.filter(p => !p.pasado).length > viene.length ? '' : ''), 'Toca “Plan por mes” para cambiar lo que apartas en cualquier mes.',
+    'Lo que planeas apartar en los próximos meses. Los meses automáticos se recalculan si un mes aportas más o menos de lo planeado.');
+
+  if (m.plan.length > 1) {
+    const puntos = puntosMeses(m.plan.map(p => p.mes));
+    h += tarjetaViz('meta-acum', 'Cómo vas hacia la meta',
+      vizLinea({ puntos: puntos, series: [
+        { nombre: 'Si sigues el plan', clave: 'viz-s2', valores: m.acumulado.map(a => a.plan) },
+        { nombre: 'Lo que llevas', clave: 'viz-s1', valores: m.acumulado.map(a => a.real) },
+        { nombre: 'Meta', clave: 'viz-s3', valores: m.acumulado.map(() => m.Monto_Objetivo) }
+      ], divisa: 'COP', alto: 190, etiqueta: 'Ahorro acumulado frente a la meta' }),
+      tablaViz(['Mes', 'Con el plan', 'Llevas'], m.acumulado.map(a => [mesTexto(a.mes), dinero(a.plan), a.real === null ? '—' : dinero(a.real)])));
+    h += tarjetaViz('meta-mes', 'Plan y aportes por mes',
+      vizColumnas({ puntos: puntos, series: [{ nombre: 'Plan', clave: 'viz-s2', valores: m.plan.map(p => p.plan) }, { nombre: 'Aportado', clave: 'viz-s1', valores: m.plan.map(p => p.aportado) }], divisa: 'COP', alto: 200, etiqueta: 'Plan y aportes de cada mes' }),
+      tablaViz(['Mes', 'Plan', 'Aportado', ''], m.plan.map(p => [mesTexto(p.mes), dinero(p.plan), dinero(p.aportado), p.manual ? 'a mano' : (p.pasado ? '' : 'automático')])));
+  }
+  if (m.movimientos.length) {
+    h += seccion('Aportes y usos', m.movimientos.map(x => fila({ titulo: esc(x.Concepto), sub: esc(fechaTxt(x.Fecha)) + ' · ' + (x.tipo === 'Uso' ? 'usado' : 'aporte'),
+      final: '<span class="m-num ' + (x.tipo === 'Uso' ? 'm-negativo' : 'm-positivo') + '">' + dinero(x.Valor) + '</span>', chevron: true, attrs: 'data-acc="mov" data-id="' + esc(x.ID_Mov) + '"' })).join(''), '', 'Aportes: dinero que llevaste al bolsillo de la meta. Usos: gastos que hiciste con ese dinero. Toca uno para verlo o anularlo.');
+  }
+  if (m.usado > 0) h += '<p class="m-ayuda">Ya usaste ' + dinero(m.usado) + ' de esta meta (no baja lo ahorrado).</p>';
+  if (m.Notas) h += '<p class="m-ayuda">' + esc(m.Notas) + '</p>';
+  return h;
+}
+
+async function abrirPlanMeta(m) {
+  const futuros = m.plan.filter(p => !p.pasado);
+  if (!futuros.length) { aviso('La meta ya no tiene meses por delante. Edítala para cambiar la fecha.', true); return; }
+  const cuerpo = '<form novalidate data-form="plan-meta"><p class="m-hoja-mensaje">Escribe lo que puedes apartar en cada mes (puede ser 0). Los meses que dejes vacíos se reparten solos lo que falta: hoy, unos ' + dinero(m.sugerido) + ' cada uno.' + htmlInfo('Un valor escrito queda fijo aunque aportes más o menos. Para que un mes vuelva a ser automático, borra su valor.') + '</p>' +
+    futuros.map(p => '<div class="m-campo"><label class="m-label" for="pm-' + p.mes + '">' + esc(mesTexto(p.mes)) + (p.aportado > 0 ? ' · llevas ' + dinero(p.aportado) : '') + '</label>' +
+      '<input class="m-input m-num" id="pm-' + p.mes + '" data-mes="' + p.mes + '" inputmode="decimal" placeholder="Automático: ' + esc(dinero(p.manual ? m.sugerido : p.plan)) + '" value="' + (p.manual ? esc(String(p.plan)) : '') + '"></div>').join('') +
+    '<p class="m-ayuda" id="pm-total" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  await abrirHoja({
+    titulo: 'Plan de ' + m.Nombre, cuerpo: cuerpo, der: 'Guardar',
+    alAbrir: raiz => {
+      const resumen = () => {
+        const escritos = $$('[data-mes]', raiz).map(i => i.value.trim() === '' ? null : leerDinero(i.value));
+        const suma = escritos.reduce((a, v) => a + (typeof v === 'number' && !isNaN(v) ? v : 0), 0);
+        const libres = escritos.filter(v => v === null).length;
+        const faltaba = m.falta + m.aportadoMes; // lo que faltaba al empezar el mes
+        const resto = Math.max(0, faltaba - suma);
+        $('#pm-total', raiz).textContent = libres ? 'Lo escrito suma ' + dinero(suma) + '. Los ' + libres + ' meses automáticos se reparten ' + dinero(resto) + ' (unos ' + dinero(Math.ceil(resto / libres / 100) * 100) + ' cada uno).'
+          : (suma >= faltaba ? 'Con este plan llegas: suma ' + dinero(suma) + '.' : 'Ojo: el plan suma ' + dinero(suma) + ' y faltan ' + dinero(faltaba) + '. Te quedarían ' + dinero(faltaba - suma) + ' por cubrir.');
+      };
+      raiz.addEventListener('input', resumen); resumen();
+    },
+    alGuardar: async raiz => {
+      const plan = {};
+      $$('[data-mes]', raiz).forEach(i => {
+        const t = i.value.trim();
+        if (t === '') return;
+        const v = leerDinero(t);
+        if (typeof v !== 'number' || isNaN(v) || v < 0) throw new Error('Revisa el valor de ' + mesTexto(i.dataset.mes) + '.');
+        plan[i.dataset.mes] = v;
+      });
+      // Los meses ya pasados que se habían escrito a mano se conservan
+      m.plan.filter(p => p.pasado && p.manual).forEach(p => { plan[p.mes] = p.plan; });
+      const r = await api('saveMetaPlan', m.ID_Meta, plan);
+      aplicarMetas(r); App.ppto.data = null; render(); aviso('Plan guardado');
+    }
+  });
+}
+
+async function nuevaMeta(defaults) {
+  if (!activos('Bolsillos').length) { aviso('Primero crea una cuenta con un bolsillo.', true); return; }
+  await abrirFormulario('Metas', null, Object.assign({ Fecha_Inicio: App.boot.hoy }, defaults || {}));
+  App.metas.data = null; render();
+}
+
+async function abrirMetaArchivada(id) {
+  const a = App.metas.data && App.metas.data.archivadas.find(x => x.ID_Meta === id);
+  if (!a) return;
+  await abrirHoja({
+    titulo: a.Nombre, izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<p class="m-hoja-mensaje">Esta meta está archivada: no entra al presupuesto. Ahorraste ' + dinero(a.ahorrado) + ' de ' + dinero(a.Monto_Objetivo) + '.</p>' +
+      '<button type="button" class="m-btn m-btn-primary" style="width:100%" data-hoja-acc="reactivar">Volver a activarla</button>',
+    extra: { reactivar: async () => { aplicarMetas({ metas: await api('restoreMeta', id) }); render(); aviso('Meta activada'); return true; } }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Lista de deseos: regalos y cosas que la persona quiere comprarse (usa la tabla de regalos)
+// ---------------------------------------------------------------------------
+
+const CATEGORIAS_DESEO = { Regalo: 'Regalo', Cuidado_Personal: 'Cuidado personal', Ropa: 'Ropa y accesorios', Tecnologia: 'Tecnología', Hogar: 'Hogar', Experiencia: 'Experiencia', Otro: 'Otro' };
+const ESTADOS_DESEO = { Idea: 'Idea', Decidido: 'Decidido', Comprado: 'Comprado', Descartado: 'Descartado' };
+const OCASIONES = ['Navidad', 'Cumpleaños', 'Aniversario', 'Amor y amistad', 'Día de la madre', 'Día del padre', 'Grado', 'Porque sí'];
+
+function vRegalos() {
+  const g = App.reg;
+  if (!g.anio) g.anio = Number(cfg('Anio_Activo')) || Number(App.boot.hoy.slice(0, 4));
+  let html = bannerDemo();
+  if (g.error) html += bloqueError(g.error, 'recargar-reg');
+  else if (!g.data) html += esqueleto(4);
+  else html += htmlRegalos(g.data);
+  return {
+    titulo: 'Lista de deseos', html: html,
+    acciones: g.data ? '<button class="m-btn-texto" data-acc="nuevo-regalo" aria-label="Agregar a la lista">' + ico('plus') + '</button>' : '',
+    despues: () => { if (!g.data && !g.cargando && !g.error) { const a = g.anio; cargarEn(g, rutaActual(), 'getRegalos', [a], () => g.anio === a); } }
+  };
+}
+
+const chipEstadoDeseo = i => {
+  const e = i.Comprado ? 'Comprado' : (i.Estado || 'Idea');
+  return '<span class="m-insignia' + (e === 'Comprado' ? ' m-insignia-ok' : e === 'Decidido' ? ' m-insignia-alerta' : '') + '">' + esc(ESTADOS_DESEO[e] || e) + '</span>';
+};
+
+/** Un deseo en la lista: qué es y su estado; categoría, ocasión y prioridad; cuánto (lo gastado si ya se compró). */
+function filaDeseo(i) {
+  const que = i.Idea || (i.ParaMi ? i.CategoriaNombre : 'Regalo sin decidir');
+  const sub = [i.ParaMi || i.Categoria !== 'Regalo' ? i.CategoriaNombre : '', i.Ocasion, i.Prioridad ? 'prioridad ' + i.Prioridad.toLowerCase() : '',
+    i.ideas.length ? i.ideas.length + (i.ideas.length === 1 ? ' idea' : ' ideas') : '', i.Fecha_Objetivo ? 'para ' + fechaTxt(i.Fecha_Objetivo) : ''].filter(Boolean).join(' · ');
+  const final = i.Comprado
+    ? '<strong class="m-num">' + dinero(i.Real) + '</strong>' + (i.PendienteReserva && i.PendienteReserva.length ? '<span class="m-row-sub" style="display:block;color:var(--m-danger)">mover a la reserva</span>' : (i.Estimado ? '<span class="m-row-sub" style="display:block">de ' + dinero(i.Estimado) + '</span>' : ''))
+    : '<strong class="m-num">' + dinero(i.Estimado) + '</strong>';
+  return fila({ titulo: esc(que) + ' ' + (i.Aplica ? chipEstadoDeseo(i) : '<span class="m-insignia">' + (i.Estado === 'Descartado' ? 'descartado' : 'no aplica') + '</span>'),
+    sub: esc(sub), final: final, clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"' });
+}
+
+function htmlRegalos(d) {
+  const g = App.reg, t = d.totales;
+  const filtro = g.filtro || 'todos';
+  const controles = '<div class="m-deseos-controles"><select class="m-input" id="reg-anio" aria-label="Año">' +
+    d.anios.map(a => '<option value="' + a + '"' + (a === d.anio ? ' selected' : '') + '>' + a + '</option>').join('') + '</select>' +
+    (d.items.length ? '<div class="m-pildoras" role="radiogroup" aria-label="Para quién">' +
+      [['todos', 'Todo'], ['mi', 'Para mí'], ['otros', 'Para otros']].map(x => '<button class="m-pildora" role="radio" data-acc="deseo-filtro" data-f="' + x[0] + '" aria-checked="' + (filtro === x[0]) + '" aria-selected="' + (filtro === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' : '') + '</div>';
+  if (!d.items.length) return controles + vacio('regalo', 'Tu lista de ' + d.anio + ' está vacía', 'Anota lo que quieres regalar (y a quién) o comprarte: skincare, ropa, tecnología… Escribe cuánto quieres gastar y junta varias ideas antes de decidir. Registrar la compra es opcional.',
+    '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar a la lista</button>');
+  const avisos = (d.pendientes || []).map((p, k) => '<div class="m-banner m-pendiente m-pendiente-importante" role="note">' + ico('alerta') +
+    '<span class="m-pendiente-texto"><strong>Mueve ' + dinero(p.falta) + ' a la reserva de ' + esc(p.Tarjeta) + '</strong> ' + esc((p.ParaMi ? (p.Idea || 'Tu compra') : 'Regalo de ' + p.Persona) + (p.BolsilloPlan ? ': de “' + p.BolsilloPlan + '” a “' + p.Reserva + '”' : ' → “' + p.Reserva + '”') + '. Sigue este aviso hasta que lo registres.') + '</span>' +
+    '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="regalo-mover" data-i="' + k + '">Mover ahora</button></span></div>').join('');
+  const porComprar = d.items.filter(i => i.Aplica && !i.Comprado).reduce((a, i) => a + i.Estimado, 0);
+  // En lo ya comprado: cuánto por debajo (o por encima) de lo que pensabas gastar
+  const comprados = d.items.filter(i => i.Aplica && i.Comprado && i.Estimado > 0);
+  const ahorroCompras = comprados.reduce((a, i) => a + i.Estimado - i.Real, 0);
+  let h = avisos + controles +
+    cabeceraDestacada('Piensas gastar en ' + d.anio, dinero(t.estimado), 'Para ti ' + dinero(t.paraMi) + ' · para otros ' + dinero(t.paraOtros), t.total ? t.comprados / t.total : 0) +
+    cifrasClave([['Por comprar', dk(porComprar), (t.total - t.comprados) + ' de ' + t.total + ' cosas'], ['Ya gastado', dk(t.real), t.comprados + (t.comprados === 1 ? ' comprado' : ' comprados')],
+      comprados.length ? [ahorroCompras >= 0 ? 'Te ahorraste' : 'Te pasaste', dk(Math.abs(ahorroCompras)), 'en lo comprado, frente a lo que pensabas', ahorroCompras >= 0 ? 'm-positivo' : 'm-negativo'] : ['Te ahorraste', dinero(0), 'cuando compres, aquí ves si gastaste menos']]);
+  const items = d.items.filter(i => filtro === 'todos' || (filtro === 'mi' ? i.ParaMi : !i.ParaMi));
+  // Agrupado por para quién (lo tuyo primero); dentro, lo pendiente antes que lo comprado
+  const grupos = [];
+  items.forEach(i => { let gr = grupos.find(x => x.nombre === i.Persona); if (!gr) { gr = { nombre: i.Persona, items: [] }; grupos.push(gr); } gr.items.push(i); });
+  h += grupos.map(gr => {
+    const lista = gr.items.slice().sort((a, b) => (a.Comprado - b.Comprado) || (!a.Aplica - !b.Aplica));
+    const total = gr.items.filter(i => i.Aplica).reduce((a, i) => a + i.Estimado, 0);
+    return seccion(gr.nombre, lista.map(filaDeseo).join(''), gr.items.length + (gr.items.length === 1 ? ' cosa' : ' cosas') + ' · ' + dinero(total));
+  }).join('') || '<p class="m-ayuda">No hay nada en este filtro.</p>';
+  h += htmlDeseosGraficos(d);
+  return h;
+}
+
+function htmlDeseosGraficos(d) {
+  let h = htmlRegalosGraficos(d);
+  if (d.porCategoria && d.porCategoria.length > 1) {
+    h += tarjetaViz('deseos-cat', 'Por categoría', vizBarrasH({ items: d.porCategoria.map(c => ({ nombre: c.nombre, valor: c.estimado, detalle: c.cantidad + (c.cantidad === 1 ? ' cosa' : ' cosas') + ' · gastado ' + dinero(c.real) })), divisa: 'COP' }),
+      tablaViz(['Categoría', 'Piensas gastar', 'Gastado'], d.porCategoria.map(c => [c.nombre, dinero(c.estimado), dinero(c.real)])));
+  }
+  return h;
+}
+
+function aplicarRegalos(data) { if (App.reg.anio === data.anio) App.reg.data = data; }
+
+/** Agregar o editar un deseo: para quién (o para mí), qué, cuánto, categoría, ocasión, prioridad, enlace… */
+async function abrirRegalo(item) {
+  const personas = activos('Personas');
+  const campos = [
+    { k: 'Para', label: 'Para quién', tipo: 'select', info: 'Para ti o para alguien de tu lista de personas. Los totales separan lo tuyo de lo que regalas.', opciones: () => [['Yo', 'Para mí']].concat(personas.map(p => [p.ID_Persona, p.Nombre])),
+      ayuda: personas.length ? 'Para regalarle a alguien que no está en la lista, agrégalo en Ajustes → Personas.' : 'Para anotar regalos para otros, agrega a las personas en Ajustes → Personas.' },
+    { k: 'Idea', label: 'Qué (opcional)', tipo: 'texto', maxlength: 120, info: 'Lo que piensas comprar. Si todavía no lo sabes, déjalo vacío y anota varias ideas en la lluvia de ideas.', ayuda: 'Puedes dejarlo vacío y juntar varias ideas antes de decidir.' },
+    { k: 'Categoria', label: 'Categoría', tipo: 'select', info: 'Para agrupar tu lista y ver en qué piensas gastar más.', opciones: () => Object.keys(CATEGORIAS_DESEO).map(k => [k, CATEGORIAS_DESEO[k]]) },
+    { k: 'Estimado', label: 'Cuánto quieres gastar', tipo: 'dinero', requerido: true, info: 'Tu tope para esta compra. Al comprar, Moni compara lo que pagaste con este valor.' },
+    { k: 'Ocasion', label: 'Ocasión (opcional)', tipo: 'texto', maxlength: 60, lista: OCASIONES, info: 'Navidad, un cumpleaños, un aniversario… o simplemente porque sí.' },
+    { k: 'Fecha_Objetivo', label: 'Para cuándo (opcional)', tipo: 'fecha', info: 'La fecha en la que lo necesitas, por ejemplo el día del cumpleaños.' },
+    { k: 'Prioridad', label: 'Prioridad', tipo: 'select', info: 'Qué tan importante es frente a lo demás de tu lista, para decidir qué comprar primero.', opciones: () => [['', 'Sin prioridad'], ['Alta', 'Alta'], ['Media', 'Media'], ['Baja', 'Baja']] },
+    { k: 'Estado', label: 'Estado', tipo: 'select', info: 'Idea: lo estás pensando. Decidido: ya sabes qué comprar. Comprado: ya lo tienes. Descartado: no va y sale de los totales.', opciones: () => [['Idea', 'Idea'], ['Decidido', 'Decidido'], ['Comprado', 'Comprado'], ['Descartado', 'Descartado']] },
+    { k: 'Enlace', label: 'Enlace (opcional)', tipo: 'texto', maxlength: 500, info: 'La dirección de la página del producto (empieza por https://).', ayuda: 'La página del producto, para encontrarlo después.' },
+    { k: 'ID_Bolsillo_Plan', label: '¿De qué bolsillo planeas pagarlo? (opcional)', tipo: 'select', opciones: () => opcionesDestino(true), info: 'Si lo pagas con tarjeta de crédito, Moni te recuerda mover ese dinero desde este bolsillo a la reserva de la tarjeta.',
+      ayuda: 'Si lo compras con tarjeta de crédito, Moni te recordará pasar ese dinero de este bolsillo a la reserva de la tarjeta.' },
+    { k: 'Aplica', label: 'Cuenta este año', tipo: 'interruptor', info: 'Apagado, se queda en la lista pero no suma en los totales del año.', ayuda: 'Apágalo si este año no va: no suma en los totales.' },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ];
+  const v0 = item ? Object.assign({}, item, { Para: item.ParaMi ? 'Yo' : item.ID_Persona, Estado: item.Estado || 'Idea' }) : { Aplica: true, Para: 'Yo', Categoria: 'Otro', Estado: 'Idea' };
+  await abrirHoja({
+    titulo: item ? 'Editar' : 'Agregar a la lista',
+    cuerpo: '<form novalidate data-form="regalo">' + campos.map(c => htmlCampo(c, v0[c.k] === undefined ? '' : v0[c.k], {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      // Al elegir a otra persona, la categoría propuesta es "Regalo"
+      const para = $('#f-Para', raiz), catSel = $('#f-Categoria', raiz);
+      if (para && catSel && !item) para.addEventListener('change', () => { if (!catSel.dataset.tocado) catSel.value = para.value === 'Yo' ? 'Otro' : 'Regalo'; });
+      if (catSel) catSel.addEventListener('change', () => { catSel.dataset.tocado = '1'; });
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Estimado === '' || (typeof v.Estimado === 'number' && isNaN(v.Estimado))) throw new Error('Escribe cuánto quieres gastar (puede ser 0).');
+      const envio = Object.assign({ Anio: App.reg.anio }, v);
+      if (v.Para === 'Yo') { envio.Para = 'Yo'; envio.ID_Persona = ''; } else { envio.ID_Persona = v.Para; envio.Para = ''; }
+      if (item) envio.ID_Regalo = item.ID_Regalo;
+      aplicarRegalos(await api('saveRegalo', envio)); render(); aviso(item ? 'Cambios guardados' : 'Agregado a tu lista');
+    }
+  });
+}
+
+/** Detalle de un deseo: su información, la lluvia de ideas y lo que se puede hacer. */
+async function abrirDetalleRegalo(id) {
+  const it = App.reg.data && App.reg.data.items.find(x => x.ID_Regalo === id);
+  if (!it) return;
+  let siguiente = null;
+  const ideas = it.ideas.map(x => '<div class="m-row" style="align-items:center"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(x.Texto) + (x.Elegida ? ' <span class="m-insignia">elegida</span>' : '') + '</span>' +
+    '<span class="m-row-sub" style="display:block">' + (x.Precio ? dinero(x.Precio) : 'sin precio') + (x.Enlace ? ' · <a href="' + esc(x.Enlace) + '" target="_blank" rel="noopener noreferrer">ver</a>' : '') + '</span></span>' +
+    '<span class="m-row-final" style="display:flex;gap:var(--m-space-2)">' + (x.Elegida ? '' : '<button type="button" class="m-btn-texto" data-hoja-acc="elegir" data-idea="' + esc(x.ID_Idea) + '">Elegir</button>') +
+    '<button type="button" class="m-btn-texto" data-hoja-acc="quitar-idea" data-idea="' + esc(x.ID_Idea) + '" aria-label="Quitar la idea ' + esc(x.Texto) + '">Quitar</button></span></div>').join('');
+  const filas = [['Para', esc(it.Persona)], ['Categoría', esc(it.CategoriaNombre)], ['Piensas gastar', dinero(it.Estimado)], ['Gastado', dinero(it.Real) + (it.Comprado && !it.Registrado ? ' (anotado a mano)' : '')]];
+  if (it.Ocasion) filas.push(['Ocasión', esc(it.Ocasion)]);
+  if (it.Fecha_Objetivo) filas.push(['Para cuándo', esc(fechaTxt(it.Fecha_Objetivo))]);
+  if (it.Prioridad) filas.push(['Prioridad', esc(it.Prioridad)]);
+  if (it.Enlace) filas.push(['Enlace', '<a href="' + esc(it.Enlace) + '" target="_blank" rel="noopener noreferrer">Abrir</a>']);
+  await abrirHoja({
+    titulo: it.Idea || (it.ParaMi ? it.CategoriaNombre : 'Regalo para ' + it.Persona), izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
+      '<h3 class="m-reg-paso">Lluvia de ideas' + htmlInfo('Varias opciones para lo mismo, para comparar precios antes de decidir.') + '</h3><div class="m-group">' + (ideas || '<p class="m-ayuda" style="padding:var(--m-space-3)">Anota varias opciones y elige la mejor cuando decidas.</p>') + '</div>' +
+      '<div class="m-campo" style="margin-top:var(--m-space-3)"><div class="m-label-fila"><label class="m-label" for="idea-texto">Nueva idea</label>' + htmlInfo('Anota varias opciones con su precio y su enlace. Cuando decidas, toca “Elegir”: esa idea pasa a ser lo que vas a comprar.') + '</div><input class="m-input" id="idea-texto" maxlength="160" placeholder="Por ejemplo: audífonos inalámbricos"></div>' +
+      '<div class="m-cargo-fila" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)"><input class="m-input m-num" id="idea-precio" inputmode="decimal" placeholder="Precio (opcional)" aria-label="Precio de la idea">' +
+      '<input class="m-input" id="idea-enlace" placeholder="Enlace (opcional)" aria-label="Enlace de la idea"></div>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin:var(--m-space-2) 0 var(--m-space-4)" data-hoja-acc="agregar-idea">Agregar idea</button>' +
+      (it.Comprado ? '' : '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="comprar">Registrar la compra</button>' +
+        '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="comprado">Ya lo compré (sin registrar el gasto)</button>') +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="editar">Editar</button>' +
+      '<button type="button" class="m-accion-peligro" data-hoja-acc="quitar">Quitar de la lista</button>',
+    extra: {
+      'agregar-idea': async raiz => {
+        const texto = $('#idea-texto', raiz).value.trim();
+        if (!texto) throw new Error('Escribe la idea.');
+        const precio = $('#idea-precio', raiz).value.trim() ? leerDinero($('#idea-precio', raiz).value) : '';
+        aplicarRegalos(await api('saveIdeaDeseo', { ID_Regalo: id, Texto: texto, Precio: precio, Enlace: $('#idea-enlace', raiz).value.trim() }));
+        siguiente = () => abrirDetalleRegalo(id); return true;
+      },
+      elegir: async (raiz, el) => { aplicarRegalos(await api('chooseIdeaDeseo', el.dataset.idea)); siguiente = () => abrirDetalleRegalo(id); return true; },
+      'quitar-idea': async (raiz, el) => { aplicarRegalos(await api('deleteIdeaDeseo', el.dataset.idea)); siguiente = () => abrirDetalleRegalo(id); return true; },
+      comprar: () => { siguiente = () => abrirCompraRegalo(it); return Promise.resolve(); },
+      comprado: () => { siguiente = () => abrirMarcarComprado(it); return Promise.resolve(); },
+      editar: () => { siguiente = () => abrirRegalo(it); return Promise.resolve(); },
+      quitar: () => api('deleteRegalo', id).then(data => { aplicarRegalos(data); render(); aviso('Quitado de la lista'); })
+    }
+  });
+  render();
+  if (siguiente) siguiente();
+}
+
+/** Marcar como comprado sin registrar el gasto (la lista es informativa): solo se anota cuánto costó. */
+async function abrirMarcarComprado(it) {
+  await abrirHoja({
+    titulo: 'Ya lo compré',
+    cuerpo: '<form novalidate data-form="deseo-comprado"><p class="m-hoja-mensaje">Se anota en tu lista, sin mover ningún saldo. Si quieres que cuente como gasto, usa “Registrar la compra”.</p>' +
+      htmlCampo({ k: 'Precio_Pagado', label: 'Cuánto costó', tipo: 'dinero', requerido: true, info: 'Solo se anota en tu lista para comparar con lo estimado. No crea un gasto ni cambia tus saldos.' }, it.Estimado || '', {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Precio_Pagado', raiz).focus(); },
+    alGuardar: async raiz => {
+      const v = leerDinero($('#f-Precio_Pagado', raiz).value);
+      if (v === '' || isNaN(v) || v < 0) throw new Error('Escribe cuánto costó.');
+      aplicarRegalos(await api('saveRegalo', { ID_Regalo: it.ID_Regalo, Estado: 'Comprado', Precio_Pagado: v })); render(); aviso('Marcado como comprado');
+    }
+  });
+}
+
+/** Registrar la compra de un deseo (con un bolsillo o con tarjeta): el formulario de registro. */
+const abrirCompraRegalo = it => abrirRegistrar({ para: { tipo: 'regalo', item: it } });
+</script>
