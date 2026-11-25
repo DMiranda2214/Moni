@@ -1,4 +1,6 @@
-/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
 // ---------------------------------------------------------------------------
 // Deudas: tarjetas de crédito y créditos de autopago
 // ---------------------------------------------------------------------------
@@ -688,3 +690,4 @@ async function abrirEditarCredito() {
     extra: { anular: () => api('cancelCredito', c.ID_Credito).then(res => { aplicarEscritura(res); App.deudas.data = null; App.cre.data = null; App.boot.creditos = (App.boot.creditos || []).filter(x => x.ID_Credito !== c.ID_Credito); aviso('Crédito anulado'); volver(); }) }
   });
 }
+</script>

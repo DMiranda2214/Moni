@@ -1,4 +1,6 @@
-/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
 // ---------------------------------------------------------------------------
 // Análisis (Planear → Análisis): el panorama completo en una pantalla. Todo sale de getAnalisis (una sola llamada).
 // Cada gráfico usa la misma tarjeta (tarjetaViz) con "Ver como tabla".
@@ -96,3 +98,4 @@ function htmlAnalisis(d) {
   }
   return h;
 }
+</script>

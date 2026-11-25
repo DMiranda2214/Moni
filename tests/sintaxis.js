@@ -30,11 +30,19 @@ fs.readdirSync(raiz).filter(f => f.endsWith('.html')).sort().forEach(f => {
   if (m) revisar(f + ' (script)', m[1]);
 });
 
-// La app: sus partes (PARTES_JS de Code.gs) forman un solo <script>
+// La app: cada parte de PARTES_JS (Code.gs) es su propio bloque <script> (HTML válido para Apps Script).
 const partes = JSON.parse(fs.readFileSync(path.join(raiz, 'Code.gs'), 'utf8').match(/const PARTES_JS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
 const faltan = fs.readdirSync(raiz).filter(f => /^js_.*\.html$/.test(f) && partes.indexOf(f.replace('.html', '')) === -1);
 if (faltan.length) { fallos++; console.log('  FALLA partes sin incluir en PARTES_JS: ' + faltan.join(', ')); }
-revisar('app (' + partes.length + ' partes)', partes.map(p => fs.readFileSync(path.join(raiz, p + '.html'), 'utf8')).join('\n'));
+const cuerpos = partes.map(p => {
+  const t = fs.readFileSync(path.join(raiz, p + '.html'), 'utf8').trim();
+  if (!/^<script>/.test(t) || !/<\/script>$/.test(t) || (t.match(/<\/script>/g) || []).length !== 1) {
+    fallos++; console.log('  FALLA ' + p + '.html debe ser exactamente un bloque <script>…</script>');
+    return '';
+  }
+  return t.replace(/^<script>/, '').replace(/<\/script>$/, '');
+});
+revisar('app (' + partes.length + ' partes juntas)', cuerpos.join('\n'));
 
 JSON.parse(fs.readFileSync(path.join(raiz, 'appsscript.json'), 'utf8'));
 console.log('  ok   appsscript.json');

@@ -1,4 +1,6 @@
-/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
 // ---------------------------------------------------------------------------
 // Gráficos (SVG sin librerías): componentes reutilizables. No hay una pantalla aparte: cada módulo trae los suyos
 // (Inicio, Movimientos, Presupuesto, Deudas, Ahorro, CDT, Regalos, Nómina, Servicios, Vista anual y el detalle de un bolsillo).
@@ -376,3 +378,4 @@ function htmlGraficoAnual(d) {
     vizLinea({ puntos: puntos, series: [{ nombre: 'Entró', clave: 'viz-s1', valores: v('ingreso') }, { nombre: 'Planeado', clave: 'viz-s2', valores: v('plan') }, { nombre: 'Real', clave: 'viz-s3', valores: v('real') }], divisa: 'COP', alto: 210, etiqueta: 'Entró, planeado y real por mes' }),
     tablaViz(['Mes', 'Entró', 'Planeado', 'Real'], d.meses.filter(dato).map(m => [m.nombre, dinero(m.ingreso), dinero(m.plan), dinero(m.real)])));
 }
+</script>

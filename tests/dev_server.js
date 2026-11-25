@@ -56,7 +56,7 @@ function partesJs() {
 
 function paginaIndex() {
   const incluir = nombre => fs.readFileSync(path.join(raiz, nombre + '.html'), 'utf8');
-  const appJs = () => '<script>\n' + partesJs().map(incluir).join('\n') + '\n</script>';
+  const appJs = () => partesJs().map(incluir).join('\n'); // igual que include('app_js') en Code.gs: cada parte trae su <script>
   let html = incluir('index').replace(/<\?!=\s*include\('([^']+)'\);\s*\?>/g, (_, n) => (n === 'app_js' ? SHIM + appJs() : incluir(n)));
   return html;
 }

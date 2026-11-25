@@ -1,5 +1,8 @@
 # Cambios
 
+## 1.14.1 — Corrige la carga en Google (25 nov 2026)
+- **Corregido:** desde la 1.11, la app publicada en Apps Script no abría ("Exception: Contenido HTML con formato incorrecto"). Las partes del JavaScript eran archivos de código suelto y Apps Script exige que cada archivo `.html` incluido sea HTML válido. Ahora cada parte es su propio bloque `<script>`. La vista previa local arma la página igual que Apps Script, y una prueba nueva comprueba que ningún archivo incluido tenga código suelto.
+
 ## 1.14.0 — Análisis y gráficos coherentes (25 nov 2026)
 - **Nuevo:** pantalla **Análisis** (Planear → Análisis), todo en una sola carga:
   - **Patrimonio neto** de los últimos 12 meses (estimado reconstruido desde tus movimientos).

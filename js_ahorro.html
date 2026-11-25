@@ -1,4 +1,6 @@
-/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
 // ---------------------------------------------------------------------------
 // Ahorro, regalos, vista anual y respaldos
 // ---------------------------------------------------------------------------
@@ -917,3 +919,4 @@ async function cargarRecordatorios() {
   try { App.rec.data = await api('getRecordatorios'); caja.innerHTML = htmlEstadoRecordatorios(App.rec.data); }
   catch (e) { caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>'; }
 }
+</script>

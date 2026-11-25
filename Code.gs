@@ -61,13 +61,15 @@ function accesoPermitido_() {
  */
 function include(filename) {
   if (filename === 'app_js') {
-    // La aplicación vive en varias partes (una por módulo) que forman un solo <script>, en este orden.
-    return '<script>\n' + PARTES_JS.map(n => HtmlService.createHtmlOutputFromFile(n).getContent()).join('\n') + '\n</script>';
+    // La aplicación vive en varias partes (una por módulo). Cada parte es su propio bloque <script> (Apps Script exige
+    // que cada archivo .html sea HTML válido: un JavaScript suelto falla con "Contenido HTML con formato incorrecto").
+    // Los bloques comparten el ámbito global de la página y se cargan en este orden.
+    return PARTES_JS.map(n => HtmlService.createHtmlOutputFromFile(n).getContent()).join('\n');
   }
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-/** Partes del JavaScript de la app, en el orden en que se cargan. app_js es el núcleo (utilidades, datos, navegación). */
+/** Partes del JavaScript de la app, en el orden en que se cargan (cada una envuelta en su <script>). app_js es el núcleo (utilidades, datos, navegación). */
 const PARTES_JS = ['app_js', 'js_pantallas', 'js_formularios', 'js_movimientos', 'js_planear', 'js_deudas', 'js_ahorro', 'js_graficos', 'js_analisis', 'js_divisas', 'js_asistente', 'js_eventos'];
 
 /**
