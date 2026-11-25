@@ -683,18 +683,18 @@ function vPagos() {
       if (servicios.length) html += seccion('Servicios', servicios.map(filaCobro).join(''));
       if (subs.length) html += seccion('Suscripciones', subs.map(filaCobro).join(''));
     }
-    const codigos = activos('Servicios_Publicos');
+    // Los códigos y enlaces de pago de todos tus cobros, también los que solo guardan esos datos (sin fecha)
+    const codigos = d.codigos || [];
     if (codigos.length) {
-      html += seccion('Códigos y enlaces de pago', codigos.map(x => {
-        const i = porId('Inmuebles', 'ID_Inmueble', x.ID_Inmueble);
-        return fila({ icono: 'pulso', titulo: esc(x.Tipo + (x.Empresa ? ' · ' + x.Empresa : '')), sub: esc((i ? i.Nombre + ' · ' : '') + x.Codigo_Pago),
-          chevron: true, attrs: 'data-acc="codigo" data-id="' + esc(x.ID_Servicio) + '"' });
-      }).join(''), 'Toca uno para copiar el código o ir a pagar.');
+      html += seccion('Códigos y enlaces de pago', codigos.map(x =>
+        fila({ icono: 'pulso', titulo: esc(x.Nombre + (x.Empresa && x.Empresa !== x.Nombre ? ' · ' + x.Empresa : '')),
+          sub: esc([x.Hogar, x.codigo ? 'código ' + x.codigo : 'solo enlace'].filter(Boolean).join(' · ')),
+          chevron: true, attrs: 'data-acc="codigo" data-id="' + esc(x.ID_Suscripcion) + '"' })).join(''), 'Toca uno para copiar el código o ir a pagar.');
     }
   }
   return {
     titulo: 'Servicios y suscripciones', html: html,
-    acciones: (activos('Servicios_Publicos').length ? '<button class="m-btn-texto" data-acc="pagar-servicio">Pagar servicio</button>' : '') + '<button class="m-btn-texto" data-acc="nuevo" data-tabla="Suscripciones" aria-label="Agregar un cobro">' + ico('plus') + '</button>',
+    acciones: (p.data && (p.data.codigos || []).length ? '<button class="m-btn-texto" data-acc="pagar-servicio">Pagar servicio</button>' : '') + '<button class="m-btn-texto" data-acc="nuevo" data-tabla="Suscripciones" aria-label="Agregar un cobro">' + ico('plus') + '</button>',
     despues: () => { if (!p.data && !p.cargando && !p.error) cargarEn(p, 'pagos', 'getSuscripciones', []); }
   };
 }
@@ -786,30 +786,28 @@ async function abrirPagarCobro(s) {
   });
 }
 
-/** El enlace de pago de un servicio: el propio o, si tiene una empresa registrada, el de la empresa. */
-function urlDeServicio(x) {
-  if (x.URL_Pago) return x.URL_Pago;
-  const emp = x.ID_Empresa ? porId('Empresas_Pago', 'ID_Empresa', x.ID_Empresa) : null;
-  return emp ? emp.URL_Pago || '' : '';
-}
+/** Un dato de pago (de la lista de códigos y enlaces de la pantalla de pagos). */
+const buscarCodigo = id => ((App.pag.data && App.pag.data.codigos) || []).find(x => x.ID_Suscripcion === id) || null;
 
 /**
  * Pagar un servicio: se elige la empresa, luego el hogar, y Moni abre la página de pago en otra ventana y deja el código
  * de pago en el portapapeles. Si el navegador no deja abrir la ventana o copiar, la hoja muestra el código y el enlace.
+ * Sale de los códigos y enlaces de tus cobros (Servicios y suscripciones).
  */
 async function abrirPagarServicio() {
-  const srvs = activos('Servicios_Publicos');
-  if (!srvs.length) { aviso('Primero guarda un servicio en Ajustes → Servicios públicos.', true); return; }
-  // Se agrupan por empresa registrada; los servicios sin empresa registrada, por el nombre que se escribió.
+  const srvs = (App.pag.data && App.pag.data.codigos) || [];
+  if (!srvs.length) { aviso('Primero guarda el código o el enlace de pago de un servicio (Servicios y suscripciones → +).', true); return; }
+  // Se agrupan por empresa; los que no tienen empresa, por su nombre.
   const grupos = [];
   srvs.forEach(s => {
-    const clave = s.ID_Empresa || ('n:' + (s.Empresa || '').toLowerCase());
+    const nombre = s.Empresa || s.Nombre || 'Sin empresa';
+    const clave = nombre.toLowerCase();
     let g = grupos.find(x => x.clave === clave);
-    if (!g) { g = { clave: clave, nombre: s.Empresa || 'Sin empresa', servicios: [] }; grupos.push(g); }
+    if (!g) { g = { clave: clave, nombre: nombre, servicios: [] }; grupos.push(g); }
     g.servicios.push(s);
   });
   grupos.sort((a, b) => a.nombre.localeCompare(b.nombre));
-  const filaSrv = s => { const i = porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble); return { s: s, titulo: (i ? i.Nombre : 'Sin hogar') + ' · ' + s.Tipo, sub: 'Código ' + s.Codigo_Pago }; };
+  const filaSrv = s => ({ s: s, titulo: (s.Hogar || 'Sin hogar') + ' · ' + s.Nombre, sub: s.codigo ? 'Código ' + s.codigo : 'Solo enlace' });
   const botones = (items, attr) => '<div class="m-group">' + items.map((x, k) => fila({ titulo: esc(x.titulo), sub: esc(x.sub), chevron: true, attrs: attr + '="' + k + '"' })).join('') + '</div>';
   const cuerpo = '<div id="ps-emp"><p class="m-ayuda" style="margin-bottom:var(--m-space-3)">¿A qué empresa le vas a pagar?</p>' +
       botones(grupos.map(g => ({ titulo: g.nombre, sub: g.servicios.length + (g.servicios.length === 1 ? ' servicio' : ' servicios') })), 'data-ps-emp') + '</div>' +
@@ -828,18 +826,18 @@ async function abrirPagarServicio() {
       };
       // Todo ocurre dentro del toque del botón (el navegador solo deja abrir ventanas y copiar así).
       const pagar = s => {
-        const url = urlDeServicio(s);
+        const url = s.url;
         const ventana = url ? window.open(url, '_blank', 'noopener,noreferrer') : null;
-        const copiado = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(s.Codigo_Pago).then(() => true, () => false) : Promise.resolve(false);
+        const copiado = s.codigo && navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(s.codigo).then(() => true, () => false) : Promise.resolve(!s.codigo);
         copiado.then(ok => {
-          if (url && ventana && ok) { $('[data-hoja-acc="cerrar"]', raiz.closest('dialog') || document).click(); aviso('Código ' + s.Codigo_Pago + ' copiado: pégalo en la página de pago'); return; }
+          if (url && ventana && ok) { $('[data-hoja-acc="cerrar"]', raiz.closest('dialog') || document).click(); aviso(s.codigo ? 'Código ' + s.codigo + ' copiado: pégalo en la página de pago' : 'Abrí la página de pago'); return; }
           // Algo no se pudo: se deja todo a mano
           $('#ps-hogar', raiz).hidden = true; $('#ps-emp', raiz).hidden = true;
           const caja = $('#ps-fallo', raiz); caja.hidden = false;
-          caja.innerHTML = '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(s.Codigo_Pago) + '</div></div>' +
-            '<p class="m-ayuda" style="margin-bottom:var(--m-space-3)">' + (ok ? 'El código ya está copiado.' : 'No pude copiarlo solo: toca “Copiar código”.') + (url && !ventana ? ' El navegador bloqueó la ventana: usa “Ir a pagar”.' : '') + (url ? '' : ' Este servicio no tiene enlace de pago guardado.') + '</p>' +
-            '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)"><button type="button" class="m-btn m-btn-primary" id="ps-copiar">Copiar código</button>' + (url ? enlaceExterno(url, 'Ir a pagar') : '') + '</div>';
-          $('#ps-copiar', raiz).addEventListener('click', () => copiar(s.Codigo_Pago, 'Código copiado'));
+          caja.innerHTML = (s.codigo ? '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(s.codigo) + '</div></div>' : '') +
+            '<p class="m-ayuda" style="margin-bottom:var(--m-space-3)">' + (s.codigo ? (ok ? 'El código ya está copiado.' : 'No pude copiarlo solo: toca “Copiar código”.') : '') + (url && !ventana ? ' El navegador no dejó abrir la página: usa el botón.' : '') + (!url ? ' No tiene enlace de pago guardado.' : '') + '</p>' +
+            '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)">' + (s.codigo ? '<button type="button" class="m-btn m-btn-primary" id="ps-copiar">Copiar código</button>' : '') + (url ? enlaceExterno(url, 'Ir a pagar') : '') + '</div>';
+          const b = $('#ps-copiar', raiz); if (b) b.addEventListener('click', () => copiar(s.codigo, 'Código copiado'));
         });
       };
       raiz.addEventListener('click', ev => {
@@ -853,14 +851,18 @@ async function abrirPagarServicio() {
 }
 
 async function abrirCodigoServicio(id) {
-  const x = porId('Servicios_Publicos', 'ID_Servicio', id);
+  const x = buscarCodigo(id);
   if (!x) return;
   await abrirHoja({
-    titulo: x.Tipo + (x.Empresa ? ' · ' + x.Empresa : ''), sinGuardar: true, izq: 'Cerrar',
-    cuerpo: '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(x.Codigo_Pago) + '</div></div>' +
-      '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)"><button type="button" class="m-btn m-btn-primary" data-hoja-acc="copiar">Copiar código</button>' +
-      (urlDeServicio(x) ? enlaceExterno(urlDeServicio(x), 'Ir a pagar') : '<p class="m-ayuda" style="text-align:center">No tiene enlace de pago guardado.</p>') + '</div>',
-    extra: { copiar: async () => { await copiar(x.Codigo_Pago, 'Código copiado'); } }
+    titulo: x.Nombre + (x.Empresa && x.Empresa !== x.Nombre ? ' · ' + x.Empresa : ''), sinGuardar: true, izq: 'Cerrar',
+    cuerpo: (x.codigo ? '<div class="m-saldo-grande" style="text-align:center"><div class="m-resumen-etiqueta">Código de pago' + (x.Hogar ? ' · ' + esc(x.Hogar) : '') + '</div><div class="m-resumen-cifra m-num" style="font-size:var(--m-text-title-2)">' + esc(x.codigo) + '</div></div>' : '') +
+      '<div style="display:flex;flex-direction:column;gap:var(--m-space-3)">' + (x.codigo ? '<button type="button" class="m-btn m-btn-primary" data-hoja-acc="copiar">Copiar código</button>' : '') +
+      (x.url ? enlaceExterno(x.url, 'Ir a pagar') : '<p class="m-ayuda" style="text-align:center">No tiene enlace de pago guardado.</p>') +
+      '<button type="button" class="m-btn-texto" data-hoja-acc="editar">Editar</button></div>',
+    extra: {
+      copiar: async () => { await copiar(x.codigo, 'Código copiado'); },
+      editar: async () => { setTimeout(() => abrirFormulario('Suscripciones', x.ID_Suscripcion), 0); return true; }
+    }
   });
 }
 

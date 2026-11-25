@@ -17,8 +17,7 @@ const PASOS_ASIST = [
   { id: 'ingresos', corto: 'Ingresos', tabla: 'Ingresos_Recurrentes', uno: 'un ingreso', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'cdt', corto: 'CDT', tabla: 'CDTs', uno: 'un CDT', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'hogar', corto: 'Hogar', tabla: 'Inmuebles', uno: 'un hogar', otro: 'Guardar y agregar otro', opcional: true },
-  { id: 'servicios', corto: 'Servicios', tabla: 'Servicios_Publicos', clave: 'Tipo', uno: 'un servicio', otro: 'Guardar y agregar otro', opcional: true },
-  { id: 'suscripciones', corto: 'Suscripciones', tabla: 'Suscripciones', uno: 'una suscripción', otro: 'Guardar y agregar otra', opcional: true },
+  { id: 'suscripciones', corto: 'Servicios', tabla: 'Suscripciones', uno: 'un servicio o suscripción', otro: 'Guardar y agregar otro', opcional: true },
   { id: 'tasa', corto: 'Dólar', opcional: true }
 ];
 const ORDEN_ASIST = ['bienvenida'].concat(PASOS_ASIST.map(p => p.id), ['fin']);
@@ -29,10 +28,9 @@ const CAMPOS_ASIST = {
   Cuentas: ['ID_Banco', 'Nombre', 'Tipo', 'Permite_Bolsillos', 'Saldo_Apertura'],
   Bolsillos: ['ID_Cuenta', 'Nombre', 'Rol', 'Saldo_Apertura'],
   Ingresos_Recurrentes: ['Nombre', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo'],
-  Suscripciones: ['Nombre', 'Tipo', 'ID_Inmueble', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'URL_Pago'],
+  Suscripciones: ['Nombre', 'Tipo', 'ID_Inmueble', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'Empresa', 'Codigo_Pago', 'URL_Pago'],
   CDTs: ['Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Pago_Intereses', 'Retencion_Tipo', 'Retencion_Valor', 'Retencion_Pct'],
-  Inmuebles: ['Nombre'],
-  Servicios_Publicos: ['ID_Inmueble', 'Tipo', 'Empresa', 'Codigo_Pago', 'URL_Pago']
+  Inmuebles: ['Nombre']
 };
 const TEXTOS_ASIST = {
   perfil: { titulo: '¿Cómo te llamas?', sub: 'Así te saluda Moni cada vez que la abres.' },
@@ -42,9 +40,8 @@ const TEXTOS_ASIST = {
   nomina: { titulo: 'Tu nómina', sub: 'Es opcional. Con tu sueldo, Moni estima cuánto vas a recibir cada mes (con prima, cesantías, salud y pensión) y lo reparte en tus bolsillos. Los descuentos fijos (libranza, medicina prepagada) y lo del mes (horas extras, cesantías…) los agregas después en Planear → Nómina.' },
   ingresos: { titulo: '¿Recibes otros ingresos?', sub: 'Es opcional. Otro trabajo, un arriendo, ventas, servicios… Anota el concepto, cuánto y a qué cuenta llega; Moni te recuerda cuándo esperarlo.' },
   cdt: { titulo: '¿Tienes CDT?', sub: 'Es opcional. Un CDT es dinero que tienes a plazo fijo en un banco. Regístralo con su capital, tasa y plazo: Moni lo muestra como "Invertido" (no como disponible), calcula lo que ganarás y te avisa cuando vence. Los que ya tenías no descuentan nada de tus bolsillos.' },
-  suscripciones: { titulo: '¿Pagas suscripciones o servicios?', sub: 'Es opcional. Streaming, música, internet, el celular… Anota cuánto, cada cuánto y desde dónde pagas; si lo pagas en más de un hogar, elige a cuál pertenece. Moni te recuerda cuándo se cobra.' },
+  suscripciones: { titulo: '¿Qué pagas cada mes?', sub: 'Es opcional. Servicios (luz, agua, gas, internet, el celular) y suscripciones (streaming, música): cuánto, cada cuánto y con qué pagas. Si quieres, su empresa, su código de pago y el enlace para pagar; si lo pagas en más de un hogar, elige a cuál pertenece. Moni te recuerda cuándo se cobra y lo suma a tu presupuesto.' },
   hogar: { titulo: 'Tu hogar', sub: 'Es opcional. Agrega la casa o el apartamento cuyos servicios pagas (puedes tener varios, por ejemplo el tuyo y el de tu mamá). Los servicios y las suscripciones se vinculan a un hogar.' },
-  servicios: { titulo: 'Servicios públicos de tu hogar', sub: 'Es opcional. Luz, agua, gas, internet… Cada servicio va en un hogar: guarda su código de pago y, si quieres, el enlace para pagar. Si el valor cambia cada mes, créalo también como suscripción de tipo servicio.' },
   tasa: { titulo: '¿Manejas dólares?', sub: 'Es opcional. Moni puede traer el dólar (TRM) de Google Finance para mostrarte cuánto equivale en pesos un saldo en dólares. Es solo informativo: tus saldos y conversiones usan lo que cobró tu banco.' },
   tarjetas: { titulo: '¿Tienes tarjetas de crédito?', sub: 'Es opcional. Con su día de corte y de pago, Moni te recuerda cuándo toca pagarlas. Puedes agregar todas las que tengas.' }
 };
@@ -75,7 +72,6 @@ function pasoInicialAsist() {
 function aplicaPasoAsist(id) {
   if (id === 'bolsillos') return activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)); // sin bolsillos no hay qué repartir
   if (id === 'ingresos') return activos('Bolsillos').length > 0; // el ingreso llega a un bolsillo
-  if (id === 'servicios') return activos('Inmuebles').length > 0; // un servicio es de un inmueble
   if (id === 'cdt') return activos('Bancos').some(b => (b.Divisa || 'COP') === 'COP'); // un CDT es de un banco en pesos
   return true;
 }

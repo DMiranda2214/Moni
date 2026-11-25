@@ -152,6 +152,22 @@ module.exports = function (prueba, assert, crearEntorno) {
       });
     });
 
+    // 3b. Servicios públicos y empresas de la versión anterior: cada uno sigue visible, con su código, su enlace y su hogar
+    const tabla = (n) => { const f = hojasAntes[n] || []; return f.slice(1).map(r => { const o = {}; f[0].forEach((h, i) => { o[h] = r[i]; }); return o; }); };
+    const empresas = tabla('Empresas_Pago'), inmuebles = tabla('Inmuebles');
+    const codigos = nuevo.llamar('obtenerSuscripciones').codigos;
+    const activo = x => x.Activo === true || String(x.Activo).toUpperCase() === 'TRUE';
+    tabla('Servicios_Publicos').filter(activo).forEach(srv => {
+      const emp = empresas.find(e => e.ID_Empresa === srv.ID_Empresa);
+      const hogar = (inmuebles.find(i => i.ID_Inmueble === srv.ID_Inmueble) || {}).Nombre || '';
+      const c = codigos.find(x => x.codigo === String(srv.Codigo_Pago));
+      assert.ok(c, 'el código ' + srv.Codigo_Pago + ' sigue a la vista');
+      assert.strictEqual(c.url, srv.URL_Pago || (emp ? emp.URL_Pago : ''), 'mismo enlace de pago');
+      if (!c.programado) assert.strictEqual(c.Hogar, hogar, 'mismo hogar');
+    });
+    assert.ok(tabla('Servicios_Publicos').length > 0, 'la versión anterior tenía servicios públicos que probar');
+    ['Servicios_Publicos', 'Empresas_Pago'].forEach(n => assert.deepStrictEqual(nuevo.hojas[n].filas.slice(0, hojasAntes[n].length), hojasAntes[n], n + ' queda intacta'));
+
     // 4. Lo que se ve da lo mismo (y la foto no está vacía)
     assert.ok(antes.movimientos.items.length >= 5 && antes.creditos.length && antes.tarjetas.length && antes.cdts.vigentes.length && antes.detalleCreditos[0].pagos.length, 'la foto de referencia debería tener datos');
     // Cambios de presentación anunciados en el CHANGELOG (no tocan datos): desde 1.12 abrir o cobrar un CDT no cuenta

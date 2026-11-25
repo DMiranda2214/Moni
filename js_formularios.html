@@ -133,7 +133,7 @@ const CAT = {
   Inmuebles: {
     plural: 'Inmuebles', singular: 'inmueble', icono: 'edificio', id: 'ID_Inmueble',
     vacio: 'Agrega las casas o apartamentos cuyos servicios pagas.',
-    fila: i => ({ titulo: esc(i.Nombre), sub: (n => n + (n === 1 ? ' servicio' : ' servicios'))(activos('Servicios_Publicos').filter(s => s.ID_Inmueble === i.ID_Inmueble).length) }),
+    fila: i => ({ titulo: esc(i.Nombre), sub: (n => n + (n === 1 ? ' servicio' : ' servicios'))(activos('Suscripciones').filter(s => s.ID_Inmueble === i.ID_Inmueble).length) }),
     campos: [{ k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }]
   },
   CDTs: {
@@ -177,33 +177,23 @@ const CAT = {
   Suscripciones: {
     plural: 'Servicios y suscripciones', singular: 'cobro', icono: 'tarjetas', id: 'ID_Suscripcion',
     vacio: 'Agrega lo que pagas cada cierto tiempo: streaming, música, internet, luz, agua…',
-    fila: s => { const h = s.ID_Inmueble ? porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble) : null; return { titulo: esc(s.Nombre), sub: esc(etiqueta('PeriodoCobro', s.Periodicidad)) + ' · próximo ' + esc(fechaTxt(s.Proximo_Cobro)) + (h ? ' · ' + esc(h.Nombre) : ''), final: '<span class="m-num">' + dinero(s.Valor) + '</span>' }; },
+    fila: s => { const h = s.ID_Inmueble ? porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble) : null; return { titulo: esc(s.Nombre), sub: (s.Proximo_Cobro ? esc(etiqueta('PeriodoCobro', s.Periodicidad)) + ' · próximo ' + esc(fechaTxt(s.Proximo_Cobro)) : 'Solo datos de pago' + (s.Codigo_Pago ? ' · código ' + esc(s.Codigo_Pago) : '')) + (h ? ' · ' + esc(h.Nombre) : ''), final: s.Proximo_Cobro ? '<span class="m-num">' + dinero(s.Valor) + '</span>' : '' }; },
     campos: [
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Streaming', 'Música', 'Internet', 'Luz', 'Agua', 'Gas', 'Celular'] },
       { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Suscripcion', opciones: () => [['Suscripcion', 'Suscripción (valor fijo)'], ['Servicio', 'Servicio (el valor cambia)']] },
       { k: 'ID_Inmueble', label: 'Hogar (opcional)', tipo: 'select', visible: () => activos('Inmuebles').length > 0,
         opciones: () => [['', 'Ninguno']].concat(activos('Inmuebles').map(i => [i.ID_Inmueble, i.Nombre])), ayuda: 'Si lo pagas en más de una casa (por ejemplo, el mismo Netflix en la tuya y en la de tu mamá), elige a cuál pertenece.' },
-      { k: 'Valor', label: 'Cuánto cuesta', tipo: 'dinero', requerido: true, ayuda: 'En un servicio es un estimado: al pagar lo ajustas y queda el último valor.' },
+      { k: 'Valor', label: 'Cuánto cuesta', tipo: 'dinero', ayuda: 'En un servicio es un estimado: al pagar lo ajustas y queda el último valor.' },
       { k: 'Periodicidad', label: 'Cada cuánto', tipo: 'select', defecto: 'Mensual', opciones: () => Object.keys(ETIQUETAS.PeriodoCobro).map(k => [k, ETIQUETAS.PeriodoCobro[k]]) },
-      { k: 'Proximo_Cobro', label: 'Próximo cobro', tipo: 'fecha', requerido: true, ayuda: 'El día de este cobro se repite cada período.' },
+      { k: 'Proximo_Cobro', label: 'Próximo cobro', tipo: 'fecha', ayuda: 'El día de este cobro se repite cada período. En un servicio puedes dejarlo vacío si solo quieres guardar su código y su enlace de pago.' },
       { k: 'ID_Bolsillo', label: 'Pagas desde el bolsillo', tipo: 'select', opciones: () => opcionesDestino(true), ayuda: 'Elige un bolsillo o una tarjeta, no los dos.' },
       { k: 'ID_Tarjeta', label: 'O con la tarjeta', tipo: 'select', opciones: () => [['', 'Ninguna']].concat(activos('Tarjetas').map(t => [t.ID_Tarjeta, t.Nombre])) },
       { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre])) },
-      { k: 'ID_Servicio', label: 'Servicio público enlazado', tipo: 'select', visible: v => v.Tipo === 'Servicio',
-        opciones: () => [['', 'Ninguno']].concat(activos('Servicios_Publicos').map(x => [x.ID_Servicio, x.Tipo + (x.Empresa ? ' · ' + x.Empresa : '')])), ayuda: 'Trae su código de pago y su enlace.' },
+      { k: 'Empresa', label: 'Empresa (opcional)', tipo: 'texto', maxlength: 60, lista: () => empresasDePago(), ayuda: 'A quién le pagas: Enel, Vanti, el acueducto, Claro… Agrupa tus pagos en “Pagar servicio”.' },
+      { k: 'Codigo_Pago', label: 'Código o referencia de pago (opcional)', tipo: 'texto', maxlength: 40, inputmode: 'text', ayuda: 'El número con el que pagas: contrato, matrícula o referencia.' },
       { k: 'Renglon', label: 'Renglón del presupuesto (opcional)', tipo: 'texto', maxlength: 80, lista: ['Suscripciones', 'Servicios públicos', 'Internet', 'Entretenimiento'],
         ayuda: 'El nombre de un renglón de tu presupuesto. Al pagar, el gasto cuenta ahí.' },
       { k: 'URL_Pago', label: 'Enlace para pagar (opcional)', tipo: 'texto', inputmode: 'url', ayuda: 'Debe empezar por https://' },
-      { k: 'Notas', label: 'Notas', tipo: 'area' }
-    ]
-  },
-  Empresas_Pago: {
-    plural: 'Empresas de servicios', singular: 'empresa', icono: 'tarjetas', id: 'ID_Empresa',
-    vacio: 'Guarda las empresas a las que les pagas los servicios (Enel, Vanti, el acueducto…) con su enlace de pago, una sola vez.',
-    fila: e => ({ titulo: esc(e.Nombre), sub: e.URL_Pago ? esc(e.URL_Pago.replace(/^https:\/\//, '')) : 'Sin enlace de pago' }),
-    campos: [
-      { k: 'Nombre', label: 'Empresa', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Enel', 'Vanti', 'Acueducto', 'Claro', 'Movistar', 'Tigo', 'Aseo'] },
-      { k: 'URL_Pago', label: 'Enlace de pago', tipo: 'texto', inputmode: 'url', ayuda: 'La página donde se paga. Debe empezar por https://' },
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
@@ -225,25 +215,6 @@ const CAT = {
       { k: 'Porcentaje', label: 'Porcentaje', tipo: 'porcentaje', requerido: true, visible: v => v.Modo === 'Porcentaje', ayuda: 'Por ejemplo 0,4 para el 4x1000 o 3 para un recargo del 3 %.' },
       { k: 'Minimo', label: 'Mínimo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' },
       { k: 'Maximo', label: 'Máximo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' }
-    ]
-  },
-  Servicios_Publicos: {
-    plural: 'Servicios públicos', singular: 'servicio', icono: 'pulso', id: 'ID_Servicio',
-    vacio: 'Guarda el código de pago de cada servicio para tenerlo a la mano.',
-    requiere: () => activos('Inmuebles').length ? '' : 'Primero agrega un inmueble.',
-    fila: s => {
-      const i = porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble);
-      return { titulo: esc(s.Tipo), sub: esc(i ? i.Nombre : '') + (s.Empresa ? ' · ' + esc(s.Empresa) : '') + ' · ' + esc(s.Codigo_Pago) };
-    },
-    campos: [
-      { k: 'ID_Inmueble', label: 'Inmueble', tipo: 'select', requerido: true, opciones: optsActivas('Inmuebles', 'ID_Inmueble') },
-      { k: 'Tipo', label: 'Servicio', tipo: 'texto', requerido: true, maxlength: 40, lista: ['Luz', 'Agua', 'Gas', 'Internet', 'Teléfono', 'Aseo'] },
-      { k: 'ID_Empresa', label: 'Empresa', tipo: 'select', opciones: () => [['', 'Otra (la escribo yo)']].concat(activos('Empresas_Pago').map(e => [e.ID_Empresa, e.Nombre])),
-        ayuda: 'Si la empresa ya está guardada (Ajustes → Empresas de servicios), el enlace de pago sale de ella y no se repite.' },
-      { k: 'Empresa', label: 'Nombre de la empresa', tipo: 'texto', maxlength: 60, visible: v => !v.ID_Empresa },
-      { k: 'Codigo_Pago', label: 'Código de pago', tipo: 'texto', requerido: true, maxlength: 40, inputmode: 'text' },
-      { k: 'URL_Pago', label: 'Enlace de pago (opcional)', tipo: 'texto', inputmode: 'url', visible: v => !v.ID_Empresa, ayuda: 'Debe empezar por https://' },
-      { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
   Presupuesto_Plantilla: {
@@ -355,20 +326,12 @@ const INFO_CAMPOS = {
     ID_Bolsillo: 'El bolsillo del que sale el dinero cuando lo pagas. Elige este o una tarjeta, no los dos.',
     ID_Tarjeta: 'Si lo cobran a una tarjeta de crédito, la compra queda en su extracto.',
     ID_Categoria: 'Para que el gasto salga en los gráficos por categoría.',
-    ID_Servicio: 'Trae el código de pago y el enlace del servicio público que ya guardaste.',
+    Empresa: 'A quién le pagas. Los cobros de la misma empresa se agrupan en “Pagar servicio”.',
+    Codigo_Pago: 'El número de referencia con el que pagas (matrícula, contrato o referencia de pago).',
     ID_Inmueble: 'La casa o apartamento al que pertenece este cobro. Te deja separar el mismo servicio o suscripción por hogar.',
     Renglon: 'Escribe el nombre de un renglón de tu presupuesto (por ejemplo, “Suscripciones”). Al pagar, el gasto cuenta en ese renglón del mes.',
     URL_Pago: 'La página donde se paga. Aparece como “Ir a pagar” en el cobro.',
     Notas: 'Lo que quieras recordar de este cobro.'
-  },
-  Servicios_Publicos: {
-    ID_Inmueble: 'A qué casa o apartamento pertenece el servicio.',
-    Tipo: 'Luz, agua, gas, internet… Puedes escribir el que quieras.',
-    ID_Empresa: 'La empresa con la que pagas este servicio. Se guarda una sola vez en Ajustes → Empresas de servicios, con su enlace de pago.',
-    Empresa: 'Quién lo cobra.',
-    Codigo_Pago: 'El número de referencia con el que pagas (matrícula, contrato o referencia de pago).',
-    URL_Pago: 'La página donde se paga. Debe empezar por https://',
-    Notas: 'Lo que quieras recordar de este servicio.'
   },
   Ingresos_Recurrentes: {
     Nombre: 'De dónde viene: otro trabajo, un arriendo, la venta de productos, servicios que prestas…',
@@ -565,7 +528,7 @@ function htmlCampo(c, valor, ctx) {
     default:
       ctl = '<input class="m-input" id="' + id + '" name="' + c.k + '" type="text"' + (c.inputmode ? ' inputmode="' + c.inputmode + '"' : '') +
         (c.maxlength ? ' maxlength="' + c.maxlength + '"' : '') + (c.lista ? ' list="' + id + '-lista"' : '') + req + desc + ' autocomplete="off" value="' + esc(valor) + '">' +
-        (c.lista ? '<datalist id="' + id + '-lista">' + c.lista.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' : '');
+        (c.lista ? '<datalist id="' + id + '-lista">' + (typeof c.lista === 'function' ? c.lista() : c.lista).map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' : '');
   }
   return '<div class="m-campo" data-campo="' + c.k + '"><div class="m-label-fila"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label>' + info + '</div>' + ctl + ayuda + '</div>';
 }

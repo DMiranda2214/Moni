@@ -433,49 +433,13 @@ const CATALOGOS = {
       return { Nombre: nombre, Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
     },
     bloqueos: function (reg) {
-      const n = leer_('Servicios_Publicos').filter(s => s.ID_Inmueble === reg.ID_Inmueble && estaActivo(s)).length;
-      return n ? [n + ' servicio(s) activo(s); desactívalos primero'] : [];
+      const n = leer_('Suscripciones').filter(s => s.ID_Inmueble === reg.ID_Inmueble && estaActivo(s)).length;
+      return n ? [n + ' servicio(s) o suscripción(es) activo(s) de este hogar; cámbialos o desactívalos primero'] : [];
     }
   },
 
-  // Empresas con las que se pagan los servicios (Enel, Vanti, el acueducto…): su enlace se guarda una sola vez.
-  Empresas_Pago: {
-    id: 'ID_Empresa', prefijo: 'emp', etiqueta: 'La empresa',
-    normalizar: function (item, actual, filas) {
-      const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
-      exigirNombreUnico_(filas, nombre, actual, 'ID_Empresa');
-      const url = urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago);
-      return { Nombre: nombre, URL_Pago: url, Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
-    },
-    bloqueos: function (reg) {
-      const n = leer_('Servicios_Publicos').filter(s => s.ID_Empresa === reg.ID_Empresa && estaActivo(s)).length;
-      return n ? [n + ' servicio(s) activo(s) usan esta empresa; cámbialos o desactívalos primero'] : [];
-    }
-  },
-
-  Servicios_Publicos: {
-    id: 'ID_Servicio', prefijo: 'srv', etiqueta: 'El servicio',
-    normalizar: function (item, actual) {
-      const idInmueble = item.ID_Inmueble !== undefined ? item.ID_Inmueble : actual && actual.ID_Inmueble;
-      exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El inmueble');
-      // Con una empresa registrada, el nombre y el enlace salen de ella; sin empresa, se escriben aquí (como antes).
-      const idEmpresa = texto_(item.ID_Empresa !== undefined ? item.ID_Empresa : actual && actual.ID_Empresa);
-      const empresa = idEmpresa ? exigirActivo_(leer_('Empresas_Pago'), 'ID_Empresa', idEmpresa, 'La empresa') : null;
-      return {
-        ID_Inmueble: idInmueble,
-        ID_Empresa: idEmpresa,
-        Tipo: textoRequerido_(item.Tipo !== undefined ? item.Tipo : actual && actual.Tipo, 'El tipo de servicio'),
-        Empresa: empresa ? empresa.Nombre : texto_(item.Empresa !== undefined ? item.Empresa : actual && actual.Empresa),
-        Codigo_Pago: textoRequerido_(item.Codigo_Pago !== undefined ? item.Codigo_Pago : actual && actual.Codigo_Pago, 'El código de pago'),
-        URL_Pago: empresa ? '' : urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago),
-        Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas)
-      };
-    },
-    bloqueos: function () { return []; },
-    padreActivo: function (reg) {
-      exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', reg.ID_Inmueble, 'El inmueble del servicio');
-    }
-  },
+  // Desde 1.15 las empresas de pago y los servicios públicos son datos de cada cobro (Suscripciones: Empresa, Codigo_Pago,
+  // URL_Pago). Sus pestañas siguen en la hoja con lo que tenían, pero ya no se editan desde la app (ver unificarServicios_).
 
   Suscripciones: {
     id: 'ID_Suscripcion', prefijo: 'sus', etiqueta: 'La suscripción',
@@ -486,23 +450,26 @@ const CATALOGOS = {
       const idInmueble = texto_(pick('ID_Inmueble'));
       if (idInmueble) exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El hogar');
       exigirNombreUnico_(filas, nombre, actual, 'ID_Suscripcion', f => texto_(f.ID_Inmueble) === idInmueble);
+      const tipo = opcion_(pick('Tipo'), ENUMS.Suscripciones.Tipo, 'El tipo', 'Suscripcion');
       const proximo = fechaIso_(pick('Proximo_Cobro'), 'La fecha del próximo cobro');
-      if (!proximo) throw new Error('Indica cuándo es el próximo cobro.');
+      // Un servicio puede guardarse sin fecha: solo sus datos de pago (empresa, código, enlace)
+      if (!proximo && tipo !== 'Servicio') throw new Error('Indica cuándo es el próximo cobro.');
       const idBolsillo = texto_(pick('ID_Bolsillo')), idTarjeta = texto_(pick('ID_Tarjeta'));
       if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo'); exigirPesos_(idBolsillo, 'El bolsillo'); }
       if (idTarjeta) exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
       if (idBolsillo && idTarjeta) throw new Error('Elige cómo se paga: desde un bolsillo o con una tarjeta, no ambos.');
       const idCat = texto_(pick('ID_Categoria'));
       if (idCat) exigirActivo_(leer_('Categorias'), 'ID_Categoria', idCat, 'La categoría');
-      const idSrv = texto_(pick('ID_Servicio'));
-      if (idSrv) exigirActivo_(leer_('Servicios_Publicos'), 'ID_Servicio', idSrv, 'El servicio');
+      // ID_Servicio solo recuerda de qué servicio público vino un cobro (unificarServicios_); ya no se elige
+      const idSrv = texto_(actual ? actual.ID_Servicio : '');
       return {
         Nombre: nombre,
-        Tipo: opcion_(pick('Tipo'), ENUMS.Suscripciones.Tipo, 'El tipo', 'Suscripcion'),
-        Valor: numero_(pick('Valor'), 'El valor', { requerido: true, min: 0, max: VALOR_MAXIMO }),
+        Tipo: tipo,
+        Valor: numero_(pick('Valor'), 'El valor', { requerido: !!proximo, min: 0, max: VALOR_MAXIMO, defecto: 0 }),
         Periodicidad: opcion_(pick('Periodicidad'), ENUMS.Suscripciones.Periodicidad, 'La periodicidad', 'Mensual'),
-        Proximo_Cobro: proximo, Dia_Cobro: Number(proximo.slice(8, 10)),
+        Proximo_Cobro: proximo, Dia_Cobro: proximo ? Number(proximo.slice(8, 10)) : '',
         ID_Bolsillo: idBolsillo, ID_Tarjeta: idTarjeta, ID_Categoria: idCat, ID_Servicio: idSrv, ID_Inmueble: idInmueble,
+        Empresa: texto_(pick('Empresa')).slice(0, 60), Codigo_Pago: texto_(pick('Codigo_Pago')).slice(0, 40),
         Renglon: texto_(pick('Renglon')).slice(0, 80),
         URL_Pago: urlSegura_(pick('URL_Pago')), Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
@@ -1034,8 +1001,7 @@ function obtenerEstadoConfiguracion(verificacionPrevia) {
     { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' },
     { id: 'cdt', titulo: 'Registra tus CDT', hecho: listarCatalogo('CDTs').length > 0, opcional: true, pantalla: 'cdt' },
     { id: 'hogar', titulo: 'Agrega tu hogar', hecho: listarCatalogo('Inmuebles').length > 0, opcional: true, pantalla: 'ajustes/Inmuebles' },
-    { id: 'servicios', titulo: 'Guarda los códigos de tus servicios públicos', hecho: listarCatalogo('Servicios_Publicos').length > 0, opcional: true, pantalla: 'ajustes/Servicios_Publicos' },
-    { id: 'suscripciones', titulo: 'Anota tus suscripciones y servicios', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
+    { id: 'suscripciones', titulo: 'Anota tus servicios y suscripciones (con su código de pago)', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
     { id: 'tasa', titulo: 'Vincula el dólar de Google Finance', hecho: esVerdadero(config.Tasa_Auto), opcional: true, pantalla: 'ajustes/divisas' }
   ];
   const completo = pasos.filter(p => !p.opcional).every(p => p.hecho);

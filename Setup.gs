@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '13';
+const ESQUEMA_VERSION = '14';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -48,8 +48,8 @@ const SCHEMAS = {
     ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'ID_Empresa', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
     [170, 170, 110, 170, 180, 150, 260, 200, 70]),
   Suscripciones: tabla_(
-    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
+    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden', 'Empresa', 'Codigo_Pago', 'ID_Empresa'],
+    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60, 180, 150, 170]),
   CDTs: tabla_(
     ['ID_CDT', 'Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Fecha_Vencimiento', 'Pago_Intereses', 'Retencion_Pct', 'Retencion_Tipo', 'Retencion_Valor', 'Estado', 'ID_Bolsillo_Origen', 'ID_Bolsillo_Destino', 'Renovar', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Intereses_Cobrados', 'ID_Mov_Apertura', 'Fecha_Cierre', 'Notas', 'Activo', 'Orden'],
     [170, 220, 170, 130, 90, 110, 90, 120, 120, 100, 110, 120, 90, 170, 170, 80, 120, 120, 130, 170, 110, 220, 70, 60]),
@@ -156,7 +156,7 @@ const COLUMNAS_TEXTO = {
   Config: ['Valor'],
   Cuentas: ['Fecha_Apertura', 'Fecha_Saldo_Real'],
   Servicios_Publicos: ['Codigo_Pago'],
-  Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago'],
+  Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago', 'Codigo_Pago'],
   Ingresos_Recurrentes: ['Proximo_Cobro', 'Ultimo_Cobro'],
   CDTs: ['Fecha_Inicio', 'Fecha_Vencimiento', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Fecha_Cierre'],
   Movimientos: ['Fecha'],
@@ -312,7 +312,11 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Creditos_Pagos', columna: 'Cargos', valor: 0 },
   { tabla: 'Compras_TC', columna: 'Divisa_Original', valor: '' },
   { tabla: 'Compras_TC', columna: 'Valor_Original', valor: '' },
-  { tabla: 'Compras_TC', columna: 'Tasa', valor: '' }
+  { tabla: 'Compras_TC', columna: 'Tasa', valor: '' },
+  // 1.15: servicios, empresas y suscripciones en una sola tabla (Suscripciones). Las pestañas viejas se conservan.
+  { tabla: 'Suscripciones', columna: 'Empresa', valor: '' },
+  { tabla: 'Suscripciones', columna: 'Codigo_Pago', valor: '' },
+  { tabla: 'Suscripciones', columna: 'ID_Empresa', valor: '' }
 ];
 
 /**
@@ -432,6 +436,9 @@ function setupDatabase(spreadsheet, opciones) {
   });
 
   const migradas = migrarColumnas_(ss);
+  // Datos que una versión nueva reorganiza (sin borrar nada de lo que ya había)
+  let unificados = 0;
+  try { invalidateCache(); unificados = unificarServicios_(); } catch (e) { try { registrarLog('ERROR', 'unificarServicios_', 'No se pudieron unificar los servicios', String(e && e.message)); } catch (x) {} }
   sembrarPorDefecto_(ss);
   completarConfig_(ss);
   invalidateCache();

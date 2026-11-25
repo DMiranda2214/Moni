@@ -219,7 +219,7 @@ function obtenerAnalisis() {
   const flujo = obtenerGraficos({ mes: mes, meses: 12 }).serie;
   const previos = flujo.slice(-4, -1);
   const gastoPromedio = previos.length ? previos.reduce((a, m) => a + m.gastos, 0) / previos.length : 0;
-  const compromisosMes = getTableData('Suscripciones').filter(estaActivo).reduce((a, x) => a + costoMensual_(x.Valor, x.Periodicidad), 0) +
+  const compromisosMes = getTableData('Suscripciones').filter(s => estaActivo(s) && cobroProgramado_(s)).reduce((a, x) => a + costoMensual_(x.Valor, x.Periodicidad), 0) +
     getTableData('Creditos').filter(c => c.Estado === 'Activo' && esBancario_(c)).reduce((a, c) => a + (Number(c.Cuota_Fija) || 0) * (c.Periodicidad === 'Quincenal' ? 2 : 1), 0);
   // Sin historia todavía (quien empieza), el plan del presupuesto del mes o, si no lo hay, la plantilla base
   let baseGasto = gastoPromedio, fuente = gastoPromedio > 0 ? 'promedio' : '';

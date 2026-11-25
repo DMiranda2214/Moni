@@ -297,6 +297,14 @@ function activarCargos(raiz, contexto) {
   return { pedir: pedir };
 }
 
+/** Nombres de las empresas que ya usaste en tus cobros (sugerencias al escribir la empresa de un servicio). */
+function empresasDePago() {
+  const vistos = {};
+  activos('Suscripciones').forEach(s => { const e = String(s.Empresa || '').trim(); if (e) vistos[e.toLowerCase()] = e; });
+  const lista = Object.keys(vistos).map(k => vistos[k]).sort((a, b) => a.localeCompare(b));
+  return lista.length ? lista : ['Enel', 'Vanti', 'Acueducto', 'Claro', 'Movistar', 'Tigo'];
+}
+
 /** Cuándo se cobra un cargo, en palabras. */
 const OPERACION_CARGO = {
   Salida: 'En toda salida de dinero de la cuenta', Transferencia: 'Al pasar dinero a otra cuenta', Pago: 'En gastos y pagos',
@@ -480,7 +488,7 @@ async function refrescarParcial(opc) {
   if ((opc.tablas || []).indexOf('CDTs') !== -1) { App.cdt.data = null; App.proximosViejos = true; }
   if (r.estado) App.boot.estado = r.estado;
   if (r.avisos) App.boot.avisos = r.avisos;
-  const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos', 'Servicios_Publicos'].indexOf(t) !== -1);
+  const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos'].indexOf(t) !== -1);
   if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
   // Una suscripción nueva o editada entra al presupuesto de este mes: se vuelve a pedir para que Registrar y Presupuesto la vean.
   if ((opc.tablas || []).indexOf('Suscripciones') !== -1) {

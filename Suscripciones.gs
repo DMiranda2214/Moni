@@ -3,15 +3,24 @@
  * Pagos que se repiten: suscripciones (Netflix, Disney…) y servicios (luz, agua, internet…).
  * Cada una guarda su próximo cobro; al pagarla se registra un gasto (desde un bolsillo) o una compra
  * de tarjeta, y el próximo cobro avanza un período. El día de cobro se conserva (31 → 28 → 31).
- * Tipo "Servicio": el valor es un estimado (el último que pagaste) y puede enlazar un servicio público
- * con su código de pago y su enlace.
+ * Tipo "Servicio": el valor es un estimado (el último que pagaste).
+ *
+ * Desde 1.15 esta es LA tabla de lo que pagas: cada cobro guarda también su empresa, su código de pago y su enlace.
+ * Lo que antes estaba en Servicios_Publicos y Empresas_Pago se trajo aquí (unificarServicios_), sin borrar esas pestañas.
+ * Un cobro sin "próximo cobro" es solo un dato de pago (un código o un enlace): no entra en próximos pagos, costos ni
+ * presupuesto, igual que antes un servicio público sin suscripción.
  */
 
 const MARCA_SUSCRIPCION = 'Suscripción ';
 // Lo común con los ingresos recurrentes (periodos, costo mensual y anual, saltar y deshacer) está en Recurrentes.gs.
 
+/** ¿El cobro tiene fecha (se repite)? Sin fecha es solo un dato de pago: código, enlace, empresa. */
+function cobroProgramado_(s) { return !!texto_(s.Proximo_Cobro); }
+
 function resumenSuscripcion_(s, hoy, ctx) {
-  const base = resumenRecurrente_(s, hoy, 'vencida');
+  const programado = cobroProgramado_(s);
+  const base = programado ? resumenRecurrente_(s, hoy, 'vencida')
+    : { Valor: Number(s.Valor) || 0, Periodicidad: s.Periodicidad || 'Mensual', dias: null, estado: 'sin_fecha', mensual: 0, anual: 0 };
   const srv = s.ID_Servicio ? buscarPorId_(ctx.servicios, 'ID_Servicio', s.ID_Servicio) : null;
   const tar = s.ID_Tarjeta ? buscarPorId_(ctx.tarjetas, 'ID_Tarjeta', s.ID_Tarjeta) : null;
   const bol = s.ID_Bolsillo ? buscarPorId_(ctx.bolsillos, 'ID_Bolsillo', s.ID_Bolsillo) : null;
@@ -20,7 +29,10 @@ function resumenSuscripcion_(s, hoy, ctx) {
     ID_Suscripcion: s.ID_Suscripcion, Nombre: s.Nombre, Tipo: s.Tipo || 'Suscripcion', Valor: base.Valor, Periodicidad: base.Periodicidad,
     Proximo_Cobro: s.Proximo_Cobro, dias: base.dias, estado: base.estado, mensual: base.mensual, anual: base.anual,
     ID_Bolsillo: s.ID_Bolsillo || '', ID_Tarjeta: s.ID_Tarjeta || '', medio: tar ? tar.Nombre : (bol ? bol.Nombre : ''),
-    ID_Servicio: s.ID_Servicio || '', ID_Inmueble: s.ID_Inmueble || '', Hogar: hog ? hog.Nombre : '', Renglon: s.Renglon || '', codigo: srv ? srv.Codigo_Pago : '', url: s.URL_Pago || (srv ? srv.URL_Pago || urlEmpresaServicio_(srv, ctx) : ''),
+    ID_Servicio: s.ID_Servicio || '', ID_Inmueble: s.ID_Inmueble || '', Hogar: hog ? hog.Nombre : '', Renglon: s.Renglon || '',
+    // El código y el enlace son del propio cobro; los de antes de 1.15 que no se hayan unificado aún, del servicio enlazado
+    codigo: texto_(s.Codigo_Pago) || (srv ? texto_(srv.Codigo_Pago) : ''), url: s.URL_Pago || (srv ? srv.URL_Pago || urlEmpresaServicio_(srv, ctx) : ''),
+    Empresa: texto_(s.Empresa) || (srv ? texto_(srv.Empresa) : ''), programado: programado,
     Ultimo_Pago: s.Ultimo_Pago || '', Notas: s.Notas || ''
   };
 }
@@ -39,12 +51,15 @@ function contextoSuscripciones_() {
 function obtenerSuscripciones() {
   const hoy = hoyIso_();
   const ctx = contextoSuscripciones_();
-  const lista = getTableData('Suscripciones').filter(estaActivo)
-    .map(s => resumenSuscripcion_(s, hoy, ctx)).sort((a, b) => a.dias - b.dias || a.Nombre.localeCompare(b.Nombre));
+  const todos = getTableData('Suscripciones').filter(estaActivo).map(s => resumenSuscripcion_(s, hoy, ctx));
+  // Los cobros con fecha (lo que se paga y cuánto cuesta) y, aparte, los códigos y enlaces de pago de todos
+  const lista = todos.filter(x => x.programado).sort((a, b) => a.dias - b.dias || a.Nombre.localeCompare(b.Nombre));
+  const codigos = todos.filter(x => x.codigo || x.url).sort((a, b) => (a.Hogar || '').localeCompare(b.Hogar || '') || a.Nombre.localeCompare(b.Nombre));
   const susc = lista.filter(x => x.Tipo === 'Suscripcion');
   const t = totalesRecurrentes_(lista);
   return {
     items: lista,
+    codigos: codigos,
     totales: {
       cantidad: t.cantidad, suscripciones: susc.length, mensual: t.mensual, anual: t.anual,
       mensualSuscripciones: totalesRecurrentes_(susc).mensual, porPagar: t.pronto
@@ -109,7 +124,7 @@ function pagarSuscripcion(id, d) {
 
   if (marcarPagado) { marcarRenglonPagado(item.ID_Item, true); alDeshacer(() => marcarRenglonPagado(item.ID_Item, false)); }
 
-  const cambios = { Proximo_Cobro: siguienteCobro_(s), Ultimo_Pago: fecha };
+  const cambios = { Proximo_Cobro: cobroProgramado_(s) ? siguienteCobro_(s) : '', Ultimo_Pago: fecha };
   if (s.Tipo === 'Servicio') cambios.Valor = valor; // el estimado pasa a ser el último pago
   updateRow('Suscripciones', s, cambios);
   invalidateCache('Suscripciones');
@@ -140,7 +155,81 @@ function deshacerPagoSuscripcion(id, anterior, idMov, idCompra) {
 
 /** Pasa al siguiente cobro sin registrar nada (se pagó por otro lado, o este mes no aplica). */
 function saltarCobroSuscripcion(id) {
-  const r = saltarRecurrente_('Suscripciones', suscripcionActiva_(id), 'Ultimo_Pago');
+  const s = suscripcionActiva_(id);
+  if (!cobroProgramado_(s)) throw new Error('Este cobro no tiene fecha: no hay nada que saltar.');
+  const r = saltarRecurrente_('Suscripciones', s, 'Ultimo_Pago');
   invalidateCache('Suscripciones');
   return r;
 }
+
+// ---------------------------------------------------------------------------
+// Unificación (1.15): servicios públicos y empresas de pago pasan a ser datos del cobro
+// ---------------------------------------------------------------------------
+
+/**
+ * Trae a Suscripciones lo que estaba en Servicios_Publicos y Empresas_Pago. No borra nada y se puede repetir sin duplicar:
+ *   - Un servicio enlazado a un cobro le pasa su empresa y su código, en las columnas NUEVAS (Empresa, Codigo_Pago,
+ *     ID_Empresa). Ninguna celda que la persona ya tenía cambia: el hogar y el enlace del cobro quedan como estaban (el
+ *     enlace del servicio se sigue mostrando por resumenSuscripcion_, como antes).
+ *   - Un servicio sin cobro se vuelve un cobro de tipo Servicio SIN fecha (solo datos de pago, como era), con su hogar,
+ *     empresa, código, enlace y notas; queda activo o inactivo como estaba. Se reconoce por su ID_Servicio.
+ *   - Una empresa que ningún servicio usaba se vuelve un dato de pago con su nombre y su enlace (se reconoce por ID_Empresa).
+ * @returns {number} cuántos cobros se crearon o completaron
+ */
+function unificarServicios_() {
+  const srvs = leer_('Servicios_Publicos'), emps = leer_('Empresas_Pago');
+  if (!srvs.length && !emps.length) return 0;
+  const subs = leer_('Suscripciones');
+  const empPorId = {};
+  emps.forEach(e => { empPorId[e.ID_Empresa] = e; });
+  const nuevos = [], cambios = [];
+  let orden = siguienteOrden_(subs);
+
+  srvs.forEach(srv => {
+    const emp = empPorId[srv.ID_Empresa] || null;
+    const datos = {
+      Empresa: emp ? texto_(emp.Nombre) : texto_(srv.Empresa), ID_Empresa: texto_(srv.ID_Empresa), Codigo_Pago: texto_(srv.Codigo_Pago),
+      URL_Pago: texto_(srv.URL_Pago) || (emp ? texto_(emp.URL_Pago) : ''), ID_Inmueble: texto_(srv.ID_Inmueble)
+    };
+    const enlazados = subs.filter(s => texto_(s.ID_Servicio) === srv.ID_Servicio);
+    if (enlazados.length) {
+      enlazados.forEach(s => {
+        const c = {};
+        ['Empresa', 'Codigo_Pago', 'ID_Empresa'].forEach(k => { if (datos[k] && !texto_(s[k])) c[k] = datos[k]; });
+        if (Object.keys(c).length) cambios.push({ fila: s, cambios: c });
+      });
+      return;
+    }
+    nuevos.push(Object.assign({
+      ID_Suscripcion: nuevoId_('sus'), Nombre: texto_(srv.Tipo) || 'Servicio', Tipo: 'Servicio', Valor: 0, Periodicidad: 'Mensual',
+      Proximo_Cobro: '', Dia_Cobro: '', ID_Bolsillo: '', ID_Tarjeta: '', ID_Categoria: '', ID_Servicio: srv.ID_Servicio, Renglon: '',
+      Ultimo_Pago: '', Notas: texto_(srv.Notas), Activo: estaActivo(srv), Orden: orden++
+    }, datos));
+  });
+
+  const empresasUsadas = {};
+  srvs.forEach(srv => { if (srv.ID_Empresa) empresasUsadas[srv.ID_Empresa] = true; });
+  emps.forEach(e => {
+    if (empresasUsadas[e.ID_Empresa] || subs.some(s => texto_(s.ID_Empresa) === e.ID_Empresa)) return;
+    nuevos.push({
+      ID_Suscripcion: nuevoId_('sus'), Nombre: texto_(e.Nombre) || 'Empresa', Tipo: 'Servicio', Valor: 0, Periodicidad: 'Mensual',
+      Proximo_Cobro: '', Dia_Cobro: '', ID_Bolsillo: '', ID_Tarjeta: '', ID_Categoria: '', ID_Servicio: '', ID_Inmueble: '', Renglon: '',
+      URL_Pago: texto_(e.URL_Pago), Ultimo_Pago: '', Notas: texto_(e.Notas), Activo: estaActivo(e), Orden: orden++,
+      Empresa: texto_(e.Nombre), Codigo_Pago: '', ID_Empresa: e.ID_Empresa
+    });
+  });
+
+  if (!cambios.length && !nuevos.length) return 0;
+  // Los códigos de pago son texto ("00123" no debe perder los ceros)
+  try {
+    const hoja = getSpreadsheet().getSheetByName('Suscripciones');
+    const col = encabezados_(hoja, 'Suscripciones').indexOf('Codigo_Pago') + 1;
+    if (col > 0) hoja.getRange(2, col, Math.max(hoja.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+  } catch (e) { /* si no se puede dar formato, los datos igual quedan */ }
+  conBloqueo_(() => {
+    if (cambios.length) updateRows_('Suscripciones', cambios);
+    if (nuevos.length) insertRows('Suscripciones', nuevos);
+  });
+  return cambios.length + nuevos.length;
+}
+

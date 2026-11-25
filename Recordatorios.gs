@@ -60,7 +60,7 @@ function proximosPagos_(horizonte) {
   });
 
   const ctx = contextoSuscripciones_();
-  getTableData('Suscripciones').filter(estaActivo).forEach(x => {
+  getTableData('Suscripciones').filter(s => estaActivo(s) && cobroProgramado_(s)).forEach(x => {
     const r = resumenSuscripcion_(x, hoy, ctx);
     if (r.dias > limite) return;
     lista.push({ tipo: r.Tipo, id: r.ID_Suscripcion, titulo: r.Nombre, fecha: r.Proximo_Cobro, dias: r.dias, valor: r.Valor, detalle: r.Tipo === 'Servicio' ? 'Servicio' + (r.medio ? ' · ' + r.medio : '') : 'Suscripción' + (r.medio ? ' · ' + r.medio : ''), susc: r });

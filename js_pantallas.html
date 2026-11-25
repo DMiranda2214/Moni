@@ -519,7 +519,7 @@ function vAjustes() {
         (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
-        ['Categorias', 'Personas', 'Inmuebles', 'Empresas_Pago', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Categorias', 'Personas', 'Inmuebles', 'Suscripciones'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
         fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +

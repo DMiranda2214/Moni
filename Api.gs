@@ -87,6 +87,7 @@ function armarBootstrap_() {
     if (!verificacion.desdeCache) {
       try { if (asegurarBolsillosInternos_()) invalidateCache(); } catch (e) {}
       try { if (repararFormatosMes_(getSpreadsheet())) invalidateCache(); } catch (e) {}
+      try { if (unificarServicios_()) invalidateCache(); } catch (e) {}
     }
 
     precargarTablas_(Object.keys(SCHEMAS)); // todo lo que esté en caché, en 2 llamadas
