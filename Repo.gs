@@ -9,7 +9,7 @@ const CACHE_TTL_SECONDS = 3600; // catálogos: 1 h (toda escritura de la app los
 const CACHE_TTL_MOVIMIENTOS = 600; // tablas de movimientos: 10 min
 
 /** Catálogos pequeños que cambian poco: se guardan en caché. Toda escritura la invalida. */
-const TABLAS_CACHEABLES = ['Config', 'Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios', 'Subsidios'];
+const TABLAS_CACHEABLES = ['Config', 'Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios', 'Subsidios', 'Cargos_Reglas'];
 
 /**
  * Interpreta un valor booleano de una celda (TRUE de Sheets, texto en español o inglés).

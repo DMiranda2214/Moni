@@ -212,6 +212,13 @@ async function abrirRegistrar(o) {
     (renglones.length ? '<div class="m-campo" data-campo="ID_Item_Ppto" data-solo="Gasto,Ajuste,Mover"><div class="m-label-fila"><label class="m-label" for="f-ID_Item_Ppto">Renglón del presupuesto (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Item_Ppto) + '</div><select class="m-input" id="f-ID_Item_Ppto" name="ID_Item_Ppto"><option value="">Ninguno</option>' +
       renglones.map(r => '<option value="' + esc(r.ID_Item) + '"' + (r.ID_Item === itemInicial ? ' selected' : '') + '>' + esc(r.Concepto) + '</option>').join('') + '</select><p class="m-ayuda">Así el gasto cuenta como lo "real" de ese renglón.</p></div>' : '') +
     '<div class="m-campo" data-campo="ID_Categoria" data-solo="Gasto,Ingreso,Ajuste"><div class="m-label-fila"><label class="m-label" for="f-ID_Categoria">Categoría (opcional)</label>' + htmlInfo(INFO_GENERAL.ID_Categoria) + '</div><select class="m-input" id="f-ID_Categoria" name="ID_Categoria"></select></div>' +
+    // Compra con tarjeta en otra moneda: cuánto costó allá (la deuda queda en la moneda de la tarjeta)
+    (conTarjetas ? '<div class="m-campo" id="reg-moneda" hidden><div class="m-label-fila"><span class="m-label">¿Pagaste en otra moneda? (opcional)</span></div>' +
+      '<div class="m-cargo-fila" style="grid-template-columns:7.5rem minmax(0,1fr)"><select class="m-input" id="f-Divisa_Original" aria-label="Moneda de la compra"><option value="">No, en la de la tarjeta</option>' +
+      ['USD', 'EUR', 'GBP', 'MXN', 'CAD', 'BRL', 'CLP', 'PEN', 'ARS'].map(d => '<option value="' + d + '">' + d + '</option>').join('') + '</select>' +
+      '<input class="m-input m-num" id="f-Valor_Original" inputmode="decimal" aria-label="Valor en esa moneda" placeholder="Valor en esa moneda" disabled></div>' +
+      '<p class="m-ayuda">Escribe arriba lo que te cobró la tarjeta en tu moneda. Si tu tarjeta cobra un recargo por compras en otra moneda, aparece abajo.</p></div>' : '') +
+    (edit ? '' : htmlCargos('Gasto,Mover')) +
     paso(3, '¿Cuándo y cómo se cuenta?') +
     '<div class="m-campo" data-campo="Fecha"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo(INFO_GENERAL.Fecha) + '</div><input class="m-input" id="f-Fecha" name="Fecha" type="date" max="' + hoy + '" value="' + esc(edit ? edit.Fecha : hoy) + '"></div>' +
     htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
@@ -267,6 +274,8 @@ async function abrirRegistrar(o) {
     if (!caja || !medio) return;
     const esTarjeta = medio.value.indexOf('T:') === 0;
     caja.hidden = !esTarjeta;
+    const mon = $('#reg-moneda', raiz);
+    if (mon) mon.hidden = !(esTarjeta && tipoActual(raiz) === 'Gasto');
     if (!esTarjeta) return;
     const r = renglones.find(x => x.ID_Item === ($('#f-ID_Item_Ppto', raiz) || {}).value);
     const b = r && r.ID_Bolsillo_Destino ? porId('Bolsillos', 'ID_Bolsillo', r.ID_Bolsillo_Destino) : null;
@@ -295,6 +304,25 @@ async function abrirRegistrar(o) {
       };
       proponerMedio(); actualizar(raiz);
       monedaDelValor();
+      // Moneda original de una compra con tarjeta
+      const divOrig = $('#f-Divisa_Original', raiz);
+      if (divOrig) divOrig.addEventListener('change', () => { const v = $('#f-Valor_Original', raiz); v.disabled = !divOrig.value; if (!divOrig.value) v.value = ''; else v.focus(); });
+      // Comisiones e impuestos propuestos según las reglas del medio de pago
+      if (!edit) activarCargos(raiz, () => {
+        const t = tipoActual(raiz), n = leerDinero(($('#f-Valor', raiz) || {}).value || ''), valor = typeof n === 'number' && !isNaN(n) ? n : 0;
+        if (t === 'Gasto') {
+          const medio = ($('#f-ID_Bolsillo', raiz) || {}).value || '';
+          if (medio.indexOf('T:') === 0) return { operacion: divOrig && divOrig.value ? 'Compra_Internacional' : 'Compra', ctx: { idTarjeta: medio.slice(2), valor: valor } };
+          return medio ? { operacion: 'Pago', ctx: { idBolsillo: medio, valor: valor } } : null;
+        }
+        if (t === 'Mover') {
+          const o = ($('#f-Origen', raiz) || {}).value, d = ($('#f-Destino', raiz) || {}).value;
+          const bo = porId('Bolsillos', 'ID_Bolsillo', o), bd = porId('Bolsillos', 'ID_Bolsillo', d);
+          // Entre bolsillos de la misma cuenta no hay cobros; a otra cuenta, sí puede haberlos
+          return bo && bd && bo.ID_Cuenta !== bd.ID_Cuenta ? { operacion: 'Transferencia', ctx: { idBolsillo: o, valor: valor } } : null;
+        }
+        return null;
+      });
       // Autocompletado: al elegir un concepto que ya usaste se llenan lo que todavía no hayas tocado.
       const campoConcepto = $('#f-Concepto', raiz);
       const buscarSug = edit ? () => null : conectarSugerencias(raiz, campoConcepto, () => tipoActual(raiz));
@@ -342,16 +370,20 @@ async function abrirRegistrar(o) {
       if (t === 'Mover') {
         if (v.Origen === v.Destino) throw new Error('Elige dos bolsillos distintos.');
         if (divisaDeBolsillo(v.Origen) !== divisaDeBolsillo(v.Destino)) throw new Error('Esos bolsillos están en monedas distintas. Usa “Convertir divisas” en la pantalla Bolsillos.');
-        res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '', afectaSaldos: afectaSaldos }, vistaActual());
+        res = await api('addTransferencia', { origen: v.Origen, destino: v.Destino, valor: v.Valor, fecha: fecha, concepto: v.Concepto, notas: notas, itemPpto: v.ID_Item_Ppto || '', afectaSaldos: afectaSaldos, cargos: leerCargos(raiz) }, vistaActual());
         recordarBolsillo(v.Origen);
       } else if (t === 'Gasto' && v.ID_Bolsillo.indexOf('T:') === 0) {
         // Gasto con tarjeta: con renglón aparta de su bolsillo; sin renglón no aparta nada.
-        res = await api('addGastoTarjeta', { ID_Tarjeta: v.ID_Bolsillo.slice(2), Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
+        const divOrig = ($('#f-Divisa_Original', raiz) || {}).value || '';
+        const valOrig = divOrig ? leerDinero($('#f-Valor_Original', raiz).value) : '';
+        if (divOrig && (valOrig === '' || isNaN(valOrig) || valOrig <= 0)) throw new Error('Escribe cuánto costó en ' + divOrig + ', o elige “No, en la de la tarjeta”.');
+        res = await api('addGastoTarjeta', { ID_Tarjeta: v.ID_Bolsillo.slice(2), Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas,
+          Divisa_Original: divOrig, Valor_Original: valOrig, cargos: leerCargos(raiz) }, vistaActual());
         aplicarEscritura(res); App.tar.data = null; App.deudas.data = null; render();
         aviso(res.aparto ? 'Gasto con tarjeta registrado y dinero apartado' : 'Gasto con tarjeta registrado', { deshacer: () => anularGastoTarjeta(res.idCompra, res.idItem) });
         return;
       } else {
-        res = await api('addMovimiento', { Afecta_Saldos: afectaSaldos, Tipo_Mov: t, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas }, vistaActual());
+        res = await api('addMovimiento', { Afecta_Saldos: afectaSaldos, Tipo_Mov: t, Valor: v.Valor, Concepto: v.Concepto, Fecha: fecha, ID_Bolsillo: v.ID_Bolsillo, ID_Categoria: v.ID_Categoria, ID_Item_Ppto: v.ID_Item_Ppto || '', Notas: notas, cargos: t === 'Gasto' ? leerCargos(raiz) : [] }, vistaActual());
         recordarBolsillo(v.ID_Bolsillo);
       }
       aplicarEscritura(res); render();

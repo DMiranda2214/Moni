@@ -269,8 +269,26 @@ function presupuestoAfectado_(ids, idItem) {
 
 function addMovimiento(m, vista) {
   return responder_(function () {
-    const fila = registrarMovimiento(m);
-    return resultadoEscritura_([fila.ID_Mov], vista);
+    // Con `cargos` (comisiones, impuestos…), cada uno queda como un gasto ligado al movimiento: todo o nada.
+    const ids = transaccion_(alDeshacer => {
+      const fila = registrarMovimiento(m);
+      alDeshacer(() => anularMovimiento(fila.ID_Mov));
+      const cargos = fila.Tipo_Mov === 'Gasto' && m && m.cargos ? registrarCargos_(m.cargos, { idBolsillo: fila.ID_Bolsillo, fecha: fila.Fecha, concepto: fila.Concepto, idRef: fila.ID_Mov, idItem: fila.ID_Item_Ppto, afecta: fila.Afecta_Saldos }) : [];
+      return [fila.ID_Mov].concat(cargos);
+    });
+    return resultadoEscritura_(ids, vista);
+  });
+}
+
+/**
+ * Cargos que corresponden a una operación según las reglas de la persona (para mostrarlos y que los ajuste).
+ * @param {string} operacion Pago | Transferencia | Compra | Compra_Internacional | Conversion | Cuota | Apertura_CDT | Extracto
+ * @param {Object} ctx { idBolsillo, idTarjeta, idCredito, valor }
+ */
+function getCargosSugeridos(operacion, ctx) {
+  return responder_(function () {
+    opcion_(operacion, ENUMS.Cargos_Reglas.Operacion, 'La operación');
+    return cargosSugeridos_(operacion, ctx || {});
   });
 }
 
@@ -309,8 +327,13 @@ function saveTasaAuto(activar) { return responder_(function () { return configur
 function addTransferencia(t, vista) {
   return responder_(function () {
     const x = t || {};
-    const r = registrarTransferencia(x.origen, x.destino, x.valor, x.fecha, x.concepto, x.notas, 'App', { ID_Item_Ppto: x.itemPpto, Afecta_Saldos: x.afectaSaldos });
-    return resultadoEscritura_(r.patas.map(p => p.ID_Mov), vista);
+    const ids = transaccion_(alDeshacer => {
+      const r = registrarTransferencia(x.origen, x.destino, x.valor, x.fecha, x.concepto, x.notas, 'App', { ID_Item_Ppto: x.itemPpto, Afecta_Saldos: x.afectaSaldos });
+      alDeshacer(() => anularMovimiento(r.patas[0].ID_Mov));
+      const cargos = x.cargos ? registrarCargos_(x.cargos, { idBolsillo: x.origen, fecha: r.patas[0].Fecha, concepto: r.patas[0].Concepto, idRef: r.patas[0].ID_Mov, afecta: r.patas[0].Afecta_Saldos }) : [];
+      return r.patas.map(p => p.ID_Mov).concat(cargos);
+    });
+    return resultadoEscritura_(ids, vista);
   });
 }
 
@@ -513,7 +536,13 @@ function resultadoTarjeta_(idTarjeta, mes, ids) {
  */
 function addGastoTarjeta(c, vista) {
   return responder_(function () {
-    const compra = registrarCompraTC(c);
+    const compra = transaccion_(alDeshacer => {
+      const compra = registrarCompraTC(c);
+      alDeshacer(() => anularCompraTC(compra.ID_Compra));
+      // Cargos de la compra (por ejemplo, el recargo por comprar en otra moneda): compras de la misma tarjeta y extracto
+      if (c && c.cargos) registrarCargosTarjeta_(c.cargos, { idTarjeta: compra.ID_Tarjeta, fecha: compra.Fecha, concepto: compra.Concepto, idRef: compra.ID_Compra, mes: compra.Mes_Extracto });
+      return compra;
+    });
     const ids = compra.ID_Mov_Reserva ? filasDelGrupo_(compra.ID_Mov_Reserva).filas.map(f => f.ID_Mov) : [];
     return resultadoEscritura_(ids, Object.assign({}, vista, { idItem: compra.ID_Item_Ppto }),
       { idCompra: compra.ID_Compra, idItem: compra.ID_Item_Ppto || '', aparto: !!compra.ID_Mov_Reserva });
@@ -549,9 +578,19 @@ function restoreCompraTC(idCompra) {
   });
 }
 
-function payExtracto(idTarjeta, mes, fecha, idOrigen, aportes) {
+function payExtracto(idTarjeta, mes, fecha, idOrigen, aportes, cargos) {
   return responder_(function () {
-    const r = pagarExtracto(idTarjeta, mes, fecha, idOrigen, aportes);
+    const r = transaccion_(alDeshacer => {
+      const r = pagarExtracto(idTarjeta, mes, fecha, idOrigen, aportes);
+      alDeshacer(() => anularPagoExtracto(r.idExtracto));
+      // Cuota de manejo y otros cargos del extracto: gastos desde el bolsillo con que se paga, ligados al pago
+      if (cargos && cargos.length) {
+        const origen = idOrigen || (buscarPorId_(getTableData('Tarjetas'), 'ID_Tarjeta', idTarjeta) || {}).ID_Bolsillo_Personal;
+        if (!origen) throw new Error('Elige de qué bolsillo pagas la cuota de manejo y los demás cargos.');
+        r.ids = r.ids.concat(registrarCargos_(cargos, { idBolsillo: origen, fecha: fechaMovimiento_(fecha), concepto: 'Extracto ' + r.mes, idRef: r.idExtracto }));
+      }
+      return r;
+    });
     return Object.assign(resultadoTarjeta_(r.tarjeta, r.mes, r.ids), { idExtracto: r.idExtracto, completado: r.falta, total: r.total });
   });
 }
@@ -601,9 +640,9 @@ function previewPagoCredito(idCredito, valor) {
   return responder_(function () { return previsualizarPagoCredito(idCredito, valor); });
 }
 
-function payCredito(idCredito, valor, fecha, idBolsillo) {
+function payCredito(idCredito, valor, fecha, idBolsillo, cargos) {
   return responder_(function () {
-    const r = registrarPagoCredito(idCredito, valor, fecha, idBolsillo);
+    const r = registrarPagoCredito(idCredito, valor, fecha, idBolsillo, cargos);
     return Object.assign(resultadoCredito_(idCredito, r.ids), { pago: { num: r.num, valorCobrado: r.valorCobrado, excedente: r.excedente, cuotasAhorradas: r.cuotasAhorradas, cancela: r.cancela, idPago: r.idPago } });
   });
 }
@@ -850,7 +889,7 @@ function getSuscripciones() { return responder_(function () { return obtenerSusc
 function paySuscripcion(id, datos) {
   return responder_(function () {
     const r = pagarSuscripcion(id, datos);
-    const ids = r.idMov ? [r.idMov] : [];
+    const ids = (r.idMov ? [r.idMov] : []).concat(r.idsCargos || []);
     return Object.assign(resultadoEscritura_(ids, { idItem: r.idItem }, { suscripciones: obtenerSuscripciones() }), r);
   });
 }

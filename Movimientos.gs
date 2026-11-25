@@ -41,7 +41,10 @@ function categoriaMovimiento_(idCategoria, tipo) {
  * una suscripción, la distribución de un mes…). Antes vivían solo en Notas; desde 1.11 se guardan también en la columna
  * Ref, así la persona puede editar sus notas sin romper el vínculo. Los registros viejos sin Ref siguen leyéndose de Notas.
  */
-const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución )/;
+const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución |Cargo )/;
+
+/** Ref de un cargo (comisión, impuesto…): "Cargo <ID de la operación>" (ver Cargos.gs). */
+const MARCA_CARGO = 'Cargo ';
 
 function esMarcaSistema_(t) { return MARCAS_SISTEMA.test(texto_(t)); }
 
@@ -59,7 +62,7 @@ function conRef_(fila) {
  * conversiones entre divisas, que son traslados) ni el dinero que entra o sale de una inversión (abrir o cobrar el
  * capital de un CDT): el dinero solo cambia de lugar. Sí cambian el saldo del bolsillo.
  */
-const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno'];
+const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso']; // el desembolso de un crédito es una deuda, no un ingreso
 
 function esIngresoOGasto_(m) {
   return m.Tipo_Mov !== 'Transferencia' && SUBTIPOS_INVERSION.indexOf(m.Subtipo) === -1;
@@ -103,7 +106,8 @@ function registrarMovimiento(m) {
     Notas: texto_(m.Notas).slice(0, 500),
     Origen: opcion_(m.Origen || 'App', ENUMS.Movimientos.Origen, 'El origen'),
     Anulado: false,
-    Afecta_Saldos: afecta
+    Afecta_Saldos: afecta,
+    Ref: texto_(m.Ref).slice(0, 200)
   };
   insertRow('Movimientos', conRef_(fila));
   return fila;
@@ -254,9 +258,12 @@ function filasDelGrupo_(idMov) {
 /** Anula un movimiento; si es un traslado, anula las dos patas. Devuelve los IDs afectados. */
 function anularMovimiento(idMov) {
   const g = filasDelGrupo_(idMov);
-  const pendientes = g.filas.filter(f => !esVerdadero(f.Anulado));
+  // Sus cargos (comisiones, impuestos…) se anulan con él
+  const refs = g.filas.map(f => MARCA_CARGO + f.ID_Mov);
+  const cargos = getTableData('Movimientos').filter(m => refs.indexOf(texto_(m.Ref)) !== -1);
+  const pendientes = g.filas.concat(cargos).filter(f => !esVerdadero(f.Anulado));
   updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: true } })));
-  return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
+  return { ids: g.filas.concat(cargos).map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
 /** Deshace una anulación. Exige que los bolsillos involucrados sigan activos. */
@@ -269,9 +276,11 @@ function restaurarMovimiento(idMov) {
       throw new Error('El bolsillo "' + (b ? b.Nombre : f.ID_Bolsillo) + '" está desactivado. Reactívalo para restaurar el movimiento.');
     }
   });
-  const pendientes = g.filas.filter(f => esVerdadero(f.Anulado));
+  const refs = g.filas.map(f => MARCA_CARGO + f.ID_Mov);
+  const cargos = getTableData('Movimientos').filter(m => refs.indexOf(texto_(m.Ref)) !== -1);
+  const pendientes = g.filas.concat(cargos).filter(f => esVerdadero(f.Anulado));
   updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: false } })));
-  return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
+  return { ids: g.filas.concat(cargos).map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
 /**

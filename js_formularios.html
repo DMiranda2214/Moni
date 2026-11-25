@@ -205,6 +205,26 @@ const CAT = {
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
+  Cargos_Reglas: {
+    plural: 'Cargos y comisiones', singular: 'regla de cargo', icono: 'escudo', id: 'ID_Regla',
+    vacio: 'Anota lo que te cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir, el 4x1000, la cuota de manejo, el recargo por comprar en otra moneda o el seguro de cada cuota. Moni te los propone al registrar; siempre puedes cambiarlos o quitarlos.',
+    requiere: () => opcionesMedioCargo().length ? '' : 'Primero agrega un banco, una cuenta, una tarjeta o un crédito.',
+    fila: r => ({ titulo: esc(r.Nombre), sub: esc(nombreMedioCargo(r)) + ' · ' + esc(OPERACION_CARGO[r.Operacion] || r.Operacion), final: '<span class="m-num">' + (r.Modo === 'Porcentaje' ? esc(pctDecimal(r.Valor)) : dinero(r.Valor)) + '</span>' }),
+    // Un solo selector "medio de pago" (Ambito|ID) y el porcentaje en su propio campo
+    alEditar: r => Object.assign({}, r, { Medio: r.Ambito + '|' + r.ID_Ambito, Porcentaje: r.Modo === 'Porcentaje' ? r.Valor : '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['GMF (4x1000)', 'Comisión por transferencia', 'Cuota de manejo', 'Recargo por compra internacional', 'Seguro de vida', 'Seguro deudor', 'Comisión de retiro'] },
+      { k: 'Medio', label: 'Medio de pago', tipo: 'select', requerido: true, opciones: () => opcionesMedioCargo() },
+      { k: 'Tipo_Cargo', label: 'Tipo', tipo: 'select', requerido: true, defecto: 'Comision', opciones: () => [['Comision', 'Comisión'], ['Impuesto', 'Impuesto (por ejemplo el 4x1000)'], ['Cambio_Divisa', 'Cambio de divisa'], ['Cuota_Manejo', 'Cuota de manejo'], ['Seguro', 'Seguro']] },
+      { k: 'Operacion', label: '¿Cuándo se cobra?', tipo: 'select', requerido: true, defecto: 'Salida', opciones: () => Object.keys(OPERACION_CARGO).map(k => [k, OPERACION_CARGO[k]]),
+        ayuda: 'Cuentas: toda salida, traslados a otra cuenta, gastos y pagos, conversiones, cuotas o CDT. Tarjetas: compras, compras en otra moneda o cada extracto. Créditos: cada cuota.' },
+      { k: 'Modo', label: '¿Cómo se calcula?', tipo: 'select', requerido: true, defecto: 'Fijo', opciones: () => [['Fijo', 'Un valor fijo'], ['Porcentaje', 'Un porcentaje del valor']] },
+      { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, visible: v => v.Modo !== 'Porcentaje' },
+      { k: 'Porcentaje', label: 'Porcentaje', tipo: 'porcentaje', requerido: true, visible: v => v.Modo === 'Porcentaje', ayuda: 'Por ejemplo 0,4 para el 4x1000 o 3 para un recargo del 3 %.' },
+      { k: 'Minimo', label: 'Mínimo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' },
+      { k: 'Maximo', label: 'Máximo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' }
+    ]
+  },
   Servicios_Publicos: {
     plural: 'Servicios públicos', singular: 'servicio', icono: 'pulso', id: 'ID_Servicio',
     vacio: 'Guarda el código de pago de cada servicio para tenerlo a la mano.',

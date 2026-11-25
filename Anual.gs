@@ -32,7 +32,7 @@ function obtenerVistaAnual(anio) {
   const divisaDe = mapaDivisas_().bolsillos;
   const nomina = ingresosNomina_();
   movs.forEach(mv => {
-    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha || nomina.idsMov[mv.ID_Mov] || (divisaDe[mv.ID_Bolsillo] || DIVISA_BASE) !== DIVISA_BASE) return;
+    if (mv.Tipo_Mov !== 'Ingreso' || !mv.Fecha || !esIngresoOGasto_(mv) || nomina.idsMov[mv.ID_Mov] || (divisaDe[mv.ID_Bolsillo] || DIVISA_BASE) !== DIVISA_BASE) return;
     const m = porMes[mv.Fecha.slice(0, 7)];
     if (m) m.ingreso += Number(mv.Valor) || 0;
   });

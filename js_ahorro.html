@@ -559,9 +559,19 @@ async function abrirRecibirIngreso(i) {
     cuerpo: '<form novalidate data-form="recibir-ingreso">' + htmlCampo({ k: 'Valor', label: 'Cuánto recibiste', tipo: 'dinero', requerido: true, info: 'Por defecto, el monto esperado. Escribe el valor real si fue otro.' }, i.Valor, {}) +
       '<div class="m-campo"><label class="m-label" for="f-Bolsillo">Llegó a</label><select class="m-input" id="f-Bolsillo">' +
       grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === i.ID_Bolsillo ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+      htmlCargos() +
       '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
       '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
+    alAbrir: raiz => {
+      activarEcoDinero(raiz); $('#f-Valor', raiz).focus();
+      // Comisión del pago o el 4x1000 desde un bolsillo; con tarjeta, lo que cobre la tarjeta por la compra
+      activarCargos(raiz, () => {
+        const m = ($('#f-Medio', raiz) || {}).value || '', n = leerDinero($('#f-Valor', raiz).value), valor = typeof n === 'number' && !isNaN(n) ? n : 0;
+        if (m[0] === 'B') return { operacion: 'Pago', ctx: { idBolsillo: m.slice(2), valor: valor } };
+        if (m[0] === 'T') return { operacion: 'Compra', ctx: { idTarjeta: m.slice(2), valor: valor } };
+        return null;
+      });
+    },
     alGuardar: async raiz => {
       const v = leerDinero($('#f-Valor', raiz).value);
       if (v === '' || isNaN(v)) throw new Error('Escribe cuánto recibiste.');
@@ -699,7 +709,7 @@ async function abrirPagarCobro(s) {
       if (v === '' || isNaN(v)) throw new Error('Escribe el valor.');
       const m = $('#f-Medio', raiz).value;
       if (!m) throw new Error('Elige con qué lo pagas.');
-      const datos = { Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: m[0] === 'B' ? m.slice(2) : '', ID_Tarjeta: m[0] === 'T' ? m.slice(2) : '' };
+      const datos = { Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: m[0] === 'B' ? m.slice(2) : '', ID_Tarjeta: m[0] === 'T' ? m.slice(2) : '', cargos: leerCargos(raiz) };
       const res = await api('paySuscripcion', s.ID_Suscripcion, datos);
       aplicarEscritura(res); App.pag.data = res.suscripciones; render();
       aviso('Pago registrado · próximo cobro ' + res.proximo, {

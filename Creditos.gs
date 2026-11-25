@@ -1,8 +1,11 @@
 /**
  * Creditos.gs — Moni
- * Créditos de AUTOPAGO: la persona se presta a sí misma desde una cuenta de ahorro y se paga en
- * cuotas siguiendo una tabla de amortización francesa. Cada cuota pagada sale de un bolsillo y
- * vuelve a la cuenta de ahorro (reposición).
+ * Dos clases de crédito, ambos con tabla de amortización francesa:
+ *   - AUTOPAGO: la persona se presta a sí misma desde una cuenta de ahorro y se paga en cuotas. Cada cuota pagada sale
+ *     de un bolsillo y vuelve a la cuenta de ahorro (reposición).
+ *   - BANCARIO (desde 1.13): un crédito con un banco o entidad (hipoteca, vehículo, libre inversión…). El desembolso, si
+ *     se anota, llega a un bolsillo; cada cuota sale de un bolsillo como un gasto. La cuota puede llevar cargos fijos
+ *     (seguros, cuota de manejo) que se registran aparte, como cargos de la cuota.
  *
  * El saldo lo manda la tabla de amortización, no un banco. Un pago mayor a la cuota abona el
  * excedente a capital y el plazo se recalcula: la cuota y la tasa se mantienen, el cronograma
@@ -94,11 +97,20 @@ function normalizarCredito_(c) {
     throw new Error('Ya hay un crédito activo llamado "' + nombre + '".');
   }
   if (c.ID_Persona) exigirActivo_(leer_('Personas'), 'ID_Persona', c.ID_Persona, 'La persona');
-  const cuenta = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', c.ID_Cuenta_Ahorro, 'La cuenta de ahorro');
-  if (cuenta.Tipo !== 'Ahorro') throw new Error('El dinero de un crédito sale de una cuenta de tipo Ahorro. "' + cuenta.Nombre + '" no lo es.');
-  exigirCuentaPesos_(cuenta.ID_Cuenta, 'La cuenta de ahorro');
+  const tipo = opcion_(c.Tipo_Credito || 'Autopago', ENUMS.Creditos.Tipo_Credito, 'El tipo de crédito');
+  let cuenta = null;
+  if (tipo === 'Autopago') {
+    cuenta = exigirActivo_(leer_('Cuentas'), 'ID_Cuenta', c.ID_Cuenta_Ahorro, 'La cuenta de ahorro');
+    if (cuenta.Tipo !== 'Ahorro') throw new Error('El dinero de un crédito de autopago sale de una cuenta de tipo Ahorro. "' + cuenta.Nombre + '" no lo es.');
+    exigirCuentaPesos_(cuenta.ID_Cuenta, 'La cuenta de ahorro');
+  }
+  const idBanco = tipo === 'Bancario' ? texto_(c.ID_Banco) : '';
+  if (idBanco) exigirActivo_(leer_('Bancos'), 'ID_Banco', idBanco, 'La entidad');
   exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', c.ID_Bolsillo_Pago, 'El bolsillo desde el que pagas');
   exigirPesos_(c.ID_Bolsillo_Pago, 'El bolsillo desde el que pagas');
+  const idDesembolso = tipo === 'Bancario' ? texto_(c.ID_Bolsillo_Desembolso) : '';
+  if (idDesembolso) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idDesembolso, 'El bolsillo donde llegó el dinero'); exigirPesos_(idDesembolso, 'El bolsillo donde llegó el dinero'); }
+  const cargosCuota = tipo === 'Bancario' ? numero_(c.Cargos_Cuota, 'Los cargos de cada cuota', { min: 0, max: VALOR_MAXIMO, defecto: 0 }) : 0;
 
   const monto = numero_(c.Monto, 'El monto', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const periodicidad = opcion_(c.Periodicidad || 'Mensual', ENUMS.Creditos.Periodicidad, 'La periodicidad');
@@ -121,9 +133,12 @@ function normalizarCredito_(c) {
     : cuotaFrancesa_(monto, tasa, n);
   const pagadas = numero_(c.cuotasPagadas, 'Las cuotas ya pagadas', { entero: true, min: 0, max: n - 1, defecto: 0 });
 
-  return { nombre: nombre, idPersona: c.ID_Persona || '', idCuenta: cuenta.ID_Cuenta, idBolsilloPago: c.ID_Bolsillo_Pago, monto: monto,
+  return { nombre: nombre, idPersona: c.ID_Persona || '', idCuenta: cuenta ? cuenta.ID_Cuenta : '', idBolsilloPago: c.ID_Bolsillo_Pago, monto: monto,
     periodicidad: periodicidad, n: n, inicio: inicio, metodo: metodo, tasa: tasa, cuota: cuota, pagadas: pagadas,
-    desembolsar: c.desembolsar !== false && pagadas === 0, notas: texto_(c.Notas).slice(0, 300) };
+    // Autopago: por defecto el dinero sale del ahorro. Bancario: solo si se dice a qué bolsillo llegó.
+    desembolsar: tipo === 'Bancario' ? !!idDesembolso && c.desembolsar !== false && pagadas === 0 : c.desembolsar !== false && pagadas === 0,
+    notas: texto_(c.Notas).slice(0, 300), tipo: tipo, idBanco: idBanco, idDesembolso: idDesembolso,
+    cargosCuota: cargosCuota, detalleCargos: texto_(c.Detalle_Cargos).slice(0, 120) };
 }
 
 
@@ -132,7 +147,9 @@ function previsualizarCredito(c) {
   const p = normalizarCredito_(c);
   const filas = generarCronograma_(p.monto, p.tasa, p.cuota, 1, p.n, num => fechaCuota_(p.inicio, p.periodicidad, num));
   const interes = redondear2_(filas.reduce((a, f) => a + f.Interes, 0));
-  return { cuota: p.cuota, tasaPeriodica: p.tasa, cuotas: filas.length, interesTotal: interes, totalAPagar: redondear2_(p.monto + interes), primera: filas[0] || null, ultima: filas[filas.length - 1] || null };
+  const cargos = redondear2_(p.cargosCuota * filas.length);
+  return { cuota: p.cuota, cargosCuota: p.cargosCuota, cuotaTotal: redondear2_(p.cuota + p.cargosCuota), tasaPeriodica: p.tasa, cuotas: filas.length,
+    interesTotal: interes, cargosTotal: cargos, totalAPagar: redondear2_(p.monto + interes + cargos), primera: filas[0] || null, ultima: filas[filas.length - 1] || null };
 }
 
 /**
@@ -147,16 +164,22 @@ function registrarCredito(c) {
 
   const ids = [];
   transaccion_(alDeshacer => {
-    if (p.desembolsar) {
+    if (p.desembolsar && p.tipo === 'Autopago') {
       const b = bolsilloDeCuenta_(p.idCuenta);
       const mov = registrarMovimiento({ Tipo_Mov: 'Gasto', Subtipo: 'Para_Gastos', Valor: p.monto, Fecha: p.inicio, Concepto: 'Préstamo: ' + p.nombre, ID_Bolsillo: b.ID_Bolsillo, Notas: 'Crédito ' + idCredito });
+      ids.push(mov.ID_Mov);
+      alDeshacer(() => anularMovimiento(mov.ID_Mov));
+    } else if (p.desembolsar) {
+      // Crédito bancario: el dinero prestado llega a un bolsillo (no es un ingreso: es una deuda)
+      const mov = registrarMovimiento({ Tipo_Mov: 'Ingreso', Subtipo: 'Desembolso', Valor: p.monto, Fecha: p.inicio, Concepto: 'Desembolso: ' + p.nombre, ID_Bolsillo: p.idDesembolso, Notas: 'Crédito ' + idCredito });
       ids.push(mov.ID_Mov);
       alDeshacer(() => anularMovimiento(mov.ID_Mov));
     }
     insertRow('Creditos', {
       ID_Credito: idCredito, Nombre: p.nombre, ID_Persona: p.idPersona, ID_Cuenta_Ahorro: p.idCuenta, ID_Bolsillo_Pago: p.idBolsilloPago,
       Fecha_Inicio: p.inicio, Monto: p.monto, Tasa_Periodica: p.tasa, Periodicidad: p.periodicidad, Num_Periodos: filas.length,
-      Cuota_Fija: p.cuota, Metodo_Tasa: p.metodo, Estado: 'Activo', Notas: p.notas
+      Cuota_Fija: p.cuota, Metodo_Tasa: p.metodo, Estado: 'Activo', Notas: p.notas,
+      Tipo_Credito: p.tipo, ID_Banco: p.idBanco, Cargos_Cuota: p.cargosCuota, Detalle_Cargos: p.detalleCargos
     });
     // Si el cronograma no se pudo guardar, el crédito no queda a medias: se anula
     alDeshacer(() => { const c = buscarPorId_(leer_('Creditos'), 'ID_Credito', idCredito); if (c) updateRow('Creditos', c, { Estado: 'Anulado' }); });
@@ -197,6 +220,15 @@ function planPagoCredito_(credito, vigente, valor) {
   };
 }
 
+/** ¿Es un crédito con un banco o entidad? (los de antes de 1.13 son de autopago) */
+function esBancario_(c) { return texto_(c.Tipo_Credito) === 'Bancario'; }
+
+/** Cargos fijos de cada cuota de un crédito bancario (seguros…), como un cargo sugerido. */
+function cargosFijosCredito_(c) {
+  const v = Number(c && c.Cargos_Cuota) || 0;
+  return v > 0 ? [{ idRegla: '', nombre: texto_(c.Detalle_Cargos) || 'Seguros y cargos de la cuota', tipo: 'Seguro', valor: redondear2_(v) }] : [];
+}
+
 function creditoActivo_(idCredito) {
   const c = buscarPorId_(leer_('Creditos'), 'ID_Credito', idCredito);
   if (!c) throw new Error('El crédito no existe.');
@@ -218,24 +250,43 @@ function previsualizarPagoCredito(idCredito, valor) {
  * Paga la siguiente cuota (y, si el valor es mayor, abona el excedente a capital).
  * Mueve dinero del bolsillo de pago a la cuenta de ahorro de origen (reposición).
  */
-function registrarPagoCredito(idCredito, valor, fecha, idBolsilloOrigen) {
+function registrarPagoCredito(idCredito, valor, fecha, idBolsilloOrigen, cargos) {
   const credito = creditoActivo_(idCredito);
   const vigente = cronogramaVigente_(idCredito);
   const plan = planPagoCredito_(credito, vigente, valor);
   const f = fechaMovimiento_(fecha);
   const origen = idBolsilloOrigen || credito.ID_Bolsillo_Pago;
-  const destino = bolsilloDeCuenta_(credito.ID_Cuenta_Ahorro);
-  if (origen === destino.ID_Bolsillo) throw new Error('El bolsillo desde el que pagas no puede ser el mismo de la cuenta de ahorro.');
+  const bancario = esBancario_(credito);
+  const destino = bancario ? null : bolsilloDeCuenta_(credito.ID_Cuenta_Ahorro);
+  if (destino && origen === destino.ID_Bolsillo) throw new Error('El bolsillo desde el que pagas no puede ser el mismo de la cuenta de ahorro.');
+  if (bancario) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', origen, 'El bolsillo desde el que pagas'); exigirPesos_(origen, 'El bolsillo desde el que pagas'); }
+  // Los cargos de la cuota (seguros…): los que manda la pantalla o, si no manda, los fijos del crédito y sus reglas
+  const listaCargos = cargos === undefined ? cargosSugeridos_('Cuota', { idCredito: idCredito, idBolsillo: origen, valor: plan.valorCobrado }) : cargos;
 
   const renglon = leer_('Presupuesto_Mes').find(i => i.Mes === f.slice(0, 7) && i.ID_Credito === idCredito);
   const k = plan.cuota;
   const idPago = nuevoId_('pgo');
 
   // Todo o nada: si algo falla, el dinero vuelve y el cronograma queda como estaba.
+  let totalCargos = 0;
   const t = transaccion_(alDeshacer => {
-    const t = registrarTransferencia(origen, destino.ID_Bolsillo, plan.valorCobrado, f, 'Cuota ' + k.Num + ' · ' + credito.Nombre,
-      'Pago ' + idPago, 'App', { Subtipo: 'Pago_Cuota', ID_Item_Ppto: renglon ? renglon.ID_Item : '' });
+    let t;
+    if (bancario) {
+      // La cuota sale del bolsillo como un gasto (con un grupo propio para encontrarla al anular el pago)
+      const idGrupo = nuevoId_('grp');
+      const cat = buscarPorId_(leer_('Categorias'), 'ID_Categoria', 'cat-cuota');
+      const mov = registrarMovimiento({ Tipo_Mov: 'Gasto', Subtipo: 'Pago_Cuota', Valor: plan.valorCobrado, Fecha: f, Concepto: 'Cuota ' + k.Num + ' · ' + credito.Nombre,
+        ID_Bolsillo: origen, ID_Categoria: cat && estaActivo(cat) ? cat.ID_Categoria : '', ID_Grupo: idGrupo, ID_Item_Ppto: renglon ? renglon.ID_Item : '', Notas: 'Pago ' + idPago });
+      t = { idGrupo: idGrupo, patas: [mov] };
+    } else {
+      t = registrarTransferencia(origen, destino.ID_Bolsillo, plan.valorCobrado, f, 'Cuota ' + k.Num + ' · ' + credito.Nombre,
+        'Pago ' + idPago, 'App', { Subtipo: 'Pago_Cuota', ID_Item_Ppto: renglon ? renglon.ID_Item : '' });
+    }
     alDeshacer(() => anularMovimiento(t.patas[0].ID_Mov));
+    // Seguros y otros cargos de la cuota: gastos aparte, ligados al pago (se anulan con él)
+    const idsCargos = registrarCargos_(listaCargos, { idBolsillo: origen, fecha: f, concepto: 'Cuota ' + k.Num + ' · ' + credito.Nombre, idRef: t.patas[0].ID_Mov, idItem: renglon ? renglon.ID_Item : '' });
+    totalCargos = redondear2_(normalizarCargos_(listaCargos).reduce((a, x) => a + x.valor, 0));
+    t.patas = t.patas.concat(idsCargos.map(id => ({ ID_Mov: id })));
     updateRow('Creditos_Cronograma', k, { Estado: 'Pagada' });
     alDeshacer(() => updateRow('Creditos_Cronograma', k, { Estado: 'Pendiente' }));
     if (plan.excedente > 0) {
@@ -254,7 +305,8 @@ function registrarPagoCredito(idCredito, valor, fecha, idBolsilloOrigen) {
     alDeshacer(() => updateRow('Creditos', credito, { Num_Periodos: credito.Num_Periodos, Estado: credito.Estado }));
     insertRow('Creditos_Pagos', {
       ID_Pago: idPago, ID_Credito: idCredito, Fecha: f, Num_Cuota: Number(k.Num), Valor_Pagado: plan.valorCobrado, Interes: Number(k.Interes),
-      Capital_Cuota: Number(k.Capital), Abono_Extra: plan.excedente, Saldo_Despues: plan.saldoDespues, Version: Number(k.Version), ID_Grupo: t.idGrupo, Anulado: false
+      Capital_Cuota: Number(k.Capital), Abono_Extra: plan.excedente, Saldo_Despues: plan.saldoDespues, Version: Number(k.Version), ID_Grupo: t.idGrupo, Anulado: false,
+      Cargos: totalCargos
     });
     return t;
   });
@@ -478,6 +530,7 @@ function resumenCredito_(c, vigente, personas, cuentas) {
     saldo: c.Estado === 'Activo' ? saldo : 0, cuotasPagadas: pagadas.length, cuotasTotal: vigente.length,
     proxima: proxima ? { Num: Number(proxima.Num), Fecha: proxima.Fecha_Prevista, Cuota: Number(proxima.Cuota) } : null,
     avance: monto > 0 ? Math.min(1, Math.round((monto - (c.Estado === 'Activo' ? saldo : 0)) / monto * 1000) / 1000) : 0,
+    Tipo_Credito: esBancario_(c) ? 'Bancario' : 'Autopago', ID_Banco: c.ID_Banco || '', Cargos_Cuota: Number(c.Cargos_Cuota) || 0, Detalle_Cargos: c.Detalle_Cargos || '',
     EA: Math.round(eaDesdeTasa_(Number(c.Tasa_Periodica) || 0, c.Periodicidad, c.Metodo_Tasa) * 1e6) / 1e6,
     tasaPorRevisar: tasaPareceRedondeada_(c)
   };
@@ -517,5 +570,6 @@ function obtenerCredito(idCredito) {
 
 /** Lo que se debe a las cuentas de ahorro por créditos activos (suma de saldos). */
 function deudaConAhorro_() {
-  return redondear2_(listarCreditos().filter(c => c.Estado === 'Activo').reduce((a, c) => a + c.saldo, 0));
+  // Solo los de autopago: lo que debes a un banco no es deuda con tu ahorro
+  return redondear2_(listarCreditos().filter(c => c.Estado === 'Activo' && c.Tipo_Credito !== 'Bancario').reduce((a, c) => a + c.saldo, 0));
 }

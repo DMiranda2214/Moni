@@ -95,6 +95,7 @@ function pagarSuscripcion(id, d) {
     resultado.idCompra = compra.ID_Compra;
     resultado.idMovReserva = compra.ID_Mov_Reserva || '';
     alDeshacer(() => anularCompraTC(compra.ID_Compra));
+    if (x.cargos) registrarCargosTarjeta_(x.cargos, { idTarjeta: idTarjeta, fecha: fecha, concepto: s.Nombre, idRef: compra.ID_Compra, mes: compra.Mes_Extracto });
   } else {
     const mov = registrarMovimiento({
       Tipo_Mov: 'Gasto', Valor: valor, Fecha: fecha, ID_Bolsillo: idBolsillo, ID_Categoria: s.ID_Categoria,
@@ -102,6 +103,8 @@ function pagarSuscripcion(id, d) {
     });
     resultado.idMov = mov.ID_Mov;
     alDeshacer(() => anularMovimiento(mov.ID_Mov));
+    // Comisión del pago (por ejemplo, PSE) o el 4x1000: gastos aparte, ligados al pago
+    if (x.cargos) resultado.idsCargos = registrarCargos_(x.cargos, { idBolsillo: idBolsillo, fecha: fecha, concepto: s.Nombre, idRef: mov.ID_Mov, idItem: item ? item.ID_Item : '' });
   }
 
   if (marcarPagado) { marcarRenglonPagado(item.ID_Item, true); alDeshacer(() => marcarRenglonPagado(item.ID_Item, false)); }

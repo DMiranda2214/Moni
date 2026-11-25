@@ -59,12 +59,19 @@ function htmlDeudas(d) {
 
   const activos_ = d.creditos.filter(c => c.Estado === 'Activo');
   const pagados = d.creditos.filter(c => c.Estado === 'Pagado');
-  if (activos_.length) {
-    h += seccion('Créditos de autopago', activos_.map(filaCredito).join(''),
+  // Créditos con un banco o entidad, y los de autopago (te prestas de tu ahorro)
+  const bancarios = activos_.filter(c => c.Tipo_Credito === 'Bancario'), autopago = activos_.filter(c => c.Tipo_Credito !== 'Bancario');
+  if (bancarios.length) {
+    const debes = bancarios.reduce((a, c) => a + (c.saldo || 0), 0);
+    h += seccion('Créditos', bancarios.map(filaCredito).join(''), 'Debes <strong class="m-num">' + dinero(debes) + '</strong> de capital en total.');
+  }
+  if (autopago.length) {
+    h += seccion('Créditos de autopago', autopago.map(filaCredito).join(''),
       'Debes a tu ahorro <strong class="m-num">' + dinero(d.deudaAhorro) + '</strong> en total. Cada cuota que pagas vuelve a tu ahorro.');
-  } else if (!pagados.length) {
-    h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Créditos de autopago</h2><div class="m-group">' +
-      vacio('capas', 'Sin créditos', 'Un crédito de autopago es dinero que te prestas de tu ahorro y te devuelves en cuotas, con su tabla de amortización.',
+  }
+  if (!activos_.length && !pagados.length) {
+    h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Créditos</h2><div class="m-group">' +
+      vacio('capas', 'Sin créditos', 'Anota tus créditos con un banco o entidad (hipoteca, vehículo, libre inversión…) o los de autopago (te prestas de tu ahorro y te devuelves en cuotas). Moni lleva la tabla de amortización, los seguros de cada cuota y lo que falta.',
         '<button class="m-btn m-btn-secondary" data-acc="nuevo-credito">Crear un crédito</button>') + '</div></section>';
   }
   if (pagados.length) h += seccion('Pagados', pagados.map(filaCredito).join(''));
@@ -77,7 +84,7 @@ function filaCredito(c) {
     : c.cuotasTotal + ' cuotas');
   return fila({
     icono: 'capas', titulo: esc(c.Nombre), sub: sub,
-    final: c.Estado === 'Activo' ? '<strong class="m-num">' + dinero(c.saldo) + '</strong><span class="m-row-sub" style="display:block">saldo</span>' : '<span class="m-insignia">Pagado</span>',
+    final: c.Estado === 'Activo' ? '<strong class="m-num">' + dinero(c.saldo) + '</strong><span class="m-row-sub" style="display:block">' + (c.Tipo_Credito === 'Bancario' ? 'debes' : 'saldo') + '</span>' : '<span class="m-insignia">Pagado</span>',
     chevron: true, attrs: 'data-acc="ir" data-ruta="credito/' + esc(c.ID_Credito) + '"'
   });
 }
@@ -337,6 +344,7 @@ async function abrirPagoExtracto() {
     '<div class="m-campo" id="px-origen"><div class="m-label-fila"><label class="m-label" for="f-Origen">¿De qué bolsillo sale lo que falta?</label>' + htmlInfo('Lo que falta en la reserva (compras que no apartaron dinero) sale del bolsillo que elijas, y así queda registrado de dónde salió.') + '</div>' +
       '<select class="m-input" id="f-Origen">' + (preferido ? '' : '<option value="" disabled selected>Elegir…</option>') +
       grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    htmlCargos() +
     '<p class="m-hoja-mensaje">Lo tuyo se paga desde la reserva y las compras quedan marcadas como pagadas.</p>' +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha del pago</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
     '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
@@ -350,8 +358,12 @@ async function abrirPagoExtracto() {
         const mia = Math.max(0, saldo - terceros), falta = Math.max(0, Math.round((mia - enReserva) * 100) / 100);
         $('#px-terceros', raiz).textContent = dinero(terceros);
         $('#px-falta', raiz).textContent = dinero(falta);
-        $('#px-origen', raiz).hidden = !(falta > 0);
+        // El bolsillo también hace falta si hay cargos (cuota de manejo…): salen de ahí
+        $('#px-origen', raiz).hidden = !(falta > 0 || leerCargos(raiz).length);
       };
+      activarCargos(raiz, () => ({ operacion: 'Extracto', ctx: { idTarjeta: td.tarjeta.ID_Tarjeta, idBolsillo: ($('#f-Origen', raiz) || {}).value || preferido, valor: saldo } }));
+      raiz.addEventListener('input', calcular); raiz.addEventListener('click', () => setTimeout(calcular, 0));
+      new MutationObserver(calcular).observe($('[data-cargos-lista]', raiz), { childList: true });
       $('#px-mas', raiz).addEventListener('click', () => { $('#px-aportes', raiz).insertAdjacentHTML('beforeend', filaAporte()); const n = $$('.m-aporte [data-ap="nombre"]', raiz); n[n.length - 1].focus(); });
       raiz.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.ap) calcular(); });
       raiz.addEventListener('click', ev => { const q = ev.target.closest('[data-ap="quitar"]'); if (q) { q.closest('.m-aporte').remove(); calcular(); } });
@@ -363,8 +375,9 @@ async function abrirPagoExtracto() {
       const terceros = lista.reduce((a, x) => a + x.Valor, 0);
       const falta = Math.max(0, saldo - terceros - enReserva);
       const origen = $('#f-Origen', raiz);
-      if (falta > 0 && (!origen || !origen.value)) throw new Error('Elige de qué bolsillo sale lo que falta.');
-      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, falta > 0 && origen ? origen.value : '', lista);
+      const cargos = leerCargos(raiz);
+      if ((falta > 0 || cargos.length) && (!origen || !origen.value)) throw new Error(falta > 0 ? 'Elige de qué bolsillo sale lo que falta.' : 'Elige de qué bolsillo salen los cargos.');
+      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, (falta > 0 || cargos.length) && origen ? origen.value : '', lista, cargos);
       aplicarEscritura(res); aplicarTarjeta(res); render();
       aviso('Extracto pagado', { deshacer: () => anularPagoExtractoYAvisar(res.idExtracto) });
     }
@@ -413,11 +426,17 @@ function htmlCredito(d) {
       '<button type="button" class="m-btn-texto m-btn-suave" data-acc="tasa-ok">Está bien</button></span></div>';
   }
 
+  const bancario = c.Tipo_Credito === 'Bancario';
+  const entidad = bancario && c.ID_Banco ? porId('Bancos', 'ID_Banco', c.ID_Banco) : null;
   h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
-    '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>' +
+    (bancario
+      ? (entidad ? '<div><dt>Entidad</dt><dd>' + esc(entidad.Nombre) + '</dd></div>' : '') + '<div><dt>Pagas desde</dt><dd>' + esc(d.BolsilloPago) + '</dd></div>'
+      : '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>') +
     '<div><dt>Monto del crédito</dt><dd class="m-num">' + dinero(c.Monto) + '</dd></div><div><dt>Cuota fija</dt><dd class="m-num">' + dinero(c.Cuota_Fija) + '</dd></div>' +
+    (bancario && c.Cargos_Cuota ? '<div><dt>' + esc(c.Detalle_Cargos || 'Seguros y cargos') + ' por cuota</dt><dd class="m-num">' + dinero(c.Cargos_Cuota) + '</dd></div>' +
+      '<div><dt>Pagas cada cuota</dt><dd class="m-num"><strong>' + dinero(c.Cuota_Fija + c.Cargos_Cuota) + '</strong></dd></div>' : '') +
     '<div><dt>Intereses pagados</dt><dd class="m-num">' + dinero(d.totales.interesPagado) + '</dd></div><div><dt>Intereses por pagar</dt><dd class="m-num">' + dinero(d.totales.interesPendiente) + '</dd></div></dl></div>',
-    'Los intereses también vuelven a tu ahorro: te los pagas a ti.');
+    bancario ? 'La cuota sale de tu bolsillo como un gasto; los seguros y cargos se anotan aparte, en “Comisiones e impuestos”.' : 'Los intereses también vuelven a tu ahorro: te los pagas a ti.');
 
   h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Tabla de amortización</h2><div class="m-group">' + d.cronograma.map(f => {
     const proxima = c.proxima && f.Num === c.proxima.Num && activo;
@@ -512,6 +531,7 @@ async function abrirPagoCredito() {
   let temporizador = null, previa = null;
   const cuerpo = '<form novalidate data-form="pagocredito">' + htmlCampo(campos[0], c.proxima.Cuota, {}) +
     '<div id="pago-prev" aria-live="polite" class="m-hoja-mensaje"></div>' +
+    htmlCargos() +
     '<div class="m-campo"><label class="m-label" for="f-Origen">Pagas desde</label><select class="m-input" id="f-Origen">' +
     grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === c.ID_Bolsillo_Pago ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
     '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
@@ -535,11 +555,16 @@ async function abrirPagoCredito() {
       };
       entrada.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(calcular, 350); });
       calcular(); entrada.focus();
+      // Seguros y cargos de la cuota (los fijos del crédito y las reglas del medio de pago); se pueden cambiar
+      if (c.Tipo_Credito === 'Bancario' || activos('Cargos_Reglas').length) activarCargos(raiz, () => {
+        const v = leerDinero(entrada.value);
+        return { operacion: 'Cuota', ctx: { idCredito: c.ID_Credito, idBolsillo: $('#f-Origen', raiz).value, valor: typeof v === 'number' && !isNaN(v) ? v : c.proxima.Cuota } };
+      });
     },
     alGuardar: async raiz => {
       const v = leerDinero($('#f-Valor', raiz).value);
       if (v === '' || isNaN(v)) throw new Error('Escribe el valor del pago.');
-      const res = await api('payCredito', c.ID_Credito, v, $('#f-Fecha', raiz).value, $('#f-Origen', raiz).value);
+      const res = await api('payCredito', c.ID_Credito, v, $('#f-Fecha', raiz).value, $('#f-Origen', raiz).value, leerCargos(raiz));
       aplicarEscritura(res); aplicarCredito(res); render();
       aviso(res.pago.cancela ? 'Crédito pagado por completo' : (res.pago.excedente ? (res.pago.cuotasAhorradas > 0 ? 'Pago registrado: el plazo bajó ' + res.pago.cuotasAhorradas + (res.pago.cuotasAhorradas === 1 ? ' cuota' : ' cuotas') : 'Pago registrado con abono a capital') : 'Cuota pagada'), { deshacer: () => anularPagoCreditoYAvisar(res.pago.idPago) });
     }
@@ -550,7 +575,11 @@ const anularPagoCreditoYAvisar = idPago => escribirYAvisar('voidPagoCredito', [i
 
 async function abrirNuevoCredito() {
   const ahorros = activos('Cuentas').filter(c => c.Tipo === 'Ahorro');
-  if (!ahorros.length) { aviso('Primero crea una cuenta de tipo Ahorro: de ahí sale el dinero del crédito.', true); return; }
+  // Dos clases: con un banco o entidad (hipoteca, vehículo, libre inversión…) o de autopago (te prestas desde tu ahorro)
+  const tipoInicial = 'Bancario';
+  const solo = (tipo, html) => '<div data-tipo-cred="' + tipo + '"' + (tipo === tipoInicial ? '' : ' hidden') + '>' + html + '</div>';
+  const bolsillosSel = (id, vacio) => '<select class="m-input" id="' + id + '">' + (vacio ? '<option value="">' + esc(vacio) + '</option>' : '') +
+    opcionesDestino(false).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select>';
   const personas = [['', 'Nadie en particular']].concat(activos('Personas').map(p => [p.ID_Persona, p.Nombre]));
   const campos = [
     { k: 'Nombre', label: 'Nombre del crédito', tipo: 'texto', requerido: true, maxlength: 80 },
@@ -558,22 +587,40 @@ async function abrirNuevoCredito() {
     { k: 'ID_Persona', label: '¿Para quién es?', tipo: 'select', opciones: () => personas },
     { k: 'Num_Periodos', label: 'Número de cuotas', tipo: 'entero', requerido: true, min: 1, max: 360 }
   ];
-  const cuerpo = '<form novalidate data-form="credito">' + campos.map(c => htmlCampo(c, c.k === 'Num_Periodos' ? 12 : '', {})).join('') +
+  const cuerpo = '<form novalidate data-form="credito">' +
+    '<div class="m-campo"><div class="m-label" id="lbl-tipocred">¿Qué clase de crédito es?</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-tipocred">' +
+      '<label><input type="radio" name="tipoCred" value="Bancario" checked><span>Con un banco o entidad</span></label>' +
+      '<label><input type="radio" name="tipoCred" value="Autopago"' + (ahorros.length ? '' : ' disabled') + '><span>Me presto de mi ahorro</span></label></div>' +
+      (ahorros.length ? '' : '<p class="m-ayuda">Para un crédito de autopago necesitas una cuenta de tipo Ahorro.</p>') + '</div>' +
+    campos.map(c => htmlCampo(c, c.k === 'Num_Periodos' ? 12 : '', {})).join('') +
+    solo('Bancario', '<div class="m-campo"><label class="m-label" for="f-Entidad">Entidad (opcional)</label><select class="m-input" id="f-Entidad"><option value="">Sin elegir</option>' +
+      activos('Bancos').map(b => '<option value="' + esc(b.ID_Banco) + '">' + esc(b.Nombre) + '</option>').join('') + '</select></div>') +
     '<div class="m-campo"><div class="m-label" id="lbl-per">Cada cuánto se paga</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-per"><label><input type="radio" name="per" value="Mensual" checked><span>Mensual</span></label><label><input type="radio" name="per" value="Quincenal"><span>Quincenal</span></label></div></div>' +
     '<div class="m-campo"><label class="m-label" for="f-Tasa">Tasa de interés (%)</label><input class="m-input m-num" id="f-Tasa" type="text" inputmode="decimal" value="0"><div class="m-segmentado" style="margin-top:var(--m-space-2)" role="radiogroup" aria-label="Tipo de tasa"><label><input type="radio" name="tipoTasa" value="EA" checked><span>Efectiva anual</span></label><label><input type="radio" name="tipoTasa" value="Periodo"><span>Por periodo</span></label></div><p class="m-ayuda">La tasa efectiva anual (EA) es la que suelen informar los bancos. “Por periodo” es la de cada cuota.</p></div>' +
     '<div class="m-campo"><label class="m-label" for="f-Inicio">Fecha de inicio</label><input class="m-input" id="f-Inicio" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
-    '<div class="m-campo"><label class="m-label" for="f-Cuenta">El dinero sale de la cuenta de ahorro</label><select class="m-input" id="f-Cuenta">' + ahorros.map(a => '<option value="' + esc(a.ID_Cuenta) + '">' + esc(a.Nombre) + '</option>').join('') + '</select></div>' +
+    solo('Autopago', '<div class="m-campo"><label class="m-label" for="f-Cuenta">El dinero sale de la cuenta de ahorro</label><select class="m-input" id="f-Cuenta">' + ahorros.map(a => '<option value="' + esc(a.ID_Cuenta) + '">' + esc(a.Nombre) + '</option>').join('') + '</select></div>') +
     '<div class="m-campo"><label class="m-label" for="f-BolsilloPago">Pagas las cuotas desde</label><select class="m-input" id="f-BolsilloPago">' + opcionesDestino(false).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
     htmlCampo({ k: 'Pagadas', label: 'Cuotas que ya pagaste', tipo: 'entero', min: 0, max: 359, ayuda: 'Déjalo en 0 si el crédito es nuevo. Si ya venía en marcha, escribe cuántas llevas.' }, 0, {}) +
-    '<div class="m-campo" id="caja-desembolso"><div class="m-interruptor-fila"><label for="f-Desembolso">Registrar la salida del dinero del ahorro</label><span class="m-interruptor"><input type="checkbox" role="switch" id="f-Desembolso" checked><i></i></span></div><p class="m-ayuda">Descuenta el monto de tu cuenta de ahorro, porque es el dinero que te prestas.</p></div>' +
+    solo('Autopago', '<div class="m-campo" id="caja-desembolso"><div class="m-interruptor-fila"><label for="f-Desembolso">Registrar la salida del dinero del ahorro</label><span class="m-interruptor"><input type="checkbox" role="switch" id="f-Desembolso" checked><i></i></span></div><p class="m-ayuda">Descuenta el monto de tu cuenta de ahorro, porque es el dinero que te prestas.</p></div>') +
+    solo('Bancario',
+      '<div class="m-campo" id="caja-desembolso-b"><label class="m-label" for="f-Desembolso-b">¿A qué bolsillo llegó el dinero?</label>' + bolsillosSel('f-Desembolso-b', 'No registrarlo (ya lo tenía en cuenta o ya lo gasté)') +
+      '<p class="m-ayuda">Si eliges un bolsillo, el desembolso entra ahí. No cuenta como ingreso: es una deuda.</p></div>' +
+      htmlCampo({ k: 'Cargos_Cuota', label: 'Seguros y otros cargos en cada cuota (opcional)', tipo: 'dinero', ayuda: 'Lo que el banco suma a la cuota además del capital y el interés: seguro de vida, seguro deudor, cuota de manejo…' }, '', {}) +
+      htmlCampo({ k: 'Detalle_Cargos', label: '¿Qué son esos cargos? (opcional)', tipo: 'texto', maxlength: 120 }, '', {})) +
     '<div id="credito-prev" class="m-hoja-mensaje" aria-live="polite"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
 
   const leer = raiz => {
     const v = leerFormulario(raiz, campos);
     const tasa = Number(($('#f-Tasa', raiz).value || '0').replace(',', '.')) / 100;
-    const envio = { Nombre: v.Nombre, Monto: v.Monto, ID_Persona: v.ID_Persona, Num_Periodos: v.Num_Periodos, Periodicidad: $('input[name="per"]:checked', raiz).value,
-      Fecha_Inicio: $('#f-Inicio', raiz).value, ID_Cuenta_Ahorro: $('#f-Cuenta', raiz).value, ID_Bolsillo_Pago: $('#f-BolsilloPago', raiz).value,
-      cuotasPagadas: Number($('#f-Pagadas', raiz).value) || 0, desembolsar: $('#f-Desembolso', raiz).checked };
+    const tipo = $('input[name="tipoCred"]:checked', raiz).value;
+    const envio = { Tipo_Credito: tipo, Nombre: v.Nombre, Monto: v.Monto, ID_Persona: v.ID_Persona, Num_Periodos: v.Num_Periodos, Periodicidad: $('input[name="per"]:checked', raiz).value,
+      Fecha_Inicio: $('#f-Inicio', raiz).value, ID_Bolsillo_Pago: $('#f-BolsilloPago', raiz).value, cuotasPagadas: Number($('#f-Pagadas', raiz).value) || 0 };
+    if (tipo === 'Autopago') Object.assign(envio, { ID_Cuenta_Ahorro: ($('#f-Cuenta', raiz) || {}).value, desembolsar: $('#f-Desembolso', raiz).checked });
+    else {
+      const cargos = leerDinero(($('#f-Cargos_Cuota', raiz) || {}).value || '');
+      Object.assign(envio, { ID_Banco: $('#f-Entidad', raiz).value, ID_Bolsillo_Desembolso: $('#f-Desembolso-b', raiz).value,
+        Cargos_Cuota: typeof cargos === 'number' && !isNaN(cargos) ? cargos : 0, Detalle_Cargos: ($('#f-Detalle_Cargos', raiz) || {}).value || '' });
+    }
     if ($('input[name="tipoTasa"]:checked', raiz).value === 'EA') envio.EA = tasa; else envio.Tasa_Periodica = tasa;
     return envio;
   };
@@ -585,15 +632,20 @@ async function abrirNuevoCredito() {
       activarEcoDinero(raiz);
       const previsualizar = async () => {
         const e = leer(raiz), caja = $('#credito-prev', raiz);
-        $('#caja-desembolso', raiz).hidden = e.cuotasPagadas > 0;
+        $$('[data-tipo-cred]', raiz).forEach(el => { el.hidden = el.dataset.tipoCred !== e.Tipo_Credito; });
+        const cd = $('#caja-desembolso', raiz); if (cd) cd.hidden = e.cuotasPagadas > 0;
+        const cb = $('#caja-desembolso-b', raiz); if (cb) cb.hidden = e.cuotasPagadas > 0;
         if (!e.Nombre || !e.Monto || !e.Num_Periodos) { caja.textContent = ''; return; }
         try {
           const p = await api('previewCredito', e);
-          caja.innerHTML = 'Pagarías <strong>' + dinero(p.cuota) + '</strong> por cada una de ' + p.cuotas + ' cuotas · intereses ' + dinero(p.interesTotal) + ' · en total ' + dinero(p.totalAPagar) + '.';
+          caja.innerHTML = 'Pagarías <strong>' + dinero(p.cuotaTotal || p.cuota) + '</strong> por cada una de ' + p.cuotas + ' cuotas' +
+            (p.cargosCuota ? ' (' + dinero(p.cuota) + ' de capital e interés + ' + dinero(p.cargosCuota) + ' de seguros y cargos)' : '') +
+            ' · intereses ' + dinero(p.interesTotal) + (p.cargosTotal ? ' · cargos ' + dinero(p.cargosTotal) : '') + ' · en total ' + dinero(p.totalAPagar) + '.';
         } catch (x) { caja.textContent = x.message; }
       };
       const programar = () => { clearTimeout(temporizador); temporizador = setTimeout(previsualizar, 400); };
       raiz.addEventListener('input', programar); raiz.addEventListener('change', programar);
+      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipoCred') previsualizar(); });
       $('#f-Nombre', raiz).focus();
     },
     alGuardar: async raiz => {

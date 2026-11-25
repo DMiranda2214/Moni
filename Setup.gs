@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '12';
+const ESQUEMA_VERSION = '13';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -63,8 +63,8 @@ const SCHEMAS = {
     ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos', 'Ref'],
     [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110, 200]),
   Compras_TC: tabla_(
-    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado', 'Ref'],
-    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80, 200]),
+    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado', 'Ref', 'Divisa_Original', 'Valor_Original', 'Tasa'],
+    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80, 200, 100, 120, 100]),
   Extractos: tabla_(
     ['ID_Extracto', 'ID_Tarjeta', 'Mes', 'Total', 'Estado', 'Fecha_Pago', 'ID_Grupo_Pago', 'URL_PDF', 'Notas', 'Anulado'],
     [170, 170, 90, 120, 90, 110, 170, 260, 200, 80]),
@@ -92,19 +92,23 @@ const SCHEMAS = {
 
   // ---- Créditos (autopago) ----
   Creditos: tabla_(
-    ['ID_Credito', 'Nombre', 'ID_Persona', 'ID_Cuenta_Ahorro', 'ID_Bolsillo_Pago', 'Fecha_Inicio', 'Monto', 'Tasa_Periodica', 'Periodicidad', 'Num_Periodos', 'Cuota_Fija', 'Metodo_Tasa', 'Estado', 'Notas'],
-    [170, 200, 170, 170, 170, 110, 120, 110, 100, 100, 120, 100, 90, 200]),
+    ['ID_Credito', 'Nombre', 'ID_Persona', 'ID_Cuenta_Ahorro', 'ID_Bolsillo_Pago', 'Fecha_Inicio', 'Monto', 'Tasa_Periodica', 'Periodicidad', 'Num_Periodos', 'Cuota_Fija', 'Metodo_Tasa', 'Estado', 'Notas', 'Tipo_Credito', 'ID_Banco', 'Cargos_Cuota', 'Detalle_Cargos'],
+    [170, 200, 170, 170, 170, 110, 120, 110, 100, 100, 120, 100, 90, 200, 110, 170, 120, 220]),
   Creditos_Cronograma: tabla_(
     ['ID_Cuota', 'ID_Credito', 'Version', 'Num', 'Fecha_Prevista', 'Saldo_Inicial', 'Cuota', 'Interes', 'Capital', 'Saldo_Final', 'Estado'],
     [170, 170, 70, 60, 110, 120, 110, 110, 110, 120, 100]),
   Creditos_Pagos: tabla_(
-    ['ID_Pago', 'ID_Credito', 'Fecha', 'Num_Cuota', 'Valor_Pagado', 'Interes', 'Capital_Cuota', 'Abono_Extra', 'Saldo_Despues', 'Version', 'ID_Grupo', 'Anulado'],
-    [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80]),
+    ['ID_Pago', 'ID_Credito', 'Fecha', 'Num_Cuota', 'Valor_Pagado', 'Interes', 'Capital_Cuota', 'Abono_Extra', 'Saldo_Despues', 'Version', 'ID_Grupo', 'Anulado', 'Cargos'],
+    [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80, 110]),
 
   // ---- Otros ----
   Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas', 'ID_Bolsillo_Plan'], [170, 70, 170, 220, 120, 120, 70, 170, 200, 170]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
-  Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400])
+  Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400]),
+  // 1.13: comisiones, impuestos, cambio de divisa, cuota de manejo y seguros que cobra cada medio de pago
+  Cargos_Reglas: tabla_(
+    ['ID_Regla', 'Nombre', 'Tipo_Cargo', 'Ambito', 'ID_Ambito', 'Operacion', 'Modo', 'Valor', 'Minimo', 'Maximo', 'Periodicidad', 'Activo', 'Orden'],
+    [170, 220, 120, 90, 170, 150, 90, 100, 100, 100, 120, 70, 60])
 };
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
@@ -118,7 +122,8 @@ const ENUMS = {
   Personas: { Rol: ['Titular', 'Familiar', 'Otro'] },
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
-    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno'],
+    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno',
+      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -127,7 +132,14 @@ const ENUMS = {
   Presupuesto_Plantilla: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Presupuesto_Mes: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Nomina_Pagos: { Estado: ['Proyectado', 'Recibido'], Origen: ['App', 'Demo', 'Import'] },
-  Creditos: { Periodicidad: ['Quincenal', 'Mensual'], Metodo_Tasa: ['Excel', 'Exacta'], Estado: ['Activo', 'Pagado', 'Anulado'] },
+  Creditos: { Periodicidad: ['Quincenal', 'Mensual'], Metodo_Tasa: ['Excel', 'Exacta'], Estado: ['Activo', 'Pagado', 'Anulado'], Tipo_Credito: ['Autopago', 'Bancario'] },
+  Cargos_Reglas: {
+    Tipo_Cargo: ['Comision', 'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro'],
+    Ambito: ['Banco', 'Cuenta', 'Tarjeta', 'Credito'],
+    Operacion: ['Salida', 'Transferencia', 'Pago', 'Compra', 'Compra_Internacional', 'Conversion', 'Cuota', 'Apertura_CDT', 'Extracto'],
+    Modo: ['Fijo', 'Porcentaje'],
+    Periodicidad: ['Por_Operacion', 'Mensual']
+  },
   Creditos_Cronograma: { Estado: ['Pendiente', 'Pagada', 'Reemplazada'] },
   Suscripciones: { Tipo: ['Suscripcion', 'Servicio'], Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Log: { Nivel: ['Info', 'Aviso', 'Error'] }
@@ -291,7 +303,16 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Movimientos', columna: 'Ref', valor: '' },
   { tabla: 'Compras_TC', columna: 'Ref', valor: '' },
   // 1.11: las categorías que usa la app (salario, rendimientos, regalos, comisiones) se reconocen por su rol, no por un ID fijo
-  { tabla: 'Categorias', columna: 'Rol', valor: '' }
+  { tabla: 'Categorias', columna: 'Rol', valor: '' },
+  // 1.13: créditos bancarios y cargos (los créditos que ya existen son de autopago)
+  { tabla: 'Creditos', columna: 'Tipo_Credito', valor: 'Autopago' },
+  { tabla: 'Creditos', columna: 'ID_Banco', valor: '' },
+  { tabla: 'Creditos', columna: 'Cargos_Cuota', valor: 0 },
+  { tabla: 'Creditos', columna: 'Detalle_Cargos', valor: '' },
+  { tabla: 'Creditos_Pagos', columna: 'Cargos', valor: 0 },
+  { tabla: 'Compras_TC', columna: 'Divisa_Original', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Valor_Original', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Tasa', valor: '' }
 ];
 
 /**

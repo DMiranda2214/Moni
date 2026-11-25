@@ -160,6 +160,7 @@ require('./test_produccion')(prueba, assert, crearEntorno);
 require('./test_migracion_datos')(prueba, assert, crearEntorno);
 require('./test_integridad')(prueba, assert, crearEntorno);
 require('./test_unificacion')(prueba, assert, crearEntorno);
+require('./test_cargos')(prueba, assert, crearEntorno);
 
 let fallos = 0;
 pruebas.forEach(p => {

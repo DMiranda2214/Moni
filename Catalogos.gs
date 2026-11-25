@@ -585,6 +585,39 @@ const CATALOGOS = {
     bloqueos: function (reg) { return reg.Estado === 'Vigente' ? ['está vigente: ciérralo o anúlalo desde la pantalla de CDT'] : []; }
   },
 
+  // Comisiones, impuestos, cambio de divisa, cuota de manejo y seguros de cada medio de pago (ver Cargos.gs)
+  Cargos_Reglas: {
+    id: 'ID_Regla', prefijo: 'crg', etiqueta: 'La regla',
+    normalizar: function (item, actual) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre').slice(0, 80);
+      // La pantalla manda el medio de pago como "Ambito|ID" en un solo selector
+      let ambito = texto_(pick('Ambito')), idAmbito = texto_(pick('ID_Ambito'));
+      const medio = texto_(item.Medio);
+      if (medio.indexOf('|') > 0) { ambito = medio.split('|')[0]; idAmbito = medio.split('|').slice(1).join('|'); }
+      ambito = opcion_(ambito, ENUMS.Cargos_Reglas.Ambito, 'El medio de pago');
+      const DE = { Banco: ['Bancos', 'ID_Banco', 'El banco'], Cuenta: ['Cuentas', 'ID_Cuenta', 'La cuenta'], Tarjeta: ['Tarjetas', 'ID_Tarjeta', 'La tarjeta'], Credito: ['Creditos', 'ID_Credito', 'El crédito'] }[ambito];
+      if (!idAmbito) throw new Error('Elige a qué medio de pago aplica.');
+      if (!buscarPorId_(leer_(DE[0]), DE[1], idAmbito)) throw new Error(DE[2] + ' no existe.');
+      const tipo = opcion_(pick('Tipo_Cargo'), ENUMS.Cargos_Reglas.Tipo_Cargo, 'El tipo de cargo');
+      const operacion = opcion_(pick('Operacion'), ENUMS.Cargos_Reglas.Operacion, 'Cuándo se cobra');
+      const PERMITIDAS = { Tarjeta: ['Compra', 'Compra_Internacional', 'Extracto'], Credito: ['Cuota'], Cuenta: ['Salida', 'Transferencia', 'Pago', 'Conversion', 'Cuota', 'Apertura_CDT', 'Extracto'] };
+      if (PERMITIDAS[ambito] && PERMITIDAS[ambito].indexOf(operacion) === -1) throw new Error('Ese cobro no aplica a ' + DE[2].toLowerCase() + '. Opciones: ' + PERMITIDAS[ambito].join(', ') + '.');
+      const modo = opcion_(pick('Modo') || 'Fijo', ENUMS.Cargos_Reglas.Modo, 'Cómo se calcula');
+      const valor = modo === 'Porcentaje'
+        ? tasa_(item.Porcentaje !== undefined ? item.Porcentaje : actual && actual.Valor, 'El porcentaje', { requerido: true, min: 0, max: 1 })
+        : numero_(pick('Valor'), 'El valor', { requerido: true, min: 0, max: VALOR_MAXIMO });
+      const minimo = modo === 'Porcentaje' ? numero_(pick('Minimo'), 'El mínimo', { min: 0, max: VALOR_MAXIMO, defecto: '' }) : '';
+      const maximo = modo === 'Porcentaje' ? numero_(pick('Maximo'), 'El máximo', { min: 0, max: VALOR_MAXIMO, defecto: '' }) : '';
+      if (minimo !== '' && maximo !== '' && maximo > 0 && minimo > maximo) throw new Error('El mínimo no puede ser mayor que el máximo.');
+      return {
+        Nombre: nombre, Tipo_Cargo: tipo, Ambito: ambito, ID_Ambito: idAmbito, Operacion: operacion, Modo: modo, Valor: valor,
+        Minimo: minimo, Maximo: maximo, Periodicidad: 'Por_Operacion', Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+    },
+    bloqueos: function () { return []; } // los cargos ya cobrados quedan en tus movimientos
+  },
+
   Ingresos_Recurrentes: {
     id: 'ID_Ingreso', prefijo: 'ing', etiqueta: 'El ingreso',
     normalizar: function (item, actual, filas) {

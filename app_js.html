@@ -215,6 +215,112 @@ function aviso(mensaje, opc) {
  * @param {Array} args sus argumentos
  * @param {Object} o { mensaje, aplicar: [fn(res)], deshacer: fn }
  */
+// ---------------------------------------------------------------------------
+// Cargos de una operación (comisiones, impuestos, cambio de divisa, cuota de manejo, seguros)
+// Moni los PROPONE según las reglas de Ajustes → Cargos y comisiones; la persona los cambia, quita o agrega.
+// ---------------------------------------------------------------------------
+
+/** Bloque de cargos para un formulario. `solo`: tipos de registro en que se muestra (como los demás data-solo). */
+function htmlCargos(solo) {
+  return '<div class="m-campo m-cargos" data-cargos' + (solo ? ' data-solo="' + solo + '"' : '') + '>' +
+    '<details class="m-nom-mas" data-cargos-det><summary>Comisiones e impuestos <span class="m-cargos-resumen" data-cargos-resumen></span></summary>' +
+    '<p class="m-ayuda">Lo que te cobra el banco o la tarjeta por esta operación. Se registra aparte, como gasto en “Comisiones e impuestos”, y se anula si anulas la operación.</p>' +
+    '<div data-cargos-lista></div>' +
+    '<button type="button" class="m-btn-texto" data-cargos-agregar>' + ico('plus') + ' Agregar un cargo</button>' +
+    '<p class="m-ayuda" data-cargos-total aria-live="polite"></p></details></div>';
+}
+
+function htmlFilaCargo(c) {
+  return '<div class="m-cargo-fila" data-tipo="' + esc(c.tipo || 'Comision') + '">' +
+    '<input class="m-input" data-cargo-nombre aria-label="Nombre del cargo" maxlength="80" value="' + esc(c.nombre || '') + '" placeholder="Comisión, 4x1000, seguro…">' +
+    '<input class="m-input m-num" data-cargo-valor aria-label="Valor del cargo" inputmode="decimal" value="' + esc(c.valor ? String(c.valor).replace('.', ',') : '') + '" placeholder="0">' +
+    '<button type="button" class="m-btn-texto" data-cargo-quitar aria-label="Quitar este cargo">✕</button></div>';
+}
+
+/** Los cargos que quedaron en el formulario: [{ nombre, tipo, valor }] (sin los vacíos). */
+function leerCargos(raiz) {
+  return $$('[data-cargos] .m-cargo-fila', raiz).map(f => {
+    const v = leerDinero($('[data-cargo-valor]', f).value);
+    return { nombre: $('[data-cargo-nombre]', f).value.trim(), tipo: f.dataset.tipo || 'Comision', valor: typeof v === 'number' && !isNaN(v) ? v : 0 };
+  }).filter(c => c.valor > 0);
+}
+
+/**
+ * Pide al servidor los cargos sugeridos cada vez que cambia la operación (medio de pago, valor…) y los pinta.
+ * Cuando la persona toca un cargo, ya no se reemplazan: lo que escribió manda.
+ * @param {Function} contexto () => ({ operacion, ctx: { idBolsillo, idTarjeta, idCredito, valor } }) o null si no aplica
+ */
+function activarCargos(raiz, contexto) {
+  const caja = $('[data-cargos]', raiz);
+  if (!caja) return { pedir: () => {} };
+  const lista = $('[data-cargos-lista]', caja), det = $('[data-cargos-det]', caja);
+  let tocado = false, temporizador = null, pedido = 0;
+  const resumir = () => {
+    const cs = leerCargos(raiz), total = cs.reduce((a, c) => a + c.valor, 0);
+    const c = contexto(), base = c && c.ctx ? Number(c.ctx.valor) || 0 : 0;
+    $('[data-cargos-resumen]', caja).textContent = cs.length ? '· ' + cs.length + ' · ' + dinero(total) : '';
+    $('[data-cargos-total]', caja).textContent = cs.length && base ? 'Total con cargos: ' + dinero(base + total) : '';
+  };
+  const pintar = cargos => { lista.innerHTML = cargos.map(htmlFilaCargo).join(''); resumir(); };
+  const pedir = () => {
+    if (tocado) { resumir(); return; }
+    clearTimeout(temporizador);
+    temporizador = setTimeout(async () => {
+      const c = contexto();
+      // Sin reglas no hay nada que sugerir (y no se molesta al servidor), salvo los seguros fijos de un crédito
+      if (!c || (!activos('Cargos_Reglas').length && !c.ctx.idCredito)) { if (!tocado) pintar([]); return; }
+      const n = ++pedido;
+      try {
+        const s = await api('getCargosSugeridos', c.operacion, c.ctx);
+        if (n !== pedido || tocado) return;
+        pintar(s);
+        if (s.length) det.open = true;
+      } catch (e) { /* sin sugerencias: la persona puede agregarlos a mano */ }
+    }, 350);
+  };
+  caja.addEventListener('input', () => { tocado = true; resumir(); });
+  caja.addEventListener('click', ev => {
+    const q = ev.target.closest('[data-cargo-quitar]');
+    if (q) { tocado = true; q.closest('.m-cargo-fila').remove(); resumir(); return; }
+    if (ev.target.closest('[data-cargos-agregar]')) {
+      tocado = true;
+      lista.insertAdjacentHTML('beforeend', htmlFilaCargo({}));
+      const ult = lista.lastElementChild; if (ult) $('[data-cargo-nombre]', ult).focus();
+      resumir();
+    }
+  });
+  const fuera = ev => { if (!ev.target.closest('[data-cargos]')) pedir(); };
+  raiz.addEventListener('input', fuera);
+  raiz.addEventListener('change', fuera);
+  pedir();
+  return { pedir: pedir };
+}
+
+/** Cuándo se cobra un cargo, en palabras. */
+const OPERACION_CARGO = {
+  Salida: 'En toda salida de dinero de la cuenta', Transferencia: 'Al pasar dinero a otra cuenta', Pago: 'En gastos y pagos',
+  Conversion: 'Al convertir divisas', Apertura_CDT: 'Al abrir un CDT', Compra: 'En cada compra con la tarjeta',
+  Compra_Internacional: 'En compras en otra moneda', Extracto: 'En cada extracto (mensual)', Cuota: 'En cada cuota del crédito'
+};
+
+/** Medios de pago a los que se les puede poner una regla de cargo: [['Ambito|ID', 'Tipo · Nombre']]. */
+function opcionesMedioCargo() {
+  const lista = [];
+  activos('Bancos').forEach(b => lista.push(['Banco|' + b.ID_Banco, 'Banco · ' + b.Nombre]));
+  activos('Cuentas').forEach(c => lista.push(['Cuenta|' + c.ID_Cuenta, 'Cuenta · ' + c.Nombre]));
+  activos('Tarjetas').forEach(t => lista.push(['Tarjeta|' + t.ID_Tarjeta, 'Tarjeta · ' + t.Nombre]));
+  ((App.boot && App.boot.creditos) || []).forEach(c => lista.push(['Credito|' + c.ID_Credito, 'Crédito · ' + c.Nombre]));
+  return lista;
+}
+
+function nombreMedioCargo(r) {
+  const o = opcionesMedioCargo().find(x => x[0] === r.Ambito + '|' + r.ID_Ambito);
+  return o ? o[1] : r.Ambito;
+}
+
+/** 0,004 → "0,4 %" (con los decimales que tenga). */
+function pctDecimal(n) { return (Math.round((Number(n) || 0) * 100000) / 1000).toLocaleString('es-CO') + ' %'; }
+
 /**
  * Carga los datos de una pantalla en su estado { data, cargando, error } y repinta si la persona sigue en esa ruta.
  * Con `valido`, una respuesta que llega vieja (la persona cambió de mes o de elemento mientras tanto) se descarta.
