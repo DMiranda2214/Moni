@@ -8,6 +8,32 @@ const DIAS_RECORDATORIO = 14;
 
 
 /**
+ * TODO lo que viene, en una sola lista ordenada por fecha: lo que sale (extractos, cuotas, suscripciones y servicios),
+ * lo que entra (nómina estimada, ingresos recurrentes, intereses y vencimientos de CDT) y, si se pide, las fechas
+ * límite de la nómina (prima, cesantías). Lo usan Inicio (próximos pagos y por recibir), los recordatorios de
+ * Calendar y la proyección de caja. Cada evento lleva `direccion` ('sale' | 'entra' | 'fecha') y `fuente`.
+ * @param {number} horizonte días hacia adelante (los atrasados siempre se incluyen, salvo las fechas de nómina)
+ * @param {Object} [o] { pagos: true, ingresos: true, cdt: true, fechasNomina: false }
+ */
+function proximosEventos_(horizonte, o) {
+  const opc = o || {};
+  const lista = [];
+  const con = (direccion, fuente) => e => lista.push(Object.assign({}, e, { direccion: direccion, fuente: fuente }));
+  if (opc.pagos !== false) proximosPagos_(horizonte).forEach(con('sale', 'pago'));
+  if (opc.ingresos !== false) ingresosEsperados_(horizonte).forEach(con('entra', 'ingreso'));
+  if (opc.cdt !== false) eventosCdt_(horizonte).forEach(con('entra', 'cdt'));
+  if (opc.fechasNomina) fechasNomina_(hoyIso_(), horizonte).forEach(con('fecha', 'nomina'));
+  return lista.sort((a, b) => a.dias - b.dias || a.titulo.localeCompare(b.titulo));
+}
+
+/** El evento sin los campos internos (para respuestas que ya tenían su forma). */
+function quitarDireccion_(e) {
+  const x = Object.assign({}, e);
+  delete x.direccion; delete x.fuente;
+  return x;
+}
+
+/**
  * Pagos próximos (dentro de DIAS_RECORDATORIO días) y vencidos.
  * @return {Array} [{ tipo: 'Tarjeta'|'Credito'|'Suscripcion'|'Servicio', id, titulo, fecha, dias, valor, detalle }]
  */
@@ -122,7 +148,7 @@ function fechasNomina_(hoy, horizonte) {
     cfgValor_(def[0]).split(',').map(s => s.trim()).filter(s => /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s)).forEach(mmdd => {
       [Number(hoy.slice(0, 4)), Number(hoy.slice(0, 4)) + 1].forEach(anio => {
         const f = anio + '-' + mmdd;
-        if (new Date(f + 'T00:00:00Z').toISOString().slice(0, 10) !== f) return; // un 30 de febrero no existe
+        if (!fechaExiste_(f)) return; // un 30 de febrero no existe
         const dias = diasEntre_(hoy, f);
         if (dias >= 0 && dias <= horizonte) salida.push({ tipo: 'Nomina', id: def[0] + '-' + mmdd, titulo: def[1], fecha: f, dias: dias, valor: null, detalle: '' });
       });
@@ -133,10 +159,8 @@ function fechasNomina_(hoy, horizonte) {
 
 /** Lo que debería haber en el calendario: [{ clave, titulo, descripcion, fecha }]. */
 function recordatoriosDeseados_(ajustes) {
-  const hoy = hoyIso_();
-  let lista = proximosPagos_(HORIZONTE_CALENDARIO).filter(p => p.dias >= 0);
-  if (ajustes.nomina) lista = lista.concat(fechasNomina_(hoy, HORIZONTE_CALENDARIO));
-  lista = lista.concat(eventosCdt_(HORIZONTE_CALENDARIO).filter(e => e.dias >= 0));
+  // Los pagos, los CDT y (si se quiere) las fechas de la nómina; los ingresos recurrentes no van al calendario.
+  const lista = proximosEventos_(HORIZONTE_CALENDARIO, { ingresos: false, fechasNomina: ajustes.nomina }).filter(p => p.dias >= 0);
   return lista.map(p => {
     const titulo = p.tipo === 'Nomina' ? p.titulo
       : p.tipo === 'Tarjeta' ? 'Pagar tarjeta ' + p.titulo

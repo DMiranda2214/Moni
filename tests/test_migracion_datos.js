@@ -103,7 +103,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     paso('cuota crédito', () => e.llamar('registrarPagoCredito', credito.ID_Credito, undefined, hoy));
     paso('abono a capital', () => { const d = e.llamar('obtenerCredito', credito.ID_Credito); e.llamar('registrarPagoCredito', credito.ID_Credito, d.cronograma.find(f => f.Estado === 'Pendiente').Cuota + 100000, hoy); });
     const banco = e.llamar('listarCatalogo', 'Bancos').find(b => (b.Divisa || 'COP') === 'COP');
-    paso('cdt', () => e.llamar('guardarCatalogo', 'CDTs', { Nombre: 'CDT prueba', ID_Banco: banco.ID_Banco, Capital: 1000000, Tasa_EA: 0.0975, Fecha_Inicio: hoy, Plazo_Dias: 180, Retencion_Pct: 0.04, ID_Bolsillo_Origen: b1.ID_Bolsillo }));
+    paso('cdt', () => e.llamar('guardarCatalogo', 'CDTs', { Nombre: 'CDT prueba', ID_Banco: banco.ID_Banco, Capital: 1000000, Tasa_EA: 0.0975, Fecha_Inicio: hoy, Plazo_Dias: 180, Retencion_Pct: 0.04 }, { descontar: true, ID_Bolsillo_Origen: b1.ID_Bolsillo }));
     const ahorro = e.llamar('listarCatalogo', 'Cuentas').find(c => c.Tipo === 'Ahorro');
     if (ahorro) paso('rendimiento', () => e.llamar('registrarRendimiento', { ID_Cuenta: ahorro.ID_Cuenta, Tipo: 'Interes', Valor: 12345.67, Fecha: hoy }));
     const susc = e.llamar('listarCatalogo', 'Suscripciones')[0];
@@ -154,6 +154,9 @@ module.exports = function (prueba, assert, crearEntorno) {
 
     // 4. Lo que se ve da lo mismo (y la foto no está vacía)
     assert.ok(antes.movimientos.items.length >= 5 && antes.creditos.length && antes.tarjetas.length && antes.cdts.vigentes.length && antes.detalleCreditos[0].pagos.length, 'la foto de referencia debería tener datos');
+    // Cambios de presentación anunciados en el CHANGELOG (no tocan datos): desde 1.12 abrir o cobrar un CDT no cuenta
+    // como gasto ni ingreso en los totales de Movimientos. Lo demás debe ser idéntico.
+    delete antes.movimientos.totales; delete despues.movimientos.totales;
     Object.keys(antes).forEach(k => {
       const d = diferencia(despues[k], antes[k], k);
       assert.strictEqual(d, '', 'cambió al actualizar → ' + d);

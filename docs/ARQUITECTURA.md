@@ -57,8 +57,9 @@
 | `Avisos.gs` | Avisos de Inicio: configuración que falta o datos desactualizados |
 | `Ingresos.gs` | Ingresos recurrentes distintos de la nómina: concepto, monto, bolsillo de llegada, próximo cobro y recibirlo |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
+| `Recurrentes.gs` | Lo común a todo lo que se repite (suscripciones, servicios e ingresos): periodos, costo mensual y anual, estado, saltar y deshacer |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
-| `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |
+| `Recordatorios.gs` | `proximosEventos_`: una sola lista de lo que viene (lo que sale, lo que entra, CDT y fechas de nómina) para Inicio, Calendar y la proyección; y la sincronización con Google Calendar |
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`). **Solo desarrollo**: producción lo reemplaza por `scripts/stubs/Demo.gs` |

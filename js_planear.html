@@ -47,17 +47,9 @@ function vPresupuesto() {
   return { titulo: 'Presupuesto', acciones: acciones, html: html, despues: () => { if (!p.data && !p.cargando && !p.error) cargarPpto(); } };
 }
 
-async function cargarPpto() {
-  const p = App.ppto;
-  const mes = p.mes;
-  p.cargando = true; p.error = null;
-  try {
-    const data = await api('getPresupuesto', mes);
-    if (p.mes !== mes) { p.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
-    p.data = data; aplicarPresupuesto(data);
-  } catch (e) { p.error = e.message; }
-  p.cargando = false;
-  if (rutaActual() === 'presupuesto') render();
+function cargarPpto() {
+  const p = App.ppto, mes = p.mes;
+  return cargarEn(p, 'presupuesto', 'getPresupuesto', [mes], () => p.mes === mes, aplicarPresupuesto);
 }
 
 function htmlGenerarPpto(d) {
@@ -432,18 +424,10 @@ function opcionesNomina() {
   return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {}, adicionales: adicionales };
 }
 
-async function cargarNomina() {
-  const n = App.nom;
-  const mes = n.mes, idEsc = n.idEsc;
-  n.cargando = true; n.error = null;
-  try {
-    const data = await api('getNomina', mes || '', idEsc || '', opcionesNomina());
-    if (n.mes !== mes || n.idEsc !== idEsc) { n.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
-    n.data = data;
-    if (!n.mes) n.mes = data.periodo; // el servidor elige el mes del próximo pago
-  } catch (e) { n.error = e.message; }
-  n.cargando = false;
-  if (rutaActual() === 'nomina') render();
+function cargarNomina() {
+  const n = App.nom, mes = n.mes, idEsc = n.idEsc;
+  // Sin mes, el servidor elige el del próximo pago
+  return cargarEn(n, 'nomina', 'getNomina', [mes || '', idEsc || '', opcionesNomina()], () => n.mes === mes && n.idEsc === idEsc, d => { if (!n.mes) n.mes = d.periodo; });
 }
 
 /** Cambia una casilla o un número del estimado y lo vuelve a calcular sin perder la pantalla. */
@@ -665,13 +649,9 @@ async function abrirRegistrarNomina() {
   });
 }
 
-async function anularNominaYAvisar() {
-  try {
-    const res = await api('anularNomina', App.nom.mes);
-    aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
-    aviso('Nómina anulada');
-  } catch (e) { aviso(e.message, true); }
-}
+const anularNominaYAvisar = () => escribirYAvisar('anularNomina', [App.nom.mes], {
+  mensaje: 'Nómina anulada', aplicar: [res => { (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; }]
+});
 
 // ---------- Parámetros de nómina ----------
 

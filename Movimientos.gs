@@ -54,6 +54,17 @@ function conRef_(fila) {
   return fila;
 }
 
+/**
+ * Una sola regla para decir si un movimiento es ingreso o gasto en informes y totales. No lo son: los traslados (y las
+ * conversiones entre divisas, que son traslados) ni el dinero que entra o sale de una inversión (abrir o cobrar el
+ * capital de un CDT): el dinero solo cambia de lugar. Sí cambian el saldo del bolsillo.
+ */
+const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno'];
+
+function esIngresoOGasto_(m) {
+  return m.Tipo_Mov !== 'Transferencia' && SUBTIPOS_INVERSION.indexOf(m.Subtipo) === -1;
+}
+
 function valorConSigno_(valor, tipo) {
   const n = numero_(valor, 'El valor', { requerido: true, max: VALOR_MAXIMO, min: -VALOR_MAXIMO });
   if (tipo === 'Ajuste') {
@@ -392,6 +403,7 @@ function listarMovimientos(f) {
   items.forEach(i => {
     if (i.Anulado || i.Divisa !== divisaTotales) return;
     if (i.esTransferencia) { traslados += conFiltroDeLugar ? i.Valor : 0; return; }
+    if (SUBTIPOS_INVERSION.indexOf(i.Subtipo) !== -1) return; // abrir o cobrar un CDT no es ingreso ni gasto
     if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor;
   });
 

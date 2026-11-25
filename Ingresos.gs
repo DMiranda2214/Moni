@@ -9,14 +9,12 @@
 const MARCA_INGRESO = 'Ingreso recurrente ';
 
 function resumenIngreso_(r, hoy, bolsillos, cuentas) {
-  const dias = diasEntre_(hoy, r.Proximo_Cobro);
+  const base = resumenRecurrente_(r, hoy, 'atrasado');
   const b = r.ID_Bolsillo ? buscarPorId_(bolsillos, 'ID_Bolsillo', r.ID_Bolsillo) : null;
   const c = b ? buscarPorId_(cuentas, 'ID_Cuenta', b.ID_Cuenta) : null;
-  const valor = Number(r.Valor) || 0;
   return {
-    ID_Ingreso: r.ID_Ingreso, Nombre: r.Nombre, Valor: valor, Periodicidad: r.Periodicidad || 'Mensual',
-    Proximo_Cobro: r.Proximo_Cobro, dias: dias, estado: dias < 0 ? 'atrasado' : (dias <= DIAS_PRONTO ? 'pronto' : 'ok'),
-    mensual: costoMensual_(valor, r.Periodicidad), anual: redondear2_(valor * 12 / (MESES_PERIODO[r.Periodicidad] || 1)),
+    ID_Ingreso: r.ID_Ingreso, Nombre: r.Nombre, Valor: base.Valor, Periodicidad: base.Periodicidad,
+    Proximo_Cobro: r.Proximo_Cobro, dias: base.dias, estado: base.estado, mensual: base.mensual, anual: base.anual,
     ID_Bolsillo: r.ID_Bolsillo || '', ID_Categoria: r.ID_Categoria || '',
     destino: b ? (c && !esVerdadero(b.Es_Interno) ? c.Nombre + ' · ' + b.Nombre : (c ? c.Nombre : b.Nombre)) : '',
     Ultimo_Cobro: r.Ultimo_Cobro || '', Notas: r.Notas || ''
@@ -29,8 +27,8 @@ function obtenerIngresosRecurrentes() {
   const bolsillos = getTableData('Bolsillos'), cuentas = getTableData('Cuentas');
   const lista = getTableData('Ingresos_Recurrentes').filter(estaActivo)
     .map(r => resumenIngreso_(r, hoy, bolsillos, cuentas)).sort((a, b) => a.dias - b.dias || a.Nombre.localeCompare(b.Nombre));
-  const suma = f => redondear2_(lista.reduce((a, x) => a + f(x), 0));
-  return { items: lista, totales: { cantidad: lista.length, mensual: suma(x => x.mensual), anual: suma(x => x.anual), porRecibir: lista.filter(x => x.dias <= DIAS_PRONTO).length } };
+  const t = totalesRecurrentes_(lista);
+  return { items: lista, totales: { cantidad: t.cantidad, mensual: t.mensual, anual: t.anual, porRecibir: t.pronto } };
 }
 
 function ingresoActivo_(id) {
@@ -51,34 +49,36 @@ function recibirIngresoRecurrente(id, d) {
   exigirPesos_(idBolsillo, 'El bolsillo donde llegó el ingreso');
 
   const anterior = { Proximo_Cobro: r.Proximo_Cobro, Ultimo_Cobro: r.Ultimo_Cobro || '', Valor: Number(r.Valor) || 0 };
-  const mov = registrarMovimiento({
-    Tipo_Mov: 'Ingreso', Valor: valor, Fecha: fecha, ID_Bolsillo: idBolsillo, ID_Categoria: r.ID_Categoria,
-    Concepto: r.Nombre, Notas: MARCA_INGRESO + r.ID_Ingreso
+  return transaccion_(alDeshacer => {
+    const mov = registrarMovimiento({
+      Tipo_Mov: 'Ingreso', Valor: valor, Fecha: fecha, ID_Bolsillo: idBolsillo, ID_Categoria: r.ID_Categoria,
+      Concepto: r.Nombre, Notas: MARCA_INGRESO + r.ID_Ingreso
+    });
+    alDeshacer(() => anularMovimiento(mov.ID_Mov));
+    const proximo = siguienteCobro_(r);
+    updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: proximo, Ultimo_Cobro: fecha });
+    invalidateCache('Ingresos_Recurrentes');
+    return { idMov: mov.ID_Mov, anterior: anterior, proximo: proximo };
   });
-  const proximo = sumarMeses_(r.Proximo_Cobro, MESES_PERIODO[r.Periodicidad] || 1, Number(r.Dia_Cobro));
-  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: proximo, Ultimo_Cobro: fecha });
-  invalidateCache('Ingresos_Recurrentes');
-  return { idMov: mov.ID_Mov, anterior: anterior, proximo: proximo };
 }
 
 /** Deshace lo recibido: anula el ingreso y devuelve el cobro a como estaba. */
 function deshacerIngresoRecurrente(id, anterior, idMov) {
   const r = ingresoActivo_(id);
   if (!anterior || !anterior.Proximo_Cobro) throw new Error('Faltan los datos para deshacer.');
-  if (idMov) anularMovimiento(idMov);
-  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: fechaIso_(anterior.Proximo_Cobro, 'El cobro'), Ultimo_Cobro: texto_(anterior.Ultimo_Cobro) });
-  invalidateCache('Ingresos_Recurrentes');
-  return { ok: true };
+  return conBloqueo_(() => {
+    if (idMov) anularMovimiento(idMov);
+    restaurarRecurrente_('Ingresos_Recurrentes', r, anterior, 'Ultimo_Cobro', false);
+    invalidateCache('Ingresos_Recurrentes');
+    return { ok: true };
+  });
 }
 
 /** Pasa al siguiente cobro sin registrar nada (este mes no llegó o no aplica). */
 function saltarIngresoRecurrente(id) {
-  const r = ingresoActivo_(id);
-  const anterior = { Proximo_Cobro: r.Proximo_Cobro, Ultimo_Cobro: r.Ultimo_Cobro || '', Valor: Number(r.Valor) || 0 };
-  const proximo = sumarMeses_(r.Proximo_Cobro, MESES_PERIODO[r.Periodicidad] || 1, Number(r.Dia_Cobro));
-  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: proximo });
+  const r = saltarRecurrente_('Ingresos_Recurrentes', ingresoActivo_(id), 'Ultimo_Cobro');
   invalidateCache('Ingresos_Recurrentes');
-  return { anterior: anterior, proximo: proximo };
+  return r;
 }
 
 /**
@@ -86,6 +86,11 @@ function saltarIngresoRecurrente(id) {
  * @return {Array} [{ tipo: 'Nomina'|'Ingreso', id, titulo, fecha, dias, valor, detalle }]
  */
 function proximosIngresos_() {
+  return proximosEventos_(DIAS_RECORDATORIO, { pagos: false }).map(quitarDireccion_);
+}
+
+/** La nómina estimada (si falta registrarla) y los ingresos recurrentes que llegan dentro del horizonte (o atrasados). */
+function ingresosEsperados_(horizonte) {
   const hoy = hoyIso_();
   const lista = [];
   try {
@@ -95,7 +100,7 @@ function proximosIngresos_() {
       const dia = Math.min(Number(cfgValor_('Nomina_Dia_Pago')) || 30, diasDelMes_(+mes.slice(0, 4), +mes.slice(5, 7)));
       const fecha = mes + '-' + ('0' + dia).slice(-2);
       const dias = diasEntre_(hoy, fecha);
-      if (dias <= DIAS_RECORDATORIO) {
+      if (dias <= horizonte) {
         const c = calcularNominaEscenario_(escenarioNomina_(''), mes);
         lista.push({ tipo: 'Nomina', id: '', titulo: 'Nómina de ' + mes, fecha: fecha, dias: dias, valor: c.totales.neto, detalle: 'Estimado' });
       }
@@ -105,9 +110,8 @@ function proximosIngresos_() {
   const bolsillos = getTableData('Bolsillos'), cuentas = getTableData('Cuentas');
   getTableData('Ingresos_Recurrentes').filter(estaActivo).forEach(r => {
     const x = resumenIngreso_(r, hoy, bolsillos, cuentas);
-    if (x.dias > DIAS_RECORDATORIO) return;
+    if (x.dias > horizonte) return;
     lista.push({ tipo: 'Ingreso', id: x.ID_Ingreso, titulo: x.Nombre, fecha: x.Proximo_Cobro, dias: x.dias, valor: x.Valor, detalle: x.destino ? 'A ' + x.destino : 'Por recibir', ingreso: x });
   });
-  eventosCdt_(DIAS_RECORDATORIO).forEach(e => lista.push(e)); // vencimientos y pagos de intereses de CDT
-  return lista.sort((a, b) => a.dias - b.dias || a.titulo.localeCompare(b.titulo));
+  return lista;
 }

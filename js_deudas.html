@@ -40,13 +40,7 @@ function vDeudas() {
   };
 }
 
-async function cargarDeudas() {
-  const d = App.deudas;
-  d.cargando = true; d.error = null;
-  try { d.data = await api('getDeudas'); } catch (e) { d.error = e.message; }
-  d.cargando = false;
-  if (rutaActual() === 'tarjetas') render();
-}
+const cargarDeudas = () => cargarEn(App.deudas, 'tarjetas', 'getDeudas', []);
 
 function htmlDeudas(d) {
   let h = '';
@@ -105,17 +99,9 @@ function vTarjeta(id) {
   };
 }
 
-async function cargarTarjeta() {
-  const t = App.tar;
-  const id = t.id, mes = t.mes;
-  t.cargando = true; t.error = null;
-  try {
-    const data = await api('getTarjeta', id, mes);
-    if (t.id !== id || t.mes !== mes) { t.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
-    t.data = data; t.mes = data.mes;
-  } catch (e) { t.error = e.message; }
-  t.cargando = false;
-  if (rutaActual() === 'tarjeta/' + id) render();
+function cargarTarjeta() {
+  const t = App.tar, id = t.id, mes = t.mes;
+  return cargarEn(t, 'tarjeta/' + id, 'getTarjeta', [id, mes], () => t.id === id && t.mes === mes, d => { t.mes = d.mes; });
 }
 
 function htmlTarjeta(d) {
@@ -208,10 +194,7 @@ async function abrirAbonoTarjeta() {
   });
 }
 
-async function anularAbonoYAvisar(idPago) {
-  try { const res = await api('voidAbonoTarjeta', idPago); aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Abono anulado'); }
-  catch (e) { aviso(e.message, true); }
-}
+const anularAbonoYAvisar = idPago => escribirYAvisar('voidAbonoTarjeta', [idPago], { mensaje: 'Abono anulado', aplicar: [aplicarTarjeta] });
 
 /** Aplica el resultado de una escritura sobre la tarjeta que se está viendo. */
 function aplicarTarjeta(res) {
@@ -315,17 +298,8 @@ async function abrirCompra(idTarjeta) {
   });
 }
 
-async function anularCompraYAvisar(idCompra) {
-  try {
-    const res = await api('voidCompraTC', idCompra);
-    aplicarEscritura(res); aplicarTarjeta(res); render();
-    aviso('Compra anulada', { deshacer: () => restaurarCompraYAvisar(idCompra) });
-  } catch (e) { aviso(e.message, true); }
-}
-async function restaurarCompraYAvisar(idCompra) {
-  try { const res = await api('restoreCompraTC', idCompra); aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Compra restaurada'); }
-  catch (e) { aviso(e.message, true); }
-}
+const anularCompraYAvisar = idCompra => escribirYAvisar('voidCompraTC', [idCompra], { mensaje: 'Compra anulada', aplicar: [aplicarTarjeta], deshacer: () => restaurarCompraYAvisar(idCompra) });
+const restaurarCompraYAvisar = idCompra => escribirYAvisar('restoreCompraTC', [idCompra], { mensaje: 'Compra restaurada', aplicar: [aplicarTarjeta] });
 
 async function abrirDetalleCompra(id) {
   const td = App.tar.data;
@@ -397,10 +371,7 @@ async function abrirPagoExtracto() {
   });
 }
 
-async function anularPagoExtractoYAvisar(idExtracto) {
-  try { const res = await api('voidPagoExtracto', idExtracto); aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Pago anulado'); }
-  catch (e) { aviso(e.message, true); }
-}
+const anularPagoExtractoYAvisar = idExtracto => escribirYAvisar('voidPagoExtracto', [idExtracto], { mensaje: 'Pago anulado', aplicar: [aplicarTarjeta] });
 
 // ---------- Detalle de un crédito ----------
 
@@ -418,13 +389,9 @@ function vCredito(id) {
   };
 }
 
-async function cargarCredito() {
-  const c = App.cre;
-  const id = c.id;
-  c.cargando = true; c.error = null;
-  try { const data = await api('getCredito', id); if (c.id !== id) { c.cargando = false; render(); return; } c.data = data; } catch (e) { c.error = e.message; }
-  c.cargando = false;
-  if (rutaActual() === 'credito/' + id) render();
+function cargarCredito() {
+  const c = App.cre, id = c.id;
+  return cargarEn(c, 'credito/' + id, 'getCredito', [id], () => c.id === id);
 }
 
 function htmlCredito(d) {
@@ -488,13 +455,7 @@ function aplicarCredito(res) {
 }
 
 /** Corrige la tasa de un crédito creado cuando la app redondeaba las tasas (o confirma que está bien). */
-async function confirmarTasaCredito() {
-  try {
-    const res = await api('fixTasaCredito', App.cre.id, { soloConfirmar: true });
-    aplicarEscritura(res); aplicarCredito(res); render();
-    aviso('Listo, la tasa queda como está');
-  } catch (e) { aviso(e.message, true); }
-}
+const confirmarTasaCredito = () => escribirYAvisar('fixTasaCredito', [App.cre.id, { soloConfirmar: true }], { mensaje: 'Listo, la tasa queda como está', aplicar: [aplicarCredito] });
 
 async function abrirCorregirTasa() {
   const d = App.cre.data;
@@ -585,10 +546,7 @@ async function abrirPagoCredito() {
   });
 }
 
-async function anularPagoCreditoYAvisar(idPago) {
-  try { const res = await api('voidPagoCredito', idPago); aplicarEscritura(res); aplicarCredito(res); render(); aviso('Pago anulado'); }
-  catch (e) { aviso(e.message, true); }
-}
+const anularPagoCreditoYAvisar = idPago => escribirYAvisar('voidPagoCredito', [idPago], { mensaje: 'Pago anulado', aplicar: [aplicarCredito] });
 
 async function abrirNuevoCredito() {
   const ahorros = activos('Cuentas').filter(c => c.Tipo === 'Ahorro');

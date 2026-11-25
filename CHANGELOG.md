@@ -1,5 +1,10 @@
 # Cambios
 
+## 1.12.0 — Una sola regla para lo que se repite y para lo que viene (25 nov 2026)
+- **Corregido:** abrir o cobrar el capital de un **CDT** ya no aparece como gasto o ingreso en los gráficos ni en los totales de Movimientos: el dinero solo cambia de lugar (sí cambia el saldo del bolsillo). Antes inflaba el gasto del mes en que abrías el CDT.
+- **Mejora:** pagar una suscripción o recibir un ingreso recurrente son **todo o nada**: si algo falla, el gasto o el ingreso no queda registrado a medias.
+- **Interno:** suscripciones, servicios e ingresos recurrentes comparten sus reglas (`Recurrentes.gs`): periodos, costo mensual y anual, saltar y deshacer. Lo que viene (pagos, ingresos, CDT y fechas de nómina) sale de una sola lista (`proximosEventos_`) para Inicio y Calendar. En la app, cargar una pantalla y anular-avisar-deshacer usan un solo mecanismo (`cargarEn`, `escribirYAvisar`).
+
 ## 1.11.0 — Más rápida al guardar y código ordenado (25 nov 2026)
 - **Mejora:** guardar es más rápido. Dentro de una misma operación, Moni ya no vuelve a leer una tabla de la hoja después de cada paso: actualiza lo que ya tenía en memoria. Medido con `tests/medir_llamadas.js` sobre los datos de ejemplo: anular un movimiento pasa de 18 a 6 lecturas de la hoja, pagar una cuota de 38 a 29 y regenerar el presupuesto de 26 a 18.
 - **Mejora:** varias filas se actualizan de una vez (pagar un extracto, anular un pago de crédito, desactivar bolsillos) y el presupuesto de un mes, los saldos y las divisas se calculan una sola vez por operación.

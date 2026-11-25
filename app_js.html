@@ -208,6 +208,41 @@ function aviso(mensaje, opc) {
   setTimeout(() => el.remove(), o.deshacer ? Math.max(8000, lectura) : lectura);
 }
 
+/**
+ * Una escritura completa: llama al servidor, aplica lo que cambió, repinta y avisa (con "Deshacer" si se da).
+ * Reemplaza el mismo try/catch que se repetía en cada "anular…" y "restaurar…".
+ * @param {string} fn función del servidor
+ * @param {Array} args sus argumentos
+ * @param {Object} o { mensaje, aplicar: [fn(res)], deshacer: fn }
+ */
+/**
+ * Carga los datos de una pantalla en su estado { data, cargando, error } y repinta si la persona sigue en esa ruta.
+ * Con `valido`, una respuesta que llega vieja (la persona cambió de mes o de elemento mientras tanto) se descarta.
+ * `alCargar(data)` hace lo propio de cada pantalla con los datos nuevos. Todas las pantallas cargan así.
+ */
+async function cargarEn(st, ruta, fn, args, valido, alCargar) {
+  st.cargando = true; st.error = null;
+  try {
+    const data = await api.apply(null, [fn].concat(args || []));
+    if (valido && !valido()) { st.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
+    st.data = data;
+    if (alCargar) alCargar(data);
+  } catch (e) { st.error = e.message; }
+  st.cargando = false;
+  if (rutaActual() === ruta) render();
+}
+
+async function escribirYAvisar(fn, args, o) {
+  try {
+    const res = await api.apply(null, [fn].concat(args || []));
+    aplicarEscritura(res);
+    (o.aplicar || []).forEach(a => a(res));
+    render();
+    aviso(o.mensaje, o.deshacer ? { deshacer: o.deshacer } : undefined);
+    return res;
+  } catch (e) { aviso(e.message, true); return null; }
+}
+
 // ---------------------------------------------------------------------------
 // Apariencia (tema y color de acento)
 // ---------------------------------------------------------------------------

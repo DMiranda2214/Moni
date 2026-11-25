@@ -10,17 +10,6 @@ App.anual = { anio: null, data: null, cargando: false, error: null };
 App.resp = { data: null, cargando: false, error: null };
 App.pag = { data: null, cargando: false, error: null };
 
-/** Carga genérica: pide `fn`, guarda en `st.data` y vuelve a pintar si se sigue en `ruta`. */
-async function cargarEn(st, ruta, fn, args, valido) {
-  st.cargando = true; st.error = null;
-  try {
-    const data = await api.apply(null, [fn].concat(args));
-    if (valido && !valido()) { st.cargando = false; render(); return; }
-    st.data = data;
-  } catch (e) { st.error = e.message; }
-  st.cargando = false;
-  if (rutaActual() === ruta) render();
-}
 
 // ---------- Ahorro ----------
 

@@ -51,7 +51,7 @@ function obtenerGraficos(o) {
     hayDatos = true;
     if (mueve) fila.movido += v; // todo cambia el saldo, también los traslados y las conversiones
     // El pago de un extracto liquida una deuda: el gasto ya se contó el día de cada compra.
-    if (m.Tipo_Mov === 'Transferencia' || m.Subtipo === 'Pago_TC') return;
+    if (!esIngresoOGasto_(m) || m.Subtipo === 'Pago_TC') return;
     if (v >= 0) { fila.ingresos += v; return; }
     fila.gastos += -v;
     if (mm === mes) {

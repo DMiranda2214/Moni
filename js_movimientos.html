@@ -113,17 +113,9 @@ function vBolsillo(id) {
   };
 }
 
-async function cargarDetalle() {
-  const d = App.det;
-  const id = d.id, mes = d.mes, an = d.anulados;
-  d.cargando = true; d.error = null;
-  try {
-    const data = await api('getDetalleBolsillo', id, mes, an);
-    if (d.id !== id || d.mes !== mes || d.anulados !== an) { d.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
-    d.data = data;
-  } catch (e) { d.error = e.message; }
-  d.cargando = false;
-  if (rutaActual() === 'bolsillo/' + id) render();
+function cargarDetalle() {
+  const d = App.det, id = d.id, mes = d.mes, an = d.anulados;
+  return cargarEn(d, 'bolsillo/' + id, 'getDetalleBolsillo', [id, mes, an], () => d.id === id && d.mes === mes && d.anulados === an);
 }
 
 // ---------- Lista de todos los movimientos ----------
@@ -153,17 +145,9 @@ function vMovimientos() {
   return { titulo: 'Movimientos', html: html, despues: () => { if (!m.data && !m.cargando && !m.error) cargarMov(); } };
 }
 
-async function cargarMov() {
-  const m = App.mov;
-  const mes = m.mes, an = m.anulados;
-  m.cargando = true; m.error = null;
-  try {
-    const data = await api('getMovimientos', { mes: mes, incluirAnulados: an, limite: 300 });
-    if (m.mes !== mes || m.anulados !== an) { m.cargando = false; render(); return; } // respuesta vieja: se descarta y se pide la actual
-    m.data = data;
-  } catch (e) { m.error = e.message; }
-  m.cargando = false;
-  if (rutaActual() === 'movimientos') render();
+function cargarMov() {
+  const m = App.mov, mes = m.mes, an = m.anulados;
+  return cargarEn(m, 'movimientos', 'getMovimientos', [{ mes: mes, incluirAnulados: an, limite: 300 }], () => m.mes === mes && m.anulados === an);
 }
 
 // ---------- Registrar, mover y editar ----------
@@ -385,21 +369,8 @@ async function anularGastoTarjeta(idCompra, idItem) {
   } catch (e) { aviso(e.message, true); }
 }
 
-async function anularYAvisar(id) {
-  try {
-    const res = await api('voidMovimiento', id, vistaActual());
-    aplicarEscritura(res); render();
-    aviso('Movimiento anulado', { deshacer: () => restaurarYAvisar(id) });
-  } catch (e) { aviso(e.message, true); }
-}
-
-async function restaurarYAvisar(id) {
-  try {
-    const res = await api('restoreMovimiento', id, vistaActual());
-    aplicarEscritura(res); render();
-    aviso('Movimiento restaurado');
-  } catch (e) { aviso(e.message, true); }
-}
+const anularYAvisar = id => escribirYAvisar('voidMovimiento', [id, vistaActual()], { mensaje: 'Movimiento anulado', deshacer: () => restaurarYAvisar(id) });
+const restaurarYAvisar = id => escribirYAvisar('restoreMovimiento', [id, vistaActual()], { mensaje: 'Movimiento restaurado' });
 
 // ---------- Detalle de un movimiento ----------
 
