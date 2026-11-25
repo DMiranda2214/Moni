@@ -86,7 +86,8 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 - `ID_Bolsillo_Reserva`: dinero apartado para pagar el extracto.
 - `ID_Bolsillo_Personal`: bolsillo del que sale lo que falta al pagar (compras de Fuente `Personal`).
 
-**Categorias** — `ID_Categoria, Nombre, Tipo, Icono, Color, Activo, Orden` · `Tipo`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
+**Categorias** — `ID_Categoria, Nombre, Tipo, Icono, Color, Activo, Orden, Rol` · `Tipo`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
+- `Rol` (desde 1.10.1): marca las categorías que usa la app (`Salario`, `Rendimiento`, `Regalos`, `Comision`, `Cargos`). Así la persona puede renombrarlas sin romper nada. En hojas anteriores la columna llega vacía y la app reconoce esas categorías por el ID con el que se sembraron (`cat-salario`, `cat-rendim`, `cat-regalos`, `cat-comision`).
 
 **Personas** — `ID_Persona, Nombre, Rol, Activo` · `Rol`: `Titular`, `Familiar`, `Otro`. Se usan en créditos y regalos.
 
@@ -109,7 +110,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 ## 2. Operación
 
 **Movimientos** (libro mayor de bolsillos) —
-`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos`
+`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos, Ref`
+- `Ref` (desde 1.10.1): vínculo con lo que generó el movimiento (`Crédito <id>`, `Extracto <id>`, `Regalo <id>`, `Suscripción <id>`, `Ingreso recurrente <id>`, `Distribución <mes>`, `Pago <id>`, `Abono <id>`). Antes vivía solo en `Notas`; los movimientos viejos sin `Ref` se siguen leyendo de `Notas`, y si la persona edita esas notas el vínculo se copia a `Ref` primero.
 - `Afecta_Saldos`: `FALSE` = movimiento **histórico** (cuenta en informes, no en saldos); vacío o `TRUE` = afecta saldos (los anteriores a la columna).
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
 - `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion` (dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`).
@@ -119,7 +121,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 > El ahorro externo **no tiene tabla propia**: las cuentas de tipo `Ahorro` usan este mismo libro. La deuda con el ahorro de una cuenta = Σ `Para_Gastos` − Σ `Reposicion`.
 
 **Compras_TC** —
-`ID_Compra, Fecha, Concepto, Valor, ID_Tarjeta, Mes_Extracto, Fuente, ID_Categoria, ID_Item_Ppto, ID_Extracto, Pagado, ID_Mov_Reserva, Notas, Origen, Anulado`
+`ID_Compra, Fecha, Concepto, Valor, ID_Tarjeta, Mes_Extracto, Fuente, ID_Categoria, ID_Item_Ppto, ID_Extracto, Pagado, ID_Mov_Reserva, Notas, Origen, Anulado, Ref`
+- `Ref` (desde 1.10.1): como en `Movimientos` (por ejemplo `Regalo <id>`).
 - `Fuente`: `Personal`, `Ppto`, `Guardar`, `Otro`. (`Personal` = gasto propio que se paga desde `Tarjetas.ID_Bolsillo_Personal`.)
 - `ID_Mov_Reserva`: movimiento que apartó el dinero en la reserva (Fuente `Ppto`).
 - `Mes_Extracto` se calcula con el `Dia_Corte` de la tarjeta si no se indica.

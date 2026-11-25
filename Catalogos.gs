@@ -40,7 +40,14 @@ function numero_(v, etiqueta, opc) {
   if (o.entero && Math.floor(n) !== n) throw new Error(etiqueta + ' debe ser un número entero.');
   if (o.min !== undefined && n < o.min) throw new Error(etiqueta + ' no puede ser menor que ' + o.min + '.');
   if (o.max !== undefined && n > o.max) throw new Error(etiqueta + ' no puede ser mayor que ' + o.max + '.');
-  return Math.round(n * 100) / 100;
+  // Dinero: 2 decimales. Tasas y porcentajes en decimal (0,095 = 9,5 %) necesitan más: { decimales: 9 }.
+  const f = Math.pow(10, o.decimales === undefined ? 2 : o.decimales);
+  return Math.round(n * f) / f;
+}
+
+/** Una tasa o porcentaje en decimal (0,095 = 9,5 %): nunca se redondea a 2 decimales. */
+function tasa_(v, etiqueta, opc) {
+  return numero_(v, etiqueta, Object.assign({ decimales: 9 }, opc || {}));
 }
 
 function fechaIso_(v, etiqueta, defecto) {
@@ -117,6 +124,20 @@ function tasaDivisa_(divisa) {
   if (divisa === DIVISA_BASE) return 1;
   const n = Number(String(cfgValor_('Tasa_' + divisa)).replace(',', '.'));
   return isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Categorías que usa la app. Se reconocen por su columna Rol; las hojas de antes de 1.11 no la tienen llena y se
+ * reconocen por el ID con el que se sembraron (sin cambiar nada en la hoja).
+ */
+const ROLES_CATEGORIA = { Salario: 'cat-salario', Rendimiento: 'cat-rendim', Regalos: 'cat-regalos', Comision: 'cat-comision', Cargos: 'cat-cargos' };
+
+/** La categoría activa con ese rol (o la sembrada con su ID de antes), o null. */
+function categoriaPorRol_(rol, incluirInactivas) {
+  const cats = leer_('Categorias');
+  const ok = c => incluirInactivas || estaActivo(c);
+  return cats.find(c => texto_(c.Rol) === rol && ok(c)) ||
+    cats.find(c => c.ID_Categoria === ROLES_CATEGORIA[rol] && !texto_(c.Rol) && ok(c)) || null;
 }
 
 function buscarPorId_(filas, idCol, id) {
@@ -237,7 +258,7 @@ const CATALOGOS = {
       if (item.Saldo_Apertura !== undefined) {
         const interno = leer_('Bolsillos').find(b => b.ID_Cuenta === reg.ID_Cuenta && esVerdadero(b.Es_Interno));
         if (interno) {
-          updateRow('Bolsillos', interno._rowIndex, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
+          updateRow('Bolsillos', interno, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
         }
       }
     },
@@ -253,7 +274,7 @@ const CATALOGOS = {
     alDesactivar: function (reg) {
       // Los bolsillos de una cuenta desactivada también quedan inactivos (ya están en cero).
       leer_('Bolsillos').filter(b => b.ID_Cuenta === reg.ID_Cuenta && estaActivo(b))
-        .forEach(b => updateRow('Bolsillos', b._rowIndex, { Activo: false }));
+        .forEach(b => updateRow('Bolsillos', b, { Activo: false }));
     },
     padreActivo: function (reg) {
       exigirActivo_(leer_('Bancos'), 'ID_Banco', reg.ID_Banco, 'El banco de la cuenta');
@@ -668,7 +689,7 @@ const CATALOGOS = {
     despues: function (reg, anterior, item, opciones) {
       if (esVerdadero(reg.Vigente)) {
         leer_('Nomina_Escenarios').filter(e => e.ID_Nomina_Esc !== reg.ID_Nomina_Esc && esVerdadero(e.Vigente))
-          .forEach(e => updateRow('Nomina_Escenarios', e._rowIndex, { Vigente: false }));
+          .forEach(e => updateRow('Nomina_Escenarios', e, { Vigente: false }));
       }
       // Los subsidios del escenario se reemplazan por la lista recibida (si viene).
       const ids = (opciones && opciones.subsidios) || (item && item.subsidios);
@@ -696,7 +717,7 @@ const CATALOGOS = {
       // Un solo escenario base: al marcar este, los demás dejan de serlo.
       if (esVerdadero(reg.Es_Base)) {
         leer_('Escenarios').filter(e => e.ID_Escenario !== reg.ID_Escenario && esVerdadero(e.Es_Base))
-          .forEach(e => updateRow('Escenarios', e._rowIndex, { Es_Base: false }));
+          .forEach(e => updateRow('Escenarios', e, { Es_Base: false }));
       }
       // Crear un escenario copiando los renglones de otro (p. ej. Contingencia a partir de Normal).
       if (!anterior && o.copiarDe) {
@@ -723,7 +744,7 @@ function sincronizarSubsidios_(idEsc, idsSubsidio) {
   const subsidios = leer_('Subsidios');
   idsSubsidio.forEach(id => exigirActivo_(subsidios, 'ID_Subsidio', id, 'El subsidio'));
   const actuales = leer_('Nomina_Conceptos').filter(c => c.ID_Nomina_Esc === idEsc && estaActivo(c));
-  actuales.forEach(c => { if (idsSubsidio.indexOf(c.ID_Subsidio) === -1) updateRow('Nomina_Conceptos', c._rowIndex, { Activo: false }); });
+  actuales.forEach(c => { if (idsSubsidio.indexOf(c.ID_Subsidio) === -1) updateRow('Nomina_Conceptos', c, { Activo: false }); });
   const yaEstan = actuales.map(c => c.ID_Subsidio);
   const nuevos = idsSubsidio.filter(id => yaEstan.indexOf(id) === -1).map(id => {
     const sub = buscarPorId_(subsidios, 'ID_Subsidio', id);
@@ -778,7 +799,7 @@ function guardarCatalogo(tabla, item, opciones) {
   let registro;
   if (actual) {
     if (sinOrden) delete datos.Orden; // al editar, el orden se conserva si no se envía
-    updateRow(tabla, actual._rowIndex, datos);
+    updateRow(tabla, actual, datos);
     registro = Object.assign({}, actual, datos);
   } else {
     datos[def.id] = nuevoId_(def.prefijo);
@@ -806,7 +827,7 @@ function desactivarCatalogo(tabla, id) {
     throw new Error('No se puede desactivar "' + (reg.Nombre || id) + '": ' + motivos.join('; ') + '.');
   }
 
-  updateRow(tabla, reg._rowIndex, { Activo: false });
+  updateRow(tabla, reg, { Activo: false });
   if (def.alDesactivar) def.alDesactivar(reg);
   invalidateCache(tabla);
   return Object.assign({}, reg, { Activo: false });
@@ -818,7 +839,7 @@ function reactivarCatalogo(tabla, id) {
   const reg = buscarPorId_(leer_(tabla), def.id, id);
   if (!reg) throw new Error(def.etiqueta + ' no existe.');
   if (def.padreActivo) def.padreActivo(reg);
-  updateRow(tabla, reg._rowIndex, { Activo: true });
+  updateRow(tabla, reg, { Activo: true });
   invalidateCache(tabla);
   return Object.assign({}, reg, { Activo: true });
 }
@@ -929,7 +950,7 @@ function fusionarBolsillos_(cuenta, idDestino) {
   });
   // Releer: los traslados invalidaron la lectura anterior y hay que usar números de fila vigentes.
   leer_('Bolsillos').filter(b => otros.some(o => o.ID_Bolsillo === b.ID_Bolsillo))
-    .forEach(b => updateRow('Bolsillos', b._rowIndex, { Activo: false }));
+    .forEach(b => updateRow('Bolsillos', b, { Activo: false }));
   invalidateCache('Bolsillos');
 }
 
@@ -947,7 +968,7 @@ function cambiarModoBolsillos_(cuenta, permite) {
   }
   if (!permite) fusionarBolsillos_(cuenta, interno.ID_Bolsillo);
   const vigente = leer_('Bolsillos').find(b => b.ID_Bolsillo === interno.ID_Bolsillo);
-  updateRow('Bolsillos', vigente._rowIndex, { Nombre: permite ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre, Rol: 'General', Es_Interno: true });
+  updateRow('Bolsillos', vigente, { Nombre: permite ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre, Rol: 'General', Es_Interno: true });
   invalidateCache('Bolsillos');
 }
 

@@ -622,6 +622,14 @@ function voidPagoCredito(idPago) {
   });
 }
 
+/** Corrige la tasa de un crédito creado antes de la corrección del redondeo (o la marca como revisada). */
+function fixTasaCredito(idCredito, datos) {
+  return responder_(function () {
+    corregirTasaCredito(idCredito, datos);
+    return resultadoCredito_(idCredito, []);
+  });
+}
+
 function saveCredito(idCredito, datos) {
   return responder_(function () {
     editarCredito(idCredito, datos);

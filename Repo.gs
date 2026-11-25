@@ -104,12 +104,56 @@ function idHojaUsuario_() {
  * Toma el bloqueo (un solo escritor a la vez).
  * Una hoja: es del script y protege también de dos personas que comparten la hoja.
  * Varias hojas: es de la persona, para que unas no esperen a otras.
- * No es reentrante: ninguna función que lo tenga puede llamar a otra que también lo tome.
+ * Es reentrante dentro de una petición: si ya se tiene, solo se cuenta una vez más y se suelta al devolver la última.
+ * Así una operación compuesta (pagar un extracto, abonar un crédito) puede tomarlo una vez con conBloqueo_ y
+ * sus escrituras internas no lo sueltan a mitad de camino.
  */
+let BLOQUEO_ACTUAL = null; // { lock, n }
+
 function tomarBloqueo(ms) {
+  if (BLOQUEO_ACTUAL) {
+    BLOQUEO_ACTUAL.n++;
+    return { releaseLock: soltarBloqueo_ };
+  }
   const lock = modoMultiusuario_() ? LockService.getUserLock() : LockService.getScriptLock();
   lock.waitLock(ms || 10000);
-  return lock;
+  BLOQUEO_ACTUAL = { lock: lock, n: 1 };
+  return { releaseLock: soltarBloqueo_ };
+}
+
+function soltarBloqueo_() {
+  if (!BLOQUEO_ACTUAL) return;
+  BLOQUEO_ACTUAL.n--;
+  if (BLOQUEO_ACTUAL.n <= 0) {
+    const lock = BLOQUEO_ACTUAL.lock;
+    BLOQUEO_ACTUAL = null;
+    lock.releaseLock();
+  }
+}
+
+/** Ejecuta fn con el bloqueo tomado una sola vez para toda la operación. */
+function conBloqueo_(fn, ms) {
+  const b = tomarBloqueo(ms || 15000);
+  try { return fn(); } finally { b.releaseLock(); }
+}
+
+/**
+ * Operación compuesta "todo o nada": fn(alDeshacer) recibe una función para anotar cómo deshacer cada paso ya hecho.
+ * Si algo falla, se deshacen en orden inverso (lo que no se pueda deshacer se registra en el Log) y se relanza el error.
+ * Todo ocurre con el bloqueo tomado una vez.
+ */
+function transaccion_(fn) {
+  return conBloqueo_(() => {
+    const pasos = [];
+    try {
+      return fn(deshacer => pasos.push(deshacer));
+    } catch (e) {
+      for (let i = pasos.length - 1; i >= 0; i--) {
+        try { pasos[i](); } catch (x) { try { registrarLog('ERROR', 'transaccion', 'No se pudo deshacer un paso', String(x && x.message)); } catch (y) {} }
+      }
+      throw e;
+    }
+  });
 }
 
 /**
@@ -412,31 +456,97 @@ function updateRowById(sheetName, idColumnName, idValue, updatesObj) {
  * Actualiza una fila identificada por su número real de fila en la hoja (fila 1 = encabezados).
  * Usar el `_rowIndex` que entrega getTableData; nunca calcularlo a partir de la posición en el arreglo,
  * porque getTableData omite filas vacías y las posiciones dejan de coincidir.
+ * Lo recomendado es pasar el REGISTRO leído (con su `_rowIndex` y su ID): antes de escribir se comprueba que la fila
+ * siga siendo la de ese ID y, si se movió (alguien borró o insertó filas a mano en la hoja), se busca por el ID.
+ * Así nunca se sobrescribe otro registro. Con un número a secas se escribe en esa fila sin comprobar.
  * @param {string} sheetName Nombre de la pestaña.
- * @param {number} rowNumber Número de fila en la hoja (mínimo 2).
+ * @param {number|Object} filaORegistro Número de fila en la hoja (mínimo 2) o el registro leído.
  * @param {Object} updatesObj Campos a modificar; las claves que no son columnas se ignoran.
  */
-function updateRow(sheetName, rowNumber, updatesObj) {
-  const fila = Number(rowNumber);
-  if (!Number.isInteger(fila) || fila < 2) {
-    throw new Error(`Número de fila no válido para "${sheetName}": ${rowNumber}.`);
-  }
+function updateRow(sheetName, filaORegistro, updatesObj) {
+  return updateRows_(sheetName, [{ fila: filaORegistro, cambios: updatesObj }])[0];
+}
+
+/**
+ * Actualiza varias filas de una tabla con UN bloqueo, UNA lectura de la hoja y una escritura por tramo seguido.
+ * @param {string} sheetName
+ * @param {Array<{fila: number|Object, cambios: Object}>} lista
+ * @returns {Array<{ok, fila}>}
+ */
+function updateRows_(sheetName, lista) {
+  const items = (lista || []).filter(x => x);
+  if (!items.length) return [];
+  const pedidos = items.map(x => {
+    const registro = x.fila && typeof x.fila === 'object' ? x.fila : null;
+    const n = Number(registro ? registro._rowIndex : x.fila);
+    if (!Number.isInteger(n) || n < 2) throw new Error(`Número de fila no válido para "${sheetName}": ${registro ? registro._rowIndex : x.fila}.`);
+    return { n: n, registro: registro, cambios: x.cambios || {} };
+  });
 
   const lock = tomarBloqueo(10000);
-
   try {
-    const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName(sheetName);
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
-    if (fila > sheet.getLastRow()) {
-      throw new Error(`La fila ${fila} no existe en "${sheetName}".`);
+    const ultima = sheet.getLastRow();
+    const ancho = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, ancho).getValues()[0].map(h => String(h).trim());
+    const idCol = headers[0] && headers[0].indexOf('ID') === 0 ? 0 : -1;
+    const ahora = ahoraIso_();
+    const colAct = headers.indexOf('Actualizado_En');
+    const tocadas = {};
+    const idDe = p => (p.registro && idCol !== -1 ? p.registro[headers[idCol]] : '');
+    const conId = p => { const v = idDe(p); return v !== undefined && v !== null && v !== ''; };
+
+    // Se lee solo el tramo de filas pedido; si alguna se movió, la hoja entera (una vez) para buscarla por su ID.
+    const dentro = pedidos.map(p => p.n).filter(n => n <= ultima);
+    const min = dentro.length ? Math.min.apply(null, dentro) : 2;
+    const max = dentro.length ? Math.max.apply(null, dentro) : 1;
+    const valores = []; // valores[fila - 1] = arreglo de la fila
+    if (max >= min) sheet.getRange(min, 1, max - min + 1, ancho).getValues().forEach((r, i) => { valores[min - 1 + i] = r; });
+    const movidas = pedidos.some(p => conId(p) && (p.n > ultima || String(valores[p.n - 1][idCol]) !== String(idDe(p))));
+    if (movidas && ultima >= 2) sheet.getRange(2, 1, ultima - 1, ancho).getValues().forEach((r, i) => { valores[i + 1] = r; });
+
+    const resultados = pedidos.map(p => {
+      let fila = p.n;
+      if (conId(p)) {
+        const actual = fila <= ultima ? valores[fila - 1][idCol] : undefined;
+        if (String(actual) !== String(idDe(p))) {
+          // La fila se movió: se busca el registro por su ID.
+          fila = -1;
+          for (let i = 1; i < ultima; i++) if (valores[i] && String(valores[i][idCol]) === String(idDe(p))) { fila = i + 1; break; }
+          if (fila === -1) throw new Error(`El registro ${idDe(p)} ya no está en "${sheetName}". Actualiza desde la hoja e inténtalo de nuevo.`);
+        }
+      } else if (fila > ultima) {
+        throw new Error(`La fila ${fila} no existe en "${sheetName}".`);
+      }
+      const fila0 = valores[fila - 1];
+      let hay = false;
+      Object.keys(p.cambios).forEach(key => {
+        const c = headers.indexOf(key);
+        if (c === -1) return;
+        const v = p.cambios[key];
+        fila0[c] = (v === undefined || v === null) ? '' : v;
+        hay = true;
+      });
+      if (hay) {
+        if (colAct !== -1) fila0[colAct] = ahora;
+        tocadas[fila] = true;
+      }
+      return { ok: true, fila: fila };
+    });
+
+    // Una escritura por tramo de filas seguidas.
+    const nums = Object.keys(tocadas).map(Number).sort((a, b) => a - b);
+    let i = 0;
+    while (i < nums.length) {
+      let j = i;
+      while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+      const desde = nums[i], cuantas = nums[j] - nums[i] + 1;
+      sheet.getRange(desde, 1, cuantas, headers.length).setValues(valores.slice(desde - 1, desde - 1 + cuantas).map(r => r.slice(0, headers.length)));
+      i = j + 1;
     }
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    escribirCambiosFila_(sheet, headers, fila, updatesObj);
-
-    invalidateCache(sheetName);
-    return { ok: true, fila: fila };
+    if (nums.length) invalidateCache(sheetName);
+    return resultados;
   } finally {
     lock.releaseLock();
   }

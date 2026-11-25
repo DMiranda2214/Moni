@@ -56,7 +56,7 @@ function recibirIngresoRecurrente(id, d) {
     Concepto: r.Nombre, Notas: MARCA_INGRESO + r.ID_Ingreso
   });
   const proximo = sumarMeses_(r.Proximo_Cobro, MESES_PERIODO[r.Periodicidad] || 1, Number(r.Dia_Cobro));
-  updateRow('Ingresos_Recurrentes', r._rowIndex, { Proximo_Cobro: proximo, Ultimo_Cobro: fecha });
+  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: proximo, Ultimo_Cobro: fecha });
   invalidateCache('Ingresos_Recurrentes');
   return { idMov: mov.ID_Mov, anterior: anterior, proximo: proximo };
 }
@@ -66,7 +66,7 @@ function deshacerIngresoRecurrente(id, anterior, idMov) {
   const r = ingresoActivo_(id);
   if (!anterior || !anterior.Proximo_Cobro) throw new Error('Faltan los datos para deshacer.');
   if (idMov) anularMovimiento(idMov);
-  updateRow('Ingresos_Recurrentes', r._rowIndex, { Proximo_Cobro: fechaIso_(anterior.Proximo_Cobro, 'El cobro'), Ultimo_Cobro: texto_(anterior.Ultimo_Cobro) });
+  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: fechaIso_(anterior.Proximo_Cobro, 'El cobro'), Ultimo_Cobro: texto_(anterior.Ultimo_Cobro) });
   invalidateCache('Ingresos_Recurrentes');
   return { ok: true };
 }
@@ -76,7 +76,7 @@ function saltarIngresoRecurrente(id) {
   const r = ingresoActivo_(id);
   const anterior = { Proximo_Cobro: r.Proximo_Cobro, Ultimo_Cobro: r.Ultimo_Cobro || '', Valor: Number(r.Valor) || 0 };
   const proximo = sumarMeses_(r.Proximo_Cobro, MESES_PERIODO[r.Periodicidad] || 1, Number(r.Dia_Cobro));
-  updateRow('Ingresos_Recurrentes', r._rowIndex, { Proximo_Cobro: proximo });
+  updateRow('Ingresos_Recurrentes', r, { Proximo_Cobro: proximo });
   invalidateCache('Ingresos_Recurrentes');
   return { anterior: anterior, proximo: proximo };
 }

@@ -251,7 +251,7 @@ function cambiarMesPresupuestoNomina(periodo, mesNuevo) {
   if (!pago) throw new Error('No hay una nómina registrada en ese mes.');
   const nuevo = mesValido_(mesNuevo);
   const anterior = mesPresupuestoNomina_(pago);
-  updateRow('Nomina_Pagos', pago._rowIndex, { Mes_Presupuesto: nuevo });
+  updateRow('Nomina_Pagos', pago, { Mes_Presupuesto: nuevo });
   return { periodo: p, anterior: anterior, nuevo: nuevo };
 }
 
@@ -273,7 +273,7 @@ function registrarPagoNomina(periodo, idEsc, netoReal, fecha, idBolsillo, opcion
   const mesP = mesPresupuesto ? mesValido_(mesPresupuesto) : p;
   if (afecta) exigirPesos_(idBolsillo, 'El bolsillo donde llega la nómina');
 
-  const catSalario = leer_('Categorias').find(c => c.ID_Categoria === 'cat-salario' && estaActivo(c));
+  const catSalario = categoriaPorRol_('Salario');
   const mov = afecta ? registrarMovimiento({
     Tipo_Mov: 'Ingreso', Subtipo: 'Nomina', Valor: neto, Fecha: f, Concepto: 'Nómina ' + p,
     ID_Bolsillo: idBolsillo, ID_Categoria: catSalario ? catSalario.ID_Categoria : '', Notas: 'Escenario: ' + esc.Nombre
@@ -302,7 +302,7 @@ function anularPagoNomina(periodo) {
   const pago = leer_('Nomina_Pagos').find(n => n.Periodo === p && !esVerdadero(n.Anulado));
   if (!pago) throw new Error('No hay una nómina registrada en ese mes.');
   if (pago.ID_Mov) anularMovimiento(pago.ID_Mov);
-  updateRow('Nomina_Pagos', pago._rowIndex, { Anulado: true });
+  updateRow('Nomina_Pagos', pago, { Anulado: true });
   return { idMov: pago.ID_Mov, periodo: p, fecha: pago.Fecha_Pago, mesPresupuesto: mesPresupuestoNomina_(pago) };
 }
 
@@ -329,7 +329,7 @@ function guardarConceptoNomina(d) {
   if (filas.some(f => (!actual || f.ID_Concepto !== actual.ID_Concepto) && f.ID_Nomina_Esc === idEsc && estaActivo(f) && f.Tipo === tipo && texto_(f.Concepto).toLowerCase() === concepto.toLowerCase())) {
     throw new Error('Ya hay un concepto llamado "' + concepto + '" en este escenario.');
   }
-  if (actual) { updateRow('Nomina_Conceptos', actual._rowIndex, datos); return Object.assign({}, actual, datos); }
+  if (actual) { updateRow('Nomina_Conceptos', actual, datos); return Object.assign({}, actual, datos); }
   const nuevo = Object.assign({ ID_Concepto: nuevoId_('nco'), Dias: '', Porcentaje: '', ID_Subsidio: '' }, datos);
   insertRow('Nomina_Conceptos', nuevo);
   return nuevo;
@@ -338,7 +338,7 @@ function guardarConceptoNomina(d) {
 function quitarConceptoNomina(idConcepto) {
   const c = buscarPorId_(leer_('Nomina_Conceptos'), 'ID_Concepto', idConcepto);
   if (!c) throw new Error('El concepto no existe.');
-  updateRow('Nomina_Conceptos', c._rowIndex, { Activo: false });
+  updateRow('Nomina_Conceptos', c, { Activo: false });
   return { ID_Nomina_Esc: c.ID_Nomina_Esc };
 }
 

@@ -37,6 +37,24 @@ function categoriaMovimiento_(idCategoria, tipo) {
 }
 
 /** Normaliza el valor con su signo: Gasto negativo, Ingreso positivo, Ajuste con el signo recibido. */
+/**
+ * Vínculos que la app escribe para reconocer lo que generó un movimiento o una compra (un crédito, un extracto, un regalo,
+ * una suscripción, la distribución de un mes…). Antes vivían solo en Notas; desde 1.11 se guardan también en la columna
+ * Ref, así la persona puede editar sus notas sin romper el vínculo. Los registros viejos sin Ref siguen leyéndose de Notas.
+ */
+const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución )/;
+
+function esMarcaSistema_(t) { return MARCAS_SISTEMA.test(texto_(t)); }
+
+/** El vínculo de un registro: su Ref o, en los registros de antes de 1.11, sus Notas. */
+function refDe_(fila) { return texto_(fila && fila.Ref) || texto_(fila && fila.Notas); }
+
+/** Completa Ref en un registro nuevo cuyas Notas son una marca de la app. */
+function conRef_(fila) {
+  if (fila && !texto_(fila.Ref) && esMarcaSistema_(fila.Notas)) fila.Ref = texto_(fila.Notas);
+  return fila;
+}
+
 function valorConSigno_(valor, tipo) {
   const n = numero_(valor, 'El valor', { requerido: true, max: VALOR_MAXIMO, min: -VALOR_MAXIMO });
   if (tipo === 'Ajuste') {
@@ -77,7 +95,7 @@ function registrarMovimiento(m) {
     Anulado: false,
     Afecta_Saldos: afecta
   };
-  insertRow('Movimientos', fila);
+  insertRow('Movimientos', conRef_(fila));
   return fila;
 }
 
@@ -149,17 +167,17 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
 
   const salida = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: desde.ID_Bolsillo, Valor: -monto }, comun);
   const entrada = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: hacia.ID_Bolsillo, Valor: monto }, comun);
-  insertRows('Movimientos', [salida, entrada]);
+  insertRows('Movimientos', [conRef_(salida), conRef_(entrada)]);
 
   return { ok: true, idGrupo: idGrupo, patas: [salida, entrada] };
 }
 
 /** Categoría de las comisiones de conversión: se crea la primera vez; si la persona la desactivó, queda sin categoría. */
 function categoriaComision_() {
-  const cats = leer_('Categorias');
-  const existente = buscarPorId_(cats, 'ID_Categoria', 'cat-comision');
+  const existente = categoriaPorRol_('Comision', true);
   if (existente) return estaActivo(existente) ? existente.ID_Categoria : '';
-  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats) });
+  const cats = leer_('Categorias');
+  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats), Rol: 'Comision' });
   return 'cat-comision';
 }
 
@@ -227,7 +245,7 @@ function filasDelGrupo_(idMov) {
 function anularMovimiento(idMov) {
   const g = filasDelGrupo_(idMov);
   const pendientes = g.filas.filter(f => !esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f._rowIndex, { Anulado: true }));
+  pendientes.forEach(f => updateRow('Movimientos', f, { Anulado: true }));
   return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
@@ -242,7 +260,7 @@ function restaurarMovimiento(idMov) {
     }
   });
   const pendientes = g.filas.filter(f => esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f._rowIndex, { Anulado: false }));
+  pendientes.forEach(f => updateRow('Movimientos', f, { Anulado: false }));
   return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
@@ -275,7 +293,9 @@ function editarMovimiento(idMov, cambios) {
     Notas: c.Notas !== undefined ? texto_(c.Notas).slice(0, 500) : mov.Notas
   };
   if (c.Afecta_Saldos !== undefined) datos.Afecta_Saldos = quiereAfectarSaldos_(c.Afecta_Saldos, tipo);
-  updateRow('Movimientos', mov._rowIndex, datos);
+  // Un registro de antes de 1.11 guarda su vínculo (regalo, suscripción…) en Notas: se copia a Ref antes de cambiar la nota.
+  if (!texto_(mov.Ref) && esMarcaSistema_(mov.Notas) && datos.Notas !== mov.Notas) datos.Ref = texto_(mov.Notas);
+  updateRow('Movimientos', mov, datos);
   return Object.assign({}, mov, datos, { bolsilloAnterior: mov.ID_Bolsillo });
 }
 
@@ -432,6 +452,6 @@ function cuadrarCuenta(idCuenta, saldoReal, idBolsilloAjuste) {
     });
   }
 
-  updateRow('Cuentas', cuenta._rowIndex, { Saldo_Real: real, Fecha_Saldo_Real: hoyIso_() });
+  updateRow('Cuentas', cuenta, { Saldo_Real: real, Fecha_Saldo_Real: hoyIso_() });
   return { diferenciaAnterior: diferencia, ajustado: !!ajuste, idMov: ajuste ? ajuste.ID_Mov : '' };
 }

@@ -210,7 +210,7 @@ function agregarSuscripcionesAlMes(mes) {
         if ((r.ID_Tarjeta || '') !== (s.ID_Tarjeta || '')) cambios.ID_Tarjeta = s.ID_Tarjeta || '';
         if ((r.ID_Bolsillo_Destino || '') !== (s.ID_Bolsillo || '')) cambios.ID_Bolsillo_Destino = s.ID_Bolsillo || '';
         if (r.Concepto !== nombreRenglon && !usados[texto_(nombreRenglon).toLowerCase()]) cambios.Concepto = nombreRenglon;
-        if (Object.keys(cambios).length) { updateRow('Presupuesto_Mes', r._rowIndex, cambios); actualizados++; }
+        if (Object.keys(cambios).length) { updateRow('Presupuesto_Mes', r, cambios); actualizados++; }
       }
       return;
     }
@@ -260,7 +260,7 @@ function guardarRenglonMes(item) {
   if (datos.ID_Credito && !leer_('Creditos').some(c => c.ID_Credito === datos.ID_Credito && c.Estado === 'Activo')) throw new Error('El crédito no existe o ya está pagado.');
 
   if (actual) {
-    updateRow('Presupuesto_Mes', actual._rowIndex, datos);
+    updateRow('Presupuesto_Mes', actual, datos);
     return Object.assign({}, actual, datos);
   }
   const esc = filas.find(f => f.Mes === mes);
@@ -288,7 +288,7 @@ function eliminarRenglonMes(idItem) {
 function marcarRenglonPagado(idItem, pagado) {
   const fila = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
   if (!fila) throw new Error('El renglón no existe.');
-  updateRow('Presupuesto_Mes', fila._rowIndex, { Pagado: !!pagado });
+  updateRow('Presupuesto_Mes', fila, { Pagado: !!pagado });
   return { mes: fila.Mes, pagado: !!pagado };
 }
 
@@ -334,7 +334,7 @@ function pagarRenglonMes(idItem, d) {
     if (!mov || esVerdadero(mov.Anulado)) throw new Error('Ese movimiento no existe o está anulado.');
     if (mov.ID_Item_Ppto) throw new Error('Ese movimiento ya está enlazado a otro renglón.');
     const patas = mov.ID_Grupo ? leer_('Movimientos').filter(m => m.ID_Grupo === mov.ID_Grupo && !esVerdadero(m.Anulado)) : [mov];
-    patas.forEach(m => { updateRow('Movimientos', m._rowIndex, { ID_Item_Ppto: idItem }); ids.push(m.ID_Mov); });
+    patas.forEach(m => { updateRow('Movimientos', m, { ID_Item_Ppto: idItem }); ids.push(m.ID_Mov); });
   } else {
     const fecha = fechaMovimiento_(x.Fecha);
     const valor = numero_(x.Valor, 'El valor', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
@@ -354,7 +354,7 @@ function pagarRenglonMes(idItem, d) {
         .patas.forEach(p => ids.push(p.ID_Mov));
     }
   }
-  if (completar) updateRow('Presupuesto_Mes', item._rowIndex, { Pagado: true });
+  if (completar) updateRow('Presupuesto_Mes', item, { Pagado: true });
   return { mes: item.Mes, ids: ids };
 }
 
@@ -376,7 +376,7 @@ function desmarcarRenglonMes(idItem, anular) {
       anularCompraTC(c.ID_Compra).ids.forEach(i => ids.push(i));
     });
   }
-  updateRow('Presupuesto_Mes', buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem)._rowIndex, { Pagado: false });
+  updateRow('Presupuesto_Mes', buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem), { Pagado: false });
   return { mes: item.Mes, ids: ids };
 }
 
@@ -417,7 +417,7 @@ function previsualizarDistribucion(mes, idOrigen) {
   lineas.forEach(l => { l.Monto = redondear2_(l.Monto); });
 
   const marca = PREFIJO_DISTRIBUCION + m;
-  const yaDistribuido = getTableData('Movimientos', { excludeAnulados: true }).some(mv => mv.Subtipo === 'Distribucion' && mv.Notas === marca);
+  const yaDistribuido = getTableData('Movimientos', { excludeAnulados: true }).some(mv => mv.Subtipo === 'Distribucion' && refDe_(mv) === marca);
   return {
     mes: m, origen: { ID_Bolsillo: origen.ID_Bolsillo, Nombre: origen.Nombre },
     lineas: lineas, total: redondear2_(lineas.reduce((a, l) => a + l.Monto, 0)), yaDistribuido: yaDistribuido

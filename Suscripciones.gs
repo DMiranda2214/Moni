@@ -125,7 +125,7 @@ function pagarSuscripcion(id, d) {
 
   const cambios = { Proximo_Cobro: sumarMeses_(s.Proximo_Cobro, MESES_PERIODO[s.Periodicidad] || 1, Number(s.Dia_Cobro)), Ultimo_Pago: fecha };
   if (s.Tipo === 'Servicio') cambios.Valor = valor; // el estimado pasa a ser el último pago
-  updateRow('Suscripciones', s._rowIndex, cambios);
+  updateRow('Suscripciones', s, cambios);
   invalidateCache('Suscripciones');
   return Object.assign(resultado, { anterior: anterior, proximo: cambios.Proximo_Cobro });
 }
@@ -144,7 +144,7 @@ function deshacerPagoSuscripcion(id, anterior, idMov, idCompra) {
     const r = buscarPorId_(leer_('Presupuesto_Mes'), 'ID_Item', idItem);
     if (r && r.ID_Suscripcion === s.ID_Suscripcion && esVerdadero(r.Pagado)) marcarRenglonPagado(idItem, false);
   }
-  updateRow('Suscripciones', s._rowIndex, {
+  updateRow('Suscripciones', s, {
     Proximo_Cobro: fechaIso_(anterior.Proximo_Cobro, 'El cobro'), Ultimo_Pago: texto_(anterior.Ultimo_Pago),
     Valor: numero_(anterior.Valor, 'El valor', { defecto: s.Valor })
   });
@@ -157,7 +157,7 @@ function saltarCobroSuscripcion(id) {
   const s = suscripcionActiva_(id);
   const anterior = { Proximo_Cobro: s.Proximo_Cobro, Ultimo_Pago: s.Ultimo_Pago || '', Valor: Number(s.Valor) || 0 };
   const proximo = sumarMeses_(s.Proximo_Cobro, MESES_PERIODO[s.Periodicidad] || 1, Number(s.Dia_Cobro));
-  updateRow('Suscripciones', s._rowIndex, { Proximo_Cobro: proximo });
+  updateRow('Suscripciones', s, { Proximo_Cobro: proximo });
   invalidateCache('Suscripciones');
   return { anterior: anterior, proximo: proximo };
 }

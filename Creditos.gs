@@ -24,6 +24,12 @@ function tasaDesdeEA_(ea, periodicidad, metodo) {
   return (2 * (Math.pow(1 + ea, 1 / 2) - 1)) / n;
 }
 
+/** La EA que corresponde a una tasa periódica (lo inverso de tasaDesdeEA_), para mostrarla. */
+function eaDesdeTasa_(i, periodicidad, metodo) {
+  const n = PERIODOS_ANIO[periodicidad] || 12;
+  return metodo === 'Exacta' ? Math.pow(1 + i, n) - 1 : Math.pow(1 + i * n / 2, 2) - 1;
+}
+
 /** Cuota fija de la amortización francesa. */
 function cuotaFrancesa_(monto, i, n) {
   if (i <= 0) return redondear2_(monto / n);
@@ -131,9 +137,9 @@ function normalizarCredito_(c) {
 
   let tasa;
   if (c.Tasa_Periodica !== undefined && c.Tasa_Periodica !== '' && c.Tasa_Periodica !== null) {
-    tasa = numero_(c.Tasa_Periodica, 'La tasa por periodo', { min: 0, max: 1 });
+    tasa = tasa_(c.Tasa_Periodica, 'La tasa por periodo', { min: 0, max: 1 });
   } else if (c.EA !== undefined && c.EA !== '' && c.EA !== null) {
-    tasa = tasaDesdeEA_(numero_(c.EA, 'La tasa efectiva anual', { min: 0, max: 5 }), periodicidad, metodo);
+    tasa = tasaDesdeEA_(tasa_(c.EA, 'La tasa efectiva anual', { min: 0, max: 5 }), periodicidad, metodo);
   } else {
     tasa = 0;
   }
@@ -173,23 +179,22 @@ function registrarCredito(c) {
   const idCredito = c.ID_Credito ? texto_(c.ID_Credito) : nuevoId_('cre'); // el ID propio solo lo usan los datos de demostración
 
   const ids = [];
-  if (p.desembolsar) {
-    const b = bolsilloDeCuenta_(p.idCuenta);
-    const mov = registrarMovimiento({ Tipo_Mov: 'Gasto', Subtipo: 'Para_Gastos', Valor: p.monto, Fecha: p.inicio, Concepto: 'Préstamo: ' + p.nombre, ID_Bolsillo: b.ID_Bolsillo, Notas: 'Crédito ' + idCredito });
-    ids.push(mov.ID_Mov);
-  }
-
-  try {
+  transaccion_(alDeshacer => {
+    if (p.desembolsar) {
+      const b = bolsilloDeCuenta_(p.idCuenta);
+      const mov = registrarMovimiento({ Tipo_Mov: 'Gasto', Subtipo: 'Para_Gastos', Valor: p.monto, Fecha: p.inicio, Concepto: 'Préstamo: ' + p.nombre, ID_Bolsillo: b.ID_Bolsillo, Notas: 'Crédito ' + idCredito });
+      ids.push(mov.ID_Mov);
+      alDeshacer(() => anularMovimiento(mov.ID_Mov));
+    }
     insertRow('Creditos', {
       ID_Credito: idCredito, Nombre: p.nombre, ID_Persona: p.idPersona, ID_Cuenta_Ahorro: p.idCuenta, ID_Bolsillo_Pago: p.idBolsilloPago,
       Fecha_Inicio: p.inicio, Monto: p.monto, Tasa_Periodica: p.tasa, Periodicidad: p.periodicidad, Num_Periodos: filas.length,
       Cuota_Fija: p.cuota, Metodo_Tasa: p.metodo, Estado: 'Activo', Notas: p.notas
     });
+    // Si el cronograma no se pudo guardar, el crédito no queda a medias: se anula
+    alDeshacer(() => { const c = buscarPorId_(leer_('Creditos'), 'ID_Credito', idCredito); if (c) updateRow('Creditos', c, { Estado: 'Anulado' }); });
     insertRows('Creditos_Cronograma', filas.map(f => filaCronograma_(idCredito, 1, f, f.Num <= p.pagadas ? 'Pagada' : 'Pendiente')));
-  } catch (e) {
-    ids.forEach(id => { try { anularMovimiento(id); } catch (x) {} });
-    throw e;
-  }
+  });
   return { idCredito: idCredito, cuota: p.cuota, cuotas: filas.length, ids: ids };
 }
 
@@ -259,25 +264,33 @@ function registrarPagoCredito(idCredito, valor, fecha, idBolsilloOrigen) {
   const k = plan.cuota;
   const idPago = nuevoId_('pgo');
 
-  const t = registrarTransferencia(origen, destino.ID_Bolsillo, plan.valorCobrado, f, 'Cuota ' + k.Num + ' · ' + credito.Nombre,
-    'Pago ' + idPago, 'App', { Subtipo: 'Pago_Cuota', ID_Item_Ppto: renglon ? renglon.ID_Item : '' });
-  try {
-    updateRow('Creditos_Cronograma', k._rowIndex, { Estado: 'Pagada' });
-    if (plan.excedente > 0 && !plan.cancela) {
-      plan.pendientesReemplazadas.forEach(r => updateRow('Creditos_Cronograma', r._rowIndex, { Estado: 'Reemplazada' }));
-      insertRows('Creditos_Cronograma', plan.nuevoCronograma.map(x => filaCronograma_(idCredito, Number(k.Version) + 1, x)));
-    } else if (plan.excedente > 0 && plan.cancela) {
-      plan.pendientesReemplazadas.forEach(r => updateRow('Creditos_Cronograma', r._rowIndex, { Estado: 'Reemplazada' }));
+  // Todo o nada: si algo falla, el dinero vuelve y el cronograma queda como estaba.
+  const t = transaccion_(alDeshacer => {
+    const t = registrarTransferencia(origen, destino.ID_Bolsillo, plan.valorCobrado, f, 'Cuota ' + k.Num + ' · ' + credito.Nombre,
+      'Pago ' + idPago, 'App', { Subtipo: 'Pago_Cuota', ID_Item_Ppto: renglon ? renglon.ID_Item : '' });
+    alDeshacer(() => anularMovimiento(t.patas[0].ID_Mov));
+    updateRow('Creditos_Cronograma', k, { Estado: 'Pagada' });
+    alDeshacer(() => updateRow('Creditos_Cronograma', k, { Estado: 'Pendiente' }));
+    if (plan.excedente > 0) {
+      updateRows_('Creditos_Cronograma', plan.pendientesReemplazadas.map(r => ({ fila: r, cambios: { Estado: 'Reemplazada' } })));
+      alDeshacer(() => updateRows_('Creditos_Cronograma', plan.pendientesReemplazadas.map(r => ({ fila: r, cambios: { Estado: 'Pendiente' } }))));
+      if (!plan.cancela) {
+        const nuevas = plan.nuevoCronograma.map(x => filaCronograma_(idCredito, Number(k.Version) + 1, x));
+        insertRows('Creditos_Cronograma', nuevas);
+        alDeshacer(() => {
+          const ids = nuevas.map(n => n.ID_Cuota);
+          updateRows_('Creditos_Cronograma', leer_('Creditos_Cronograma').filter(r => ids.indexOf(r.ID_Cuota) !== -1).map(r => ({ fila: r, cambios: { Estado: 'Reemplazada' } })));
+        });
+      }
     }
-    updateRow('Creditos', credito._rowIndex, { Num_Periodos: Number(k.Num) + plan.cuotasRestantes, Estado: plan.cancela ? 'Pagado' : 'Activo' });
+    updateRow('Creditos', credito, { Num_Periodos: Number(k.Num) + plan.cuotasRestantes, Estado: plan.cancela ? 'Pagado' : 'Activo' });
+    alDeshacer(() => updateRow('Creditos', credito, { Num_Periodos: credito.Num_Periodos, Estado: credito.Estado }));
     insertRow('Creditos_Pagos', {
       ID_Pago: idPago, ID_Credito: idCredito, Fecha: f, Num_Cuota: Number(k.Num), Valor_Pagado: plan.valorCobrado, Interes: Number(k.Interes),
       Capital_Cuota: Number(k.Capital), Abono_Extra: plan.excedente, Saldo_Despues: plan.saldoDespues, Version: Number(k.Version), ID_Grupo: t.idGrupo, Anulado: false
     });
-  } catch (e) {
-    anularMovimiento(t.patas[0].ID_Mov);
-    throw e;
-  }
+    return t;
+  });
   return { idPago: idPago, num: Number(k.Num), valorCobrado: plan.valorCobrado, excedente: plan.excedente, saldoDespues: plan.saldoDespues,
     cuotasAhorradas: plan.cuotasAhorradas, cancela: plan.cancela, ids: t.patas.map(p => p.ID_Mov), idCredito: idCredito };
 }
@@ -293,21 +306,25 @@ function anularPagoCredito(idPago) {
   const credito = creditoActivo_(pago.ID_Credito);
   const cron = leer_('Creditos_Cronograma').filter(f => f.ID_Credito === pago.ID_Credito);
   const version = Number(pago.Version);
+  const maxVersion = cron.filter(f => f.Estado !== 'Reemplazada').reduce((m, f) => Math.max(m, Number(f.Version) || 1), 1);
+  if (maxVersion > version + (Number(pago.Abono_Extra) > 0 ? 1 : 0)) {
+    throw new Error('Después de este pago se corrigió la tasa del crédito: ya no se puede anular. Corrige el valor con "Editar pago".');
+  }
 
   const movs = leer_('Movimientos').filter(m => m.ID_Grupo === pago.ID_Grupo && !esVerdadero(m.Anulado));
   const ids = [];
   if (movs.length) anularMovimiento(movs[0].ID_Mov).ids.forEach(i => ids.push(i));
 
   cron.filter(f => Number(f.Version) === version && Number(f.Num) === Number(pago.Num_Cuota))
-    .forEach(f => updateRow('Creditos_Cronograma', f._rowIndex, { Estado: 'Pendiente' }));
+    .forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Pendiente' }));
   if (Number(pago.Abono_Extra) > 0) {
-    cron.filter(f => Number(f.Version) === version + 1).forEach(f => updateRow('Creditos_Cronograma', f._rowIndex, { Estado: 'Reemplazada' }));
+    cron.filter(f => Number(f.Version) === version + 1).forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Reemplazada' }));
     cron.filter(f => Number(f.Version) === version && Number(f.Num) > Number(pago.Num_Cuota) && f.Estado === 'Reemplazada')
-      .forEach(f => updateRow('Creditos_Cronograma', f._rowIndex, { Estado: 'Pendiente' }));
+      .forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Pendiente' }));
   }
   const maxNum = cron.filter(f => Number(f.Version) <= version).reduce((m, f) => Math.max(m, Number(f.Num)), 0);
-  updateRow('Creditos', credito._rowIndex, { Estado: 'Activo', Num_Periodos: maxNum });
-  updateRow('Creditos_Pagos', pago._rowIndex, { Anulado: true });
+  updateRow('Creditos', credito, { Estado: 'Activo', Num_Periodos: maxNum });
+  updateRow('Creditos_Pagos', pago, { Anulado: true });
   return { ids: ids, idCredito: pago.ID_Credito };
 }
 
@@ -376,7 +393,7 @@ function editarPagoCredito(idCredito, numCuota, nuevoValor) {
   insertRows('Creditos_Cronograma', todas.map(f => filaCronograma_(idCredito, f.Version, f, f.Estado)));
   pagadas.forEach(n => {
     const r = resultado[n], p = pagoDe(n);
-    if (p) updateRow('Creditos_Pagos', p._rowIndex, { Valor_Pagado: r.Valor_Pagado, Interes: r.Interes, Capital_Cuota: r.Capital_Cuota, Abono_Extra: r.Abono_Extra, Saldo_Despues: r.Saldo_Despues, Version: r.Version });
+    if (p) updateRow('Creditos_Pagos', p, { Valor_Pagado: r.Valor_Pagado, Interes: r.Interes, Capital_Cuota: r.Capital_Cuota, Abono_Extra: r.Abono_Extra, Saldo_Despues: r.Saldo_Despues, Version: r.Version });
     else if (n === num) {
       insertRow('Creditos_Pagos', { ID_Pago: nuevoId_('pgo'), ID_Credito: idCredito, Fecha: r.fecha, Num_Cuota: n, Valor_Pagado: r.Valor_Pagado, Interes: r.Interes,
         Capital_Cuota: r.Capital_Cuota, Abono_Extra: r.Abono_Extra, Saldo_Despues: r.Saldo_Despues, Version: r.Version, ID_Grupo: '', Anulado: false });
@@ -384,8 +401,67 @@ function editarPagoCredito(idCredito, numCuota, nuevoValor) {
   });
   const pendientes = vivas().length;
   const ultimoNum = todas.filter(f => f.Estado !== 'Reemplazada').reduce((m, f) => Math.max(m, f.Num), 0);
-  updateRow('Creditos', credito._rowIndex, { Num_Periodos: ultimoNum, Estado: pendientes ? 'Activo' : 'Pagado' });
+  updateRow('Creditos', credito, { Num_Periodos: ultimoNum, Estado: pendientes ? 'Activo' : 'Pagado' });
   return { idCredito: idCredito, num: num, cuotasRestantes: pendientes, saldo: pendientes ? vivas()[0].Saldo_Inicial : 0 };
+}
+
+/**
+ * Hasta la versión 1.10 las tasas pasaban por un redondeo de 2 decimales (9,5 % EA quedaba en 10 %, 0,4 % por periodo
+ * en 0 %). Los créditos creados antes de la corrección cuya tasa "parece redondeada" se marcan para que la persona la
+ * revise; nada se cambia solo.
+ */
+const FECHA_CORRECCION_TASAS = '2026-11-26';
+
+function tasaPareceRedondeada_(c) {
+  if (c.Estado !== 'Activo') return false;
+  if (texto_(c.Creado_En).slice(0, 10) >= FECHA_CORRECCION_TASAS) return false;
+  if (texto_(c.Notas).indexOf('[tasa revisada]') !== -1) return false;
+  const i = Number(c.Tasa_Periodica) || 0;
+  if (i === 0) return true;
+  const ea = eaDesdeTasa_(i, c.Periodicidad, c.Metodo_Tasa);
+  const entero = x => Math.abs(x * 100 - Math.round(x * 100)) < 1e-6;
+  return entero(ea) || entero(i);
+}
+
+/** Créditos activos cuya tasa conviene revisar (para el aviso de Inicio). */
+function creditosTasaPorRevisar_() {
+  return getTableData('Creditos').filter(tasaPareceRedondeada_);
+}
+
+/**
+ * Corrige la tasa de un crédito: las cuotas pendientes se rehacen con la tasa nueva (mismo número de cuotas pendientes,
+ * desde el saldo actual). Las pagadas, los pagos y los movimientos no se tocan. Sin tasa nueva solo marca "revisada".
+ * @param {string} idCredito
+ * @param {Object} d { EA?, Tasa_Periodica?, soloConfirmar? }
+ */
+function corregirTasaCredito(idCredito, d) {
+  const c = creditoActivo_(idCredito);
+  if (c.Estado !== 'Activo') throw new Error('Solo se puede corregir la tasa de un crédito activo.');
+  const x = d || {};
+  const notas = (texto_(c.Notas) + ' [tasa revisada]').trim().slice(0, 300);
+  if (x.soloConfirmar) { updateRow('Creditos', c, { Notas: notas }); return { idCredito: idCredito, cambio: false }; }
+
+  let tasa;
+  if (x.Tasa_Periodica !== undefined && x.Tasa_Periodica !== '') tasa = tasa_(x.Tasa_Periodica, 'La tasa por periodo', { min: 0, max: 1 });
+  else if (x.EA !== undefined && x.EA !== '') tasa = tasaDesdeEA_(tasa_(x.EA, 'La tasa efectiva anual', { min: 0, max: 5 }), c.Periodicidad, c.Metodo_Tasa || 'Excel');
+  else throw new Error('Escribe la tasa correcta.');
+  tasa = Math.round(tasa * 1e9) / 1e9;
+
+  const vigente = cronogramaVigente_(idCredito);
+  const pendientes = vigente.filter(f => f.Estado === 'Pendiente');
+  if (!pendientes.length) throw new Error('Este crédito ya no tiene cuotas pendientes.');
+  const primera = pendientes[0];
+  const saldo = redondear2_(Number(primera.Saldo_Inicial));
+  const cuota = cuotaFrancesa_(saldo, tasa, pendientes.length);
+  const version = vigente.reduce((m, f) => Math.max(m, Number(f.Version) || 1), 1) + 1;
+  const nuevas = generarCronograma_(saldo, tasa, cuota, Number(primera.Num), pendientes.length, num => fechaCuota_(c.Fecha_Inicio, c.Periodicidad, num));
+
+  return conBloqueo_(() => {
+    updateRows_('Creditos_Cronograma', pendientes.map(f => ({ fila: f, cambios: { Estado: 'Reemplazada' } })));
+    insertRows('Creditos_Cronograma', nuevas.map(f => filaCronograma_(idCredito, version, f)));
+    updateRow('Creditos', c, { Tasa_Periodica: tasa, Cuota_Fija: cuota, Num_Periodos: Number(primera.Num) - 1 + nuevas.length, Notas: notas });
+    return { idCredito: idCredito, cambio: true, tasa: tasa, cuota: cuota, cuotas: nuevas.length };
+  });
 }
 
 /** Cambia datos que no alteran el cronograma. */
@@ -401,7 +477,7 @@ function editarCredito(idCredito, datos) {
   if (d.ID_Persona !== undefined) { if (d.ID_Persona) exigirActivo_(leer_('Personas'), 'ID_Persona', d.ID_Persona, 'La persona'); cambios.ID_Persona = d.ID_Persona || ''; }
   if (d.ID_Bolsillo_Pago !== undefined) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', d.ID_Bolsillo_Pago, 'El bolsillo de pago'); exigirPesos_(d.ID_Bolsillo_Pago, 'El bolsillo de pago'); cambios.ID_Bolsillo_Pago = d.ID_Bolsillo_Pago; }
   if (d.Notas !== undefined) cambios.Notas = texto_(d.Notas).slice(0, 300);
-  updateRow('Creditos', c._rowIndex, cambios);
+  updateRow('Creditos', c, cambios);
   return { idCredito: idCredito };
 }
 
@@ -410,9 +486,9 @@ function anularCredito(idCredito) {
   const c = creditoActivo_(idCredito);
   if (leer_('Creditos_Pagos').some(p => p.ID_Credito === idCredito && !esVerdadero(p.Anulado))) throw new Error('El crédito ya tiene pagos. Anúlalos primero (del último al primero).');
   const ids = [];
-  leer_('Movimientos').filter(m => m.Notas === 'Crédito ' + idCredito && !esVerdadero(m.Anulado)).forEach(m => anularMovimiento(m.ID_Mov).ids.forEach(i => ids.push(i)));
-  leer_('Creditos_Cronograma').filter(f => f.ID_Credito === idCredito && f.Estado !== 'Reemplazada').forEach(f => updateRow('Creditos_Cronograma', f._rowIndex, { Estado: 'Reemplazada' }));
-  updateRow('Creditos', c._rowIndex, { Estado: 'Anulado' });
+  leer_('Movimientos').filter(m => refDe_(m) === 'Crédito ' + idCredito && !esVerdadero(m.Anulado)).forEach(m => anularMovimiento(m.ID_Mov).ids.forEach(i => ids.push(i)));
+  leer_('Creditos_Cronograma').filter(f => f.ID_Credito === idCredito && f.Estado !== 'Reemplazada').forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Reemplazada' }));
+  updateRow('Creditos', c, { Estado: 'Anulado' });
   return { ids: ids, idCredito: idCredito };
 }
 
@@ -434,7 +510,9 @@ function resumenCredito_(c, vigente, personas, cuentas) {
     Fecha_Inicio: c.Fecha_Inicio, Monto: monto, Periodicidad: c.Periodicidad, Tasa_Periodica: Number(c.Tasa_Periodica) || 0, Cuota_Fija: Number(c.Cuota_Fija) || 0, Notas: c.Notas || '',
     saldo: c.Estado === 'Activo' ? saldo : 0, cuotasPagadas: pagadas.length, cuotasTotal: vigente.length,
     proxima: proxima ? { Num: Number(proxima.Num), Fecha: proxima.Fecha_Prevista, Cuota: Number(proxima.Cuota) } : null,
-    avance: monto > 0 ? Math.min(1, Math.round((monto - (c.Estado === 'Activo' ? saldo : 0)) / monto * 1000) / 1000) : 0
+    avance: monto > 0 ? Math.min(1, Math.round((monto - (c.Estado === 'Activo' ? saldo : 0)) / monto * 1000) / 1000) : 0,
+    EA: Math.round(eaDesdeTasa_(Number(c.Tasa_Periodica) || 0, c.Periodicidad, c.Metodo_Tasa) * 1e6) / 1e6,
+    tasaPorRevisar: tasaPareceRedondeada_(c)
   };
 }
 

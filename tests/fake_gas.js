@@ -225,6 +225,11 @@ function crearEntorno(hojasIniciales, opciones) {
     });
   }
 
+  /** Carga código que no está en disco (por ejemplo, una versión anterior sacada de git). */
+  function cargarTexto(nombre, codigo) {
+    vm.runInContext(codigo, ctx, { filename: nombre });
+  }
+
   // Cada ejecutar() equivale a una petición de Apps Script: empieza sin nada memorizado.
   const ejecutar = (js) => {
     vm.runInContext("typeof reiniciarMemoria_ === 'function' && reiniciarMemoria_()", ctx);
@@ -233,7 +238,7 @@ function crearEntorno(hojasIniciales, opciones) {
 
   // como(correo): quién está usando la app a partir de ahora (otra persona = otras propiedades, caché y activadores).
   const como = correo => { usuarioActual = correo; return correo; };
-  return { ctx, hojas, registro, propiedades, propsUsuario, libros, como, cargar, ejecutar, drive, calendario };
+  return { ctx, hojas, registro, propiedades, propsUsuario, libros, como, cargar, cargarTexto, ejecutar, drive, calendario };
 }
 
 module.exports = { crearEntorno };

@@ -123,7 +123,7 @@ function sembrarDatosDemo() {
   insertRows('Inmuebles', inmuebles);
   insertRows('Empresas_Pago', empresas);
   insertRows('Servicios_Publicos', servicios);
-  insertRows('Movimientos', movimientos);
+  insertRows('Movimientos', movimientos.map(conRef_));
 
   // Plantilla de presupuesto y nómina de ejemplo (sobre el escenario base que ya existe)
   const esc = getTableData('Escenarios', { forceRefresh: true }).find(e => esVerdadero(e.Es_Base));

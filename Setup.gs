@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '11';
+const ESQUEMA_VERSION = '12';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -40,7 +40,7 @@ const SCHEMAS = {
   Tarjetas: tabla_(
     ['ID_Tarjeta', 'ID_Banco', 'Nombre', 'Cupo', 'Dia_Corte', 'Dia_Pago', 'ID_Bolsillo_Reserva', 'ID_Bolsillo_Personal', 'Color', 'Activo', 'Orden'],
     [170, 170, 200, 120, 90, 90, 170, 170, 90, 70, 60]),
-  Categorias: tabla_(['ID_Categoria', 'Nombre', 'Tipo', 'Icono', 'Color', 'Activo', 'Orden'], [170, 220, 120, 90, 90, 70, 60]),
+  Categorias: tabla_(['ID_Categoria', 'Nombre', 'Tipo', 'Icono', 'Color', 'Activo', 'Orden', 'Rol'], [170, 220, 120, 90, 90, 70, 60, 120]),
   Personas: tabla_(['ID_Persona', 'Nombre', 'Rol', 'Activo'], [170, 220, 110, 70]),
   Inmuebles: tabla_(['ID_Inmueble', 'Nombre', 'Activo', 'Orden'], [170, 220, 70, 60]),
   Empresas_Pago: tabla_(['ID_Empresa', 'Nombre', 'URL_Pago', 'Notas', 'Activo', 'Orden'], [170, 200, 280, 220, 70, 60]),
@@ -60,11 +60,11 @@ const SCHEMAS = {
 
   // ---- Operación ----
   Movimientos: tabla_(
-    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos'],
-    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110]),
+    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos', 'Ref'],
+    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110, 200]),
   Compras_TC: tabla_(
-    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado'],
-    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80]),
+    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado', 'Ref'],
+    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80, 200]),
   Extractos: tabla_(
     ['ID_Extracto', 'ID_Tarjeta', 'Mes', 'Total', 'Estado', 'Fecha_Pago', 'ID_Grupo_Pago', 'URL_PDF', 'Notas', 'Anulado'],
     [170, 170, 90, 120, 90, 110, 170, 260, 200, 80]),
@@ -206,23 +206,23 @@ const DEFAULT_CONFIG = [
   ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización']
 ];
 
-/** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden]. */
+/** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden, Rol]. Rol marca las que usa la app. */
 const DEFAULT_CATEGORIAS = [
-  ['cat-mercado', 'Mercado', 'Gasto', 'carrito', '', true, 1],
-  ['cat-servicios', 'Servicios públicos', 'Gasto', 'rayo', '', true, 2],
-  ['cat-transporte', 'Transporte', 'Gasto', 'auto', '', true, 3],
-  ['cat-salud', 'Salud y farmacia', 'Gasto', 'corazon', '', true, 4],
-  ['cat-suscrip', 'Suscripciones', 'Gasto', 'pantalla', '', true, 5],
-  ['cat-hogar', 'Arriendo y hogar', 'Gasto', 'casa', '', true, 6],
-  ['cat-salidas', 'Salidas y restaurantes', 'Gasto', 'cubiertos', '', true, 7],
-  ['cat-familia', 'Apoyo familiar', 'Gasto', 'personas', '', true, 8],
-  ['cat-cuota', 'Cuota de crédito', 'Gasto', 'tarjeta', '', true, 9],
-  ['cat-regalos', 'Regalos', 'Gasto', 'regalo', '', true, 10],
-  ['cat-salario', 'Salario / nómina', 'Ingreso', 'billete', '', true, 11],
-  ['cat-extra', 'Ingreso extra', 'Ingreso', 'mas', '', true, 12],
-  ['cat-rendim', 'Rendimientos', 'Ingreso', 'grafico', '', true, 13],
-  ['cat-transfer', 'Transferencia', 'Transferencia', 'flechas', '', true, 14],
-  ['cat-ajuste', 'Ajuste contable', 'Ajuste', 'ajuste', '', true, 15]
+  ['cat-mercado', 'Mercado', 'Gasto', 'carrito', '', true, 1, ''],
+  ['cat-servicios', 'Servicios públicos', 'Gasto', 'rayo', '', true, 2, ''],
+  ['cat-transporte', 'Transporte', 'Gasto', 'auto', '', true, 3, ''],
+  ['cat-salud', 'Salud y farmacia', 'Gasto', 'corazon', '', true, 4, ''],
+  ['cat-suscrip', 'Suscripciones', 'Gasto', 'pantalla', '', true, 5, ''],
+  ['cat-hogar', 'Arriendo y hogar', 'Gasto', 'casa', '', true, 6, ''],
+  ['cat-salidas', 'Salidas y restaurantes', 'Gasto', 'cubiertos', '', true, 7, ''],
+  ['cat-familia', 'Apoyo familiar', 'Gasto', 'personas', '', true, 8, ''],
+  ['cat-cuota', 'Cuota de crédito', 'Gasto', 'tarjeta', '', true, 9, ''],
+  ['cat-regalos', 'Regalos', 'Gasto', 'regalo', '', true, 10, 'Regalos'],
+  ['cat-salario', 'Salario / nómina', 'Ingreso', 'billete', '', true, 11, 'Salario'],
+  ['cat-extra', 'Ingreso extra', 'Ingreso', 'mas', '', true, 12, ''],
+  ['cat-rendim', 'Rendimientos', 'Ingreso', 'grafico', '', true, 13, 'Rendimiento'],
+  ['cat-transfer', 'Transferencia', 'Transferencia', 'flechas', '', true, 14, ''],
+  ['cat-ajuste', 'Ajuste contable', 'Ajuste', 'ajuste', '', true, 15, '']
 ];
 
 /** Escenario inicial: [ID, Nombre, Es_Base, Descripcion, Activo]. */
@@ -291,7 +291,12 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Regalos', columna: 'ID_Bolsillo_Plan', valor: '' },
   { tabla: 'Servicios_Publicos', columna: 'ID_Empresa', valor: '' },
   { tabla: 'CDTs', columna: 'Retencion_Tipo', valor: 'Porcentaje' },
-  { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 }
+  { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 },
+  // 1.11: el vínculo con lo que generó el registro (crédito, extracto, regalo…) vive en su propia columna; Notas queda libre
+  { tabla: 'Movimientos', columna: 'Ref', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Ref', valor: '' },
+  // 1.11: las categorías que usa la app (salario, rendimientos, regalos, comisiones) se reconocen por su rol, no por un ID fijo
+  { tabla: 'Categorias', columna: 'Rol', valor: '' }
 ];
 
 /**

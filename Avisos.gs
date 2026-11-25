@@ -51,6 +51,12 @@ function obtenerAvisos_() {
       'Compraste el regalo de ' + x.Persona + ' con la tarjeta' + (x.BolsilloPlan ? ': pasa ese dinero de “' + x.BolsilloPlan + '” a “' + x.Reserva + '”' : ': pasa ese dinero a “' + x.Reserva + '”') + ' para tenerlo apartado. Se quita cuando registres el movimiento.', 'regalos');
   });
 
+  // Créditos creados cuando las tasas se redondeaban a 2 decimales: la persona confirma o corrige la tasa (nada cambia solo)
+  creditosTasaPorRevisar_().forEach(c => {
+    agregar('tasa_credito_' + c.ID_Credito, 'sugerencia', 'Revisa la tasa de “' + c.Nombre + '”',
+      'Las versiones anteriores redondeaban las tasas con decimales (9,5 % quedaba en 10 %). Confirma que la tasa está bien o corrígela: solo cambian las cuotas pendientes.', 'credito/' + c.ID_Credito);
+  });
+
   // ---- Sugerencias: configuración que falta ----
   const hayDolares = bancos.some(b => divisaBanco_(b) !== DIVISA_BASE);
   if (hayDolares && !esVerdadero(cfgValor_('Tasa_Auto')) && !cfgValor_('Tasa_USD') && !cfgValor_('Tasa_EUR')) {

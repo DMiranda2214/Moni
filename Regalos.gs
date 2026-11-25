@@ -17,14 +17,14 @@ function anioValido_(anio) {
 function realPorRegalo_() {
   const real = {};
   getTableData('Movimientos', { excludeAnulados: true }).forEach(m => {
-    const n = texto_(m.Notas);
+    const n = refDe_(m);
     if (n.indexOf(MARCA_REGALO) !== 0 || m.Tipo_Mov !== 'Gasto') return;
     const id = n.slice(MARCA_REGALO.length);
     real[id] = redondear2_((real[id] || 0) + (-(Number(m.Valor) || 0)));
   });
   // Las compras con tarjeta también cuentan como lo gastado en el regalo
   getTableData('Compras_TC').filter(c => !esVerdadero(c.Anulado)).forEach(c => {
-    const n = texto_(c.Notas);
+    const n = refDe_(c);
     if (n.indexOf(MARCA_REGALO) !== 0) return;
     const id = n.slice(MARCA_REGALO.length);
     real[id] = redondear2_((real[id] || 0) + (Number(c.Valor) || 0));
@@ -40,7 +40,7 @@ function realPorRegalo_() {
  */
 function regalosPendientesReserva_() {
   const regalos = getTableData('Regalos'), personas = getTableData('Personas'), tarjetas = getTableData('Tarjetas'), bolsillos = getTableData('Bolsillos');
-  const compras = getTableData('Compras_TC').filter(c => !esVerdadero(c.Anulado) && !esVerdadero(c.Pagado) && texto_(c.Notas).indexOf(MARCA_REGALO) === 0);
+  const compras = getTableData('Compras_TC').filter(c => !esVerdadero(c.Anulado) && !esVerdadero(c.Pagado) && refDe_(c).indexOf(MARCA_REGALO) === 0);
   if (!compras.length) return [];
   const movs = getTableData('Movimientos', { excludeAnulados: true }).filter(m => m.Tipo_Mov === 'Transferencia' && !m.Subtipo && m.ID_Grupo && afectaSaldos_(m));
   const porGrupo = {};
@@ -50,7 +50,7 @@ function regalosPendientesReserva_() {
   // Un regalo por tarjeta con lo que falta mover
   const porRegalo = {};
   compras.forEach(c => {
-    const idRegalo = texto_(c.Notas).slice(MARCA_REGALO.length);
+    const idRegalo = refDe_(c).slice(MARCA_REGALO.length);
     const k = idRegalo + '|' + c.ID_Tarjeta;
     const x = porRegalo[k] || (porRegalo[k] = { idRegalo: idRegalo, idTarjeta: c.ID_Tarjeta, total: 0, desde: c.Fecha });
     x.total = redondear2_(x.total + (Number(c.Valor) || 0));
@@ -133,7 +133,7 @@ function guardarRegalo(r) {
   };
   // El bolsillo del que se planea pagar el regalo (opcional)
   if (datos.ID_Bolsillo_Plan) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', datos.ID_Bolsillo_Plan, 'El bolsillo del regalo'); exigirPesos_(datos.ID_Bolsillo_Plan, 'El bolsillo del regalo'); }
-  if (actual) { updateRow('Regalos', actual._rowIndex, datos); return Object.assign({}, actual, datos); }
+  if (actual) { updateRow('Regalos', actual, datos); return Object.assign({}, actual, datos); }
   const nuevo = Object.assign({ ID_Regalo: nuevoId_('reg'), Real: '', ID_Mov: '' }, datos);
   insertRow('Regalos', nuevo);
   return nuevo;
@@ -157,7 +157,7 @@ function registrarGastoRegalo(idRegalo, valor, idBolsillo, fecha) {
   const regalo = buscarPorId_(leer_('Regalos'), 'ID_Regalo', idRegalo);
   if (!regalo) throw new Error('El regalo no existe.');
   const p = buscarPorId_(leer_('Personas'), 'ID_Persona', regalo.ID_Persona);
-  const cat = leer_('Categorias').find(c => c.ID_Categoria === 'cat-regalos' && estaActivo(c));
+  const cat = categoriaPorRol_('Regalos');
   if (texto_(idBolsillo).indexOf('T:') === 0) {
     const compra = registrarCompraTC({
       ID_Tarjeta: texto_(idBolsillo).slice(2), Fecha: fecha, Valor: valor, Fuente: 'Personal', ID_Categoria: cat ? cat.ID_Categoria : '',

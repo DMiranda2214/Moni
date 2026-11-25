@@ -3730,6 +3730,15 @@ function htmlCredito(d) {
     (activo && c.proxima ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Próxima cuota (' + c.proxima.Num + ')</div><strong class="m-num">' + dinero(c.proxima.Cuota) + '</strong></div><div><div class="m-resumen-etiqueta">Fecha prevista</div><strong>' + esc(fechaCorta(c.proxima.Fecha)) + '</strong></div></div>' : '') +
     (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-5)"></div>' + htmlSaldoCredito(d);
 
+  // Créditos creados cuando la app redondeaba las tasas: la persona confirma o corrige (nada cambia solo)
+  if (activo && c.tasaPorRevisar) {
+    h += '<div class="m-banner m-pendiente m-pendiente-sugerencia" role="note">' + ico('alerta') +
+      '<span class="m-pendiente-texto"><strong>Revisa la tasa: Moni tiene ' + esc(String(Math.round(c.EA * 10000) / 100).replace('.', ',')) + ' % EA</strong> ' +
+      'Las versiones anteriores redondeaban las tasas con decimales (9,5 % quedaba en 10 %). Si la de tu crédito es otra, corrígela: solo cambian las cuotas pendientes; lo pagado y tus saldos no se tocan.</span>' +
+      '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="tasa-corregir">Corregir tasa</button>' +
+      '<button type="button" class="m-btn-texto m-btn-suave" data-acc="tasa-ok">Está bien</button></span></div>';
+  }
+
   h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
     '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>' +
     '<div><dt>Monto del crédito</dt><dd class="m-num">' + dinero(c.Monto) + '</dd></div><div><dt>Cuota fija</dt><dd class="m-num">' + dinero(c.Cuota_Fija) + '</dd></div>' +
@@ -3769,6 +3778,36 @@ function htmlCredito(d) {
 function aplicarCredito(res) {
   App.deudas.data = null;
   if (res.credito && App.cre.id === res.credito.credito.ID_Credito) App.cre.data = res.credito;
+}
+
+/** Corrige la tasa de un crédito creado cuando la app redondeaba las tasas (o confirma que está bien). */
+async function confirmarTasaCredito() {
+  try {
+    const res = await api('fixTasaCredito', App.cre.id, { soloConfirmar: true });
+    aplicarEscritura(res); aplicarCredito(res); render();
+    aviso('Listo, la tasa queda como está');
+  } catch (e) { aviso(e.message, true); }
+}
+
+async function abrirCorregirTasa() {
+  const d = App.cre.data;
+  if (!d) return;
+  const c = d.credito;
+  const campos = [{ k: 'EA', label: 'Tasa efectiva anual (% EA)', tipo: 'porcentaje', requerido: true,
+    ayuda: 'Escríbela como aparece en tu crédito, con decimales si los tiene (por ejemplo 9,5). Las cuotas pendientes se recalculan desde el saldo de hoy, con el mismo número de cuotas.' }];
+  await abrirHoja({
+    titulo: 'Corregir la tasa', der: 'Guardar',
+    cuerpo: '<form novalidate data-form="corregir-tasa">' + htmlCampo(campos[0], Math.round(c.EA * 1e6) / 1e6, {}) +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { const i = $('#f-EA', raiz); if (i) { i.focus(); i.select && i.select(); } },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.EA === '' || isNaN(v.EA) || v.EA < 0 || v.EA > 5) throw new Error('Escribe la tasa en porcentaje, por ejemplo 9,5.');
+      const res = await api('fixTasaCredito', App.cre.id, { EA: v.EA });
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso('Tasa corregida: la cuota pendiente es ' + dinero(res.credito.credito.Cuota_Fija));
+    }
+  });
 }
 
 /** Corrige el valor pagado de una cuota ya pagada: el crédito se recalcula, el dinero de tus bolsillos no se toca. */
@@ -5977,6 +6016,8 @@ const ACCIONES = {
   'pagar-credito': () => abrirPagoCredito(),
   'editar-credito': () => abrirEditarCredito(),
   'corregir-cuota': el => abrirCorregirCuota(Number(el.dataset.num)),
+  'tasa-ok': () => confirmarTasaCredito(),
+  'tasa-corregir': () => abrirCorregirTasa(),
   'pago-credito': async el => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero al bolsillo y la cuota vuelve a quedar pendiente. Si el pago incluía un abono, el plazo vuelve al anterior.' });
     if (ok) anularPagoCreditoYAvisar(el.dataset.id);

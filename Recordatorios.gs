@@ -169,7 +169,11 @@ function aplicarAvisos_(ev, ajustes) {
 /** Deja el calendario como debe estar. Devuelve cuántos eventos creó, corrigió y borró. */
 function sincronizarRecordatorios_() {
   return conCalendario_(function () {
-    const lock = tomarBloqueo(15000);
+    // No se toma el bloqueo de escritura mientras se habla con Calendar (podía tardar y frenar todos los registros).
+    // Para que dos sincronizaciones no se crucen basta una marca en la caché; si se cruzaran, la siguiente borra duplicados.
+    const cache = cache_();
+    if (cache.get('SYNC_RECORDATORIOS')) return { omitido: true, creados: 0, corregidos: 0, eliminados: 0, total: 0, resumen: 'Ya se estaba sincronizando' };
+    cache.put('SYNC_RECORDATORIOS', '1', 300);
     try {
       const ajustes = ajustesRecordatorios_();
       const cal = calendarioMoni_(true);
@@ -209,7 +213,7 @@ function sincronizarRecordatorios_() {
       guardarConfig_('Recordatorios_Resumen', resumen);
       return { creados: creados, corregidos: corregidos, eliminados: eliminados, total: deseados.length, resumen: resumen };
     } finally {
-      lock.releaseLock();
+      cache.remove('SYNC_RECORDATORIOS');
     }
   });
 }

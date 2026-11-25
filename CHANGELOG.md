@@ -1,5 +1,14 @@
 # Cambios
 
+## 1.10.1 — Correcciones de integridad (25 nov 2026)
+- **Corregido:** las **tasas de los créditos** se redondeaban a 2 decimales: una EA de 9,5 % se guardaba como 10 % y una tasa de 0,4 % por periodo quedaba en 0 % (cuotas sin interés). Desde ahora se guardan exactas. Los créditos creados antes **no cambian solos**: si su tasa parece redondeada, Moni lo avisa en Inicio y en el crédito, con *Está bien* o *Corregir tasa* (solo se rehacen las cuotas pendientes; lo pagado y los saldos no se tocan).
+- **Corregido:** si alguien borraba o movía filas a mano en la hoja, una actualización podía escribir en **otra fila**. Ahora cada escritura comprueba el ID del registro y, si la fila se movió, lo busca.
+- **Corregido:** editar las **notas** de un movimiento generado por la app (un regalo, una suscripción…) rompía su vínculo. El vínculo vive ahora en su propia columna (`Ref`); en los movimientos viejos se copia ahí antes de cambiar la nota.
+- **Corregido:** las categorías que usa la app (salario, rendimientos, regalos, comisiones) se reconocen por un **rol** y no por un ID fijo: puedes renombrarlas sin perder nada.
+- **Corregido:** pagar una cuota, crear un crédito o una compra con tarjeta que aparta dinero son ahora **todo o nada**: si algo falla a mitad de camino, lo hecho se deshace (antes el cronograma o el dinero apartado podían quedar a medias).
+- **Mejora:** sincronizar los recordatorios con Google Calendar ya no frena los registros mientras habla con Calendar.
+- **Cambia:** columnas nuevas `Movimientos.Ref`, `Compras_TC.Ref` y `Categorias.Rol`; las hojas existentes se actualizan solas **sin cambiar ningún dato**. Una prueba nueva toma una hoja de la 1.10.0 con un mes de uso, la actualiza y comprueba celda por celda que nada cambió.
+
 ## 1.10.0 — Abonos y terceros en la tarjeta, y regalos con tarjeta (24 nov 2026)
 - **Nuevo:** al pagar un extracto puedes anotar **quién más aporta** (nombre libre, con sugerencias) y cuánto. No mueve tus bolsillos: solo baja lo que tú pagas.
 - **Nuevo:** **Registrar un abono** a un corte de la tarjeta, de ti (desde un bolsillo) o de otra persona. Baja la deuda y libera cupo, sin apartar dinero en la reserva. Se descuenta al pagar el extracto y se puede anular.

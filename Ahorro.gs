@@ -38,7 +38,7 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
     if (m.Subtipo === 'Interes' && v > 0) interes += v;
     else if (m.Subtipo === 'Retencion' && v < 0) retencion += -v;
     else if (m.Subtipo === 'GMF' && v < 0) gmf += -v;
-    else if (m.Subtipo === 'Para_Gastos' && v < 0 && texto_(m.Notas).indexOf('Crédito ') !== 0) paraGastos += -v; // el desembolso de un crédito va por su propio saldo
+    else if (m.Subtipo === 'Para_Gastos' && v < 0 && refDe_(m).indexOf('Crédito ') !== 0) paraGastos += -v; // el desembolso de un crédito va por su propio saldo
     else if (m.Subtipo === 'Reposicion' && v > 0) reposicion += v;
   });
 
@@ -168,7 +168,7 @@ function registrarRendimiento(r) {
   const cuenta = cuentaAhorroActiva_(r.ID_Cuenta);
   const tipo = opcion_(r.Tipo, SUBTIPOS_RENDIMIENTO, 'El tipo');
   const bolsillo = bolsilloDeCuenta_(cuenta.ID_Cuenta);
-  const cat = leer_('Categorias').find(c => c.ID_Categoria === 'cat-rendim' && estaActivo(c));
+  const cat = categoriaPorRol_('Rendimiento');
   const etiqueta = { Interes: 'Rendimientos', Retencion: 'Retención en la fuente', GMF: 'GMF (4x1000)' }[tipo];
   return registrarMovimiento({
     Tipo_Mov: tipo === 'Interes' ? 'Ingreso' : 'Gasto', Subtipo: tipo, Valor: r.Valor, Fecha: r.Fecha,
