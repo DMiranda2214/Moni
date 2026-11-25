@@ -1,5 +1,35 @@
 # Cambios
 
+## 1.16.0 — Metas, Lista de deseos, Inversiones, Calculadora, y Pensiones y cesantías (25 nov 2026)
+Estudio de mercado, información legal y plan en `docs/PLAN_1.16.md`.
+- **Nuevo: Metas de ahorro** (Planear → Metas):
+  - Para la Navidad, un viaje, la moto…, con monto, fechas y bolsillo.
+  - **Plan por mes editable:** no todos los meses se ahorra lo mismo, así que escribes los meses que quieras (incluso en 0) y el resto se reparte solo.
+  - Cada meta activa entra al **presupuesto** como un renglón de tipo Fondo, igual que las suscripciones.
+  - *Aportar ahora* y *Usar el dinero* usan el formulario único.
+  - Avance, aviso de atraso con cuánto apartar para llegar, y gráficos de plan frente a aportes y del acumulado frente a la meta.
+- **Cambia: Regalos ahora es la Lista de deseos** (Planear → Lista de deseos):
+  - Regalos para otros y cosas para ti (skincare, ropa, tecnología…), con categoría, ocasión, prioridad, fecha, enlace y **lluvia de ideas**.
+  - Es informativa: registrar el gasto es opcional y puedes marcar algo como comprado sin mover saldos.
+  - Totales para ti y para otros, y gráfico por categoría.
+- **Nuevo: Inversiones** (Dinero → Inversiones):
+  - Acciones, ETF, cripto, fondos.
+  - Compras, ventas y dividendos con **costo promedio**. El dinero sale o vuelve a un bolsillo si lo eliges, sin contar como gasto ni ingreso.
+  - Precio de **Google Finance** (hoja auxiliar `Precios_Google`, que se actualiza a diario con la tasa automática) o escrito a mano.
+  - Valor en pesos con la tasa del dólar, historial, distribución y evolución.
+  - Suman al **patrimonio neto** y a Análisis.
+- **Nuevo: Calculadora** (Planear → Herramientas): préstamo con tabla y gráfico del saldo, ahorro en el tiempo, cuánto ahorrar para una meta (con *Crear esta meta*), CDT y conversión de tasas.
+- **Nuevo: Pensiones y cesantías** (Planear → Herramientas), con la legislación colombiana:
+  - **Cesantías:** con auxilio de transporte hasta 2 SMMLV, intereses del 12 %, prima del semestre, fechas límite y retiros permitidos.
+  - **Pensión:** semanas que pide Colpensiones (C-197 de 2023 para las mujeres), fecha estimada, mesada y tasa de reemplazo (Ley 797), fondo privado con saldo proyectado y garantía de pensión mínima, aporte mensual con el Fondo de Solidaridad, y qué cambiaría con la reforma (Ley 2381 de 2024, que todavía no rige).
+  - Tus datos se pueden guardar.
+- **Cambia:** las hojas nuevas traen el salario mínimo 2026 ($ 1.750.905) y el auxilio de transporte ($ 249.095). En las hojas existentes **no se cambia** el salario mínimo guardado; el auxilio se agrega como parámetro nuevo.
+- **Tus datos:**
+  - Las tablas nuevas (`Metas`, `Deseos_Ideas`, `Inversiones`, `Inversiones_Operaciones`, `Inversiones_Precios`) se crean solas.
+  - Los regalos ganan columnas: los que ya tenías quedan como categoría *Regalo* y se ven igual.
+  - `Presupuesto_Mes` gana `ID_Meta`.
+  - Ninguna celda existente cambia. Esquema `15`, 37 tablas.
+
 ## 1.15.0 — Un solo formulario de registro y servicios en un solo lugar (25 nov 2026)
 - **Cambia:** **un solo formulario** para registrar todo lo que entra, sale o se mueve. Pagar un servicio o una suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta y sacar o reponer dinero del ahorro abren la misma hoja de *Registrar*, con lo que ya se sabe llenado. Se ve y se usa igual en todos los casos.
 - **Nuevo:** al **pagar un servicio o una suscripción** aparecen las **comisiones e impuestos** del medio de pago (antes no se podían anotar ahí). Al comprar con tarjeta desde *Registrar*, en *Más opciones* eliges qué hacer con el dinero (lo que antes solo estaba en la compra desde la tarjeta) y ves a qué extracto entra.

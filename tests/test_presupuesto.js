@@ -541,9 +541,9 @@ module.exports = function (prueba, assert, crearEntorno) {
 
   prueba('parámetros en lote: si uno falla no se guarda ninguno', () => {
     const e = E();
-    const mal = e.llamar('saveConfigParams', { SMMLV: '1750905', Aporte_Salud: '4' });
+    const mal = e.llamar('saveConfigParams', { SMMLV: '1800000', Aporte_Salud: '4' });
     assert.strictEqual(mal.ok, false);
-    assert.strictEqual(e.llamar('getTableData', 'Config').find(c => c.Clave === 'SMMLV').Valor, '1423500', 'SMMLV sin cambios');
+    assert.strictEqual(e.llamar('getTableData', 'Config').find(c => c.Clave === 'SMMLV').Valor, '1750905', 'SMMLV sin cambios');
     const bien = e.llamar('saveConfigParams', { SMMLV: '1750905', Aporte_Salud: '0,04' });
     assert.strictEqual(bien.ok, true);
     assert.strictEqual(e.llamar('getTableData', 'Config').find(c => c.Clave === 'SMMLV').Valor, '1750905');
@@ -562,13 +562,13 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.llamar('sembrarDatosDemo');
     const mes = hoy();
     e.llamar('generarPresupuestoMes', mes);
-    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mes).items.length, 10, 'plantilla demo (7) + sus 3 suscripciones y servicios');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mes).items.length, 12, 'plantilla demo (7) + sus 3 suscripciones y servicios + sus 2 metas');
     e.llamar('registrarPagoNomina', mes, undefined, '', diaHoy(), 'demo-bol-casa');
     e.llamar('registrarMovimiento', { Concepto: 'Prueba', ID_Bolsillo: 'demo-bol-ocio', Valor: 10 });
     e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco real' });
 
     const r = e.llamar('limpiarDatosDemo');
-    assert.ok(r.eliminadas.Presupuesto_Mes === 10 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
+    assert.ok(r.eliminadas.Presupuesto_Mes === 12 && r.eliminadas.Metas === 2 && r.eliminadas.Inversiones === 2 && r.eliminadas.Deseos_Ideas === 2 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
     ['Presupuesto_Plantilla', 'Presupuesto_Mes', 'Nomina_Escenarios', 'Nomina_Conceptos', 'Nomina_Pagos', 'Nomina_Pagos_Detalle', 'Movimientos', 'Subsidios'].forEach(t => {
       assert.strictEqual(e.hojas[t].filas.slice(1).filter(f => f.some(c => c !== '' && c !== undefined)).length, 0, t + ' debe quedar vacía');
     });

@@ -17,7 +17,7 @@ function parametrosNomina_() {
     aporteSalud: num('Aporte_Salud', 0.04),
     aportePension: num('Aporte_Pension', 0.04),
     redondeo: num('Redondeo_Aportes', -2),
-    smmlv: num('SMMLV', 1423500),
+    smmlv: num('SMMLV', 1750905),
     fspUmbral: num('FSP_Umbral_SMMLV', 4),
     tasaCesantias: num('Tasa_Interes_Cesantias', 0.12),
     diasBase: num('Dias_Base', 30),

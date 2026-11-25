@@ -163,8 +163,32 @@ const ACCIONES = {
   'retirar-ahorro': () => abrirMovimientoAhorro('retirar'),
   'reponer-ahorro': () => abrirMovimientoAhorro('reponer'),
   'nuevo-regalo': () => abrirRegalo(null),
+  'deseo-filtro': el => { App.reg.filtro = el.dataset.f; render(); },
+  // Metas
+  'recargar-metas': () => { App.metas.error = null; App.metas.data = null; render(); },
+  'nueva-meta': () => nuevaMeta(),
+  meta: el => navegar('meta/' + el.dataset.id),
+  'meta-archivada': el => abrirMetaArchivada(el.dataset.id),
+  'editar-meta': el => { abrirFormulario('Metas', el.dataset.id).then(() => { App.metas.data = null; render(); }); },
+  'aportar-meta': el => { const m = buscarMeta(el.dataset.id); if (m) abrirRegistrar({ para: { tipo: 'meta', item: m } }); },
+  'usar-meta': el => { const m = buscarMeta(el.dataset.id); if (m) abrirRegistrar({ para: { tipo: 'usoMeta', item: m } }); },
+  'plan-meta': el => { const m = buscarMeta(el.dataset.id); if (m) abrirPlanMeta(m); },
+  // Inversiones
+  'recargar-inv': () => { App.inv.error = null; App.inv.data = null; render(); },
+  'nueva-inversion': () => nuevaInversion(),
+  inversion: el => navegar('inversion/' + el.dataset.id),
+  'editar-inversion': el => { abrirFormulario('Inversiones', el.dataset.id).then(() => { App.inv.data = null; render(); }); },
+  'inv-op': el => { const i = buscarInversion(el.dataset.id); if (i) abrirOperacionInversion(i, el.dataset.tipo); },
+  'inv-precio': el => { const i = buscarInversion(el.dataset.id); if (i) abrirPrecioManual(i); },
+  'inv-anular': el => anularOperacionInversion(el.dataset.id),
+  'precios-google': el => actualizarPreciosInv(el),
+  // Herramientas
+  'calc-tab': el => { App.calc.tab = el.dataset.tab; render(); },
+  'calc-crear-meta': () => crearMetaDesdeCalc(),
+  'pen-tab': el => { App.pen.tab = el.dataset.tab; render(); },
+  'pen-guardar': el => guardarPerfilPension(el),
   regalo: el => abrirDetalleRegalo(el.dataset.id),
-  'regalo-mover': el => { const p = (App.reg.data && App.reg.data.pendientes || [])[Number(el.dataset.i)]; if (p) abrirRegistrar({ tipo: 'Mover', idBolsillo: p.ID_Bolsillo_Plan || undefined, destino: p.ID_Bolsillo_Reserva, valor: p.falta, concepto: 'Reserva ' + p.Tarjeta + ': regalo de ' + p.Persona }); },
+  'regalo-mover': el => { const p = (App.reg.data && App.reg.data.pendientes || [])[Number(el.dataset.i)]; if (p) abrirRegistrar({ tipo: 'Mover', idBolsillo: p.ID_Bolsillo_Plan || undefined, destino: p.ID_Bolsillo_Reserva, valor: p.falta, concepto: 'Reserva ' + p.Tarjeta + ': ' + (p.ParaMi ? (p.Idea || 'compra') : 'regalo de ' + p.Persona) }); },
   'mes-anual': el => { App.ppto.mes = el.dataset.mes; App.ppto.data = null; navegar('presupuesto'); },
   'crear-respaldo': async el => {
     el.disabled = true; el.textContent = 'Creando…';

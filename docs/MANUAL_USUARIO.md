@@ -135,10 +135,45 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 - **Si venías de una versión anterior,** tus servicios públicos y empresas de pago aparecen aquí tal como los tenías (mismo hogar, código y enlace); nada se borra.
 - **Pagar servicio** (botón arriba en esta pantalla): eliges la empresa y luego el hogar; Moni **abre la página de pago en otra ventana y deja el código de pago en el portapapeles** para que lo pegues. Si el navegador no deja abrir la ventana o copiar, muestra el código con los botones *Copiar código* e *Ir a pagar*.
 
-## 12. Regalos
-**Planear → Regalos.** Lista por año: a quién, idea, estimado. Al crear un regalo puedes decir **de qué bolsillo planeas pagarlo**. **Registrar la compra** crea el gasto (o una **compra con tarjeta de crédito**) y suma al real. Si lo compras con tarjeta, no sale dinero ahora: Moni te avisa en Regalos y en Inicio que **muevas ese dinero a la reserva de la tarjeta** (*Mover ahora* abre el traslado ya llenado) y el aviso **sigue hasta que registres ese movimiento**. Hay resumen de estimado, gastado y comprados.
+## 12. Metas y Lista de deseos
+**Planear → Metas.** Una meta es algo para lo que ahorras: la Navidad, un viaje, la moto, la cuota inicial.
+- **Crear una meta:** escribe cuánto necesitas, desde cuándo, para cuándo, el bolsillo donde guardas el dinero (por ejemplo, "Viaje") y, si ya tienes una parte, cuánto. Moni reparte lo que falta en los meses que quedan.
+- **Plan por mes:** no todos los meses se puede ahorrar lo mismo. Escribe el valor de los meses que quieras (diciembre en 0, junio con la prima el doble). Los meses que dejes vacíos se reparten solos lo que falta. Si todo el plan es a mano y no alcanza, Moni te dice cuánto queda por cubrir.
+- **En el presupuesto:** cada meta activa aparece en el presupuesto del mes como un renglón de tipo *Fondo* con lo que planeaste. Si la creas después de armar el mes, entra sola (o con *Agregar* en el aviso del presupuesto).
+- **Aportar ahora:** mueve dinero al bolsillo de la meta con el formulario de registro. Si el mes tiene el renglón de la meta, cuenta como lo real de ese renglón.
+- **Usar el dinero:** cuando compras lo que era, regístralo como gasto de la meta. Lo ahorrado no baja: lo usado se muestra aparte.
+- **Seguimiento:** cada meta muestra el avance, si vas al día o atrasado (y cuánto apartar desde ahora para llegar a tiempo), el plan frente a lo aportado mes a mes y el acumulado frente a la meta. Puedes ponerla en pausa (sale del presupuesto), marcarla como cumplida o archivarla.
 
-## 13. Vista anual y gráficos
+**Planear → Lista de deseos** (antes *Regalos*). Sirve para pensar antes de comprar.
+- **Qué anotas:** lo que quieres regalar (y a quién) o comprarte (skincare, ropa, tecnología…), cuánto quieres gastar, la ocasión, la prioridad, para cuándo y un enlace.
+- **Lluvia de ideas:** en cada deseo anotas varias opciones con su precio y su enlace, y eliges una cuando decidas.
+- **Comprar:** *Registrar la compra* crea el gasto (o una compra con tarjeta, con el aviso de mover el dinero a la reserva). *Ya lo compré (sin registrar el gasto)* solo lo anota en la lista.
+- **Vista:** filtras por *Para mí* o *Para otros*, y ves los totales para ti y para otros, lo gastado frente a lo estimado por persona y el gasto por categoría.
+- **Tus regalos de antes** siguen ahí, iguales.
+
+## 13. Inversiones, Calculadora, y Pensiones y cesantías
+**Dinero → Inversiones.** Acciones, ETF, cripto, fondos…
+- **Agregar una inversión:** escribe su nombre, qué es, la moneda del precio y, si existe, el **símbolo de Google Finance** (por ejemplo `NASDAQ:AAPL`, `NYSEARCA:VOO` o `CURRENCY:BTCUSD`).
+- **Compré, Vendí, Dividendo:**
+  - Anotas las unidades, el precio por unidad (opcional), lo que pagaste o recibiste en pesos y la comisión.
+  - Si eliges un bolsillo, el dinero sale de él (o llega a él). No cuenta como gasto ni como ingreso, salvo el dividendo, que es un ingreso.
+- **Precio:**
+  - *Actualizar precios* consulta Google Finance. Si activas la tasa automática en Ajustes → Divisas, se actualizan solos cada mañana.
+  - Si Google no tiene el activo (pasa con varias acciones de la BVC y con los fondos), usa *Escribir el precio*.
+  - Para lo que está en dólares hace falta la tasa del dólar (Ajustes → Divisas).
+- **Qué ves:** cuánto valen hoy, cuánto pagaste (costo promedio), la ganancia, lo ganado al vender, los dividendos, en qué tienes invertido y la evolución de los últimos 12 meses.
+- Las inversiones suman a tu **patrimonio neto** y a *Análisis*.
+
+**Planear → Calculadora.** Préstamo (cuota, intereses y cómo baja el saldo), ahorro en el tiempo, *¿Cuánto ahorrar?* para una meta (con *Crear esta meta*), CDT (intereses, retención y neto) y conversión de tasas (EA, mensual, nominal).
+
+**Planear → Pensiones y cesantías.** Son estimados con las reglas de Colombia y el salario mínimo de tu hoja.
+- **Cesantías y prima:** escribe tu salario, las fechas y los días no pagados. Si ganas hasta 2 salarios mínimos, la base incluye el auxilio de transporte. Ves las cesantías, sus intereses (12 %), la prima del semestre, las fechas límite y para qué puedes retirarlas. El salario integral no genera cesantías.
+- **Pensión:**
+  - Escribe tu sexo, tu fecha de nacimiento, las semanas cotizadas, cuántas semanas cotizarás por año, tu salario, si eres independiente y dónde cotizas (Colpensiones o un fondo privado, con su saldo y la rentabilidad que esperas).
+  - Ves cuándo te pensionarías, cuántas semanas pide la ley (a las mujeres cada vez menos, hasta 1.000 en 2036), la mesada estimada y la tasa de reemplazo, tu aporte de cada mes y qué cambiaría si entra la reforma pensional (Ley 2381 de 2024, que todavía no rige).
+  - *Guardar mis datos* los deja en tu hoja para la próxima vez.
+
+## 14. Vista anual y gráficos
 **Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
 ### Análisis
@@ -165,13 +200,13 @@ Además de Análisis, **cada módulo trae los suyos**. Pasa el dedo o el cursor 
 - **Vista anual:** entró, planeado y real mes a mes.
 - **Un bolsillo:** su saldo al cierre de cada mes.
 
-## 14. Movimientos
+## 16. Movimientos
 **Dinero → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
 
-## 15. Avisos en Inicio
+## 17. Avisos en Inicio
 **Para tener en cuenta** te dice qué falta configurar o está desactualizado (salario mínimo, un CDT vencido, suscripciones que faltan en el presupuesto, la nómina, los recordatorios…). Toca **Resolver** para ir a donde se arregla; los que no son urgentes se pueden ocultar con **Ahora no** y volver a mostrar en *Ajustes → Avisos de Inicio*.
 
-## 16. Ajustes
+## 18. Ajustes
 
 Menú **Ajustes** (desde *Más*):
 - **Tú:** **Perfil** (nombre) y **Apariencia** (claro/oscuro/automático y color).
@@ -201,10 +236,10 @@ Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar
 - **No se puede deshacer.** Si dudas, crea antes un respaldo en **Ajustes → Respaldos**.
 - Al terminar vuelves a ver la bienvenida.
 
-## 17. Respaldos
+## 19. Respaldos
 **Ajustes → Respaldos:** crea una copia ahora o activa copias automáticas (cada N días, conservando las últimas N). Quedan en tu Drive, carpeta **Moni Respaldos**.
 
-## 18. Consejos
+## 20. Consejos
 - Registra el gasto **cuando lo haces**; es más fácil que recordar al final del día.
 - Usa **Cuadrar** una vez por semana con cada cuenta.
 - Si dudas de una cifra, abre el detalle del bolsillo: allí está cada movimiento.

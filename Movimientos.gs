@@ -41,7 +41,7 @@ function categoriaMovimiento_(idCategoria, tipo) {
  * una suscripción, la distribución de un mes…). Antes vivían solo en Notas; desde 1.11 se guardan también en la columna
  * Ref, así la persona puede editar sus notas sin romper el vínculo. Los registros viejos sin Ref siguen leyéndose de Notas.
  */
-const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución |Cargo )/;
+const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución |Cargo |Meta |Inversión )/;
 
 /** Ref de un cargo (comisión, impuesto…): "Cargo <ID de la operación>" (ver Cargos.gs). */
 const MARCA_CARGO = 'Cargo ';
@@ -62,7 +62,7 @@ function conRef_(fila) {
  * conversiones entre divisas, que son traslados) ni el dinero que entra o sale de una inversión (abrir o cobrar el
  * capital de un CDT): el dinero solo cambia de lugar. Sí cambian el saldo del bolsillo.
  */
-const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso']; // el desembolso de un crédito es una deuda, no un ingreso
+const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta']; // el desembolso de un crédito es una deuda, no un ingreso
 
 function esIngresoOGasto_(m) {
   return m.Tipo_Mov !== 'Transferencia' && SUBTIPOS_INVERSION.indexOf(m.Subtipo) === -1;

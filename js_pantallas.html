@@ -365,11 +365,16 @@ function vPlanear() {
       fila({ icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' }) +
       fila({ icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos" data-tono="menta"' }) +
       fila({ icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos" data-tono="durazno"' }) +
+      fila({ icono: 'meta', titulo: 'Metas', sub: 'Ahorra para la Navidad, un viaje, la moto…', chevron: true, attrs: 'data-acc="ir" data-ruta="metas" data-tono="menta"' }) +
       '</div></section>' +
       '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
       fila({ icono: 'pulso', titulo: 'Análisis', sub: 'Patrimonio, en qué gastas, lo que debes y tu dinero en 90 días', chevron: true, attrs: 'data-acc="ir" data-ruta="analisis" data-tono="celeste"' }) +
       fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
-      fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
+      fila({ icono: 'regalo', titulo: 'Lista de deseos', sub: 'Regalos y cosas que quieres comprar', chevron: true, attrs: 'data-acc="ir" data-ruta="deseos" data-tono="lila"' }) +
+      '</div></section>' +
+      '<section class="m-seccion" aria-label="Herramientas"><h2 class="m-seccion-titulo">Herramientas</h2><div class="m-group">' +
+      fila({ icono: 'calculadora', titulo: 'Calculadora', sub: 'Préstamos, ahorro, CDT y tasas', chevron: true, attrs: 'data-acc="ir" data-ruta="calculadora" data-tono="celeste"' }) +
+      fila({ icono: 'paraguas', titulo: 'Pensiones y cesantías', sub: 'Cuándo te pensionas, cuánto recibirías y tus cesantías', chevron: true, attrs: 'data-acc="ir" data-ruta="pensiones" data-tono="durazno"' }) +
       '</div></section>' +
       // En el celular, la guía y los ajustes (en el computador están en la barra lateral)
       '<section class="m-seccion m-solo-movil" aria-label="Ayuda y ajustes"><h2 class="m-seccion-titulo">Ayuda y ajustes</h2><div class="m-group">' +
@@ -519,7 +524,7 @@ function vAjustes() {
         (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
         irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
       seccion('Organización',
-        ['Categorias', 'Personas', 'Inmuebles', 'Suscripciones'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+        ['Categorias', 'Personas', 'Inmuebles', 'Suscripciones', 'Metas', 'Inversiones'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
       seccion('Mantenimiento',
         enlaceHoja() +
         fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +

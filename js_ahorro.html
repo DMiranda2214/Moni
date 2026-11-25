@@ -120,91 +120,7 @@ function abrirMovimientoAhorro(modo) {
   if (d) return abrirRegistrar({ para: { tipo: 'ahorro', modo: modo, datos: d } });
 }
 
-// ---------- Regalos ----------
-
-function vRegalos() {
-  const g = App.reg;
-  if (!g.anio) g.anio = Number(cfg('Anio_Activo')) || Number(App.boot.hoy.slice(0, 4));
-  let html = bannerDemo();
-  if (g.error) html += bloqueError(g.error, 'recargar-reg');
-  else if (!g.data) html += esqueleto(4);
-  else html += htmlRegalos(g.data);
-  return {
-    titulo: 'Regalos', html: html,
-    acciones: g.data ? '<button class="m-btn-texto" data-acc="nuevo-regalo" aria-label="Agregar un regalo">' + ico('plus') + '</button>' : '',
-    despues: () => { if (!g.data && !g.cargando && !g.error) { const a = g.anio; cargarEn(g, 'regalos', 'getRegalos', [a], () => g.anio === a); } }
-  };
-}
-
-function htmlRegalos(d) {
-  const t = d.totales;
-  let h = '<div class="m-campo"><label class="m-label" for="reg-anio">Año</label><select class="m-input" id="reg-anio">' +
-    d.anios.map(a => '<option value="' + a + '"' + (a === d.anio ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></div>';
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Gastado de ' + dinero(t.estimado) + ' estimado</div><div class="m-resumen-cifra m-num">' + dinero(t.real) + '</div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Diferencia</div><strong class="m-num ' + (t.diferencia < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(t.diferencia) + '</strong></div><div><div class="m-resumen-etiqueta">Comprados</div><strong class="m-num">' + t.comprados + ' de ' + t.total + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
-  if (!d.items.length) return h + vacio('hogar', 'Sin regalos en ' + d.anio, 'Anota a quién le vas a regalar y cuánto calculas gastar. Cuando compres, registra el gasto y se calcula la diferencia.',
-    '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar un regalo</button>');
-  const banner = (d.pendientes || []).map((p, k) => '<div class="m-banner m-pendiente m-pendiente-importante" role="note">' + ico('alerta') +
-    '<span class="m-pendiente-texto"><strong>Mueve ' + dinero(p.falta) + ' a la reserva de ' + esc(p.Tarjeta) + '</strong> ' + esc('Regalo de ' + p.Persona + (p.BolsilloPlan ? ': de “' + p.BolsilloPlan + '” a “' + p.Reserva + '”' : ' → “' + p.Reserva + '”') + '. Sigue este aviso hasta que lo registres.') + '</span>' +
-    '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="regalo-mover" data-i="' + k + '">Mover ahora</button></span></div>').join('');
-  return banner + h + htmlRegalosGraficos(d) + '<div class="m-group">' + d.items.map(i => fila({
-    titulo: esc(i.Persona) + (i.Aplica ? '' : ' <span class="m-insignia">no aplica</span>'), sub: (i.Idea ? esc(i.Idea) + ' · ' : '') + 'estimado ' + dinero(i.Estimado),
-    final: i.Comprado ? '<strong class="m-num">' + dinero(i.Real) + '</strong>' + (i.PendienteReserva && i.PendienteReserva.length ? '<span class="m-row-sub" style="display:block;color:var(--m-danger)">mover a la reserva</span>' : '<span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>') : '<span class="m-row-sub">pendiente</span>',
-    clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"'
-  })).join('') + '</div>';
-}
-
-function aplicarRegalos(data) { if (App.reg.anio === data.anio) App.reg.data = data; }
-
-async function abrirRegalo(item) {
-  const personas = activos('Personas');
-  if (!personas.length) { aviso('Primero agrega a las personas en Ajustes → Personas.', true); return; }
-  const campos = [
-    { k: 'ID_Persona', label: 'Para quién', tipo: 'select', requerido: true, opciones: () => personas.map(p => [p.ID_Persona, p.Nombre]) },
-    { k: 'Idea', label: 'Idea de regalo', tipo: 'texto', maxlength: 120 },
-    { k: 'Estimado', label: 'Cuánto calculas gastar', tipo: 'dinero', requerido: true },
-    { k: 'ID_Bolsillo_Plan', label: '¿De qué bolsillo planeas pagarlo? (opcional)', tipo: 'select', opciones: () => opcionesDestino(true),
-      ayuda: 'Si lo compras con tarjeta de crédito, Moni te recordará pasar ese dinero de este bolsillo a la reserva de la tarjeta.' },
-    { k: 'Aplica', label: 'Aplica este año', tipo: 'interruptor', ayuda: 'Desactívalo si este año no le vas a regalar; no cuenta en los totales.' }
-  ];
-  const v0 = item || { Aplica: true };
-  await abrirHoja({
-    titulo: item ? 'Editar regalo' : 'Nuevo regalo',
-    cuerpo: '<form novalidate data-form="regalo">' + campos.map(c => htmlCampo(c, v0[c.k] === undefined ? '' : v0[c.k], {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
-    alAbrir: raiz => activarEcoDinero(raiz),
-    alGuardar: async raiz => {
-      const v = leerFormulario(raiz, campos);
-      if (!v.ID_Persona) throw new Error('Elige para quién es.');
-      if (v.Estimado === '' || (typeof v.Estimado === 'number' && isNaN(v.Estimado))) throw new Error('Escribe cuánto calculas gastar.');
-      const envio = Object.assign({ Anio: App.reg.anio }, v);
-      if (item) envio.ID_Regalo = item.ID_Regalo;
-      aplicarRegalos(await api('saveRegalo', envio)); render(); aviso(item ? 'Regalo actualizado' : 'Regalo agregado');
-    }
-  });
-}
-
-async function abrirDetalleRegalo(id) {
-  const it = App.reg.data && App.reg.data.items.find(x => x.ID_Regalo === id);
-  if (!it) return;
-  let siguiente = null;
-  await abrirHoja({
-    titulo: 'Regalo', izq: 'Cerrar', sinGuardar: true,
-    cuerpo: '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Persona) + (it.Idea ? ' · ' + esc(it.Idea) : '') + '</p><dl class="m-detalle">' +
-      '<div><dt>Estimado</dt><dd class="m-num">' + dinero(it.Estimado) + '</dd></div><div><dt>Gastado</dt><dd class="m-num">' + dinero(it.Real) + '</dd></div><div><dt>Diferencia</dt><dd class="m-num ' + (it.Diferencia < 0 ? 'm-negativo' : '') + '">' + dinero(it.Diferencia) + '</dd></div></dl>' +
-      '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="comprar">Registrar la compra</button>' +
-      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="editar">Editar</button>' +
-      '<button type="button" class="m-accion-peligro" data-hoja-acc="quitar">Quitar el regalo</button>',
-    extra: {
-      comprar: () => { siguiente = () => abrirCompraRegalo(it); return Promise.resolve(); },
-      editar: () => { siguiente = () => abrirRegalo(it); return Promise.resolve(); },
-      quitar: () => api('deleteRegalo', id).then(data => { aplicarRegalos(data); render(); aviso('Regalo quitado'); })
-    }
-  });
-  if (siguiente) siguiente();
-}
-
-/** Registrar la compra de un regalo (con un bolsillo o con tarjeta): el formulario de registro. */
-const abrirCompraRegalo = it => abrirRegistrar({ para: { tipo: 'regalo', item: it } });
+// La Lista de deseos (antes "Regalos") vive en js_metas.html.
 
 // ---------- Vista anual ----------
 
@@ -312,7 +228,16 @@ const GLOSARIO = [
   ['Desembolso', 'El dinero que te entrega el banco al darte un crédito. Llega a un bolsillo, pero no es un ingreso: es una deuda'],
   ['Cargo', 'Lo que te cobra un banco, una tarjeta o un crédito por una operación: comisión, impuesto (4x1000), cambio de divisa, cuota de manejo o seguro. Se anotan reglas en Ajustes → Cargos y comisiones y Moni los propone al registrar'],
   ['Cuota de manejo', 'Lo que cobra la tarjeta cada mes; Moni la propone al pagar el extracto'],
-  ['Compra en otra moneda', 'Una compra con tarjeta hecha en dólares u otra moneda: anotas lo que te cobraron en tu moneda y, si quieres, el valor original; el recargo internacional va aparte']
+  ['Compra en otra moneda', 'Una compra con tarjeta hecha en dólares u otra moneda: anotas lo que te cobraron en tu moneda y, si quieres, el valor original; el recargo internacional va aparte'],
+  ['Meta', 'Algo para lo que ahorras (la Navidad, un viaje, la moto), con un monto, una fecha y un bolsillo. Su plan por mes puede cambiar mes a mes y entra al presupuesto como un renglón'],
+  ['Lista de deseos', 'Lo que quieres regalar o comprarte, con cuánto quieres gastar y una lluvia de ideas. Registrar la compra es opcional'],
+  ['Inversión', 'Acciones, ETF, cripto o fondos. Su valor sale del precio de Google Finance (o del que escribas) por las unidades que tienes'],
+  ['Símbolo', 'Cómo se llama un activo en Google Finance: NASDAQ:AAPL, NYSEARCA:VOO o, para la cripto, CURRENCY:BTCUSD'],
+  ['Costo promedio', 'Lo que pagaste por tus unidades. Al vender una parte, sale la misma proporción del costo y la diferencia es tu ganancia realizada'],
+  ['Cesantías', 'Un mes de salario por año trabajado que tu empleador consigna en tu fondo antes del 14 de febrero. Sus intereses (12 % al año) te los paga antes del 31 de enero'],
+  ['Semanas cotizadas', 'El tiempo que has aportado a pensión. Colpensiones pide 1.300 a los hombres; a las mujeres, 1.250 en 2026 y 25 menos cada año hasta 1.000'],
+  ['IBL e IBC', 'IBC: el salario sobre el que cotizas cada mes. IBL: el promedio de los últimos 10 años, con el que se calcula la pensión en Colpensiones'],
+  ['Tasa de reemplazo', 'Qué parte de tu IBL recibes como pensión: entre 55 % y 80 % según cuánto ganas y cuántas semanas tienes de más'],
 ];
 
 function vGuia() {

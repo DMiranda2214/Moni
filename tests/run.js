@@ -179,6 +179,9 @@ require('./test_migracion_datos')(prueba, assert, crearEntorno);
 require('./test_integridad')(prueba, assert, crearEntorno);
 require('./test_unificacion')(prueba, assert, crearEntorno);
 require('./test_cargos')(prueba, assert, crearEntorno);
+require('./test_metas_deseos')(prueba, assert, crearEntorno);
+require('./test_inversiones')(prueba, assert, crearEntorno);
+require('./test_herramientas')(prueba, assert, crearEntorno);
 
 let fallos = 0;
 pruebas.forEach(p => {

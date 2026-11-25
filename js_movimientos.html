@@ -229,8 +229,8 @@ function modoRegistro(o) {
     const it = p.item;
     const pref = it.ID_Bolsillo_Plan || (opcionesDestino(false).map(g => (g.opciones.find(x => /regalo/i.test(x[1])) || [])[0]).find(Boolean) || '');
     return Object.assign({}, comun, {
-      titulo: 'Compra de regalo', tipos: ['Gasto'], conTarjetas: true, soloPesos: true, valor: it.Estimado - it.Real > 0 ? it.Estimado - it.Real : '', valorEtiqueta: 'Cuánto costó',
-      conceptoFijo: 'Regalo para ' + it.Persona + (it.Idea ? ' · ' + it.Idea : ''), medio: pref,
+      titulo: it.ParaMi ? 'Registrar la compra' : 'Compra de regalo', tipos: ['Gasto'], conTarjetas: true, soloPesos: true, valor: it.Estimado - it.Real > 0 ? it.Estimado - it.Real : '', valorEtiqueta: 'Cuánto costó',
+      conceptoFijo: it.ParaMi ? (it.Idea || it.CategoriaNombre || 'Compra de tu lista de deseos') : 'Regalo para ' + it.Persona + (it.Idea ? ' · ' + it.Idea : ''), medio: pref,
       ayudaTarjeta: 'No sale dinero ahora. Moni te recordará pasar el valor ' + (it.BolsilloPlan ? 'de “' + it.BolsilloPlan + '” ' : '') + 'a la reserva de la tarjeta, y el aviso sigue hasta que registres ese traslado.',
       guardar: async v => {
         const res = await api('payRegalo', it.ID_Regalo, v.Valor, v.medioTarjeta ? 'T:' + v.medioTarjeta : v.ID_Bolsillo, v.Fecha);
@@ -272,6 +272,38 @@ function modoRegistro(o) {
         if (esCredito || esTarjeta) { App.tar.data = null; App.deudas.data = null; }
         render();
         aviso(soloAgregar ? 'Movimiento agregado' : 'Renglón completo', { deshacer: () => desmarcarRenglon(it.ID_Item, true) });
+      }
+    });
+  }
+  if (p.tipo === 'meta') {
+    // Aportar a una meta: un traslado hacia su bolsillo (cuenta en el renglón de la meta si el mes tiene presupuesto)
+    const m = p.item;
+    return Object.assign({}, comun, {
+      titulo: 'Aportar a ' + m.Nombre, der: 'Aportar', tipos: ['Mover'], soloPesos: true,
+      conceptoFijo: 'Aporte a la meta ' + m.Nombre, valor: Math.max(0, Math.round((m.planMes - m.aportadoMes) * 100) / 100) || '',
+      valorAyuda: m.planMes > 0 ? 'Este mes planeaste ' + dinero(m.planMes) + (m.aportadoMes > 0 ? ' y ya llevas ' + dinero(m.aportadoMes) : '') + '.' : '',
+      destinoFijo: m.ID_Bolsillo, destinoTexto: m.Bolsillo || 'el bolsillo de la meta',
+      medio: ultimoBolsillo() !== m.ID_Bolsillo ? ultimoBolsillo() : '',
+      guardar: async v => {
+        const res = await api('addAporteMeta', m.ID_Meta, v.Origen, v.Valor, v.Fecha);
+        recordarBolsillo(v.Origen);
+        aplicarEscritura(res); aplicarMetas(res); render();
+        aviso('Aporte registrado · llevas ' + dinero(res.meta.ahorrado) + ' de ' + dinero(res.meta.Monto_Objetivo), { deshacer: () => anularYAvisar(res.items[0] && res.items[0].ID_Mov) });
+      }
+    });
+  }
+  if (p.tipo === 'usoMeta') {
+    // Usar el dinero de la meta (comprar lo que era): un gasto desde su bolsillo
+    const m = p.item;
+    return Object.assign({}, comun, {
+      titulo: 'Usar el dinero de ' + m.Nombre, tipos: ['Gasto'], soloPesos: true, categoria: true, notas: false,
+      medioFijo: m.ID_Bolsillo, medioTexto: m.Bolsillo || 'el bolsillo de la meta', medioEtiqueta: 'Sale de',
+      nota: 'Queda como un gasto de la meta. Lo ahorrado no baja: lo usado se muestra aparte.',
+      guardar: async v => {
+        if (!v.Concepto) throw new Error('Escribe en qué lo usaste.');
+        const res = await api('addUsoMeta', m.ID_Meta, v.Valor, v.Fecha, v.Concepto, v.ID_Categoria || '');
+        aplicarEscritura(res); aplicarMetas(res); render();
+        aviso('Gasto registrado', { deshacer: () => anularYAvisar(res.items[0] && res.items[0].ID_Mov) });
       }
     });
   }
@@ -340,7 +372,7 @@ async function abrirRegistrar(o) {
     htmlCampo(campoValor, valorInicial) +
     (modo.conceptoFijo ? '' : htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, edit ? edit.Concepto : (o.concepto || '')).replace('data-campo="Concepto"', 'data-campo="Concepto" data-etiqueta="1"')) +
     (modo.conceptoFijo ? '' : paso(2, '¿En qué bolsillo?')) +
-    selBolsillo('ID_Bolsillo', medioEtiqueta, bolsilloInicial, 'Gasto,Ingreso,Ajuste', null, modo.medioVacio) +
+    (modo.medioFijo ? fijo(medioEtiqueta, modo.medioTexto) : selBolsillo('ID_Bolsillo', medioEtiqueta, bolsilloInicial, 'Gasto,Ingreso,Ajuste', null, modo.medioVacio)) +
     (modo.origenFijo ? fijo('Sale de', modo.origenTexto) : selBolsillo('Origen', modo.medioEtiqueta && tipoInicial === 'Mover' ? modo.medioEtiqueta : 'Sale de', bolsilloInicial, 'Mover', modo.destinoFijo ? todos.map(sinOrigen(modo.destinoFijo)) : null)) +
     (modo.destinoFijo ? fijo('Llega a', modo.destinoTexto) : selBolsillo('Destino', 'Llega a', destinoInicial, 'Mover', modo.origenFijo ? todos.map(sinOrigen(modo.origenFijo)) : null)) +
     (modo.nota ? '<p class="m-ayuda">' + esc(modo.nota) + '</p>' : '') +

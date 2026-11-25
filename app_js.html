@@ -27,15 +27,16 @@ const TABS = [
 
 /** Cada pantalla principal pertenece a un área: el área marca la pestaña (o el grupo de la barra lateral) activa. */
 const AREA_DE_RUTA = {
-  inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero',
-  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', anual: 'planear', analisis: 'planear',
+  inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero', inversiones: 'dinero',
+  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', deseos: 'planear', anual: 'planear', analisis: 'planear',
+  metas: 'planear', calculadora: 'planear', pensiones: 'planear',
   tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
 };
 
 /** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
 const GRUPOS_NAV = [
-  { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas']] },
-  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['regalos', 'Regalos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso']] },
+  { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas'], ['inversiones', 'Inversiones', 'tendencia']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['metas', 'Metas', 'meta'], ['deseos', 'Lista de deseos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso'], ['calculadora', 'Calculadora', 'calculadora'], ['pensiones', 'Pensiones y cesantías', 'paraguas']] },
   { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
 ];
 const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
@@ -82,6 +83,23 @@ function dinero(n, divisa) {
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
 /** Una tasa de cambio en pesos, con decimales: $ 4.012,5 */
 const tasaPesos = n => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+
+/**
+ * Un número con decimales que puede venir escrito a la colombiana (1.250,5) o con punto decimal (0.005, 189.5).
+ * Con coma, la coma es el decimal. Sin coma, un solo punto es decimal si no le siguen exactamente 3 cifras o si
+ * la parte entera es 0 (0.005); varios puntos son de miles.
+ */
+function leerDecimal(texto) {
+  const t = String(texto === undefined || texto === null ? '' : texto).replace(/[^\d,.\-]/g, '');
+  if (t === '' || t === '-') return '';
+  let n;
+  if (t.indexOf(',') !== -1) n = Number(t.replace(/\./g, '').replace(',', '.'));
+  else {
+    const p = t.split('.');
+    n = p.length === 2 && (p[1].length !== 3 || /^-?0*$/.test(p[0])) ? Number(t) : Number(t.replace(/\./g, ''));
+  }
+  return isFinite(n) ? n : NaN;
+}
 
 function leerDinero(texto) {
   const t = String(texto || '').replace(/[^\d,.\-]/g, '');
@@ -490,8 +508,10 @@ async function refrescarParcial(opc) {
   if (r.avisos) App.boot.avisos = r.avisos;
   const tocaPagos = (opc.tablas || []).some(t => ['Suscripciones', 'Ingresos_Recurrentes', 'Tarjetas', 'Creditos'].indexOf(t) !== -1);
   if (tocaPagos) { App.proximosViejos = true; App.pag.data = null; App.ing.data = null; }
+  if ((opc.tablas || []).indexOf('Metas') !== -1) App.metas.data = null;
+  if ((opc.tablas || []).indexOf('Inversiones') !== -1) App.inv.data = null;
   // Una suscripción nueva o editada entra al presupuesto de este mes: se vuelve a pedir para que Registrar y Presupuesto la vean.
-  if ((opc.tablas || []).indexOf('Suscripciones') !== -1) {
+  if ((opc.tablas || []).some(t => t === 'Suscripciones' || t === 'Metas')) {
     App.ppto.data = null;
     try { aplicarPresupuesto(await api('getPresupuesto', App.boot.hoy.slice(0, 7))); } catch (e) { /* se pedirá al abrir el presupuesto */ }
   }
@@ -610,6 +630,7 @@ function aplicarEscritura(res) {
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
   App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; if (App.ana) App.ana.data = null;
+  if (App.metas) App.metas.data = null; if (App.inv) App.inv.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -673,7 +694,13 @@ function tituloRuta(ruta) {
   if (partes[0] === 'ajustes' && partes.length === 1) return 'Ajustes';
   if (partes[0] === 'movimientos') return 'Movimientos';
   if (partes[0] === 'nomina') return 'Nómina';
-  if (partes[0] === 'regalos') return 'Regalos';
+  if (partes[0] === 'regalos' || partes[0] === 'deseos') return 'Lista de deseos';
+  if (partes[0] === 'metas') return 'Metas';
+  if (partes[0] === 'meta') { const m = App.metas && App.metas.data && App.metas.data.items.find(x => x.ID_Meta === partes[1]); return m ? m.Nombre : 'Meta'; }
+  if (partes[0] === 'inversiones') return 'Inversiones';
+  if (partes[0] === 'inversion') { const i = App.inv && App.inv.data && App.inv.data.items.find(x => x.ID_Inversion === partes[1]); return i ? i.Nombre : 'Inversión'; }
+  if (partes[0] === 'calculadora') return 'Calculadora';
+  if (partes[0] === 'pensiones') return 'Pensiones y cesantías';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -750,7 +777,13 @@ function pantalla(ruta) {
     case 'bolsillos': return vBolsillos();
     case 'presupuesto': return vPresupuesto();
     case 'nomina': return vNomina();
-    case 'regalos': return vRegalos();
+    case 'regalos': case 'deseos': return vRegalos();
+    case 'metas': return vMetas();
+    case 'meta': return vMeta(partes[1]);
+    case 'inversiones': return vInversiones();
+    case 'inversion': return vInversion(partes[1]);
+    case 'calculadora': return vCalculadora();
+    case 'pensiones': return vPensiones();
     case 'anual': return vAnual();
     case 'analisis': return vAnalisis();
     case 'guia': return vGuia();

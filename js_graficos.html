@@ -81,6 +81,7 @@ const clavesViz = series => '<div class="m-viz-claves">' + series.map(s => '<spa
  */
 function vizLinea(o) {
   const id = 'viz' + (++VIZ.n), p = o.puntos, n = p.length, alto = o.alto || 190, solo = o.series.length === 1;
+  const fmt = o.formato || (v => dinero(v, o.divisa)); // `formato` para series que no son dinero (semanas, unidades)
   const todos = [].concat.apply([], o.series.map(s => s.valores)).filter(v => v !== null && v !== undefined);
   if (!todos.length) todos.push(0);
   const escala = ticksNice(Math.min.apply(null, todos), Math.max.apply(null, todos), 4);
@@ -104,14 +105,14 @@ function vizLinea(o) {
   });
   if (solo) {
     let u = n - 1; while (u >= 0 && ys[0][u] === null) u--;
-    if (u >= 0) fin = '<circle class="viz-fin ' + o.series[0].clave + '" cx="' + xc(u) + '" cy="' + ys[0][u] + '" r="4"/><text class="viz-valor" x="' + xc(u) + '" y="' + (ys[0][u] - 10) + '" text-anchor="end">' + esc(compactoMoneda(o.series[0].valores[u], o.divisa)) + '</text>';
+    if (u >= 0) fin = '<circle class="viz-fin ' + o.series[0].clave + '" cx="' + xc(u) + '" cy="' + ys[0][u] + '" r="4"/><text class="viz-valor" x="' + xc(u) + '" y="' + (ys[0][u] - 10) + '" text-anchor="end">' + esc(o.formato ? fmt(o.series[0].valores[u]) : compactoMoneda(o.series[0].valores[u], o.divisa)) + '</text>';
   }
   const ancho = Math.max(paso, 24);
   const zonas = p.map((q, i) => '<rect class="viz-zona" data-i="' + i + '" tabindex="0" role="img" x="' + (xc(i) - ancho / 2) + '" y="' + VIZ_M.t + '" width="' + ancho + '" height="' + (alto - VIZ_M.t - VIZ_M.b) + '" aria-label="' +
-    esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + (s.valores[i] === null || s.valores[i] === undefined ? 'sin dato' : dinero(s.valores[i], o.divisa))).join(', ')) + '"/>').join('');
+    esc(q.titulo + ': ' + o.series.map(s => s.nombre + ' ' + (s.valores[i] === null || s.valores[i] === undefined ? 'sin dato' : fmt(s.valores[i]))).join(', ')) + '"/>').join('');
   const puntosHover = o.series.map((s, k) => '<circle class="viz-punto ' + s.clave + '" data-s="' + k + '" r="4.5" hidden/>').join('');
 
-  VIZ.items[id] = { tipo: 'linea', puntos: p, series: o.series, ys: ys, xc: xc, fm: v => dinero(v, o.divisa), delta: solo && o.delta, extraTip: o.extraTip };
+  VIZ.items[id] = { tipo: 'linea', puntos: p, series: o.series, ys: ys, xc: xc, fm: fmt, delta: solo && o.delta, extraTip: o.extraTip };
   return (solo ? '' : clavesViz(o.series)) + '<svg class="m-viz-svg" data-viz-id="' + id + '" viewBox="0 0 ' + VIZ_W + ' ' + alto + '" role="group" aria-label="' + esc(o.etiqueta || '') + '">' + ejes.svg + trazos +
     '<line class="viz-mira" x1="0" x2="0" y1="' + VIZ_M.t + '" y2="' + (alto - VIZ_M.b) + '" hidden/>' + puntosHover + fin + zonas + '</svg>';
 }

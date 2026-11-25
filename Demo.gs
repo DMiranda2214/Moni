@@ -181,6 +181,29 @@ function sembrarDatosDemo() {
     { ID_Regalo: 'demo-reg-3', Anio: anioDemo, ID_Persona: 'demo-per-1', Idea: 'Libro', Estimado: 80000, Real: '', ID_Mov: '', Aplica: false, Notas: '' }
   ]);
   registrarGastoRegalo('demo-reg-2', 55000, 'demo-bol-regalos', fechaRelativa_(2));
+  // 1.16: un deseo para uno mismo, con su lluvia de ideas
+  insertRows('Regalos', [
+    { ID_Regalo: 'demo-reg-4', Anio: anioDemo, ID_Persona: '', Para: 'Yo', Idea: '', Categoria: 'Cuidado_Personal', Estimado: 120000, Real: '', ID_Mov: '', Aplica: true, Notas: '', Prioridad: 'Media', Estado: 'Idea', Ocasion: 'Porque sí' }
+  ]);
+  insertRows('Deseos_Ideas', [
+    { ID_Idea: 'demo-ida-1', ID_Regalo: 'demo-reg-4', Texto: 'Sérum con vitamina C', Precio: 95000, Enlace: '', Elegida: false, Orden: 1 },
+    { ID_Idea: 'demo-ida-2', ID_Regalo: 'demo-reg-4', Texto: 'Protector solar + hidratante', Precio: 110000, Enlace: '', Elegida: false, Orden: 2 }
+  ]);
+  // 1.16: metas de ahorro (una con el plan de diciembre en 0) e inversiones con precio de Google o manual
+  const mesDemo = hoy.slice(0, 7);
+  const planViaje = {}; planViaje[mesMas_(mesDemo, 1)] = 0;
+  insertRows('Metas', [
+    { ID_Meta: 'demo-meta-1', Nombre: 'Viaje a la costa (demo)', Motivo: 'Viaje', Monto_Objetivo: 3000000, Ahorro_Inicial: 400000, Fecha_Inicio: hoy, Fecha_Fin: sumarMeses_(hoy, 8), ID_Bolsillo: 'demo-bol-viaje', Plan_Mensual: JSON.stringify(planViaje), Estado: 'Activa', Notas: '', Activo: true, Orden: 1 },
+    { ID_Meta: 'demo-meta-2', Nombre: 'Moto (demo)', Motivo: 'Moto', Monto_Objetivo: 9000000, Ahorro_Inicial: 0, Fecha_Inicio: hoy, Fecha_Fin: sumarMeses_(hoy, 18), ID_Bolsillo: 'demo-bol-general-4', Plan_Mensual: '', Estado: 'Activa', Notas: '', Activo: true, Orden: 2 }
+  ]);
+  insertRows('Inversiones', [
+    { ID_Inversion: 'demo-inv-1', Nombre: 'Bitcoin (demo)', Tipo: 'Cripto', Simbolo: 'CURRENCY:BTCUSD', Divisa: 'USD', Precio_Manual: '', Fecha_Precio_Manual: '', Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 1 },
+    { ID_Inversion: 'demo-inv-2', Nombre: 'Fondo de inversión (demo)', Tipo: 'Fondo', Simbolo: '', Divisa: 'COP', Precio_Manual: 11250, Fecha_Precio_Manual: hoy, Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 2 }
+  ]);
+  insertRows('Inversiones_Operaciones', [
+    { ID_Operacion: 'demo-iop-1', ID_Inversion: 'demo-inv-1', Fecha: fechaRelativa_(40), Tipo: 'Compra', Cantidad: 0.005, Precio: 60000, Valor: 1200000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false },
+    { ID_Operacion: 'demo-iop-2', ID_Inversion: 'demo-inv-2', Fecha: fechaRelativa_(60), Tipo: 'Compra', Cantidad: 200, Precio: 10000, Valor: 2000000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false }
+  ]);
   retirarParaGastos('demo-cta-4', 'demo-bol-casa', 150000, fechaRelativa_(4), 'Para gastos (demo)');
 
   updateRowById('Config', 'Clave', 'Datos_Demo', { Valor: 'TRUE' });

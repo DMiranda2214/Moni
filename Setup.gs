@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '14';
+const ESQUEMA_VERSION = '15';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -76,8 +76,8 @@ const SCHEMAS = {
     ['ID_Plantilla', 'ID_Escenario', 'Concepto', 'Monto_Plan', 'Tipo', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'Activo', 'Orden'],
     [170, 170, 240, 120, 90, 170, 170, 170, 170, 70, 60]),
   Presupuesto_Mes: tabla_(
-    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas', 'ID_Suscripcion'],
-    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220, 170]),
+    ['ID_Item', 'Mes', 'ID_Escenario', 'ID_Plantilla', 'Concepto', 'Tipo', 'Plan', 'Pagado', 'ID_Bolsillo_Destino', 'ID_Credito', 'ID_Tarjeta', 'Notas', 'ID_Suscripcion', 'ID_Meta'],
+    [170, 90, 170, 170, 240, 90, 120, 70, 170, 170, 170, 220, 170, 170]),
 
   // ---- Nómina (una vez al mes) ----
   Subsidios: tabla_(['ID_Subsidio', 'Nombre', 'Valor', 'Es_Salarial', 'Vigente_Desde', 'Vigente_Hasta', 'Activo'], [170, 260, 120, 100, 120, 120, 70]),
@@ -102,7 +102,21 @@ const SCHEMAS = {
     [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80, 110]),
 
   // ---- Otros ----
-  Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas', 'ID_Bolsillo_Plan'], [170, 70, 170, 220, 120, 120, 70, 170, 200, 170]),
+  // La "Lista de deseos" (desde 1.16) usa esta misma tabla: regalos y cosas que la persona quiere comprarse
+  Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas', 'ID_Bolsillo_Plan',
+    'Para', 'Categoria', 'Ocasion', 'Prioridad', 'Estado', 'Enlace', 'Fecha_Objetivo', 'Precio_Pagado'],
+    [170, 70, 170, 220, 120, 120, 70, 170, 200, 170, 80, 130, 130, 90, 100, 260, 110, 120]),
+  // 1.16: lluvia de ideas de cada deseo
+  Deseos_Ideas: tabla_(['ID_Idea', 'ID_Regalo', 'Texto', 'Precio', 'Enlace', 'Elegida', 'Orden'], [170, 170, 260, 120, 260, 80, 60]),
+  // 1.16: metas de ahorro con un plan por mes que se puede editar (Plan_Mensual = JSON { "AAAA-MM": valor })
+  Metas: tabla_(['ID_Meta', 'Nombre', 'Motivo', 'Monto_Objetivo', 'Ahorro_Inicial', 'Fecha_Inicio', 'Fecha_Fin', 'ID_Bolsillo', 'Plan_Mensual', 'Estado', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 120, 130, 120, 110, 110, 170, 300, 90, 220, 70, 60]),
+  // 1.16: inversiones (acciones, ETF, cripto, fondos…), sus operaciones y el historial de precios
+  Inversiones: tabla_(['ID_Inversion', 'Nombre', 'Tipo', 'Simbolo', 'Divisa', 'Precio_Manual', 'Fecha_Precio_Manual', 'Precio_Google', 'Fecha_Precio_Google', 'Notas', 'Activo', 'Orden'],
+    [170, 220, 90, 170, 70, 120, 120, 120, 120, 220, 70, 60]),
+  Inversiones_Operaciones: tabla_(['ID_Operacion', 'ID_Inversion', 'Fecha', 'Tipo', 'Cantidad', 'Precio', 'Valor', 'Comision', 'ID_Bolsillo', 'ID_Mov', 'Notas', 'Anulado'],
+    [170, 170, 110, 90, 120, 120, 130, 110, 170, 170, 220, 80]),
+  Inversiones_Precios: tabla_(['ID_Precio', 'Fecha', 'ID_Inversion', 'Precio', 'Divisa', 'Fuente'], [170, 110, 170, 120, 70, 90]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
   Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400]),
   // 1.13: comisiones, impuestos, cambio de divisa, cuota de manejo y seguros que cobra cada medio de pago
@@ -123,7 +137,7 @@ const ENUMS = {
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
     Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno',
-      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso'],
+      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta', 'Dividendo', 'Aporte_Meta'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -142,7 +156,20 @@ const ENUMS = {
   },
   Creditos_Cronograma: { Estado: ['Pendiente', 'Pagada', 'Reemplazada'] },
   Suscripciones: { Tipo: ['Suscripcion', 'Servicio'], Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
-  Log: { Nivel: ['Info', 'Aviso', 'Error'] }
+  Log: { Nivel: ['Info', 'Aviso', 'Error'] },
+  Regalos: {
+    Para: ['', 'Yo'],
+    Categoria: ['Regalo', 'Cuidado_Personal', 'Ropa', 'Tecnologia', 'Hogar', 'Experiencia', 'Otro'],
+    Prioridad: ['', 'Alta', 'Media', 'Baja'],
+    Estado: ['', 'Idea', 'Decidido', 'Comprado', 'Descartado']
+  },
+  Metas: {
+    Motivo: ['Navidad', 'Viaje', 'Moto', 'Carro', 'Casa', 'Estudio', 'Emergencias', 'Tecnologia', 'Celebracion', 'Otro'],
+    Estado: ['Activa', 'Pausada', 'Cumplida']
+  },
+  Inversiones: { Tipo: ['Accion', 'ETF', 'Cripto', 'Fondo', 'Bono', 'Otro'], Divisa: DIVISAS },
+  Inversiones_Operaciones: { Tipo: ['Compra', 'Venta', 'Dividendo'] },
+  Inversiones_Precios: { Fuente: ['Google', 'Manual'] }
 };
 
 /**
@@ -169,7 +196,12 @@ const COLUMNAS_TEXTO = {
   Creditos: ['Fecha_Inicio'],
   Creditos_Cronograma: ['Fecha_Prevista'],
   Creditos_Pagos: ['Fecha'],
-  Reportes: ['Mes']
+  Reportes: ['Mes'],
+  Regalos: ['Fecha_Objetivo'],
+  Metas: ['Fecha_Inicio', 'Fecha_Fin', 'Plan_Mensual'],
+  Inversiones: ['Simbolo', 'Fecha_Precio_Manual', 'Fecha_Precio_Google'],
+  Inversiones_Operaciones: ['Fecha'],
+  Inversiones_Precios: ['Fecha']
 };
 
 /** Parámetros por defecto: [Clave, Valor, Grupo, Tipo, Descripcion]. */
@@ -191,8 +223,9 @@ const DEFAULT_CONFIG = [
   ['Aporte_Salud', '0.04', 'Nomina', 'porcentaje', 'Porcentaje de aporte a salud del trabajador'],
   ['Aporte_Pension', '0.04', 'Nomina', 'porcentaje', 'Porcentaje de aporte a pensión del trabajador'],
   ['Redondeo_Aportes', '-2', 'Nomina', 'numero', 'Redondeo de aportes (-2 = centena superior)'],
-  ['SMMLV', '1423500', 'Nomina', 'moneda', 'Salario mínimo mensual legal vigente. Actualizar cada enero'],
-  ['SMMLV_Anio', '2025', 'Nomina', 'numero', 'Año del SMMLV registrado'],
+  ['SMMLV', '1750905', 'Nomina', 'moneda', 'Salario mínimo mensual legal vigente. Actualizar cada enero'],
+  ['SMMLV_Anio', '2026', 'Nomina', 'numero', 'Año del SMMLV registrado'],
+  ['Auxilio_Transporte', '249095', 'Nomina', 'moneda', 'Auxilio de transporte legal mensual (para quien gana hasta 2 SMMLV). Actualizar cada enero'],
   ['FSP_Umbral_SMMLV', '4', 'Nomina', 'numero', 'Umbral de SMMLV para el Fondo de Solidaridad Pensional'],
   ['Auxilio_Transporte_Aplica', 'FALSE', 'Nomina', 'booleano', 'Aplica auxilio de transporte legal'],
   ['Prima_Fechas', '06-30,12-20', 'Nomina', 'texto', 'Fechas límite de pago de prima'],
@@ -215,7 +248,9 @@ const DEFAULT_CONFIG = [
   ['Recordatorios_Nomina', 'TRUE', 'Recordatorios', 'booleano', 'Incluir las fechas de prima y cesantías'],
   ['Calendario_ID', '', 'Recordatorios', 'texto', 'Calendario de Google que crea la app'],
   ['Recordatorios_Ultima', '', 'Recordatorios', 'texto', 'Fecha y hora de la última sincronización'],
-  ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización']
+  ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización'],
+  ['Pension_Perfil', '', 'Pension', 'texto', 'Datos para estimar tu pensión y tus cesantías (los guarda la app)'],
+  ['Inversiones_Ultima', '', 'Divisas', 'texto', 'Fecha y hora de la última actualización de precios de Google Finance']
 ];
 
 /** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden, Rol]. Rol marca las que usa la app. */
@@ -316,7 +351,18 @@ const MIGRACIONES_COLUMNAS = [
   // 1.15: servicios, empresas y suscripciones en una sola tabla (Suscripciones). Las pestañas viejas se conservan.
   { tabla: 'Suscripciones', columna: 'Empresa', valor: '' },
   { tabla: 'Suscripciones', columna: 'Codigo_Pago', valor: '' },
-  { tabla: 'Suscripciones', columna: 'ID_Empresa', valor: '' }
+  { tabla: 'Suscripciones', columna: 'ID_Empresa', valor: '' },
+  // 1.16: la Lista de deseos amplía los regalos (los que ya hay son regalos para la persona que tenían)
+  { tabla: 'Regalos', columna: 'Para', valor: '' },
+  { tabla: 'Regalos', columna: 'Categoria', valor: 'Regalo' },
+  { tabla: 'Regalos', columna: 'Ocasion', valor: '' },
+  { tabla: 'Regalos', columna: 'Prioridad', valor: '' },
+  { tabla: 'Regalos', columna: 'Estado', valor: '' },
+  { tabla: 'Regalos', columna: 'Enlace', valor: '' },
+  { tabla: 'Regalos', columna: 'Fecha_Objetivo', valor: '' },
+  { tabla: 'Regalos', columna: 'Precio_Pagado', valor: '' },
+  // 1.16: un renglón del presupuesto puede ser el aporte del mes a una meta
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Meta', valor: '' }
 ];
 
 /**

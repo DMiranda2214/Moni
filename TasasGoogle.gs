@@ -71,6 +71,9 @@ function configurarTasaAuto(activar) {
 function actualizarTasasAuto() {
   return ejecutarConLog_(FUNCION_TASAS, function () {
     if (!esVerdadero(cfgValor_('Tasa_Auto'))) return { omitido: true };
-    return actualizarTasasGoogle();
+    const r = actualizarTasasGoogle();
+    // Los precios de las inversiones se actualizan con la misma tarea diaria
+    try { r.inversiones = actualizarPreciosGoogle(); } catch (e) { r.inversiones = { error: e.message }; }
+    return r;
   });
 }

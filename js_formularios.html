@@ -197,6 +197,37 @@ const CAT = {
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
+  Metas: {
+    plural: 'Metas', singular: 'meta', icono: 'meta', id: 'ID_Meta',
+    vacio: 'Ahorra para lo que quieres: la Navidad, un viaje, la moto, la cuota inicial…',
+    requiere: () => activos('Bolsillos').length ? '' : 'Primero crea una cuenta con un bolsillo.',
+    fila: m => ({ titulo: esc(m.Nombre), sub: esc(MOTIVOS_META[m.Motivo] || 'Meta') + ' · para ' + esc(fechaTxt(m.Fecha_Fin)), final: '<span class="m-num">' + dinero(m.Monto_Objetivo) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre de la meta', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Navidad', 'Vacaciones', 'Moto', 'Carro', 'Cuota inicial', 'Fondo de emergencias', 'Matrícula', 'Celular nuevo'] },
+      { k: 'Motivo', label: 'Para qué es', tipo: 'select', defecto: 'Otro', opciones: () => Object.keys(MOTIVOS_META).map(k => [k, MOTIVOS_META[k]]) },
+      { k: 'Monto_Objetivo', label: 'Cuánto necesitas', tipo: 'dinero', requerido: true },
+      { k: 'Ahorro_Inicial', label: 'Lo que ya tienes ahorrado (opcional)', tipo: 'dinero', ayuda: 'Si ya tienes una parte guardada para esta meta, escríbela: cuenta en el avance.' },
+      { k: 'Fecha_Inicio', label: 'Desde', tipo: 'fecha', requerido: true },
+      { k: 'Fecha_Fin', label: 'Para cuándo', tipo: 'fecha', requerido: true },
+      { k: 'ID_Bolsillo', label: 'Dónde guardas el dinero', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), ayuda: 'El bolsillo al que van los aportes. Si no tienes uno, créalo en Bolsillos (por ejemplo, “Viaje”).' },
+      { k: 'Estado', label: 'Estado', tipo: 'select', soloAlEditar: true, defecto: 'Activa', opciones: () => [['Activa', 'Activa'], ['Pausada', 'En pausa (no entra al presupuesto)'], ['Cumplida', 'Cumplida']] },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
+  Inversiones: {
+    plural: 'Inversiones', singular: 'inversión', icono: 'tendencia', id: 'ID_Inversion',
+    vacio: 'Acciones, ETF, cripto, fondos… con su precio de Google Finance o el que tú escribas.',
+    fila: i => ({ titulo: esc(i.Nombre), sub: esc(TIPOS_INV[i.Tipo] || 'Otro') + (i.Simbolo ? ' · ' + esc(i.Simbolo) : ''), final: '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Bitcoin', 'Ethereum', 'Apple', 'Ecopetrol', 'S&P 500 (VOO)', 'Fondo de inversión'] },
+      { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Accion', opciones: () => Object.keys(TIPOS_INV).map(k => [k, TIPOS_INV[k]]) },
+      { k: 'Simbolo', label: 'Símbolo en Google Finance (opcional)', tipo: 'texto', maxlength: 40, lista: ['CURRENCY:BTCUSD', 'CURRENCY:ETHUSD', 'NASDAQ:AAPL', 'NYSEARCA:VOO', 'BVC:ECOPETROL'],
+        ayuda: 'Así Moni trae el precio sola: acciones como NASDAQ:AAPL, cripto como CURRENCY:BTCUSD. Si Google no tiene el activo (pasa con varias acciones de la BVC o los fondos), déjalo vacío y escribe el precio a mano.' },
+      { k: 'Divisa', label: 'Moneda del precio', tipo: 'select', defecto: 'COP', opciones: () => [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']], ayuda: 'En qué moneda está el precio: las acciones de EE. UU. y la cripto, en dólares. Se pasa a pesos con la tasa de Ajustes → Divisas.' },
+      { k: 'Precio_Manual', label: 'Precio de hoy por unidad (opcional)', tipo: 'decimal', ayuda: 'Si no hay símbolo o Google no lo encuentra: el valor de una acción o de una unidad del fondo, en la moneda de arriba.' },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
   Cargos_Reglas: {
     plural: 'Cargos y comisiones', singular: 'regla de cargo', icono: 'escudo', id: 'ID_Regla',
     vacio: 'Anota lo que te cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir, el 4x1000, la cuota de manejo, el recargo por comprar en otra moneda o el seguro de cada cuota. Moni te los propone al registrar; siempre puedes cambiarlos o quitarlos.',
@@ -504,6 +535,9 @@ function htmlCampo(c, valor, ctx) {
       ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc +
         ' value="' + (valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : esc(new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Number(valor)))) + '" data-tipo="dinero"><p class="m-ayuda" data-eco="' + id + '" aria-live="polite"></p>';
       break;
+    case 'decimal':
+      ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc + ' value="' + (valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : esc(String(valor).replace('.', ','))) + '">';
+      break;
     case 'porcentaje': {
       const n = valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(Number(valor) * 100);
       ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc + ' placeholder="Por ejemplo, 9,5" value="' + esc(n) + '">';
@@ -543,6 +577,7 @@ function leerFormulario(raiz, campos) {
     if (c.tipo === 'interruptor') v[c.k] = el.checked;
     else if (c.tipo === 'dinero') v[c.k] = leerDinero(el.value);
     else if (c.tipo === 'porcentaje') { const n = leerDinero(el.value); v[c.k] = n === '' ? '' : (isNaN(n) ? NaN : n / 100); }
+    else if (c.tipo === 'decimal') v[c.k] = leerDecimal(el.value);
     else if (c.tipo === 'entero') v[c.k] = el.value === '' ? '' : Number(el.value);
     else v[c.k] = el.value.trim();
   });
@@ -597,6 +632,7 @@ async function abrirFormulario(tabla, id, defaults) {
   const ctx = { existente: existente };
 
   const valorInicial = c => {
+    if (!existente && defaults && defaults[c.k] !== undefined && defaults[c.k] !== '') return defaults[c.k]; // llenado desde otra pantalla (p. ej. la calculadora)
     if (item[c.k] !== undefined && item[c.k] !== null && item[c.k] !== '') {
       return c.tipo === 'interruptor' ? esVerdad(item[c.k]) : item[c.k];
     }
@@ -637,7 +673,7 @@ async function abrirFormulario(tabla, id, defaults) {
       const v = leerFormulario(raiz, campos);
       campos.forEach(c => {
         if (c.visible && !c.visible(v, ctx)) delete v[c.k];
-        if ((c.tipo === 'dinero' || c.tipo === 'porcentaje') && v[c.k] !== undefined && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
+        if ((c.tipo === 'dinero' || c.tipo === 'porcentaje' || c.tipo === 'decimal') && v[c.k] !== undefined && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
       });
       const falta = campos.find(c => c.requerido && (!c.visible || c.visible(v, ctx)) && (v[c.k] === '' || v[c.k] === undefined));
       if (falta) throw new Error(falta.label + ' es obligatorio.');
@@ -730,7 +766,7 @@ function abrirHoja(o) {
       if (acc === 'cerrar') cerrar();
       else if (acc === 'guardar') ejecutar(o.alGuardar);
       else if (o.extra && o.extra[acc]) {
-        const r = o.extra[acc](cuerpo);
+        const r = o.extra[acc](cuerpo, b); // el botón, por si lleva datos (data-*)
         if (r && typeof r.then === 'function') ejecutar(() => r.then(() => true));
       }
     };

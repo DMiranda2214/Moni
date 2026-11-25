@@ -1,0 +1,430 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Herramientas (Planear → Herramientas): Calculadora, y Pensiones y cesantías (legislación colombiana).
+// Todo se calcula en el navegador. Las fórmulas son funciones puras (CALC) que se prueban en Node (tests/test_herramientas.js).
+// ---------------------------------------------------------------------------
+
+// <calc>
+const CALC = {
+  // ---- Tasas ----
+  mensualDeEA: ea => Math.pow(1 + ea, 1 / 12) - 1,
+  eaDeMensual: m => Math.pow(1 + m, 12) - 1,
+  /** Tasa mensual desde lo que la persona escribe: EA, mensual vencida (MV) o nominal anual mes vencido (NAMV). */
+  mensualDe: (tasa, tipo) => tipo === 'MV' ? tasa : tipo === 'NAMV' ? tasa / 12 : CALC.mensualDeEA(tasa),
+
+  // ---- Préstamo (cuota fija) ----
+  cuota: (monto, i, n) => n <= 0 ? 0 : (i === 0 ? monto / n : monto * i / (1 - Math.pow(1 + i, -n))),
+  amortizacion: (monto, i, n, extra) => {
+    const c = CALC.cuota(monto, i, n), filas = [];
+    let saldo = monto;
+    for (let k = 1; k <= n && saldo > 0.005; k++) {
+      const interes = saldo * i, capital = Math.min(saldo, c - interes);
+      saldo = Math.max(0, saldo - capital);
+      filas.push({ num: k, cuota: capital + interes + (extra || 0), interes: interes, capital: capital, seguros: extra || 0, saldo: saldo });
+    }
+    return filas;
+  },
+
+  // ---- Ahorro ----
+  /** Lo que tendrás mes a mes: lo de hoy más un aporte al final de cada mes, con interés compuesto mensual. */
+  ahorro: (inicial, aporte, i, meses) => {
+    const filas = [];
+    let saldo = inicial, aportes = inicial;
+    for (let k = 1; k <= meses; k++) {
+      saldo = saldo * (1 + i) + aporte; aportes += aporte;
+      filas.push({ mes: k, saldo: saldo, aportes: aportes, intereses: saldo - aportes });
+    }
+    return filas;
+  },
+  /** Cuánto aportar cada mes para llegar a `objetivo` en `meses`, con lo que ya tienes. */
+  aporteParaMeta: (objetivo, inicial, i, meses) => {
+    if (meses <= 0) return Math.max(0, objetivo - inicial);
+    const f = Math.pow(1 + i, meses);
+    const p = i === 0 ? (objetivo - inicial) / meses : (objetivo - inicial * f) * i / (f - 1);
+    return Math.max(0, p);
+  },
+
+  // ---- CDT ----
+  cdt: (capital, ea, dias, retencion) => {
+    const intereses = capital * (Math.pow(1 + ea, dias / 365) - 1);
+    const ret = intereses * (retencion || 0);
+    return { intereses: intereses, retencion: ret, neto: intereses - ret, total: capital + intereses - ret, porMes: (intereses - ret) / (dias / 30) };
+  },
+
+  // ---- Fechas ----
+  /** Días entre dos fechas en año comercial de 360 días (meses de 30), contando los dos extremos, como en nómina. */
+  dias360: (a, b) => {
+    const p = a.split('-').map(Number), q = b.split('-').map(Number);
+    const finFeb = (y, m, d) => m === 2 && d === new Date(Date.UTC(y, 2, 0)).getUTCDate(); // el último día de febrero cuenta como 30
+    const d1 = Math.min(p[2], 30), d2 = finFeb(q[0], q[1], q[2]) ? 30 : Math.min(q[2], 30);
+    return (q[0] - p[0]) * 360 + (q[1] - p[1]) * 30 + (d2 - d1) + 1;
+  },
+
+  // ---- Cesantías (Ley 50 de 1990, CST art. 249 y ss.) ----
+  /**
+   * @param {Object} o { salario, smmlv, auxilio, integral, conAuxilio (true/false/undefined = automático), desde, hasta, diasNoPagados }
+   * La base incluye el auxilio de transporte si se gana hasta 2 SMMLV. Intereses: 12 % anual sobre las cesantías, en proporción a los días.
+   */
+  cesantias: o => {
+    const aplicaAuxilio = o.conAuxilio === undefined ? o.salario <= 2 * o.smmlv : !!o.conAuxilio;
+    const base = o.salario + (aplicaAuxilio ? o.auxilio : 0);
+    const dias = Math.max(0, Math.min(360, CALC.dias360(o.desde, o.hasta)) - (o.diasNoPagados || 0));
+    if (o.integral) return { base: o.salario, dias: dias, aplicaAuxilio: false, cesantias: 0, intereses: 0, prima: 0, integral: true };
+    const cesantias = base * dias / 360;
+    const intereses = cesantias * dias * 0.12 / 360;
+    // Prima del semestre en curso (hasta la fecha final)
+    const semIni = o.hasta.slice(0, 4) + (Number(o.hasta.slice(5, 7)) <= 6 ? '-01-01' : '-07-01');
+    const diasPrima = Math.max(0, Math.min(180, CALC.dias360(o.desde > semIni ? o.desde : semIni, o.hasta)));
+    return { base: base, dias: dias, aplicaAuxilio: aplicaAuxilio, cesantias: cesantias, intereses: intereses, prima: base * diasPrima / 360, diasPrima: diasPrima, integral: false };
+  },
+
+  // ---- Pensión de vejez (Ley 100 de 1993, Ley 797 de 2003, C-197 de 2023; reforma Ley 2381 de 2024 como información) ----
+  edadPension: sexo => sexo === 'M' ? 57 : 62,
+  /** Semanas en Colpensiones según el año en que se cumplen: mujeres 1.250 en 2026 y 25 menos cada año hasta 1.000 (C-197/2023). */
+  semanasRequeridas: (sexo, anio, regimen) => {
+    if (regimen === 'RAIS') return 1150; // garantía de pensión mínima en un fondo privado
+    if (sexo !== 'M' || anio < 2026) return 1300;
+    return Math.max(1000, 1250 - 25 * (anio - 2026));
+  },
+  /** Porcentaje del Fondo de Solidaridad Pensional según el IBC en salarios mínimos. */
+  fsp: s => s < 4 ? 0 : s < 16 ? 0.01 : s < 17 ? 0.012 : s < 18 ? 0.014 : s < 19 ? 0.016 : s < 20 ? 0.018 : 0.02,
+  /** Tasa de reemplazo en Colpensiones: 65,5 − 0,5 × s (entre 55 % y 65 %) + 1,5 por cada 50 semanas extra, hasta 80 %. */
+  tasaReemplazo: (ibl, smmlv, semanas, requeridas) => {
+    const s = ibl / smmlv;
+    const base = Math.max(55, Math.min(65, 65.5 - 0.5 * s));
+    const extra = Math.floor(Math.max(0, semanas - requeridas) / 50) * 1.5;
+    return Math.min(80, base + extra);
+  },
+  sumarAnios: (fecha, anios) => (Number(fecha.slice(0, 4)) + anios) + fecha.slice(4),
+  /**
+   * Estimado de pensión.
+   * @param {Object} p { sexo: 'H'|'M', nacimiento, semanas, semanasPorAnio, salario, independiente, regimen: 'RPM'|'RAIS',
+   *   saldo, rentabilidad (real anual), smmlv, hoy, hijos }
+   */
+  pension: p => {
+    const edad = CALC.edadPension(p.sexo);
+    const fechaEdad = CALC.sumarAnios(p.nacimiento, edad);
+    const ibc = Math.min(25 * p.smmlv, Math.max(p.smmlv, p.independiente ? p.salario * 0.4 : p.salario));
+    const ritmo = Math.max(0, p.semanasPorAnio === undefined ? 52 : p.semanasPorAnio);
+    const anioDe = f => Number(f.slice(0, 4));
+    const aniosEntre = (a, b) => (Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / (365.25 * 86400000);
+    const semanasEn = f => p.semanas + ritmo * Math.max(0, aniosEntre(p.hoy, f));
+    // Primera fecha (mes a mes) en que se cumplen la edad y las semanas de ese año
+    let fecha = fechaEdad > p.hoy ? fechaEdad : p.hoy, cumple = null;
+    for (let k = 0; k < 12 * 50; k++) {
+      const req = CALC.semanasRequeridas(p.sexo, anioDe(fecha), p.regimen);
+      if (semanasEn(fecha) >= req - 0.01) { cumple = fecha; break; }
+      if (!ritmo) break;
+      const d = new Date(Date.parse(fecha + 'T00:00:00Z')); d.setUTCMonth(d.getUTCMonth() + 1);
+      fecha = d.toISOString().slice(0, 10);
+    }
+    const fin = cumple || fechaEdad;
+    const requeridas = CALC.semanasRequeridas(p.sexo, anioDe(fin), p.regimen);
+    const semanasAlFinal = semanasEn(fin);
+    const r = { edad: edad, fechaEdad: fechaEdad, fechaPension: cumple, requeridas: requeridas, semanasAlPensionarte: semanasAlFinal,
+      faltan: Math.max(0, requeridas - p.semanas), ibc: ibc, s: ibc / p.smmlv };
+    // Aportes de hoy
+    const fsp = CALC.fsp(ibc / p.smmlv);
+    r.aportes = p.independiente
+      ? { total: ibc * 0.16 + ibc * fsp, tuyo: ibc * 0.16 + ibc * fsp, empleador: 0, fsp: ibc * fsp, porcentajeFsp: fsp }
+      : { total: ibc * 0.16 + ibc * fsp, tuyo: ibc * 0.04 + ibc * fsp, empleador: ibc * 0.12, fsp: ibc * fsp, porcentajeFsp: fsp };
+    if (p.regimen === 'RAIS') {
+      // Saldo proyectado: lo de hoy + el 11,5 % del IBC cada mes, con la rentabilidad real que se escriba
+      const meses = Math.max(0, Math.round(aniosEntre(p.hoy, fin) * 12));
+      const im = Math.pow(1 + (p.rentabilidad || 0), 1 / 12) - 1;
+      let saldo = p.saldo || 0;
+      for (let k = 0; k < meses; k++) saldo = saldo * (1 + im) + ibc * 0.115 * (ritmo / 52);
+      const anios = p.sexo === 'M' ? 29 : 21; // años de vida esperados al pensionarse (aproximado)
+      const n = anios * 12;
+      const mensual = im > 0 ? saldo * im / (1 - Math.pow(1 + im, -n)) * 12 / 13 : saldo / n * 12 / 13;
+      r.saldoProyectado = saldo;
+      r.mesada = mensual;
+      r.garantiaMinima = mensual < p.smmlv && semanasAlFinal >= 1150;
+      if (r.garantiaMinima) r.mesada = p.smmlv;
+      r.tasa = ibc > 0 ? r.mesada / ibc * 100 : 0;
+    } else {
+      r.tasa = CALC.tasaReemplazo(ibc, p.smmlv, semanasAlFinal, requeridas);
+      r.mesada = Math.min(25 * p.smmlv, Math.max(p.smmlv, ibc * r.tasa / 100));
+    }
+    // Reforma (Ley 2381 de 2024), si entra en vigencia: transición y reparto de la cotización
+    const semanas2025 = Math.max(0, p.semanas - ritmo * Math.max(0, aniosEntre('2025-06-30', p.hoy)));
+    r.reforma = {
+      semanasJunio2025: semanas2025,
+      transicion: p.sexo === 'M' ? semanas2025 >= 750 : semanas2025 >= 900,
+      aColpensiones: Math.min(ibc, 2.3 * p.smmlv), aFondo: Math.max(0, ibc - 2.3 * p.smmlv),
+      menosPorHijos: p.sexo === 'M' ? Math.min(3, p.hijos || 0) * 50 : 0
+    };
+    return r;
+  }
+};
+// </calc>
+
+App.calc = { tab: 'prestamo', v: {} };
+App.pen = { tab: 'cesantias', v: null };
+
+/** Campo numérico de las herramientas (los valores se guardan mientras navegas). */
+function campoCalc(grupo, k, label, valor, o) {
+  const op = o || {};
+  const id = 'c-' + grupo + '-' + k;
+  return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(label) + '</label>' +
+    (op.opciones
+      ? '<select class="m-input" id="' + id + '" data-calc="' + k + '">' + op.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor) ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</select>'
+      : '<input class="m-input' + (op.tipo === 'date' ? '' : ' m-num') + '" id="' + id + '" data-calc="' + k + '" ' + (op.tipo === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" autocomplete="off"') + ' value="' + esc(valor === undefined || valor === null ? '' : valor) + '"' + (op.placeholder ? ' placeholder="' + esc(op.placeholder) + '"' : '') + '>') +
+    (op.ayuda ? '<p class="m-ayuda">' + esc(op.ayuda) + '</p>' : '') + '</div>';
+}
+/** Pesos redondeados (los cálculos dan centavos que no sirven para decidir). */
+const dr = n => dinero(Math.round(n));
+const numCalc = v => { const n = leerDecimal(v); return typeof n === 'number' && !isNaN(n) ? n : 0; };
+const pctCalc = v => numCalc(v) / 100;
+const pct1 = n => (Math.round(n * 100) / 100).toLocaleString('es-CO') + ' %';
+const filaRes = (etq, valor, clase) => '<div><div class="m-resumen-etiqueta">' + esc(etq) + '</div><strong class="m-num ' + (clase || '') + '">' + valor + '</strong></div>';
+
+// ---------------------------------------------------------------------------
+// Calculadora
+// ---------------------------------------------------------------------------
+
+const TABS_CALC = [['prestamo', 'Préstamo'], ['ahorro', 'Ahorro'], ['meta', '¿Cuánto ahorrar?'], ['cdt', 'CDT'], ['tasas', 'Tasas']];
+const DEF_CALC = {
+  prestamo: { monto: '10.000.000', plazo: '36', tasa: '24', tipoTasa: 'EA', seguros: '0' },
+  ahorro: { inicial: '0', aporte: '300.000', tasa: '9', meses: '24' },
+  meta: { objetivo: '5.000.000', inicial: '0', fecha: '', tasa: '9' },
+  cdt: { capital: '5.000.000', tasa: '10', dias: '360', retencion: '4' },
+  tasas: { tasa: '12', tipo: 'EA' }
+};
+const TIPOS_TASA = [['EA', 'Efectiva anual (EA)'], ['MV', 'Mensual vencida (MV)'], ['NAMV', 'Nominal anual mes vencido (NAMV)']];
+
+function valoresCalc(tab) {
+  const c = App.calc;
+  if (!c.v[tab]) c.v[tab] = Object.assign({}, DEF_CALC[tab]);
+  if (tab === 'meta' && !c.v.meta.fecha) c.v.meta.fecha = mesMas(App.boot.hoy.slice(0, 7), 12) + '-01';
+  return c.v[tab];
+}
+
+function vCalculadora() {
+  const tab = App.calc.tab, v = valoresCalc(tab);
+  const pildoras = '<div class="m-pildoras" role="tablist" aria-label="Qué calcular">' + TABS_CALC.map(t => '<button class="m-pildora" role="tab" data-acc="calc-tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === tab) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
+  let form = '';
+  if (tab === 'prestamo') form = campoCalc(tab, 'monto', 'Cuánto te prestan', v.monto) + campoCalc(tab, 'plazo', 'Plazo en meses', v.plazo) +
+    campoCalc(tab, 'tasa', 'Tasa de interés (%)', v.tasa, { ayuda: 'Como te la dé el banco. La tasa de usura es el tope legal de la EA.' }) + campoCalc(tab, 'tipoTasa', 'Tipo de tasa', v.tipoTasa, { opciones: TIPOS_TASA }) +
+    campoCalc(tab, 'seguros', 'Seguros y cargos por cuota (opcional)', v.seguros, { ayuda: 'Lo que el banco suma a cada cuota: seguro de vida, de desempleo…' });
+  if (tab === 'ahorro') form = campoCalc(tab, 'inicial', 'Lo que tienes hoy', v.inicial) + campoCalc(tab, 'aporte', 'Cuánto ahorras cada mes', v.aporte) +
+    campoCalc(tab, 'tasa', 'Rentabilidad anual (% EA)', v.tasa, { ayuda: 'Lo que te paga tu cuenta, bolsillo o fondo. Pon 0 si lo guardas sin rendimiento.' }) + campoCalc(tab, 'meses', 'Durante cuántos meses', v.meses);
+  if (tab === 'meta') form = campoCalc(tab, 'objetivo', 'Cuánto necesitas', v.objetivo) + campoCalc(tab, 'inicial', 'Lo que ya tienes', v.inicial) +
+    campoCalc(tab, 'fecha', 'Para cuándo', v.fecha, { tipo: 'date' }) + campoCalc(tab, 'tasa', 'Rentabilidad anual (% EA)', v.tasa);
+  if (tab === 'cdt') form = campoCalc(tab, 'capital', 'Cuánto inviertes', v.capital) + campoCalc(tab, 'tasa', 'Tasa (% EA)', v.tasa) +
+    campoCalc(tab, 'dias', 'Plazo en días', v.dias, { ayuda: 'Los CDT suelen ser a 90, 180, 360 o 540 días.' }) + campoCalc(tab, 'retencion', 'Retención en la fuente sobre los intereses (%)', v.retencion, { ayuda: 'En Colombia, por lo general, 4 % de los intereses.' });
+  if (tab === 'tasas') form = campoCalc(tab, 'tasa', 'Tasa (%)', v.tasa) + campoCalc(tab, 'tipo', 'Es una tasa', v.tipo, { opciones: TIPOS_TASA });
+  const html = pildoras + '<form class="m-group" style="padding:var(--m-space-4)" data-form="calc" novalidate>' + form + '</form>' +
+    '<div id="calc-res" aria-live="polite">' + resultadoCalc(tab, v) + '</div>' +
+    '<p class="m-ayuda">Son cálculos de referencia con cuota fija e interés compuesto. Tu banco puede redondear distinto o sumar otros cobros.</p>';
+  return {
+    titulo: 'Calculadora', html: html,
+    despues: () => {
+      const f = $('[data-form="calc"]');
+      if (!f) return;
+      f.addEventListener('input', ev => {
+        if (!ev.target.dataset.calc) return;
+        v[ev.target.dataset.calc] = ev.target.value;
+        VIZ.items = {}; $('#calc-res').innerHTML = resultadoCalc(tab, v);
+      });
+      f.addEventListener('change', ev => { if (ev.target.tagName === 'SELECT' || ev.target.type === 'date') { v[ev.target.dataset.calc] = ev.target.value; VIZ.items = {}; $('#calc-res').innerHTML = resultadoCalc(tab, v); } });
+    }
+  };
+}
+
+function resultadoCalc(tab, v) {
+  const caja = (cuerpo) => '<div class="m-group m-saldo-grande">' + cuerpo + '</div><div style="height:var(--m-space-4)"></div>';
+  if (tab === 'prestamo') {
+    const monto = numCalc(v.monto), n = Math.round(numCalc(v.plazo)), i = CALC.mensualDe(pctCalc(v.tasa), v.tipoTasa), seg = numCalc(v.seguros);
+    if (!(monto > 0) || !(n > 0)) return '<p class="m-ayuda">Escribe el monto y el plazo.</p>';
+    const tabla = CALC.amortizacion(monto, i, n, seg), cuota = CALC.cuota(monto, i, n);
+    const intereses = tabla.reduce((a, f) => a + f.interes, 0);
+    const puntos = [{ x: '0', anio: '', titulo: 'Al inicio', previo: '' }].concat(tabla.map(f => ({ x: String(f.num), anio: '', titulo: 'Cuota ' + f.num, previo: '' })));
+    return caja('<div class="m-resumen-etiqueta">Cuota mensual</div><div class="m-resumen-cifra m-num">' + dr(cuota + seg) + '</div>' +
+      (seg ? '<p class="m-ayuda" style="margin:0">' + dr(cuota) + ' de capital e interés + ' + dr(seg) + ' de seguros</p>' : '') +
+      '<div class="m-resumen-fila">' + filaRes('Pagas de intereses', dr(intereses)) + filaRes('Pagas en total', dr(monto + intereses + seg * tabla.length)) + '</div>' +
+      '<div class="m-resumen-fila">' + filaRes('Tasa mensual', pct1(i * 100)) + filaRes('Tasa EA', pct1(CALC.eaDeMensual(i) * 100)) + '</div>') +
+      tarjetaViz('calc-saldo', 'Cómo baja lo que debes',
+        vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: [monto].concat(tabla.map(f => f.saldo)) }], divisa: 'COP', alto: 170, etiqueta: 'Saldo del préstamo cuota a cuota' }),
+        tablaViz(['Cuota', 'Interés', 'Capital', 'Saldo'], tabla.map(f => [String(f.num), dr(f.interes), dr(f.capital), dr(f.saldo)])));
+  }
+  if (tab === 'ahorro') {
+    const meses = Math.min(600, Math.round(numCalc(v.meses))), i = CALC.mensualDeEA(pctCalc(v.tasa));
+    if (!(meses > 0)) return '<p class="m-ayuda">Escribe por cuántos meses.</p>';
+    const filas = CALC.ahorro(numCalc(v.inicial), numCalc(v.aporte), i, meses), u = filas[filas.length - 1];
+    const paso = Math.max(1, Math.ceil(meses / 24)), muestras = filas.filter((f, k) => k % paso === paso - 1 || k === filas.length - 1);
+    const puntos = muestras.map(f => ({ x: String(f.mes), anio: '', titulo: 'Mes ' + f.mes, previo: '' }));
+    return caja('<div class="m-resumen-etiqueta">Tendrás en ' + meses + ' meses</div><div class="m-resumen-cifra m-num">' + dr(u.saldo) + '</div>' +
+      '<div class="m-resumen-fila">' + filaRes('Pusiste', dr(u.aportes)) + filaRes('Ganaste en intereses', dr(u.intereses), 'm-positivo') + '</div>') +
+      tarjetaViz('calc-ahorro', 'Cómo crece tu ahorro',
+        vizLinea({ puntos: puntos, series: [{ nombre: 'Total', clave: 'viz-s1', valores: muestras.map(f => f.saldo) }, { nombre: 'Lo que pusiste', clave: 'viz-s2', valores: muestras.map(f => f.aportes) }], divisa: 'COP', alto: 180, etiqueta: 'Ahorro acumulado por mes' }),
+        tablaViz(['Mes', 'Total', 'Pusiste', 'Intereses'], muestras.map(f => [String(f.mes), dr(f.saldo), dr(f.aportes), dr(f.intereses)])));
+  }
+  if (tab === 'meta') {
+    const hoy = App.boot.hoy;
+    if (!v.fecha || v.fecha <= hoy) return '<p class="m-ayuda">Elige una fecha futura.</p>';
+    const meses = Math.max(1, (Number(v.fecha.slice(0, 4)) - Number(hoy.slice(0, 4))) * 12 + Number(v.fecha.slice(5, 7)) - Number(hoy.slice(5, 7)));
+    const i = CALC.mensualDeEA(pctCalc(v.tasa)), objetivo = numCalc(v.objetivo), inicial = numCalc(v.inicial);
+    const aporte = CALC.aporteParaMeta(objetivo, inicial, i, meses);
+    return caja('<div class="m-resumen-etiqueta">Aparta cada mes</div><div class="m-resumen-cifra m-num">' + dr(Math.ceil(aporte / 100) * 100) + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Durante ' + meses + ' meses, hasta el ' + esc(fechaTxt(v.fecha)) + '. Sin rendimiento serían ' + dr(Math.max(0, (objetivo - inicial) / meses)) + ' al mes.</p>' +
+      '<div class="m-acciones-fila" style="margin-top:var(--m-space-3)"><button class="m-btn m-btn-primary" data-acc="calc-crear-meta">Crear esta meta</button></div>');
+  }
+  if (tab === 'cdt') {
+    const capital = numCalc(v.capital), dias = Math.round(numCalc(v.dias));
+    if (!(capital > 0) || !(dias > 0)) return '<p class="m-ayuda">Escribe el capital y el plazo.</p>';
+    const r = CALC.cdt(capital, pctCalc(v.tasa), dias, pctCalc(v.retencion));
+    return caja('<div class="m-resumen-etiqueta">Recibes al final</div><div class="m-resumen-cifra m-num">' + dr(r.total) + '</div>' +
+      '<div class="m-resumen-fila">' + filaRes('Intereses', dr(r.intereses), 'm-positivo') + filaRes('Retención', dr(r.retencion)) + filaRes('Ganas (neto)', dr(r.neto), 'm-positivo') + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Unos ' + dr(r.porMes) + ' por cada mes de plazo.</p>');
+  }
+  if (tab === 'tasas') {
+    const t = pctCalc(v.tasa), m = CALC.mensualDe(t, v.tipo);
+    return caja('<div class="m-resumen-etiqueta">Equivale a</div>' +
+      '<div class="m-resumen-fila">' + filaRes('Efectiva anual', pct1(CALC.eaDeMensual(m) * 100)) + filaRes('Mensual vencida', pct1(m * 100)) + filaRes('Nominal mes vencido', pct1(m * 12 * 100)) + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Para comparar créditos o inversiones, usa siempre la efectiva anual (EA).</p>');
+  }
+  return '';
+}
+
+function crearMetaDesdeCalc() {
+  const v = valoresCalc('meta');
+  nuevaMeta({ Monto_Objetivo: numCalc(v.objetivo), Ahorro_Inicial: numCalc(v.inicial) || '', Fecha_Fin: v.fecha, Nombre: '' });
+}
+
+// ---------------------------------------------------------------------------
+// Pensiones y cesantías
+// ---------------------------------------------------------------------------
+
+/** Lo que la persona escribió (guardado en Config.Pension_Perfil) o lo que se puede deducir de su nómina. */
+function perfilPension() {
+  if (App.pen.v) return App.pen.v;
+  let guardado = {};
+  try { guardado = JSON.parse(cfg('Pension_Perfil') || '{}') || {}; } catch (e) { guardado = {}; }
+  const esc0 = activos('Nomina_Escenarios').find(e => esVerdad(e.Vigente)) || activos('Nomina_Escenarios')[0];
+  const sueldo = esc0 ? Number(esc0.Sueldo_Base) || 0 : 0;
+  const hoy = App.boot.hoy;
+  App.pen.v = Object.assign({
+    salario: sueldo ? String(sueldo) : '', integral: 'No', auxilio: 'auto', desde: hoy.slice(0, 4) + '-01-01', hasta: hoy, noPagados: '0',
+    sexo: 'H', nacimiento: '', semanas: '', ritmo: '52', independiente: 'No', regimen: 'RPM', saldo: '', rentabilidad: '3', hijos: '0'
+  }, guardado);
+  return App.pen.v;
+}
+const smmlvHoja = () => Number(cfg('SMMLV')) || 1750905;
+const auxilioHoja = () => Number(cfg('Auxilio_Transporte')) || 249095;
+
+function vPensiones() {
+  const tab = App.pen.tab, v = perfilPension();
+  const pildoras = '<div class="m-pildoras" role="tablist" aria-label="Qué calcular">' + [['cesantias', 'Cesantías y prima'], ['pension', 'Pensión']].map(t => '<button class="m-pildora" role="tab" data-acc="pen-tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === tab) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
+  const si = [['No', 'No'], ['Si', 'Sí']];
+  let form;
+  if (tab === 'cesantias') {
+    form = campoCalc('pen', 'salario', 'Tu salario mensual (o el promedio del año si es variable)', v.salario, { ayuda: 'Con salario variable, o si cambió en los últimos 3 meses, se usa el promedio del último año.' }) +
+      campoCalc('pen', 'integral', '¿Salario integral?', v.integral, { opciones: si, ayuda: 'El salario integral (desde 13 SMMLV) ya incluye las prestaciones: no genera cesantías ni prima.' }) +
+      campoCalc('pen', 'auxilio', 'Auxilio de transporte', v.auxilio, { opciones: [['auto', 'Automático (si ganas hasta 2 SMMLV)'], ['si', 'Sí lo recibo'], ['no', 'No lo recibo']] }) +
+      campoCalc('pen', 'desde', 'Desde', v.desde, { tipo: 'date', ayuda: 'El 1 de enero, o el día en que empezaste si entraste este año.' }) +
+      campoCalc('pen', 'hasta', 'Hasta', v.hasta, { tipo: 'date', ayuda: 'El 31 de diciembre para el año completo, o el día en que termina tu contrato.' }) +
+      campoCalc('pen', 'noPagados', 'Días no pagados (licencias, suspensiones)', v.noPagados);
+  } else {
+    form = campoCalc('pen', 'sexo', 'Sexo', v.sexo, { opciones: [['H', 'Hombre'], ['M', 'Mujer']] }) +
+      campoCalc('pen', 'nacimiento', 'Fecha de nacimiento', v.nacimiento, { tipo: 'date' }) +
+      campoCalc('pen', 'semanas', 'Semanas cotizadas hasta hoy', v.semanas, { ayuda: 'Están en tu historia laboral (Colpensiones o tu fondo, en su página o app).' }) +
+      campoCalc('pen', 'ritmo', 'Semanas que cotizarás por año desde hoy', v.ritmo, { ayuda: '52 si trabajas todo el año; menos si hay meses sin cotizar.' }) +
+      campoCalc('pen', 'salario', 'Tu salario mensual (o ingresos si eres independiente)', v.salario) +
+      campoCalc('pen', 'independiente', '¿Eres independiente?', v.independiente, { opciones: si, ayuda: 'Un independiente cotiza sobre el 40 % de sus ingresos y paga todo el aporte.' }) +
+      campoCalc('pen', 'regimen', 'Dónde cotizas', v.regimen, { opciones: [['RPM', 'Colpensiones (prima media)'], ['RAIS', 'Fondo privado (ahorro individual)']] }) +
+      (v.regimen === 'RAIS' ? campoCalc('pen', 'saldo', 'Saldo de tu cuenta en el fondo', v.saldo) + campoCalc('pen', 'rentabilidad', 'Rentabilidad real que esperas (% al año, sobre la inflación)', v.rentabilidad, { ayuda: 'Los fondos han rentado, en promedio, entre 3 % y 5 % real al año. Es una suposición.' }) : '') +
+      (v.sexo === 'M' ? campoCalc('pen', 'hijos', 'Hijos (solo para la parte de la reforma)', v.hijos) : '');
+  }
+  const html = pildoras + '<div class="m-banner" role="note">' + ico('alerta') + '<span>Son estimados informativos con las reglas vigentes en Colombia (salario mínimo de tu hoja: ' + dr(smmlvHoja()) + '). Para el dato oficial, consulta tu fondo o Colpensiones.</span></div>' +
+    '<form class="m-group" style="padding:var(--m-space-4)" data-form="pen" novalidate>' + form + '</form>' +
+    '<div id="pen-res" aria-live="polite">' + resultadoPension(tab, v) + '</div>' +
+    '<div class="m-acciones-fila" style="margin:var(--m-space-4) 0"><button class="m-btn m-btn-secondary" data-acc="pen-guardar">Guardar mis datos</button>' +
+    '<p class="m-ayuda">Quedan en tu hoja para la próxima vez (solo tú los ves).</p></div>';
+  return {
+    titulo: 'Pensiones y cesantías', html: html,
+    despues: () => {
+      const f = $('[data-form="pen"]');
+      if (!f) return;
+      const recalcular = ev => {
+        if (!ev.target.dataset.calc) return;
+        v[ev.target.dataset.calc] = ev.target.value;
+        // Cambiar régimen o sexo muestra u oculta campos: se vuelve a pintar
+        if (ev.type === 'change' && (ev.target.dataset.calc === 'regimen' || ev.target.dataset.calc === 'sexo')) { render(); return; }
+        VIZ.items = {}; $('#pen-res').innerHTML = resultadoPension(tab, v);
+      };
+      f.addEventListener('input', recalcular);
+      f.addEventListener('change', recalcular);
+    }
+  };
+}
+
+function resultadoPension(tab, v) {
+  const smmlv = smmlvHoja(), hoy = App.boot.hoy;
+  const caja = cuerpo => '<div class="m-group m-saldo-grande">' + cuerpo + '</div><div style="height:var(--m-space-4)"></div>';
+  const salario = numCalc(v.salario);
+  if (tab === 'cesantias') {
+    if (!(salario > 0)) return '<p class="m-ayuda">Escribe tu salario.</p>';
+    if (!v.desde || !v.hasta || v.hasta < v.desde) return '<p class="m-ayuda">Revisa las fechas.</p>';
+    const r = CALC.cesantias({ salario: salario, smmlv: smmlv, auxilio: auxilioHoja(), integral: v.integral === 'Si', conAuxilio: v.auxilio === 'auto' ? undefined : v.auxilio === 'si', desde: v.desde, hasta: v.hasta, diasNoPagados: numCalc(v.noPagados) });
+    if (r.integral) return caja('<div class="m-resumen-etiqueta">Cesantías</div><div class="m-resumen-cifra m-num">' + dr(0) + '</div><p class="m-ayuda" style="margin:0">Con salario integral, las prestaciones ya vienen dentro del salario (el 30 % es factor prestacional).</p>');
+    const anio = Number(v.hasta.slice(0, 4));
+    return caja('<div class="m-resumen-etiqueta">Cesantías por ' + r.dias + ' días</div><div class="m-resumen-cifra m-num">' + dr(r.cesantias) + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Sobre una base de ' + dr(r.base) + (r.aplicaAuxilio ? ' (salario + auxilio de transporte de ' + dr(auxilioHoja()) + ')' : '') + '.</p>' +
+      '<div class="m-resumen-fila">' + filaRes('Intereses (12 % anual)', dr(r.intereses), 'm-positivo') + filaRes('Prima de este semestre', dr(r.prima)) + '</div>') +
+      tarjetaViz('pen-fechas', 'Fechas que importan',
+        '<dl class="m-detalle">' +
+        '<div><dt>Intereses de cesantías</dt><dd>Te los paga tu empleador a más tardar el 31 de enero de ' + (anio + 1) + ' (desde 2026 también se pueden pagar cada mes).</dd></div>' +
+        '<div><dt>Cesantías</dt><dd>Tu empleador las consigna en tu fondo a más tardar el 14 de febrero de ' + (anio + 1) + '. Si terminas el contrato, te las paga directamente.</dd></div>' +
+        '<div><dt>Prima de servicios</dt><dd>La mitad a más tardar el 30 de junio y la otra el 20 de diciembre.</dd></div>' +
+        '<div><dt>¿Puedo sacarlas?</dt><dd>Sí, para comprar, mejorar o pagar vivienda, o para estudios tuyos, de tu pareja o tus hijos. También al terminar el contrato.</dd></div></dl>');
+  }
+  // Pensión
+  if (!v.nacimiento) return '<p class="m-ayuda">Escribe tu fecha de nacimiento y tus semanas cotizadas.</p>';
+  if (!(salario > 0)) return '<p class="m-ayuda">Escribe tu salario.</p>';
+  const r = CALC.pension({ sexo: v.sexo, nacimiento: v.nacimiento, semanas: numCalc(v.semanas), semanasPorAnio: numCalc(v.ritmo), salario: salario, independiente: v.independiente === 'Si',
+    regimen: v.regimen, saldo: numCalc(v.saldo), rentabilidad: pctCalc(v.rentabilidad), smmlv: smmlv, hoy: hoy, hijos: numCalc(v.hijos) });
+  const anios = f => Number(f.slice(0, 4)) - Number(v.nacimiento.slice(0, 4)) - (f.slice(5) < v.nacimiento.slice(5) ? 1 : 0); // edad cumplida en esa fecha
+  let h = caja('<div class="m-resumen-etiqueta">' + (r.fechaPension ? 'Te pensionarías hacia' : 'Con este ritmo no completas las semanas') + '</div>' +
+    '<div class="m-resumen-cifra">' + (r.fechaPension ? esc(mesTexto(r.fechaPension.slice(0, 7))) : '—') + '</div>' +
+    (r.fechaPension ? '<p class="m-ayuda" style="margin:0">A los ' + anios(r.fechaPension) + ' años. La edad mínima (' + r.edad + ') la cumples el ' + esc(fechaTxt(r.fechaEdad)) + '.</p>'
+      : '<p class="m-ayuda" style="margin:0">Necesitas ' + Math.round(r.requeridas) + ' semanas. Si no las completas, puedes pedir la ' + (v.regimen === 'RAIS' ? 'devolución de saldos' : 'indemnización sustitutiva') + ' o seguir cotizando.</p>') +
+    '<div class="m-resumen-fila">' + filaRes('Semanas que pide la ley', Math.round(r.requeridas).toLocaleString('es-CO')) + filaRes('Te faltan hoy', Math.round(r.faltan).toLocaleString('es-CO')) + '</div>' +
+    '<div class="m-resumen-fila">' + filaRes('Mesada estimada (de hoy)', dr(r.mesada)) + filaRes('Tasa de reemplazo', pct1(r.tasa)) + '</div>' +
+    (v.regimen === 'RAIS' ? '<p class="m-ayuda" style="margin:0">Saldo proyectado: ' + dr(r.saldoProyectado) + '.' + (r.garantiaMinima ? ' No alcanza para un salario mínimo: con 1.150 semanas aplica la garantía de pensión mínima.' : '') + '</p>' : '') + '');
+  // Semanas acumuladas frente a lo que pide la ley
+  const nac = Number(v.nacimiento.slice(0, 4)), desde = Number(hoy.slice(0, 4)), hasta = Math.max(desde + 1, Number((r.fechaPension || r.fechaEdad).slice(0, 4)) + 1);
+  const anosEje = []; for (let a = desde; a <= Math.min(hasta, desde + 45); a++) anosEje.push(a);
+  if (anosEje.length > 1) {
+    const ritmo = numCalc(v.ritmo), base = numCalc(v.semanas);
+    h += tarjetaViz('pen-semanas', 'Tus semanas frente a las que pide la ley',
+      vizLinea({ puntos: anosEje.map(a => ({ x: String(a).slice(2), anio: '', titulo: String(a) + ' (' + (a - nac) + ' años)', previo: '' })),
+        series: [{ nombre: 'Tus semanas', clave: 'viz-s1', valores: anosEje.map(a => Math.round(base + ritmo * (a - desde))) }, { nombre: 'Las que pide la ley', clave: 'viz-s2', valores: anosEje.map(a => CALC.semanasRequeridas(v.sexo, a, v.regimen)) }],
+        formato: n => Math.round(n).toLocaleString('es-CO') + ' semanas', alto: 180, etiqueta: 'Semanas cotizadas por año frente a las requeridas' }),
+      tablaViz(['Año', 'Edad', 'Tus semanas', 'Pide la ley'], anosEje.map(a => [String(a), String(a - nac), String(Math.round(base + ritmo * (a - desde))), String(CALC.semanasRequeridas(v.sexo, a, v.regimen))])));
+  }
+  // Aportes de hoy
+  h += tarjetaViz('pen-aportes', 'Tu aporte a pensión cada mes',
+    '<dl class="m-detalle"><div><dt>Ingreso base de cotización</dt><dd class="m-num">' + dr(r.ibc) + (v.independiente === 'Si' ? ' (40 % de tus ingresos)' : '') + '</dd></div>' +
+    '<div><dt>Total (16 %' + (r.aportes.porcentajeFsp ? ' + ' + pct1(r.aportes.porcentajeFsp * 100) + ' de solidaridad' : '') + ')</dt><dd class="m-num">' + dr(r.aportes.total) + '</dd></div>' +
+    '<div><dt>Pagas tú</dt><dd class="m-num">' + dr(r.aportes.tuyo) + '</dd></div>' + (r.aportes.empleador ? '<div><dt>Paga tu empleador</dt><dd class="m-num">' + dr(r.aportes.empleador) + '</dd></div>' : '') + '</dl>');
+  // Reforma
+  const rf = r.reforma;
+  h += tarjetaViz('pen-reforma', 'Si entra la reforma pensional (Ley 2381 de 2024)',
+    '<p class="m-ayuda">La Corte Constitucional avaló la mayor parte de la reforma en agosto de 2026. Se anuncia para el 1 de abril de 2027, pero todavía no rige: mientras tanto aplican las reglas de arriba.</p>' +
+    '<dl class="m-detalle"><div><dt>¿Te cobija la transición?</dt><dd>' + (rf.transicion ? 'Probablemente sí: con unas ' + Math.round(rf.semanasJunio2025) + ' semanas al 30 de junio de 2025 seguirías con las reglas actuales (se piden ' + (v.sexo === 'M' ? '750' : '900') + ').'
+      : 'Probablemente no: tenías unas ' + Math.round(rf.semanasJunio2025) + ' semanas al 30 de junio de 2025 y se piden ' + (v.sexo === 'M' ? '750' : '900') + ' para seguir con las reglas actuales.') + '</dd></div>' +
+    '<div><dt>A dónde iría tu cotización</dt><dd>' + dr(rf.aColpensiones) + ' a Colpensiones (hasta 2,3 salarios mínimos)' + (rf.aFondo > 0 ? ' y ' + dr(rf.aFondo) + ' a un fondo privado' : '') + '.</dd></div>' +
+    (rf.menosPorHijos ? '<div><dt>Por tus hijos</dt><dd>Te pedirían ' + rf.menosPorHijos + ' semanas menos.</dd></div>' : '') + '</dl>');
+  return h;
+}
+
+async function guardarPerfilPension(el) {
+  if (el) el.disabled = true;
+  try { await api('saveConfigParam', 'Pension_Perfil', JSON.stringify(App.pen.v || {})); App.boot.config.Pension_Perfil = JSON.stringify(App.pen.v || {}); aviso('Datos guardados'); }
+  catch (e) { aviso(e.message, true); }
+  if (el) el.disabled = false;
+}
+</script>

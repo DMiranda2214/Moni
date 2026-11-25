@@ -76,7 +76,7 @@ function calcularPresupuestoMes_(m) {
       Ahorro: pagado ? redondear2_(p - r) : 0,
       Restante: redondear2_(p - r),
       ID_Bolsillo_Destino: i.ID_Bolsillo_Destino || '', Bolsillo: b ? b.Nombre : '', ID_Credito: i.ID_Credito || '', ID_Tarjeta: i.ID_Tarjeta || '',
-      ID_Suscripcion: i.ID_Suscripcion || '', Notas: i.Notas || ''
+      ID_Suscripcion: i.ID_Suscripcion || '', ID_Meta: i.ID_Meta || '', Notas: i.Notas || ''
     };
   });
 
@@ -98,6 +98,8 @@ function calcularPresupuestoMes_(m) {
     items: lista,
     // Suscripciones y servicios que tocan este mes y todavía no están en el presupuesto
     faltanSuscripciones: items.length ? suscripcionesFaltantes_(m, items).length : 0,
+    // Metas con aporte planeado este mes que todavía no tienen su renglón
+    faltanMetas: items.length ? metasFaltantes_(m, items).length : 0,
     totales: {
       plan: redondear2_(plan), real: redondear2_(gastado), ahorro: redondear2_(ahorro),
       ingresos: ingresos, saldo: saldo, porcentajeAhorro: ingresos > 0 ? Math.round(saldo / ingresos * 1000) / 1000 : null,
@@ -146,7 +148,8 @@ function generarPresupuestoMes(mes, idEscenario, reemplazar) {
     ID_Bolsillo_Destino: p.ID_Bolsillo_Destino || '', ID_Credito: p.ID_Credito || '', ID_Tarjeta: p.ID_Tarjeta || '', Notas: ''
   })));
   const susc = agregarSuscripcionesAlMes(m);
-  return { mes: m, creados: plantilla.length + susc.agregados, escenario: esc.Nombre, suscripciones: susc.agregados };
+  const metas = agregarMetasAlMes(m);
+  return { mes: m, creados: plantilla.length + susc.agregados + metas.agregados, escenario: esc.Nombre, suscripciones: susc.agregados, metas: metas.agregados };
 }
 
 // ---------------------------------------------------------------------------

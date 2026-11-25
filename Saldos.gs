@@ -152,14 +152,16 @@ function resumenSaldos_() {
 function resumenPatrimonio_() {
   return memoDerivado_('patrimonio', () => {
     const s = resumenSaldos_();
-    const invertido = resumenInvertido_().total;
+    const cdt = resumenInvertido_().total;
+    const inversiones = resumenInversiones_().valor;
+    const invertido = redondear2_(cdt + inversiones);
     const tarjetas = redondear2_(resumenTarjetas_().reduce((a, t) => a + (Number(t.deuda) || 0), 0));
     const creditosB = listarCreditos().filter(c => c.Estado === 'Activo' && c.Tipo_Credito === 'Bancario');
     const creditos = redondear2_(creditosB.reduce((a, c) => a + (Number(c.saldo) || 0), 0));
     const activos = redondear2_(s.disponible + s.ahorro + invertido);
     const pasivos = redondear2_(tarjetas + creditos);
     return {
-      activos: { disponible: s.disponible, ahorro: s.ahorro, invertido: invertido, total: activos },
+      activos: { disponible: s.disponible, ahorro: s.ahorro, invertido: invertido, cdt: cdt, inversiones: inversiones, total: activos },
       pasivos: { tarjetas: tarjetas, creditos: creditos, total: pasivos },
       neto: redondear2_(activos - pasivos), divisas: s.divisas, divisa: DIVISA_BASE
     };
