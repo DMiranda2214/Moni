@@ -9,16 +9,6 @@
  * Las compras con tarjeta cuentan como gasto el día de la compra; el pago del extracto no cuenta (liquida la deuda).
  */
 
-/** Meses AAAA-MM que terminan en `mes`, del más viejo al más nuevo. */
-function mesesHasta_(mes, n) {
-  const p = mes.split('-').map(Number);
-  const lista = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(p[0], p[1] - 1 - i, 1));
-    lista.push(d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'));
-  }
-  return lista;
-}
 
 const ETIQUETA_SUBTIPO_GASTO = { Pago_TC: 'Pago de tarjetas', Pago_Cuota: 'Cuotas de crédito', GMF: 'GMF (4x1000)', Retencion: 'Retención en la fuente' };
 

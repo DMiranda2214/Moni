@@ -16,6 +16,10 @@ function redondear2_(n) {
 
 /** Devuelve { ID_Bolsillo: saldo }. `hastaFecha` (AAAA-MM-DD) es opcional e inclusiva. */
 function mapaSaldosBolsillos_(hastaFecha) {
+  return memoDerivado_('saldos|' + (hastaFecha || ''), () => calcularSaldosBolsillos_(hastaFecha));
+}
+
+function calcularSaldosBolsillos_(hastaFecha) {
   const bolsillos = getTableData('Bolsillos');
   const movimientos = getTableData('Movimientos', { excludeAnulados: true });
 

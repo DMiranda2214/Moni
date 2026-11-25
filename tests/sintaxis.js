@@ -30,6 +30,12 @@ fs.readdirSync(raiz).filter(f => f.endsWith('.html')).sort().forEach(f => {
   if (m) revisar(f + ' (script)', m[1]);
 });
 
+// La app: sus partes (PARTES_JS de Code.gs) forman un solo <script>
+const partes = JSON.parse(fs.readFileSync(path.join(raiz, 'Code.gs'), 'utf8').match(/const PARTES_JS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+const faltan = fs.readdirSync(raiz).filter(f => /^js_.*\.html$/.test(f) && partes.indexOf(f.replace('.html', '')) === -1);
+if (faltan.length) { fallos++; console.log('  FALLA partes sin incluir en PARTES_JS: ' + faltan.join(', ')); }
+revisar('app (' + partes.length + ' partes)', partes.map(p => fs.readFileSync(path.join(raiz, p + '.html'), 'utf8')).join('\n'));
+
 JSON.parse(fs.readFileSync(path.join(raiz, 'appsscript.json'), 'utf8'));
 console.log('  ok   appsscript.json');
 

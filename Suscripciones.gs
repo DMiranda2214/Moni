@@ -11,15 +11,6 @@ const MESES_PERIODO = { Mensual: 1, Bimestral: 2, Trimestral: 3, Semestral: 6, A
 const MARCA_SUSCRIPCION = 'Suscripción ';
 const DIAS_PRONTO = 7;
 
-function diasDelMes_(anio, mes) { return new Date(Date.UTC(anio, mes, 0)).getUTCDate(); }
-
-/** Suma meses a una fecha AAAA-MM-DD conservando el día de cobro (con tope en el último día del mes). */
-function sumarMeses_(fechaIso, meses, dia) {
-  const a = +fechaIso.slice(0, 4), m = +fechaIso.slice(5, 7) - 1 + meses;
-  const anio = a + Math.floor(m / 12), mes = ((m % 12) + 12) % 12 + 1;
-  const d = Math.min(dia || +fechaIso.slice(8, 10), diasDelMes_(anio, mes));
-  return anio + '-' + ('0' + mes).slice(-2) + '-' + ('0' + d).slice(-2);
-}
 
 /** Lo que cuesta al mes (para comparar una suscripción anual con una mensual). */
 function costoMensual_(valor, periodicidad) {

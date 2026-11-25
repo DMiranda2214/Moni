@@ -14,10 +14,7 @@ function carpetaRespaldos_() {
   return it.hasNext() ? it.next() : DriveApp.createFolder(CARPETA_RESPALDOS);
 }
 
-function numeroConfig_(clave, defecto) {
-  const n = Number(cfgValor_(clave));
-  return isFinite(n) && n >= 1 ? Math.floor(n) : defecto;
-}
+function numeroConfig_(clave, defecto) { return configEntero_(clave, defecto, 1); }
 
 /** Manda a la papelera las copias que sobran (deja las `retener` más recientes). Devuelve cuántas. */
 function limpiarRespaldosViejos_(carpeta, retener) {

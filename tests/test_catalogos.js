@@ -39,7 +39,8 @@ module.exports = function (prueba, assert, crearEntorno) {
   prueba('cada catálogo del servidor tiene su pantalla de Ajustes (CAT) en la app', () => {
     const e = E();
     const fs = require('fs'), path = require('path');
-    const app = fs.readFileSync(path.join(__dirname, '..', 'app_js.html'), 'utf8');
+    const app = fs.readdirSync(path.join(__dirname, '..')).filter(f => f === 'app_js.html' || /^js_.*\.html$/.test(f)).sort()
+      .map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
     const inicio = app.indexOf('const CAT = {');
     assert.ok(inicio > 0);
     const catalogos = JSON.parse(JSON.stringify(e.ejecutar('Object.keys(CATALOGOS)')));

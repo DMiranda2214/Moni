@@ -105,6 +105,26 @@ prueba('accesoPermitido_ respeta la lista de usuarios permitidos', () => {
   assert.strictEqual(e.ejecutar('accesoPermitido_()'), true, 'sin distinguir mayúsculas');
 });
 
+prueba('include("app_js") arma un solo <script> con todas las partes de la app, en orden', () => {
+  const fs = require('fs'), path = require('path');
+  const e = crearEntorno({});
+  e.ctx.HtmlService = { createHtmlOutputFromFile: n => ({ getContent: () => fs.readFileSync(path.join(__dirname, '..', n + '.html'), 'utf8') }) };
+  e.cargar('Code.gs');
+  const html = e.ejecutar("include('app_js')");
+  assert.ok(html.startsWith('<script>') && html.trim().endsWith('</script>'));
+  assert.strictEqual((html.match(/<script>/g) || []).length, 1, 'un solo <script>');
+  const partes = e.ejecutar('PARTES_JS.slice()');
+  let pos = -1;
+  partes.forEach(p => {
+    const texto = fs.readFileSync(path.join(__dirname, '..', p + '.html'), 'utf8');
+    const trozo = texto.slice(texto.indexOf('\n') + 1, texto.indexOf('\n') + 300); // sin el encabezado común
+    const i = html.indexOf(trozo);
+    assert.ok(i > pos, p + ' debe ir después de la parte anterior');
+    pos = i;
+  });
+  assert.ok(html.indexOf("'use strict'") < html.indexOf('function render('), 'el modo estricto va primero');
+});
+
 prueba('todos los .gs se cargan juntos sin declaraciones repetidas (como en Apps Script)', () => {
   // En Apps Script los archivos comparten un solo espacio global: un const repetido rompe la carga.
   const fs = require('fs');

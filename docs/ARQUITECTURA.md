@@ -3,7 +3,7 @@
 ## Visión general
 ```
  Navegador (celular o PC)
-   index.html + app_js.html + app_css.html + tokens.html   ← SPA sin frameworks
+   index.html + app_js.html y js_*.html + app_css.html + tokens.html   ← SPA sin frameworks
         │  google.script.run  (una llamada por pantalla)
         ▼
    Api.gs  ── responder_() ──►  sobre { ok, data | error, ms }
@@ -14,7 +14,7 @@
             Respaldos · Vistas · Logs · Reinicio · Multiusuario · Demo (solo desarrollo)
         │
         ▼
-   Catalogos.gs (CRUD configurable) · Saldos.gs
+   Catalogos.gs (CRUD configurable) · Saldos.gs · Fechas.gs · Finanzas.gs
         │
         ▼
    Repo.gs (libro abierto una vez por petición, lectura memorizada, caché, escrituras con bloqueo)
@@ -42,7 +42,9 @@
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
 | `Setup.gs` | Esquema de las 31 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
-| `Repo.gs` | Lectura (memorizada por petición), inserción, actualización, bloqueo, caché y propiedades de la persona (`modoMultiusuario_`, `propiedades_`, `cache_`, `tomarBloqueo`) |
+| `Repo.gs` | Lectura (memorizada por petición), inserción, actualización (`updateRow`, `updateRows_` en lote, comprobando el ID de cada registro), bloqueo reentrante (`tomarBloqueo`, `conBloqueo_`), operaciones todo o nada (`transaccion_`), resultados derivados memorizados (`memoDerivado_`), caché y propiedades de la persona |
+| `Fechas.gs` | Fechas y meses en un solo lugar: zona horaria, hoy, sumar días o meses, días entre fechas, meses anteriores |
+| `Finanzas.gs` | Fórmulas compartidas: tasa diaria, interés compuesto, EA ↔ tasa periódica, cuota francesa y plazo |
 | `Catalogos.gs` | Definición y CRUD de los catálogos; estado de configuración |
 | `Saldos.gs` | Saldos por bolsillo, cuenta y total |
 | `Movimientos.gs` | Registrar, transferir, anular, editar, listar, cuadrar |
@@ -87,7 +89,9 @@ Convenciones:
 - `Origen` = App · Demo · Import.
 
 ## Rendimiento
-- **Libro abierto una vez por petición** y **memoización por petición:** cada tabla se lee una vez por llamada; una escritura invalida solo su tabla.
+- **Libro abierto una vez por petición** y **memoización por petición:** cada tabla se lee una vez por llamada. Una escritura de la app **actualiza** lo memorizado (filas nuevas o cambiadas) en vez de olvidarlo, y olvida la caché entre peticiones de esa tabla. Los encabezados se leen una vez por petición.
+- **Resultados derivados memorizados** (`memoDerivado_`): saldos, presupuesto de un mes y divisas se calculan una vez hasta la próxima escritura.
+- **Escrituras en lote** (`updateRows_`): varias filas con un bloqueo y una escritura por tramo de filas seguidas.
 - **Caché de todas las tablas**, guardada en trozos: catálogos 1 h (`CACHE_TTL_SECONDS`), movimientos y demás tablas de operación 10 min (`CACHE_TTL_MOVIMIENTOS`). Toda escritura de la app invalida su tabla; *Ajustes → Actualizar desde la hoja* fuerza la relectura. Con caché, cargar la app casi no lee la hoja (`node tests/medir_llamadas.js` cuenta las llamadas por operación).
 - **Revisión del esquema recordada 6 h**, con una firma (`ESQUEMA_VERSION` + `VERSION_APP`): cada versión nueva de la app vuelve a revisar la hoja, y si falta una tabla se olvida lo recordado.
 - **Instalación por partes:** crear las pestañas va en pasos de unos 20 s (`PRESUPUESTO_INSTALACION_MS`); si se acaba el tiempo devuelve `parcial` y la pantalla continúa donde quedó, sin chocar con el límite de Apps Script.
@@ -100,10 +104,10 @@ Convenciones:
 - Con varias personas la hoja de cada una se actualiza sola la primera vez que entra tras una versión nueva; con una sola hoja la app ofrece **Instalar**.
 
 ## Concurrencia
-Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la persona** (`getUserLock`) en modo multiusuario y el del **script** (`getScriptLock`) con una sola hoja. Por eso dos personas con hojas distintas nunca se esperan, y dos pestañas de la misma persona no se pisan. El bloqueo **no es reentrante**: ninguna función que lo tenga puede llamar a otra que también lo tome. Dos personas que compartan **una misma hoja** (pareja) tienen bloqueos distintos: si escriben exactamente a la vez podrían pisarse.
+Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la persona** (`getUserLock`) en modo multiusuario y el del **script** (`getScriptLock`) con una sola hoja. Por eso dos personas con hojas distintas nunca se esperan, y dos pestañas de la misma persona no se pisan. Desde 1.11 el bloqueo es **reentrante** dentro de una petición: una operación compuesta lo toma una vez (`conBloqueo_` o `transaccion_`) y sus escrituras internas no lo sueltan a mitad de camino. `transaccion_` además anota cómo deshacer cada paso y, si algo falla, lo deshace. Dos personas que compartan **una misma hoja** (pareja) tienen bloqueos distintos: si escriben exactamente a la vez podrían pisarse.
 
 ## Frontend
-- JavaScript sin frameworks, en un solo `<script>` incluido desde `index.html`.
+- JavaScript sin frameworks, en un solo `<script>` incluido desde `index.html`. El código está repartido en partes (`app_js.html` = núcleo: utilidades, datos y navegación; `js_pantallas`, `js_formularios`, `js_movimientos`, `js_planear`, `js_deudas`, `js_ahorro`, `js_graficos`, `js_divisas`, `js_asistente`, `js_eventos`) que `include('app_js')` en `Code.gs` une en el orden de `PARTES_JS`.
 - **Estado** en el objeto `App`; **pantallas** son funciones `vXxx()` que devuelven `{ titulo, html, acciones, despues }`; `render()` las pinta.
 - **Delegación de eventos** con `data-acc` (clic), `data-acc-cambio` (cambio) y `data-hoja-acc` (dentro de una hoja modal). Las acciones viven en el objeto `ACCIONES`.
 - **Hojas modales** con `<dialog>` y un único registro de oyentes (`hojaActual`).

@@ -59,14 +59,6 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
   };
 }
 
-/** Primer día de un mes y fecha siguiente, en texto AAAA-MM-DD. */
-function sumarDias_(fechaIso, n) {
-  const d = new Date(Date.UTC(+fechaIso.slice(0, 4), +fechaIso.slice(5, 7) - 1, +fechaIso.slice(8, 10) + n));
-  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
-}
-
-/** Tasa diaria equivalente a una tasa efectiva anual: (1 + EA)^(1/365) − 1. */
-function tasaDiaria_(ea) { return Math.pow(1 + ea, 1 / 365) - 1; }
 
 /**
  * Cuánto rindió una cuenta de ahorro desde el último rendimiento registrado (o desde el inicio del mes) hasta ayer.

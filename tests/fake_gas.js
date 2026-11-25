@@ -218,9 +218,25 @@ function crearEntorno(hojasIniciales, opciones) {
   };
   vm.createContext(ctx);
 
+  // En Apps Script todos los .gs se cargan juntos. Las pruebas cargan listas a mano; para no tocar cada lista cuando se
+  // agrega un archivo: el núcleo (fechas y fórmulas) va siempre con Setup.gs, y con Api.gs (la app completa) van
+  // también los módulos que la lista no nombre.
+  const raizApp = path.join(__dirname, '..');
+  const NUCLEO = ['Fechas.gs', 'Finanzas.gs'];
+  const cargados = new Set();
   function cargar(...archivos) {
-    archivos.forEach(a => {
-      const codigo = fs.readFileSync(path.join(__dirname, '..', a), 'utf8');
+    const lista = archivos.slice();
+    if (lista.includes('Setup.gs')) {
+      NUCLEO.slice().reverse().forEach(n => { if (!lista.includes(n) && !cargados.has(n) && fs.existsSync(path.join(raizApp, n))) lista.splice(lista.indexOf('Setup.gs') + 1, 0, n); });
+    }
+    if (lista.includes('Api.gs')) {
+      const extra = fs.readdirSync(raizApp).filter(f => f.endsWith('.gs') && f !== 'Code.gs' && !lista.includes(f) && !cargados.has(f)).sort();
+      lista.splice(lista.indexOf('Api.gs'), 0, ...extra);
+    }
+    lista.forEach(a => {
+      if (cargados.has(a)) return;
+      cargados.add(a);
+      const codigo = fs.readFileSync(path.join(raizApp, a), 'utf8');
       vm.runInContext(codigo, ctx, { filename: a });
     });
   }

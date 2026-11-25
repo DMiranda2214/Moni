@@ -146,7 +146,8 @@ function getRefresco(opc) {
       out.catalogos[t] = listarCatalogo(t, { incluirInactivos: true });
       if (t === 'Nomina_Escenarios') out.catalogos[t].forEach(e => { e.subsidios = subsidiosDeEscenario_(e.ID_Nomina_Esc); });
     });
-    if (tablas.some(t => RELACIONADAS_[t])) out.saldos = obtenerSaldos();
+    // Con `saldos` (por ejemplo, tras cambiar la tasa de una divisa: cambian los equivalentes en pesos)
+    if (o.saldos || tablas.some(t => RELACIONADAS_[t])) out.saldos = obtenerSaldos();
     if (tablas.indexOf('CDTs') !== -1) out.invertido = resumenInvertido_(); // un CDT nuevo cambia lo invertido
     out.estado = obtenerEstadoConfiguracion();
     out.avisos = obtenerAvisos_();

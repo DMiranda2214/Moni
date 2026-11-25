@@ -1,0 +1,448 @@
+/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+// ---------------------------------------------------------------------------
+// Borrar todos los datos de la persona (Ajustes → Privacidad)
+// ---------------------------------------------------------------------------
+
+function vBorrar() {
+  const n = t => listaAsist(t).length;
+  const q = (cant, uno, varios) => cant + ' ' + (cant === 1 ? uno : varios);
+  return {
+    titulo: 'Borrar mis datos',
+    html:
+      '<div class="m-group" style="padding:var(--m-space-4)">' +
+      '<p><strong>Esta acción no se puede deshacer.</strong></p>' +
+      '<p class="m-subtitulo-cuerpo">Moni queda como recién instalada y vuelves a ver la bienvenida. Úsala para empezar de cero o si ya no vas a usar la app.</p>' +
+      '<h2 class="m-seccion-titulo" style="padding-left:0">Se borra</h2><ul class="m-lista-simple">' +
+      '<li>' + esc(q(n('Bancos'), 'banco', 'bancos') + ', ' + q(n('Cuentas'), 'cuenta', 'cuentas') + ', ' + q(n('Bolsillos'), 'bolsillo', 'bolsillos') + ' y ' + q(n('Tarjetas'), 'tarjeta', 'tarjetas')) + '</li>' +
+      '<li>Todos tus movimientos, presupuestos, nóminas, créditos, regalos y suscripciones</li>' +
+      '<li>Tu nombre y tus preferencias de apariencia</li></ul>' +
+      '<h2 class="m-seccion-titulo" style="padding-left:0">No se borra</h2><ul class="m-lista-simple">' +
+      '<li>Las copias de seguridad en tu Drive (carpeta “Moni Respaldos”): guardan tus datos. Al confirmar puedes mandarlas a la papelera.</li>' +
+      '<li>Los archivos que hayas guardado en tu Drive, como extractos en PDF</li></ul>' +
+      '<button class="m-btn m-btn-peligro" style="width:100%" data-acc="borrar-todo">Borrar todos mis datos…</button></div>' +
+      seccion('¿Quieres conservar una copia?', irA('ajustes/respaldos', { icono: 'capas', titulo: 'Crear un respaldo', sub: 'Se guarda en tu Drive antes de borrar' }))
+  };
+}
+
+/** Todo lo que la app tenía en memoria era de lo que se acaba de borrar: se descarta. */
+function olvidarDatosLocales() {
+  [App.det, App.mov, App.ppto, App.nom, App.deudas, App.tar, App.cre, App.aho, App.ahoC, App.reg, App.anual, App.resp, App.pag, App.rec, App.ing, App.cdt].forEach(s => {
+    s.data = null; s.error = null; s.cargando = false;
+    ['id', 'mes', 'anio'].forEach(k => { if (k in s) s[k] = null; });
+    if ('idEsc' in s) s.idEsc = '';
+    if ('texto' in s) s.texto = '';
+    if ('anulados' in s) s.anulados = false;
+  });
+  App.plantillaEsc = null; App.inactivos = {}; App.proximosViejos = false;
+  App.inicioGraf = { data: null, cargando: false, viejo: false, intentado: false };
+  App.asist = { activo: false, paso: null, omitido: false, ultimo: {} };
+  recordarAsistenteOmitido(false);
+  try { localStorage.removeItem('moni.ultimoBolsillo'); } catch (e) {}
+}
+
+/** Ventana de confirmación: hay que escribir BORRAR; el servidor lo vuelve a exigir. */
+async function abrirBorrar() {
+  let borrado = false;
+  await abrirHoja({
+    titulo: 'Borrar todo', sinGuardar: true,
+    cuerpo: '<form novalidate data-form="borrar">' +
+      '<p class="m-hoja-mensaje"><strong>Se borrará para siempre toda tu información</strong>: bancos, cuentas, bolsillos, tarjetas, movimientos, presupuestos, nómina, créditos, regalos y suscripciones. Moni volverá a pedirte los primeros pasos.</p>' +
+      '<div class="m-campo"><label class="m-label" for="f-frase">Para confirmar, escribe BORRAR</label>' +
+      '<input class="m-input" id="f-frase" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>' +
+      htmlCampo({ k: 'respaldos', label: 'También mandar a la papelera mis respaldos de Drive', tipo: 'interruptor', ayuda: 'Las copias de “Moni Respaldos” guardan tus datos. Si no las borras, siguen en tu Drive.' }, false) +
+      '<button type="button" class="m-btn m-btn-peligro" style="width:100%" data-hoja-acc="borrar" disabled>Borrar todos mis datos</button>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      const frase = $('#f-frase', raiz), boton = $('[data-hoja-acc="borrar"]', raiz);
+      frase.addEventListener('input', () => { boton.disabled = frase.value.trim().toUpperCase() !== 'BORRAR'; });
+    },
+    extra: {
+      borrar: async raiz => {
+        await api('resetAllData', $('#f-frase', raiz).value, { respaldos: $('#f-respaldos', raiz).checked });
+        borrado = true;
+      }
+    }
+  });
+  if (!borrado) return;
+  olvidarDatosLocales();
+  App.pila = ['inicio'];
+  await cargar(); // vuelve a leer todo: como no queda nada, aparece la bienvenida
+  aviso('Listo: se borró toda tu información');
+}
+
+const ACCIONES = {
+  'tasas-google': async el => {
+    el.disabled = true; el.textContent = 'Consultando…';
+    try {
+      const r = await api('updateTasasGoogle');
+      await refrescarParcial({ config: true, saldos: true }); render();
+      aviso('Tasa actualizada: ' + r.actualizadas.map(x => '1 ' + x.moneda + ' = ' + tasaPesos(x.tasa)).join(' · '));
+    } catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Actualizar ahora con Google Finance'; }
+  },
+  'rec-sync': async el => {
+    el.disabled = true; el.textContent = 'Sincronizando…';
+    try { const r = await api('syncRecordatorios'); App.rec.data = r; $('#rec-estado').innerHTML = htmlEstadoRecordatorios(r); aviso('Calendario al día: ' + r.sincronizado.total + ' pagos'); }
+    catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Sincronizar ahora'; }
+  },
+  'rec-quitar': async () => {
+    const ok = await confirmar({ titulo: 'Quitar de mi calendario', accion: 'Quitar', mensaje: 'Se borra el calendario “Moni” con todos sus eventos y se apagan los recordatorios. Tus datos en Moni no cambian.' });
+    if (!ok) return;
+    try { await api('removeRecordatorios'); await refrescarParcial({ config: true }); render(); aviso('Recordatorios quitados'); } catch (e) { aviso(e.message, true); }
+  },
+  convertir: () => abrirConversion(),
+  'log-copiar': () => { if (App.log.data && App.log.data.items.length) copiar(textoRegistro(App.log.data), 'Registro copiado'); else aviso('No hay nada que copiar'); },
+  'log-limpiar': async () => {
+    const ok = await confirmar({ titulo: 'Limpiar el registro', accion: 'Limpiar', mensaje: 'Se borran todas las entradas del registro. Tus datos no se tocan.' });
+    if (!ok) return;
+    try { await api('clearLogs'); await cargarRegistro(); aviso('Registro limpio'); } catch (e) { aviso(e.message, true); }
+  },
+  'asist-empezar': () => moverAsist(1),
+  'asist-atras': () => moverAsist(-1),
+  'asist-omitir': () => terminarAsistente(true),
+  'asist-saltar': () => moverAsist(1),
+  'asist-editar': el => abrirFormulario(el.dataset.tabla, el.dataset.id),
+  'asist-sueldo': () => abrirSueldoNomina(),
+  'asist-fin': () => terminarAsistente(false),
+  'asist-reanudar': () => { App.asist.omitido = false; recordarAsistenteOmitido(false); App.asist.activo = false; App.asist.paso = null; render(true); },
+  'asist-continuar': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, false); else moverAsist(1); },
+  'asist-otro': () => { const f = $('#asist-form'); if (f) enviarPasoAsist(f, true); },
+  'asist-tarjeta': () => abrirFormulario('Tarjetas'),
+  'crear-hoja': async el => {
+    const caja = $('#hoja-error'); if (caja) caja.hidden = true;
+    el.disabled = true; el.textContent = 'Creando tu hoja…';
+    try {
+      const c = await api('createMySheet');
+      if (c.parcial) await completarInstalacion(el, c.hechas, c.tablas);
+      await refrescar(); App.pila = ['inicio']; render(true);
+    }
+    catch (e) { el.disabled = false; el.textContent = 'Reintentar (continúa donde quedó)'; if (caja) { caja.textContent = e.message; caja.hidden = false; } else aviso(e.message, true); }
+  },
+  'vincular-hoja': () => abrirVincularHoja(),
+  'desvincular-hoja': async () => {
+    const ok = await confirmar({ titulo: 'Usar otra hoja', accion: 'Soltar esta hoja', mensaje: 'La hoja actual no se borra: sigue en tu Drive. Moni dejará de usarla y apagará sus copias automáticas y recordatorios. Después podrás crear otra o vincular una existente.' });
+    if (!ok) return;
+    try { await api('unlinkMySheet'); await refrescar(); App.pila = ['inicio']; render(true); }
+    catch (e) { aviso(e.message, true); }
+  },
+  'asist-sub-mas': () => {
+    const caja = $('#asist-subs-filas'); if (!caja) return;
+    caja.insertAdjacentHTML('beforeend', htmlFilaSubsidioAsist());
+    const fila = caja.lastElementChild; activarEcoDinero(fila); $('[data-as="nombre"]', fila).focus();
+  },
+  'asist-sub-quitar': el => { const fila = el.closest('[data-fila-sub]'); if (fila) fila.remove(); },
+  'asist-bols-mas': () => {
+    const caja = $('#asist-bols-filas'); if (!caja) return;
+    caja.insertAdjacentHTML('beforeend', htmlFilaBolsilloAsist());
+    const fila = caja.lastElementChild; activarEcoDinero(fila); $('[data-ab="nombre"]', fila).focus();
+  },
+  'asist-bols-quitar': el => {
+    const f = $('#asist-form'), fila = el.closest('[data-fila-bols]'), caja = $('#asist-bols-filas');
+    if (caja.children.length > 1) fila.remove();
+    else { $$('input', fila).forEach(i => { i.value = ''; }); }
+    if (f) sincronizarBolsillosAsist(f);
+  },
+  'borrar-todo': () => abrirBorrar(),
+  'recargar-ing': () => { App.ing.error = null; App.ing.data = null; render(); },
+  ingreso: el => abrirDetalleIngreso(el.dataset.id),
+  'recargar-pag': () => { App.pag.error = null; App.pag.data = null; render(); },
+  susc: el => abrirDetalleCobro(el.dataset.id),
+  codigo: el => abrirCodigoServicio(el.dataset.id),
+  'pagar-servicio': () => abrirPagarServicio(),
+  rapido: el => abrirRegistrar({ tipo: el.dataset.tipo }),
+  'recargar-aho': () => { App.aho.error = null; App.aho.data = null; render(); },
+  'recargar-ahoc': () => { App.ahoC.error = null; App.ahoC.data = null; render(); },
+  'recargar-reg': () => { App.reg.error = null; App.reg.data = null; render(); },
+  'recargar-anual': () => { App.anual.error = null; App.anual.data = null; render(); },
+  'recargar-resp': () => { App.resp.error = null; App.resp.data = null; render(); },
+  'rend-estimado': () => { const e = App.ahoC.data && App.ahoC.data.cuenta.rendimientoEstimado; if (e) abrirRendimiento({ valor: e.pendiente }); },
+  'aportar-ahorro': () => { const d = App.ahoC.data; if (d) abrirRegistrar({ tipo: 'Mover', destino: d.ID_Bolsillo, concepto: 'Aporte a ' + d.cuenta.Nombre }); },
+  rendimiento: () => abrirRendimiento(),
+  'retirar-ahorro': () => abrirMovimientoAhorro('retirar'),
+  'reponer-ahorro': () => abrirMovimientoAhorro('reponer'),
+  'nuevo-regalo': () => abrirRegalo(null),
+  regalo: el => abrirDetalleRegalo(el.dataset.id),
+  'regalo-mover': el => { const p = (App.reg.data && App.reg.data.pendientes || [])[Number(el.dataset.i)]; if (p) abrirRegistrar({ tipo: 'Mover', idBolsillo: p.ID_Bolsillo_Plan || undefined, destino: p.ID_Bolsillo_Reserva, valor: p.falta, concepto: 'Reserva ' + p.Tarjeta + ': regalo de ' + p.Persona }); },
+  'mes-anual': el => { App.ppto.mes = el.dataset.mes; App.ppto.data = null; navegar('presupuesto'); },
+  'crear-respaldo': async el => {
+    el.disabled = true; el.textContent = 'Creando…';
+    try { const r = await api('makeRespaldo'); App.resp.data = r.estado; render(); aviso('Respaldo creado'); }
+    catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Crear un respaldo ahora'; }
+  },
+  'recargar-deudas': () => { App.deudas.error = null; App.deudas.data = null; render(); },
+  'recargar-tar': () => { App.tar.error = null; App.tar.data = null; render(); },
+  'recargar-cre': () => { App.cre.error = null; App.cre.data = null; render(); },
+  'abrir-compra': () => abrirCompra(App.tar.id),
+  'tar-corte': (el) => { App.tar.mes = el.dataset.id; App.tar.data = null; render(); },
+  compra: el => abrirDetalleCompra(el.dataset.id),
+  'pagar-extracto': () => abrirPagoExtracto(),
+  'abrir-abono': () => abrirAbonoTarjeta(),
+  abono: async el => {
+    const ok = await confirmar({ titulo: 'Anular el abono', accion: 'Anular', mensaje: 'La deuda de ese corte vuelve a subir y, si salió de un bolsillo tuyo, el dinero regresa a él.' });
+    if (ok) anularAbonoYAvisar(el.dataset.id);
+  },
+  'anular-pago-extracto': async () => {
+    const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero a la reserva y a tu bolsillo personal, y las compras quedan pendientes otra vez.' });
+    if (ok && App.tar.data && App.tar.data.extracto) anularPagoExtractoYAvisar(App.tar.data.extracto.ID_Extracto);
+  },
+  'editar-tarjeta': () => { abrirFormulario('Tarjetas', App.tar.id).then(() => { App.tar.data = null; App.deudas.data = null; render(); }); },
+  'nuevo-credito': () => abrirNuevoCredito(),
+  'pagar-credito': () => abrirPagoCredito(),
+  'editar-credito': () => abrirEditarCredito(),
+  'corregir-cuota': el => abrirCorregirCuota(Number(el.dataset.num)),
+  'tasa-ok': () => confirmarTasaCredito(),
+  'tasa-corregir': () => abrirCorregirTasa(),
+  'pago-credito': async el => {
+    const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero al bolsillo y la cuota vuelve a quedar pendiente. Si el pago incluía un abono, el plazo vuelve al anterior.' });
+    if (ok) anularPagoCreditoYAvisar(el.dataset.id);
+  },
+  'anular-credito': async () => {
+    const ok = await confirmar({ titulo: 'Anular el crédito', accion: 'Anular', mensaje: 'Se anula el crédito y el dinero que salió del ahorro vuelve a él.' });
+    if (!ok) return;
+    try {
+      const res = await api('cancelCredito', App.cre.id);
+      aplicarEscritura(res); App.boot.creditos = (App.boot.creditos || []).filter(x => x.ID_Credito !== App.cre.id);
+      aviso('Crédito anulado'); volver();
+    } catch (e) { aviso(e.message, true); }
+  },
+  'recargar-ppto': () => { App.ppto.error = null; App.ppto.data = null; render(); },
+  'recargar-nom': () => { App.nom.error = null; App.nom.data = null; render(); },
+  'generar-ppto': async el => {
+    el.disabled = true; el.textContent = 'Generando…';
+    try {
+      const sel = $('#ppto-esc');
+      const data = await api('generarPresupuesto', App.ppto.mes, sel ? sel.value : '', false);
+      aplicarPresupuesto(data); render(); aviso('Presupuesto generado');
+    } catch (e) { aviso(e.message, true); el.disabled = false; el.textContent = 'Generar el presupuesto'; }
+  },
+  renglon: el => abrirRenglon(el.dataset.id),
+  'nuevo-renglon': () => abrirRenglonMes(null),
+  'ppto-susc': async () => {
+    try { const r = await api('addSuscripcionesPpto', App.ppto.mes); aplicarPresupuesto(r.presupuesto); render(); aviso(r.agregados ? 'Se agregaron ' + r.agregados + (r.agregados === 1 ? ' renglón' : ' renglones') + ' al presupuesto' : 'Todo al día'); }
+    catch (e) { aviso(e.message, true); }
+  },
+  distribuir: () => abrirDistribucion(App.ppto.mes),
+  'distribuir-nomina': () => abrirDistribucion(App.nom.mes),
+  'registrar-nomina': () => abrirRegistrarNomina(),
+  'nom-cambiar-mes': () => abrirCambiarMesNomina(),
+  'nom-concepto-nuevo': () => abrirConceptoNomina(null),
+  'nom-sueldo': () => abrirSueldoNomina(),
+  'aviso-ir': el => navegar(el.dataset.ruta),
+  'avisos-todos': () => { App.avisosTodos = !App.avisosTodos; render(); },
+  'aviso-ocultar': async el => {
+    try { App.boot.avisos = await api('dismissAviso', el.dataset.id); render(); aviso('Listo. Lo puedes volver a ver en Ajustes → Avisos.', { deshacer: async () => { try { App.boot.avisos = await api('restoreAvisos'); render(); } catch (e) { aviso(e.message, true); } } }); }
+    catch (e) { aviso(e.message, true); }
+  },
+  'avisos-restaurar': async () => { try { App.boot.avisos = await api('restoreAvisos'); render(); aviso('Los avisos vuelven a mostrarse'); } catch (e) { aviso(e.message, true); } },
+  cdt: el => abrirDetalleCdt(el.dataset.id),
+  'recargar-cdt': () => { App.cdt.error = null; App.cdt.data = null; render(); },
+  'nom-adic-nuevo': () => abrirAdicionalNomina(),
+  'nom-adic-quitar': el => recalcularNomina(o => { o.adicionales = (o.adicionales || []).filter((x, i) => String(i) !== el.dataset.id); }),
+  'nom-concepto-editar': el => abrirConceptoNomina(el.dataset.id),
+  'anular-nomina': async () => {
+    const ok = await confirmar({ titulo: 'Anular nómina', accion: 'Anular', mensaje: 'Se anula el ingreso de la nómina de este mes. Si ya la repartiste, esos traslados no se deshacen solos.' });
+    if (ok) anularNominaYAvisar();
+  },
+  'nuevo-plantilla': () => abrirFormulario('Presupuesto_Plantilla', null, { ID_Escenario: App.plantillaEsc }),
+  'editar-plantilla': el => abrirFormulario('Presupuesto_Plantilla', el.dataset.id),
+  registrar: el => abrirRegistrar({ idBolsillo: el.dataset.bolsillo }),
+  mover: el => abrirRegistrar({ tipo: 'Mover', idBolsillo: el.dataset.bolsillo }),
+  mov: el => abrirDetalleMov(el.dataset.id),
+  cuadrar: el => abrirCuadre(el.dataset.cuenta),
+  'recargar-det': () => { App.det.error = null; App.det.data = null; render(); },
+  'recargar-mov': () => { App.mov.error = null; App.mov.data = null; render(); },
+  mes: el => cambiarMes(el.dataset.vista, Number(el.dataset.delta)),
+  'editar-bolsillo': el => {
+    const inf = infoBolsillo(el.dataset.id);
+    if (!inf) return;
+    if (inf.b.Es_Interno) abrirFormulario('Cuentas', inf.c.ID_Cuenta); else abrirFormulario('Bolsillos', inf.b.ID_Bolsillo);
+  },
+  tab: el => navegar(el.dataset.ruta),
+  'menu-registrar': () => abrirMenuRegistrar(),
+  'ocultar-cifras': () => { try { localStorage.setItem('moni.ocultar', cifrasOcultas() ? '0' : '1'); } catch (e) {} render(); },
+  buscar: () => abrirBuscador(),
+  'lat-alternar': () => alternarLateral(),
+  ir: el => navegar(el.dataset.ruta),
+  volver: () => volver(),
+  'actualizar-datos': async () => {
+    try { await api('refreshCache'); await refrescar(); render(); aviso('Datos actualizados desde la hoja'); } catch (e) { aviso(e.message, true); }
+  },
+  recargar: () => { App.error = null; $('#vista').innerHTML = '<div class="m-cargando">Cargando…</div>'; cargar(); },
+  nuevo: el => abrirFormulario(el.dataset.tabla),
+  editar: el => abrirFormulario(el.dataset.tabla, el.dataset.id),
+  instalar: async el => {
+    el.disabled = true;
+    try {
+      const r = await completarInstalacion(el, 0, 0);
+      await refrescar(); render();
+      aviso(r.ok ? 'Base de datos lista' : 'Hay tablas con encabezados distintos; revisa el diagnóstico', !r.ok);
+    } catch (e) { aviso(e.message, true); el.disabled = false; }
+  },
+  'sembrar-demo': async el => {
+    el.disabled = true;
+    try { await api('seedDemo'); await refrescar(); render(); aviso('Datos de demostración creados'); }
+    catch (e) { aviso(e.message, true); el.disabled = false; }
+  },
+  'limpiar-demo': async () => {
+    const ok = await confirmar({ titulo: 'Borrar demostración', accion: 'Borrar', mensaje: 'Se borrarán solo los datos de demostración. Lo que hayas registrado de verdad no se toca.' });
+    if (!ok) return;
+    try { await api('clearDemo'); await refrescar(); render(); aviso('Datos de demostración borrados'); }
+    catch (e) { aviso(e.message, true); }
+  }
+};
+
+(function () {
+  const dlg = $('#hoja');
+  dlg.addEventListener('click', ev => { if (hojaActual) hojaActual.alClic(ev); });
+  dlg.addEventListener('submit', ev => { if (hojaActual) hojaActual.alEnviar(ev); });
+  // Esc o cierre nativo. El evento llega un instante DESPUÉS de cerrar: si mientras tanto se abrió otra hoja (Editar desde el
+  // detalle), no hay que cerrarla.
+  dlg.addEventListener('close', () => { if (hojaActual && !dlg.open) hojaActual.finalizar(); });
+})();
+
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-acc]');
+  if (!el || el.closest('dialog')) return;
+  const fn = ACCIONES[el.dataset.acc];
+  if (fn) { ev.preventDefault(); fn(el); }
+});
+
+document.addEventListener('change', async ev => {
+  const t = ev.target;
+  if (t.dataset.accCambio === 'inactivos') {
+    App.inactivos[t.dataset.tabla] = t.checked;
+    render();
+    const nuevo = $('#ver-inactivos'); if (nuevo) nuevo.focus();
+    return;
+  }
+  if (t.dataset.accCambio === 'pagado') {
+    // Marcar o desmarcar nunca es solo una casilla: se abre la confirmación y la casilla vuelve a su estado hasta que termine.
+    const quiereMarcar = t.checked;
+    t.checked = !quiereMarcar;
+    if (quiereMarcar) abrirCompletarRenglon(t.dataset.id); else reabrirRenglon(t.dataset.id);
+    return;
+  }
+  if (t.dataset.accCambio === 'nom-incl') {
+    recalcularNomina(o => { o.incluir = o.incluir || {}; o.incluir[t.dataset.clave] = t.checked; });
+    return;
+  }
+  if (t.dataset.accCambio === 'nom-dias') {
+    const campo = { ordinario: 'dias', prima: 'diasPrima', vacaciones: 'diasVacaciones' }[t.dataset.que];
+    const n = t.value === '' ? '' : Math.max(0, Number(t.value) || 0);
+    recalcularNomina(o => { o[campo] = n; if (n !== '' && t.dataset.que !== 'ordinario') { o.incluir = o.incluir || {}; o.incluir[t.dataset.que] = n > 0; } });
+    return;
+  }
+  if (t.dataset.accCambio === 'tasa-auto') {
+    try {
+      const r = await api('saveTasaAuto', t.checked);
+      await refrescarParcial({ config: true, saldos: true }); render();
+      aviso(r.activa ? (r.resultado ? 'Se actualizará sola cada día' : 'Activada. ' + (r.aviso || '')) : 'Actualización automática desactivada');
+    } catch (e) { t.checked = !t.checked; aviso(e.message, true); }
+    return;
+  }
+  if (t.name === 'log-filtro') { App.log.soloErrores = t.value === 'errores'; cargarRegistro(); return; }
+  if (t.dataset.accCambio === 'plantilla-esc') { App.plantillaEsc = t.value; render(); return; }
+  if (t.id === 'reg-anio') { App.reg.anio = Number(t.value); App.reg.data = null; render(); return; }
+  if (t.id === 'anual-anio') { App.anual.anio = Number(t.value); App.anual.data = null; render(); return; }
+  if (t.dataset.accCambio === 'resp-auto') {
+    try { App.resp.data = await api('setRespaldoAuto', t.checked); aviso(t.checked ? 'Copias automáticas activadas' : 'Copias automáticas desactivadas'); }
+    catch (e) { t.checked = !t.checked; aviso(e.message, true); }
+    return;
+  }
+  if (t.dataset.accCambio === 'anulados') {
+    const st = t.dataset.vista === 'det' ? App.det : App.mov;
+    st.anulados = t.checked; st.data = null;
+    render();
+    const nuevo = $('#ver-anulados'); if (nuevo) nuevo.focus();
+    return;
+  }
+  if (t.name === 'tema' || t.name === 'acento') {
+    const clave = t.name === 'tema' ? 'Tema' : 'Color_Acento';
+    const anterior = App.boot.config[clave];
+    App.boot.config[clave] = t.value;
+    aplicarApariencia();
+    try { await api('saveConfigParam', clave, t.value); }
+    catch (e) { App.boot.config[clave] = anterior; aplicarApariencia(); render(); aviso(e.message, true); return; }
+    if (t.name === 'tema') {
+      // Los colores de las muestras dependen del tema: se vuelve a pintar y se devuelve el foco.
+      render();
+      const marcado = $('input[name="tema"]:checked'); if (marcado) marcado.focus();
+    }
+  }
+});
+
+document.addEventListener('submit', async ev => {
+  const f = ev.target;
+  if (f.dataset.form === 'recordatorios') {
+    ev.preventDefault();
+    const caja = $('#rec-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true; boton.textContent = 'Guardando…';
+    try {
+      const v = leerFormulario(f, CAMPOS_REC);
+      const r = await api('saveRecordatorios', { activos: v.activos, diasAntes: Number(v.diasAntes), hora: Number(v.hora), nomina: v.nomina });
+      App.rec.data = r;
+      await refrescarParcial({ config: true }); render();
+      aviso(r.activos ? 'Recordatorios activos: ' + r.sincronizado.total + (r.sincronizado.total === 1 ? ' pago' : ' pagos') + ' en tu calendario' : 'Recordatorios desactivados');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; boton.disabled = false; boton.textContent = 'Guardar'; }
+    return;
+  }
+  if (f.dataset.form === 'tasas') {
+    ev.preventDefault();
+    const caja = $('#tasas-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true;
+    try {
+      for (const inp of $$('[data-tasa]', f)) {
+        const d = inp.dataset.tasa, n = leerDinero(inp.value);
+        if (n !== '' && isNaN(n)) throw new Error('Revisa la tasa del ' + d + '.');
+        const nueva = n === '' ? '' : String(n);
+        if (String(cfg('Tasa_' + d)) !== nueva) await api('saveTasaDivisa', d, nueva);
+      }
+      await refrescarParcial({ config: true, saldos: true }); render(); aviso('Tasas guardadas');
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; }
+    boton.disabled = false;
+    return;
+  }
+  if (f.dataset.form === 'asistente') { ev.preventDefault(); enviarPasoAsist(f, false); return; }
+  if (f.dataset.form === 'parametros' || f.dataset.form === 'respaldos') {
+    ev.preventDefault();
+    const caja = $('#param-error', f), boton = $('button[type=submit]', f);
+    caja.hidden = true; boton.disabled = true;
+    const mapa = {};
+    $$('[data-param]', f).forEach(i => {
+      let v = i.value.trim();
+      if (i.dataset.pct) { const n = Number(v.replace(',', '.')); v = isFinite(n) && v !== '' ? String(Math.round(n * 100) / 10000) : v; }
+      else if (i.getAttribute('inputmode') === 'decimal') { v = String(leerDinero(v)); }
+      mapa[i.dataset.param] = v;
+    });
+    try {
+      const r = await api('saveConfigParams', mapa);
+      Object.keys(r).forEach(k => { App.boot.config[k] = r[k]; });
+      if (f.dataset.form === 'respaldos') App.resp.data = null;
+      await refrescarParcial({ config: true }); // los avisos de Inicio (por ejemplo, el del salario mínimo) se recalculan
+      aviso('Parámetros guardados'); render();
+    } catch (e) { caja.textContent = e.message; caja.hidden = false; }
+    boton.disabled = false;
+    return;
+  }
+  if (f.dataset.form !== 'perfil') return;
+  ev.preventDefault();
+  const boton = $('button[type=submit]', f);
+  boton.disabled = true;
+  try {
+    await api('saveConfigParam', 'Nombre_Usuario', $('#f-nombre', f).value);
+    await refrescarParcial({ config: true });
+    aviso('Guardado');
+    render();
+  } catch (e) { aviso(e.message, true); }
+  boton.disabled = false;
+});
+
+document.addEventListener('input', ev => {
+  if (ev.target.id !== 'buscar-mov') return;
+  App.mov.texto = ev.target.value;
+  const caja = $('#lista-mov');
+  if (caja) caja.innerHTML = htmlListaMov(filtrarMov(App.mov.data ? App.mov.data.items : []), false);
+});
+
+window.addEventListener('scroll', () => { $('#barra').classList.toggle('m-escrolado', window.scrollY > 40); }, { passive: true });
+
+cargar();

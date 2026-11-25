@@ -10,40 +10,11 @@
  * borran: las cuotas reemplazadas quedan marcadas, para poder auditar o deshacer.
  */
 
-const PERIODOS_ANIO = { Mensual: 12, Quincenal: 24 };
 
-/**
- * Tasa periódica a partir de una tasa efectiva anual (EA).
- *   Método "Excel" (el del Excel de referencia): nominal = TASA.NOMINAL(EA; 2), luego ÷ periodos al año.
- *     EA 10 % → nominal 9,7618 % → ÷24 = 0,4067404 % por quincena.
- *   Método "Exacta": (1 + EA)^(1/periodos) − 1.
- */
-function tasaDesdeEA_(ea, periodicidad, metodo) {
-  const n = PERIODOS_ANIO[periodicidad] || 12;
-  if (metodo === 'Exacta') return Math.pow(1 + ea, 1 / n) - 1;
-  return (2 * (Math.pow(1 + ea, 1 / 2) - 1)) / n;
-}
 
-/** La EA que corresponde a una tasa periódica (lo inverso de tasaDesdeEA_), para mostrarla. */
-function eaDesdeTasa_(i, periodicidad, metodo) {
-  const n = PERIODOS_ANIO[periodicidad] || 12;
-  return metodo === 'Exacta' ? Math.pow(1 + i, n) - 1 : Math.pow(1 + i * n / 2, 2) - 1;
-}
 
-/** Cuota fija de la amortización francesa. */
-function cuotaFrancesa_(monto, i, n) {
-  if (i <= 0) return redondear2_(monto / n);
-  return redondear2_(monto * i / (1 - Math.pow(1 + i, -n)));
-}
 
-/** Cuántas cuotas hacen falta para pagar `saldo` con esa cuota y tasa (redondeado hacia arriba). */
-function plazoRestante_(saldo, i, cuota) {
-  if (i <= 0) return Math.max(1, Math.ceil(saldo / cuota - 1e-9));
-  if (cuota <= saldo * i + 1e-9) throw new Error('La cuota no alcanza a cubrir los intereses del saldo.');
-  return Math.max(1, Math.ceil(-Math.log(1 - saldo * i / cuota) / Math.log(1 + i) - 1e-9));
-}
 
-function ultimoDiaMes_(anio, mes) { return new Date(Date.UTC(anio, mes, 0)).getUTCDate(); }
 
 /**
  * Fecha prevista de la cuota número `num`, contando desde la fecha de inicio.
@@ -155,10 +126,6 @@ function normalizarCredito_(c) {
     desembolsar: c.desembolsar !== false && pagadas === 0, notas: texto_(c.Notas).slice(0, 300) };
 }
 
-function cfgValor_(clave) {
-  const f = getTableData('Config').find(x => x.Clave === clave);
-  return f ? texto_(f.Valor) : '';
-}
 
 /** Vista previa de un crédito nuevo: cuota, total a pagar y primeras cuotas. No escribe nada. */
 function previsualizarCredito(c) {
@@ -315,12 +282,12 @@ function anularPagoCredito(idPago) {
   const ids = [];
   if (movs.length) anularMovimiento(movs[0].ID_Mov).ids.forEach(i => ids.push(i));
 
-  cron.filter(f => Number(f.Version) === version && Number(f.Num) === Number(pago.Num_Cuota))
-    .forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Pendiente' }));
+  updateRows_('Creditos_Cronograma', cron.filter(f => Number(f.Version) === version && Number(f.Num) === Number(pago.Num_Cuota))
+    .map(f => ({ fila: f, cambios: { Estado: 'Pendiente' } })));
   if (Number(pago.Abono_Extra) > 0) {
-    cron.filter(f => Number(f.Version) === version + 1).forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Reemplazada' }));
-    cron.filter(f => Number(f.Version) === version && Number(f.Num) > Number(pago.Num_Cuota) && f.Estado === 'Reemplazada')
-      .forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Pendiente' }));
+    updateRows_('Creditos_Cronograma', cron.filter(f => Number(f.Version) === version + 1).map(f => ({ fila: f, cambios: { Estado: 'Reemplazada' } })));
+    updateRows_('Creditos_Cronograma', cron.filter(f => Number(f.Version) === version && Number(f.Num) > Number(pago.Num_Cuota) && f.Estado === 'Reemplazada')
+      .map(f => ({ fila: f, cambios: { Estado: 'Pendiente' } })));
   }
   const maxNum = cron.filter(f => Number(f.Version) <= version).reduce((m, f) => Math.max(m, Number(f.Num)), 0);
   updateRow('Creditos', credito, { Estado: 'Activo', Num_Periodos: maxNum });
@@ -487,7 +454,7 @@ function anularCredito(idCredito) {
   if (leer_('Creditos_Pagos').some(p => p.ID_Credito === idCredito && !esVerdadero(p.Anulado))) throw new Error('El crédito ya tiene pagos. Anúlalos primero (del último al primero).');
   const ids = [];
   leer_('Movimientos').filter(m => refDe_(m) === 'Crédito ' + idCredito && !esVerdadero(m.Anulado)).forEach(m => anularMovimiento(m.ID_Mov).ids.forEach(i => ids.push(i)));
-  leer_('Creditos_Cronograma').filter(f => f.ID_Credito === idCredito && f.Estado !== 'Reemplazada').forEach(f => updateRow('Creditos_Cronograma', f, { Estado: 'Reemplazada' }));
+  updateRows_('Creditos_Cronograma', leer_('Creditos_Cronograma').filter(f => f.ID_Credito === idCredito && f.Estado !== 'Reemplazada').map(f => ({ fila: f, cambios: { Estado: 'Reemplazada' } })));
   updateRow('Creditos', c, { Estado: 'Anulado' });
   return { ids: ids, idCredito: idCredito };
 }

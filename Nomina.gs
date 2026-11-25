@@ -194,8 +194,7 @@ function mesProximoPagoNomina_() {
   const diaPago = Number(cfgValor_('Nomina_Dia_Pago')) || 30;
   const registrada = leer_('Nomina_Pagos').some(n => n.Periodo === mes && !esVerdadero(n.Anulado));
   if (!registrada && Number(hoy.slice(8, 10)) <= diaPago) return mes;
-  const d = new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 1));
-  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2);
+  return mesMas_(mes, 1);
 }
 
 /**

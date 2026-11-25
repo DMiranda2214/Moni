@@ -230,11 +230,6 @@ const DEFAULT_ESCENARIOS = [
   ['esc-normal', 'Normal', true, 'Presupuesto habitual', true]
 ];
 
-/** Fecha y hora actual en ISO local (para Creado_En / Actualizado_En). */
-function ahoraIso_() {
-  return Utilities.formatDate(new Date(), 'America/Bogota', "yyyy-MM-dd'T'HH:mm:ss");
-}
-
 /**
  * Compara los encabezados reales de cada pestaña con los del esquema.
  * No modifica nada. Devuelve { faltantes: [tablas], diferencias: [{tabla, esperado, actual}] }.
@@ -500,6 +495,19 @@ function asegurarConfig_(clave) {
   const d = configInicial_().find(item => item[0] === clave);
   if (!d) throw new Error('No hay parámetro "' + clave + '".');
   insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
+}
+
+/** Valor de un parámetro de Config, como texto ('' si no está). */
+function cfgValor_(clave) {
+  const f = getTableData('Config').find(x => x.Clave === clave);
+  return f ? texto_(f.Valor) : '';
+}
+
+/** Un parámetro numérico entero entre min y max, o el valor por defecto si falta o no es válido. */
+function configEntero_(clave, defecto, min, max) {
+  const t = cfgValor_(clave);
+  const n = Number(t);
+  return t !== '' && isFinite(n) && n >= (min === undefined ? -Infinity : min) && n <= (max === undefined ? Infinity : max) ? Math.floor(n) : defecto;
 }
 
 function guardarConfig_(clave, valor) {

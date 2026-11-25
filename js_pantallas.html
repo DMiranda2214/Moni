@@ -1,0 +1,602 @@
+/* Moni — parte de la aplicación (va dentro del mismo bloque de script que app_js, en el orden de PARTES_JS en Code.gs). */
+// ---------------------------------------------------------------------------
+// Pantallas principales
+// ---------------------------------------------------------------------------
+
+function vErrorCarga() {
+  return {
+    titulo: 'Moni', ocultarTitulo: true,
+    html: vacio('alerta', 'No se pudo cargar', App.error, '<button class="m-btn m-btn-primary" data-acc="recargar">Reintentar</button>')
+  };
+}
+
+/** Primera vez en la versión para varias personas: cada una guarda sus finanzas en su propia hoja de Google. */
+function vCrearHoja() {
+  const c = App.boot.cuenta || {};
+  const dato = (icono, titulo, sub) => '<div class="m-row"><span class="m-row-icono">' + ico(icono, 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(titulo) + '</span><span class="m-row-sub" style="display:block;white-space:normal">' + esc(sub) + '</span></span></div>';
+  return {
+    titulo: 'Bienvenida', ocultarTitulo: true, asistente: true,
+    html: '<div class="m-asist m-asist-centro">' +
+      '<div class="m-asist-hero" aria-hidden="true">' + ico('capas') + '</div>' +
+      '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + (App.boot.hojaPerdida ? 'Falta tu hoja de Moni' : 'Te damos la bienvenida a Moni') + '</h1>' +
+      '<p class="m-subtitulo">Moni guarda tus finanzas en una hoja de cálculo de <strong>tu propio Google Drive</strong>. Es solo tuya.</p>' +
+      '<div class="m-group m-asist-lista">' +
+        dato('usuario', 'Tus datos son tuyos', 'Nadie más ve tu hoja, tampoco quien administra la aplicación.') +
+        dato('capas', 'Se crea en tu Drive', 'Puedes abrirla, copiarla o borrarla cuando quieras.') +
+        dato('check', 'Se actualiza sola', 'Cuando Moni mejora, tu hoja se pone al día sin perder nada.') + '</div>' +
+      (App.boot.hojaPerdida ? '<div class="m-banner" role="note">' + ico('prueba') + '<span>No se encontró la hoja que tenías vinculada (se borró o ya no tienes acceso). Crea una nueva o vincula otra; la anterior no se toca.</span></div>' : '') +
+      '<div class="m-error-form" id="hoja-error" role="alert" hidden></div>' +
+      '<div class="m-asist-acciones">' +
+        '<button type="button" class="m-btn m-btn-primary" data-acc="crear-hoja">Crear mi hoja</button>' +
+        '<button type="button" class="m-btn m-btn-secondary" data-acc="vincular-hoja">Ya tengo una hoja de Moni</button></div>' +
+      (c.correo ? '<p class="m-ayuda">Entraste como ' + esc(c.correo) + '. La primera vez, Google te pedirá permiso para crear la hoja en tu Drive.</p>' : '') + '</div>'
+  };
+}
+
+/** Fila que abre la hoja de cálculo donde Moni guarda todo (siempre visible en Ajustes). */
+function enlaceHoja() {
+  const c = (App.boot && App.boot.cuenta) || {};
+  if (!c.urlHoja) return '';
+  return '<a class="m-row" style="text-decoration:none;color:inherit" href="' + esc(c.urlHoja) + '" target="_blank" rel="noopener noreferrer"><span class="m-row-icono">' + ico('capas', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">Abrir mi hoja de cálculo</span><span class="m-row-sub" style="display:block">' + esc(c.nombreHoja || 'Donde Moni guarda tus datos') + '</span></span>' + ico('der', 'm-icon-sm m-chevron') + '</a>';
+}
+
+/** Ajustes → Mi cuenta (solo en la versión para varias personas): de quién es la hoja y cómo cambiarla. */
+function vCuenta() {
+  const c = App.boot.cuenta || {};
+  const filas = fila({ icono: 'usuario', titulo: 'Cuenta de Google', sub: esc(c.correo || 'Sin identificar') }) +
+    (c.urlHoja ? '<a class="m-row" style="text-decoration:none;color:inherit" href="' + esc(c.urlHoja) + '" target="_blank" rel="noopener noreferrer"><span class="m-row-icono">' + ico('capas', 'm-icon-sm') + '</span><span class="m-row-texto"><span class="m-row-titulo" style="display:block">Abrir mi hoja</span><span class="m-row-sub" style="display:block">' + esc(c.nombreHoja || '') + '</span></span>' + ico('der', 'm-icon-sm m-chevron') + '</a>' : '');
+  return {
+    titulo: 'Mi cuenta',
+    html: seccion('Tu hoja', filas, 'Tus finanzas viven en esta hoja de tu Drive. Solo tú (y quien tú invites) puede verla.') +
+      seccion('Cambiar de hoja', fila({ icono: 'capas', titulo: 'Usar otra hoja', sub: 'Suelta esta hoja (no se borra) y elige otra', chevron: true, attrs: 'data-acc="desvincular-hoja"' }),
+        'Sirve para usar una hoja compartida (por ejemplo, la de tu pareja) o empezar con otra. Apaga las copias automáticas y los recordatorios de la hoja actual.')
+  };
+}
+
+/** Pide el enlace de una hoja de Moni que ya se tiene y la vincula. */
+async function abrirVincularHoja() {
+  await abrirHoja({
+    titulo: 'Usar una hoja que ya tengo',
+    cuerpo: '<form novalidate data-form="vincular-hoja"><p class="m-hoja-mensaje">Pega el enlace de tu hoja de Moni (el de la barra del navegador). Necesitas permiso de edición sobre ella.</p>' +
+      '<div class="m-campo"><label class="m-label" for="f-enlace">Enlace de la hoja</label><input class="m-input" id="f-enlace" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…"></div>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    der: 'Usar',
+    alAbrir: raiz => { const i = $('#f-enlace', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const enlace = $('#f-enlace', raiz).value.trim();
+      if (!enlace) throw new Error('Pega el enlace de tu hoja.');
+      await api('linkMySheet', enlace);
+      await refrescar(); App.pila = ['inicio']; render(true);
+      aviso('Hoja vinculada');
+    }
+  });
+}
+
+function vInstalar() {
+  return {
+    titulo: 'Moni', ocultarTitulo: true,
+    html: vacio('capas', 'Falta instalar o actualizar la base de datos',
+      (App.boot.instalando ? 'Tu hoja se está preparando (' + App.boot.hechas + ' de ' + App.boot.tablas + ' tablas). Pulsa continuar; retoma donde quedó.' : 'Moni va a crear las tablas que necesita en tu hoja de cálculo. No borra ni modifica nada de lo que ya exista.'),
+      '<button class="m-btn m-btn-primary" data-acc="instalar">' + (App.boot.instalando ? 'Continuar' : 'Instalar') + '</button>')
+  };
+}
+
+function vProximamente(titulo, icono, texto) {
+  return { titulo: titulo, html: vacio(icono, 'Próximamente', texto) };
+}
+
+function textoPlazo(dias) {
+  if (dias < 0) return 'Venció hace ' + (-dias) + (dias === -1 ? ' día' : ' días');
+  if (dias === 0) return 'Vence hoy';
+  if (dias === 1) return 'Vence mañana';
+  return 'Vence en ' + dias + ' días';
+}
+
+async function refrescarProximos() {
+  App.proximosCargando = true;
+  try { const [a, b] = await Promise.all([api('getProximos'), api('getProximosIngresos')]); App.boot.proximos = a; App.boot.porRecibir = b; App.proximosViejos = false; }
+  catch (e) { /* queda la lista anterior; no es crítico */ }
+  App.proximosCargando = false;
+  if (rutaActual() === 'inicio') render();
+}
+
+function bannerDemo() {
+  if (!demoOn() || !esVerdad(cfg('Datos_Demo'))) return '';
+  return '<div class="m-banner" role="note">' + ico('prueba') + '<span>Estás viendo datos de demostración.</span>' +
+    '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/demo">Gestionar</button></div>';
+}
+
+/**
+ * "Para tener en cuenta": lo que falta configurar o está desactualizado (lo calcula el servidor desde el estado de la hoja,
+ * así que cada aviso desaparece solo cuando se resuelve). Importante: no se oculta. Sugerencia y novedad: "Ahora no".
+ */
+App.avisosTodos = false;
+function htmlAvisos() {
+  const todos = App.boot.avisos || [];
+  if (!todos.length) return '';
+  const limite = App.avisosTodos ? todos.length : 3;
+  const icono = a => a.nivel === 'importante' ? 'alerta' : (a.nivel === 'novedad' ? 'prueba' : 'check');
+  return '<section class="m-seccion m-tablero-ancho" aria-label="Para tener en cuenta"><h2 class="m-seccion-titulo">Para tener en cuenta' + (todos.length > 1 ? ' · ' + todos.length : '') + '</h2>' +
+    todos.slice(0, limite).map(a =>
+      '<div class="m-banner m-pendiente m-pendiente-' + esc(a.nivel) + '" role="note">' + ico(icono(a)) +
+      '<span class="m-pendiente-texto"><strong>' + esc(a.titulo) + '</strong> ' + esc(a.detalle) + '</span>' +
+      '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="aviso-ir" data-ruta="' + esc(a.pantalla) + '">' + (a.nivel === 'novedad' ? 'Verlo' : 'Resolver') + '</button>' +
+      (a.ocultable ? '<button type="button" class="m-btn-texto m-btn-suave" data-acc="aviso-ocultar" data-id="' + esc(a.id) + '">Ahora no</button>' : '') + '</span></div>').join('') +
+    (todos.length > 3 ? '<button type="button" class="m-btn-texto" data-acc="avisos-todos">' + (App.avisosTodos ? 'Ver menos' : 'Ver los otros ' + (todos.length - 3)) + '</button>' : '') +
+    '</section>';
+}
+
+/** Anillo de avance (SVG). `pct` de 0 a 1. */
+function htmlAnillo(pct, tam, centro, etiqueta) {
+  const r = 40, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
+  return '<div class="m-anillo" style="width:' + tam + 'px;height:' + tam + 'px"><svg viewBox="0 0 96 96" width="' + tam + '" height="' + tam + '" role="img" aria-label="' + esc(etiqueta) + '">' +
+    '<circle cx="48" cy="48" r="' + r + '" class="m-anillo-fondo"/><circle cx="48" cy="48" r="' + r + '" class="m-anillo-valor" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - p)).toFixed(1) + '" transform="rotate(-90 48 48)"/></svg>' +
+    '<div class="m-anillo-centro">' + centro + '</div></div>';
+}
+
+const cifrasOcultas = () => { try { return localStorage.getItem('moni.ocultar') === '1'; } catch (e) { return false; } };
+const cifraHero = (n, divisa) => cifrasOcultas() ? '••••' : dinero(n, divisa);
+
+/** Tarjeta de avance de los primeros pasos y la lista agrupada. */
+function htmlPrimerosPasos(estado) {
+  const pasos = estado.pasos, hechos = pasos.filter(p => p.hecho).length;
+  const basicos = pasos.filter(p => !p.opcional), extras = pasos.filter(p => p.opcional);
+  const basicosListos = basicos.every(p => p.hecho);
+  const siguiente = pasos.find(p => !p.hecho && !p.opcional) || pasos.find(p => !p.hecho);
+  const reanudar = App.asist.omitido && !esVerdad(cfg('Datos_Demo'));
+  const filaPaso = p => fila({ icono: p.hecho ? 'check' : 'plus', titulo: esc(p.titulo), sub: p.opcional ? 'Opcional' : '', chevron: true,
+    attrs: 'data-acc="ir" data-ruta="' + esc(p.pantalla) + '"', clase: p.hecho ? 'm-hecho' : '' });
+  let h = '<section class="m-ppasos" aria-label="Primeros pasos"><div class="m-ppasos-cab">' +
+    htmlAnillo(hechos / pasos.length, 64, '<strong>' + hechos + '/' + pasos.length + '</strong>', hechos + ' de ' + pasos.length + ' pasos') +
+    '<div><h2>Primeros pasos</h2><p>' + (basicosListos ? 'Lo básico ya está. Lo que falta es opcional.' : 'Completa lo básico para empezar.') + '</p></div></div>';
+  if (reanudar) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('capas') + '</span><div><small>Asistente</small><strong>Continuar donde quedaste</strong></div><button class="m-btn m-btn-primary" data-acc="asist-reanudar">Continuar</button></div>';
+  } else if (siguiente) {
+    h += '<div class="m-ppasos-sig"><span class="m-ppasos-ico">' + ico('plus') + '</span><div><small>Siguiente</small><strong>' + esc(siguiente.titulo) + '</strong></div>' +
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="' + esc(siguiente.pantalla) + '">Continuar</button></div>';
+  }
+  h += '</section>';
+  h += seccion('Lo básico' + (basicosListos ? ' · listo' : ''), basicos.map(filaPaso).join(''));
+  if (extras.length) h += seccion('Para sacarle más provecho', extras.map(filaPaso).join(''), 'Cuando termines, esta tarjeta se oculta sola. Puedes volver a estos pasos desde Ajustes.');
+  return h;
+}
+
+function vInicio() {
+  if (asistenteVisible()) return vAsistente();
+  const nombre = cfg('Nombre_Usuario');
+  const estado = App.boot.estado || {};
+  const s = App.boot.saldos || { cuentas: [] };
+  const inv = App.boot.invertido && App.boot.invertido.cantidad ? App.boot.invertido : null;
+  const pendientesPasos = !!(estado.pasos && !estado.completo);
+  let html = bannerDemo();
+
+  if (pendientesPasos) html += htmlPrimerosPasos(estado);
+  else html += htmlAvisos();
+
+  // Saldo total (tarjeta pastel)
+  if (s.cuentas.length) {
+    const oculto = cifrasOcultas();
+    html += '<section class="m-hero" aria-label="Saldo total"><div class="m-hero-cab"><h2>Saldo total</h2>' +
+      '<button class="m-hero-ojo" data-acc="ocultar-cifras" aria-label="' + (oculto ? 'Mostrar' : 'Ocultar') + ' las cifras" aria-pressed="' + oculto + '">' + ico('ojo') + '</button></div>' +
+      '<div class="m-hero-cifra m-num ' + claseSaldo(s.total) + '">' + cifraHero(s.total) + '</div><div class="m-hero-chips">' +
+      '<div><span>Disponible</span><strong class="m-num">' + cifraHero(s.disponible) + '</strong></div>' +
+      '<div><span>Ahorro</span><strong class="m-num">' + cifraHero(s.ahorro) + '</strong></div>' +
+      (inv ? '<div><span>Invertido</span><strong class="m-num">' + cifraHero(inv.total) + '</strong></div>' : '') + '</div></section>';
+  }
+
+  // Este mes de un vistazo
+  const pp = App.boot.ppto;
+  if (pp && s.cuentas.length) {
+    if (pp.existe) {
+      const t = pp.totales, avance = t.plan > 0 ? t.real / t.plan : 0;
+      html += '<section class="m-este-mes" aria-label="Este mes"><div class="m-este-cab"><h2>Este mes · ' + esc(mesTexto(pp.mes).toLowerCase().replace(/ de \d+$/, '')) + '</h2>' +
+        '<button class="m-btn-texto" data-acc="ir" data-ruta="presupuesto">Presupuesto</button></div><div class="m-este-cuerpo">' +
+        htmlAnillo(avance, 96, '<strong>' + Math.round(avance * 100) + ' %</strong><small>gastado</small>', Math.round(avance * 100) + ' % del presupuesto gastado') +
+        '<dl class="m-este-lista"><div><dt>Entró</dt><dd class="m-num m-positivo">' + dinero(t.ingresos) + '</dd></div><div><dt>Gastado</dt><dd class="m-num">' + dinero(t.real) + '</dd></div>' +
+        '<div class="m-este-total"><dt>Te queda</dt><dd class="m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</dd></div></dl></div>' +
+        '<p class="m-este-pie">Planeado ' + dinero(t.plan) + ' · ' + t.pagados + ' de ' + t.renglones + ' renglones completos</p></section>';
+    } else {
+      html += '<section class="m-seccion" aria-label="Este mes"><div class="m-group">' +
+        fila({ icono: 'presupuesto', titulo: 'Genera el presupuesto de ' + esc(mesTexto(pp.mes).toLowerCase()), sub: 'Con tu plantilla, en un toque', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+        '</div></section>';
+    }
+  }
+
+  if (hayBolsillos()) {
+    const rap = (icono, texto, attrs, tono) => '<button class="m-rapido" data-tono="' + tono + '" ' + attrs + '><span class="m-rapido-icono">' + ico(icono) + '</span><span>' + esc(texto) + '</span></button>';
+    html += '<section class="m-seccion m-tablero-ancho" aria-label="Accesos rápidos"><div class="m-rapidos">' +
+      rap('mover', 'Mover dinero', 'data-acc="rapido" data-tipo="Mover"', 'rosa') +
+      rap('tarjetas', 'Servicios', 'data-acc="ir" data-ruta="pagos"', 'menta') +
+      rap('presupuesto', 'Movimientos', 'data-acc="ir" data-ruta="movimientos"', 'lila') +
+      rap('bolsillos', 'Ahorro', 'data-acc="ir" data-ruta="ahorro"', 'durazno') + '</div></section>';
+  }
+  html += '<div class="m-tablero">';
+
+  // Próximos pagos
+  const prox = App.boot.proximos || [];
+  if (prox.length) {
+    const tono = p => p.tipo === 'Tarjeta' ? 'rosa' : (p.tipo === 'Credito' ? 'lila' : 'durazno');
+    html += seccion('Próximos pagos', prox.map(p => fila({
+      icono: p.tipo === 'Tarjeta' ? 'tarjetas' : (p.tipo === 'Credito' ? 'capas' : (p.tipo === 'Servicio' ? 'rayo' : 'etiqueta')),
+      titulo: esc(p.titulo),
+      sub: esc(textoPlazo(p.dias)) + ' · ' + esc(p.detalle),
+      final: '<strong class="m-num' + (p.dias < 0 ? ' m-negativo' : '') + '">' + dinero(p.valor) + '</strong>',
+      chevron: true,
+      attrs: (p.susc ? 'data-acc="susc" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="' + (p.tipo === 'Tarjeta' ? 'tarjeta/' : 'credito/') + esc(p.id) + '"') + ' data-tono="' + tono(p) + '"'
+    })).join('') + fila({ titulo: 'Ver servicios y suscripciones', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos"' }));
+  }
+
+  if (s.cuentas.length) {
+    html += seccion('Tus cuentas', s.cuentas.map(c => fila({
+      icono: c.Tipo === 'Ahorro' ? 'bolsillos' : 'cuenta',
+      titulo: esc(c.Nombre),
+      sub: esc(c.Banco) + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (c.Divisa !== 'COP' ? ' · ' + esc(c.Divisa) : ''),
+      final: '<strong class="m-num ' + claseSaldo(c.Saldo) + '">' + dinero(c.Saldo, c.Divisa) + '</strong>',
+      attrs: 'data-acc="ir" data-ruta="bolsillos" data-tono="' + (c.Tipo === 'Ahorro' ? 'menta' : 'celeste') + '"'
+    })).join(''));
+    if (inv) {
+      html += seccion('Invertido', fila({ icono: 'capas', titulo: 'CDT vigentes: ' + inv.cantidad, sub: 'Dinero a plazo fijo, no disponible' + (inv.proximoVencimiento ? ' · próximo vence ' + fechaTxt(inv.proximoVencimiento) : ''),
+        final: '<strong class="m-num">' + dinero(inv.total) + '</strong>', chevron: true, attrs: 'data-acc="ir" data-ruta="cdt" data-tono="lila"' }));
+    }
+
+    html += htmlInicioGraficos();
+
+    // Los saldos en otras monedas no se suman al total en pesos: cada una va aparte.
+    if ((s.divisas || []).length) {
+      html += seccion('Otras monedas', s.divisas.map(x => fila({
+        icono: 'banco', titulo: esc(NOMBRE_DIVISA[x.Divisa] || x.Divisa),
+        sub: x.Equivalente !== null ? '≈ ' + dinero(x.Equivalente) + ' · 1 ' + x.Divisa + ' = ' + tasaPesos(x.Tasa) : 'Anota la tasa en Ajustes → Divisas para ver el equivalente en pesos',
+        final: '<strong class="m-num ' + claseSaldo(x.Total) + '">' + dinero(x.Total, x.Divisa) + '</strong>',
+        chevron: true, attrs: 'data-acc="ir" data-ruta="bolsillos"'
+      })).join(''));
+    }
+  } else if (!pendientesPasos) {
+    html += vacio('bolsillos', 'Aún no tienes cuentas', 'Agrega una cuenta desde Ajustes para ver tus saldos aquí.');
+  }
+
+  const porRecibir = App.boot.porRecibir || [];
+  if (porRecibir.length) {
+    html += seccion('Por recibir', porRecibir.map(p => fila({
+      icono: p.tipo === 'CDT' ? 'capas' : 'usuario', titulo: esc(p.titulo), sub: esc(textoPlazo(p.dias).replace('Vence', 'Llega')) + ' · ' + esc(p.detalle),
+      final: '<strong class="m-num m-positivo">' + dinero(p.valor) + '</strong>', chevron: true,
+      attrs: p.ingreso ? 'data-acc="ingreso" data-id="' + esc(p.id) + '"' : (p.tipo === 'CDT' ? 'data-acc="cdt" data-id="' + esc(p.id) + '"' : 'data-acc="ir" data-ruta="nomina"')
+    })).join('') + fila({ titulo: 'Ver otros ingresos', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos"' }));
+  }
+
+  const ultimos = App.boot.ultimos || [];
+  if (ultimos.length) {
+    html += '<section class="m-seccion" aria-label="Últimos movimientos"><h2 class="m-seccion-titulo">Últimos movimientos</h2><div class="m-group">' +
+      ultimos.map(i => filaMov(i, false)).join('') +
+      fila({ titulo: 'Ver todos los movimientos', chevron: true, attrs: 'data-acc="ir" data-ruta="movimientos"' }) + '</div></section>';
+  }
+
+  html += '</div>';
+  return {
+    titulo: nombre ? 'Hola, ' + nombre : 'Inicio', html: html, ancha: true,
+    // Tras un pago o una compra, la lista de próximos pagos se vuelve a pedir (liviana) en segundo plano.
+    despues: () => {
+      if (App.proximosViejos && !App.proximosCargando) refrescarProximos();
+      const g = App.inicioGraf;
+      if (hayBolsillos() && !g.cargando && ((!g.data && !g.intentado) || g.viejo)) cargarInicioGraf();
+    }
+  };
+}
+
+function vBolsillos() {
+  const s = App.boot.saldos || { cuentas: [] };
+  let html = bannerDemo();
+  if (!s.cuentas.length) {
+    return { titulo: 'Bolsillos', html: html + vacio('bolsillos', 'Sin cuentas todavía', 'Crea tus cuentas y bolsillos en Ajustes.',
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Cuentas">Crear una cuenta</button>') };
+  }
+
+  if (hayOtrasDivisas() && s.cuentas.some(x => x.bolsillos.length)) {
+    html += '<div class="m-acciones-fila" style="margin:0 0 var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="convertir">Convertir divisas</button></div>';
+  }
+
+  s.cuentas.forEach(c => {
+    // "Sin asignar" no estorba cuando está en cero y la cuenta ya tiene otros bolsillos
+    const visibles = c.bolsillos.filter(b => !(b.Es_Interno && esVerdad(c.Permite_Bolsillos) && Math.abs(b.Saldo) < 0.005 && c.bolsillos.length > 1));
+    const filas = visibles.length
+      ? visibles.map(b => fila({
+          icono: b.Rol === 'Reserva_Tarjeta' ? 'tarjetas' : 'bolsillos',
+          titulo: esc(nombreBolsillo(b, c)),
+          sub: b.Es_Interno ? (esVerdad(c.Permite_Bolsillos) ? 'Dinero que no está en ningún bolsillo' : 'Cuenta sin bolsillos') : (b.Rol === 'Operativo' ? '' : esc(etiqueta('RolBolsillo', b.Rol))),
+          final: '<strong class="m-num ' + claseSaldo(b.Saldo) + '">' + dinero(b.Saldo, c.Divisa) + '</strong>',
+          chevron: true,
+          attrs: 'data-acc="ir" data-ruta="bolsillo/' + esc(b.ID_Bolsillo) + '"'
+        })).join('')
+      : '<div class="m-row"><span class="m-row-sub">Esta cuenta aún no tiene bolsillos.</span></div>';
+
+    let pie = '';
+    if (c.Saldo_Real !== null && c.Saldo_Real !== undefined) {
+      pie = 'Saldo según tu banco: ' + dinero(c.Saldo_Real, c.Divisa) + (Math.abs(c.Diferencia) < 0.005 ? ' · cuadra' : ' · diferencia de ' + dinero(c.Diferencia, c.Divisa));
+    }
+    html += '<section class="m-seccion" aria-label="' + esc(c.Nombre) + '"><div class="m-seccion-cab"><h2 class="m-seccion-titulo">' + esc(c.Banco) + ' · ' + esc(c.Nombre) + ' — ' + dinero(c.Saldo, c.Divisa) + '</h2>' +
+      '<button class="m-btn-texto" data-acc="cuadrar" data-cuenta="' + esc(c.ID_Cuenta) + '">Cuadrar</button></div>' +
+      '<div class="m-group">' + filas + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</section>';
+  });
+
+  return { titulo: 'Bolsillos', html: html };
+}
+
+/** Pantalla de entrada del área Planear: lo que entra y lo que se decidió gastar. */
+function vPlanear() {
+  const p = App.boot.ppto || {};
+  const t = p.totales || {};
+  const mes = mesTexto(App.boot.hoy.slice(0, 7)).toLowerCase();
+  const destacada = p.existe
+    ? '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra m-num">' + dinero(t.saldo) + '</span><span class="m-destacada-sub">te queda · ' + t.pagados + ' de ' + t.renglones + ' renglones completos</span></span>' + ico('der', 'm-chevron') + '</button>'
+    : '<button class="m-destacada" data-acc="ir" data-ruta="presupuesto"><span><span class="m-destacada-etq">Presupuesto de ' + esc(mes) + '</span>' +
+      '<span class="m-destacada-cifra">Aún no lo creas</span><span class="m-destacada-sub">Se arma en un toque desde tu plantilla</span></span>' + ico('der', 'm-chevron') + '</button>';
+  const inv = App.boot.invertido && App.boot.invertido.cantidad;
+  return {
+    titulo: 'Planear', subtitulo: 'Lo que entra y lo que decidiste gastar',
+    html: destacada +
+      '<section class="m-seccion" aria-label="Cada mes"><h2 class="m-seccion-titulo">Cada mes</h2><div class="m-group">' +
+      fila({ icono: 'presupuesto', titulo: 'Presupuesto', sub: 'Plan frente a lo real, renglón por renglón', chevron: true, attrs: 'data-acc="ir" data-ruta="presupuesto" data-tono="rosa"' }) +
+      fila({ icono: 'usuario', titulo: 'Nómina', sub: 'Estimado de lo que te llega y cómo se reparte', chevron: true, attrs: 'data-acc="ir" data-ruta="nomina" data-tono="menta"' }) +
+      fila({ icono: 'usuario', titulo: 'Otros ingresos', sub: 'Otro trabajo, arriendo, ventas, servicios…', chevron: true, attrs: 'data-acc="ir" data-ruta="ingresos" data-tono="menta"' }) +
+      fila({ icono: 'tarjetas', titulo: 'Servicios y suscripciones', sub: 'Lo que pagas cada mes: luz, agua, streaming…', chevron: true, attrs: 'data-acc="ir" data-ruta="pagos" data-tono="durazno"' }) +
+      '</div></section>' +
+      '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
+      fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
+      fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
+      '</div></section>'
+  };
+}
+
+/** Pestañas internas del área Dinero (solo en sus pantallas de entrada). */
+function pildorasDinero(ruta) {
+  if (App.pila.length !== 1 || AREA_DE_RUTA[ruta] !== 'dinero') return '';
+  const grupo = GRUPOS_NAV[0];
+  return '<div class="m-pildoras" role="tablist" aria-label="Dinero">' + grupo.items.map(it =>
+    '<button class="m-pildora" role="tab" data-acc="ir" data-ruta="' + it[0] + '" aria-selected="' + (it[0] === ruta) + '">' + esc(it[1]) + '</button>').join('') + '</div>';
+}
+
+// ---------- Barra lateral ----------
+
+const lateralChica = () => {
+  try { const g = localStorage.getItem('moni.lateral'); if (g) return g === 'chica'; } catch (e) {}
+  return window.innerWidth < 1100;
+};
+function alternarLateral() {
+  const nueva = !lateralChica();
+  try { localStorage.setItem('moni.lateral', nueva ? 'chica' : 'ancha'); } catch (e) {}
+  document.body.classList.toggle('m-lat-chica', nueva);
+  $('#lateral').innerHTML = htmlLateral(App.pila[0], AREA_DE_RUTA[App.pila[0]] || '', !!(App.boot && App.boot.instalado && hayBolsillos()));
+}
+
+function htmlLateral(raiz, area, puedeRegistrar) {
+  const item = (ruta, etiqueta, icono) => '<button class="m-lat-item" data-acc="ir" data-ruta="' + ruta + '" title="' + esc(etiqueta) + '"' + (ruta === raiz ? ' aria-current="page"' : '') + '>' +
+    ico(icono) + '<span class="m-lat-txt">' + esc(etiqueta) + '</span></button>';
+  const chica = lateralChica();
+  const nombre = cfg('Nombre_Usuario') || '';
+  return '<div class="m-lat-cab"><span class="m-logo" aria-hidden="true">' + ico('bolsillos') + '</span><span class="m-lat-txt m-marca">Moni</span>' +
+    '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
+    (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
+    '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
+    '<nav class="m-lat-nav" aria-label="Principal">' + item('inicio', 'Inicio', 'inicio') +
+    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</nav>' +
+    '<div class="m-lat-pie">' + item('guia', 'Guía de uso', 'etiqueta') + item('ajustes', 'Ajustes', 'ajustes') +
+    '<div class="m-lat-usuario"><span class="m-avatar" aria-hidden="true">' + esc((nombre.charAt(0) || 'M').toUpperCase()) + '</span><span class="m-lat-txt">' + esc(nombre || 'Mi cuenta') + '</span></div></div>';
+}
+
+// ---------- Registrar (botón +) ----------
+
+async function abrirMenuRegistrar() {
+  if (!App.boot || !App.boot.instalado || !hayBolsillos()) return;
+  const recientes = ((App.boot.ultimos || []).filter(m => m.Tipo_Mov === 'Gasto' && !m.Anulado && m.Valor < 0)).slice(0, 2);
+  const tile = (tipo, titulo, sub, icono, tono) => '<button class="m-reg-tile" data-reg="' + tipo + '" data-tono="' + tono + '"><span class="m-reg-ico">' + ico(icono) + '</span><strong>' + esc(titulo) + '</strong><span>' + esc(sub) + '</span></button>';
+  const cuerpo = '<div class="m-reg-rejilla">' +
+    tile('Gasto', 'Gasto', 'Lo que pagaste', 'plus', 'rosa') + tile('Ingreso', 'Ingreso', 'Dinero que llegó', 'check', 'menta') +
+    tile('Mover', 'Mover dinero', 'Entre bolsillos', 'mover', 'lila') +
+    (hayOtrasDivisas() ? tile('Convertir', 'Convertir', 'Pesos y dólares', 'capas', 'durazno') : '') + '</div>' +
+    (recientes.length ? '<h3 class="m-seccion-titulo" style="margin:var(--m-space-4) 0 var(--m-space-2)">Repetir uno reciente</h3><div class="m-group">' +
+      recientes.map(m => fila({ titulo: esc(m.Concepto), sub: esc(m.Bolsillo || ''), final: '<strong class="m-num">' + dinero(m.Valor, m.Divisa) + '</strong>', attrs: 'data-rep="' + esc(m.ID_Mov) + '"' })).join('') + '</div>' : '');
+  await abrirHoja({
+    titulo: '¿Qué quieres registrar?', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    alAbrir: raiz => raiz.addEventListener('click', ev => {
+      const t = ev.target.closest('[data-reg]'), r = ev.target.closest('[data-rep]');
+      if (t) {
+        if (t.dataset.reg === 'Convertir') abrirConversion(); else abrirRegistrar({ tipo: t.dataset.reg });
+      } else if (r) {
+        const m = recientes.find(x => x.ID_Mov === r.dataset.rep);
+        if (m) abrirRegistrar({ tipo: 'Gasto', concepto: m.Concepto, valor: Math.abs(m.Valor), idBolsillo: m.ID_Bolsillo });
+      }
+    })
+  });
+}
+
+// ---------- Buscar o ir a… (Ctrl K) ----------
+
+const sinTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function destinosBuscables() {
+  const lista = [['inicio', 'Inicio', 'Pantalla principal', 'inicio'], ['planear', 'Planear', 'Área', 'calendario']];
+  GRUPOS_NAV.forEach(g => g.items.forEach(it => lista.push([it[0], it[1], g.titulo, it[2]])));
+  lista.push(['guia', 'Guía de uso', 'Ayuda', 'etiqueta'], ['ajustes', 'Ajustes', 'Configuración', 'ajustes'],
+    ['ajustes/perfil', 'Perfil', 'Ajustes', 'usuario'], ['ajustes/apariencia', 'Apariencia', 'Ajustes', 'paleta'],
+    ['ajustes/Bancos', 'Bancos', 'Ajustes', 'banco'], ['ajustes/Cuentas', 'Cuentas', 'Ajustes', 'cuenta'], ['ajustes/Tarjetas', 'Tarjetas (ajustes)', 'Ajustes', 'tarjetas'],
+    ['ajustes/plantilla', 'Plantilla del presupuesto', 'Ajustes', 'presupuesto'], ['ajustes/divisas', 'Divisas', 'Ajustes', 'banco'],
+    ['ajustes/respaldos', 'Respaldos', 'Ajustes', 'capas'], ['ajustes/recordatorios', 'Recordatorios', 'Ajustes', 'calendario']);
+  ((App.boot && App.boot.saldos && App.boot.saldos.cuentas) || []).forEach(c => c.bolsillos.forEach(b => {
+    if (b.Es_Interno && !esVerdad(c.Permite_Bolsillos)) lista.push(['bolsillo/' + b.ID_Bolsillo, c.Nombre, 'Cuenta · ' + c.Banco, 'cuenta']);
+    else lista.push(['bolsillo/' + b.ID_Bolsillo, nombreBolsillo(b, c), 'Bolsillo · ' + c.Nombre, 'bolsillos']);
+  }));
+  return lista;
+}
+
+async function abrirBuscador() {
+  if (!App.boot || !App.boot.instalado) return;
+  const todos = destinosBuscables();
+  const htmlLista = q => {
+    const n = sinTildes(q).trim();
+    const hay = todos.filter(d => !n || sinTildes(d[1] + ' ' + d[2]).indexOf(n) !== -1).slice(0, 12);
+    return hay.length ? hay.map(d => fila({ icono: d[3], titulo: esc(d[1]), sub: esc(d[2]), chevron: true, attrs: 'data-ir="' + esc(d[0]) + '"' })).join('')
+      : '<div class="m-row"><span class="m-row-sub">No encontré nada con ese nombre.</span></div>';
+  };
+  await abrirHoja({
+    titulo: 'Buscar o ir a…', izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<div class="m-campo"><input class="m-input" id="buscador" type="search" placeholder="Pantalla, cuenta o bolsillo" autocomplete="off" aria-label="Buscar"></div>' +
+      '<div class="m-group" id="buscador-lista">' + htmlLista('') + '</div>',
+    alAbrir: raiz => {
+      const inp = $('#buscador', raiz), lista = $('#buscador-lista', raiz);
+      inp.focus();
+      inp.addEventListener('input', () => { lista.innerHTML = htmlLista(inp.value); });
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { const p = $('[data-ir]', lista); if (p) p.click(); } });
+      lista.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-ir]');
+        if (!b) return;
+        if (hojaActual) hojaActual.finalizar();
+        navegar(b.dataset.ir);
+      });
+    }
+  });
+}
+
+document.addEventListener('toggle', ev => {
+  const d = ev.target;
+  if (d && d.classList && d.classList.contains('m-nom-grupo')) { App.nom.abiertos = App.nom.abiertos || {}; App.nom.abiertos[d.dataset.grupo] = d.open; }
+}, true);
+
+document.addEventListener('keydown', ev => {
+  const t = ev.target, escribiendo = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirBuscador(); return; }
+  if (!escribiendo && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.toLowerCase() === 'n' && !hojaActual && !document.body.classList.contains('m-asistente')) { ev.preventDefault(); abrirMenuRegistrar(); }
+});
+
+function vAjustes() {
+  const n = t => activos(t).filter(f => !esVerdad(f.Es_Interno)).length;
+  const demo = esVerdad(cfg('Datos_Demo'));
+  return {
+    titulo: 'Ajustes',
+    html:
+      seccion('Tú',
+        irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso' }) +
+        irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
+        irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
+      seccion('Dinero',
+        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' })) +
+      seccion('Presupuesto y nómina',
+        irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
+        irA('ajustes/Escenarios', { icono: CAT.Escenarios.icono, titulo: CAT.Escenarios.plural, final: n('Escenarios') }) +
+        irA('nomina', { icono: 'usuario', titulo: 'Mi nómina', sub: 'Tu sueldo y tus descuentos fijos' }) +
+        (activos('Subsidios').length ? irA('ajustes/Subsidios', { icono: CAT.Subsidios.icono, titulo: CAT.Subsidios.plural, final: n('Subsidios') }) : '') +
+        irA('ajustes/parametros', { icono: 'ajustes', titulo: 'Parámetros de nómina', sub: 'SMMLV, aportes y cesantías' })) +
+      seccion('Organización',
+        ['Categorias', 'Personas', 'Inmuebles', 'Empresas_Pago', 'Servicios_Publicos'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('')) +
+      seccion('Mantenimiento',
+        enlaceHoja() +
+        fila({ icono: 'alerta', titulo: 'Avisos de Inicio', sub: 'Volver a mostrar los que ocultaste', chevron: true, attrs: 'data-acc="avisos-restaurar"' }) +
+        fila({ icono: 'pulso', titulo: 'Actualizar desde la hoja', sub: 'Si editaste la hoja a mano, vuelve a leerla', chevron: true, attrs: 'data-acc="actualizar-datos"' }) +
+        irA('ajustes/recordatorios', { icono: 'calendario', titulo: 'Recordatorios', sub: esVerdad(cfg('Recordatorios_Activos')) ? 'Activos en Google Calendar' : 'Avisos de tus pagos en Google Calendar' }) +
+        (App.boot.cuenta && App.boot.cuenta.multiusuario ? irA('ajustes/cuenta', { icono: 'usuario', titulo: 'Mi cuenta', sub: esc(App.boot.cuenta.correo || 'Tu hoja de Moni') }) : '') +
+        // Los datos de demostración solo existen en el entorno de pruebas; en producción no hay nada de eso.
+        (demoOn() ? irA('ajustes/demo', { icono: 'prueba', titulo: 'Datos de demostración', sub: demo ? 'Activos' : 'Sin datos de demostración' }) : '') +
+        irA('ajustes/respaldos', { icono: 'capas', titulo: 'Respaldos', sub: 'Copias de seguridad en tu Drive' }) +
+        irA('ajustes/registro', { icono: 'alerta', titulo: 'Registro de errores', sub: 'Para revisar qué falló y corregirlo' }) +
+        irA('ajustes/diagnostico', { icono: 'pulso', titulo: 'Diagnóstico' })) +
+      seccion('Privacidad',
+        irA('ajustes/borrar', { icono: 'alerta', titulo: 'Borrar todos mis datos', sub: 'Empieza de cero. No se puede deshacer', clase: 'm-fila-peligro' }))
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Perfil, apariencia, demostración y diagnóstico
+// ---------------------------------------------------------------------------
+
+function vPerfil() {
+  return {
+    titulo: 'Perfil',
+    html: '<form class="m-group" style="padding:var(--m-space-4)" data-form="perfil" novalidate>' +
+      '<div class="m-campo"><label class="m-label" for="f-nombre">Nombre</label>' +
+      '<input class="m-input" id="f-nombre" name="nombre" maxlength="60" autocomplete="given-name" value="' + esc(cfg('Nombre_Usuario')) + '">' +
+      '<p class="m-ayuda">Así te saluda la app en Inicio.</p></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>'
+  };
+}
+
+/** Muestras de color de acento (radios). Las usan Apariencia y el asistente; el cambio lo guarda el oyente de 'change'. */
+function htmlMuestrasAcento() {
+  const tema = cfg('Tema') || 'Automatico';
+  const acento = cfg('Color_Acento') || 'rosa';
+  const oscuro = document.documentElement.getAttribute('data-theme') === 'dark' || (tema === 'Automatico' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  return '<div class="m-muestras" role="radiogroup">' +
+    Object.keys(ACENTOS).map(k => '<label title="' + esc(ACENTOS[k].nombre) + '"><input type="radio" name="acento" value="' + k + '" aria-label="' + esc(ACENTOS[k].nombre) + '"' + (acento === k ? ' checked' : '') + '>' +
+      '<span style="--muestra:' + (oscuro ? ACENTOS[k].oscuro : ACENTOS[k].claro) + '">' + ico('check') + '</span></label>').join('') + '</div>';
+}
+
+function vApariencia() {
+  const tema = cfg('Tema') || 'Automatico';
+  return {
+    titulo: 'Apariencia',
+    html:
+      '<div class="m-group" style="padding:var(--m-space-4)">' +
+      '<fieldset class="m-campo" style="border:0;padding:0;margin:0 0 var(--m-space-5)"><legend class="m-label">Tema</legend><div class="m-segmentado" role="radiogroup">' +
+      Object.keys(ETIQUETAS.Tema).map(k => '<label><input type="radio" name="tema" value="' + k + '"' + (tema === k ? ' checked' : '') + '><span>' + esc(ETIQUETAS.Tema[k]) + '</span></label>').join('') +
+      '</div></fieldset>' +
+      '<fieldset class="m-campo" style="border:0;padding:0;margin:0"><legend class="m-label">Color de acento</legend>' + htmlMuestrasAcento() +
+      '<p class="m-ayuda">Los colores están elegidos para que el texto se lea bien en tema claro y oscuro.</p></fieldset></div>'
+  };
+}
+
+function vNoDisponible(titulo) {
+  return { titulo: titulo, html: vacio('alerta', 'No disponible en esta versión', 'Esta función solo existe en el entorno de pruebas de Moni.') };
+}
+
+function vDemo() {
+  if (!demoOn()) return vNoDisponible('Datos de demostración');
+  const demo = esVerdad(cfg('Datos_Demo'));
+  const hayReales = ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].some(t => cat(t).some(f => !String(f['ID_' + t.slice(0, -1)] || '').startsWith('demo-')));
+  let cuerpo;
+  if (demo) {
+    cuerpo = '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Hay datos ficticios cargados para probar la app. Borrarlos no afecta nada de lo que hayas registrado de verdad.</p>' +
+      '<button class="m-btn m-btn-primary" style="width:100%;background:var(--m-danger);color:#fff" data-acc="limpiar-demo">Borrar datos de demostración</button>';
+  } else {
+    cuerpo = (hayReales ? '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0"><strong>Ya tienes datos reales.</strong> Los de demostración se suman a ellos mientras los miras: los totales del Inicio incluirán ambos. Al borrarlos, lo tuyo queda intacto. Antes de empezar a operar hay que borrarlos.</p>' : '') +
+      '<p class="m-subtitulo" style="padding:0 0 var(--m-space-4);margin:0">Crea bancos, cuentas, bolsillos, tarjetas y algunos movimientos <strong>ficticios</strong> para explorar la app sin usar tus saldos reales. Se pueden borrar en un toque.</p>' +
+      '<button class="m-btn m-btn-primary" style="width:100%" data-acc="sembrar-demo">Crear datos de demostración</button>';
+  }
+  return { titulo: 'Datos de demostración', html: '<div class="m-group" style="padding:var(--m-space-4)">' + cuerpo + '</div>' };
+}
+
+/** Resumen de tiempos de esta sesión, por tipo de llamada: sirve para ver qué pesa. */
+function htmlTiempos() {
+  if (!TIEMPOS.length) return '';
+  const por = {};
+  TIEMPOS.forEach(t => { (por[t.fn] = por[t.fn] || []).push(t); });
+  const med = a => { const o = a.slice().sort((x, y) => x - y); return o[Math.floor(o.length / 2)]; };
+  const filas = Object.keys(por).map(fn => {
+    const l = por[fn];
+    const srv = l.map(t => t.servidor).filter(v => v !== null);
+    return { fn: fn, n: l.length, mediana: med(l.map(t => t.cliente)), max: Math.max.apply(null, l.map(t => t.cliente)), srv: srv.length ? med(srv) : null };
+  }).sort((a, b) => b.mediana - a.mediana);
+  return '<h3 style="margin:var(--m-space-5) 0 var(--m-space-2)">Tiempos de esta sesión</h3><p class="m-ayuda">Mediana en milisegundos: lo que ves tú y lo que tarda Apps Script. Meta: abrir ≤ 2 s con caché, guardar ≤ 1,5 s.</p>' +
+    '<div style="overflow-x:auto"><table class="m-tabla"><thead><tr><th>Llamada</th><th>Veces</th><th>Tú</th><th>Servidor</th><th>Máx.</th></tr></thead><tbody>' +
+    filas.map(f => '<tr><td>' + esc(f.fn) + '</td><td class="m-num">' + f.n + '</td><td class="m-num">' + f.mediana + '</td><td class="m-num">' + (f.srv === null ? '—' : f.srv) + '</td><td class="m-num">' + f.max + '</td></tr>').join('') + '</tbody></table></div>';
+}
+
+function vDiagnostico() {
+  return {
+    titulo: 'Diagnóstico',
+    html: '<div id="diag" class="m-group" style="padding:var(--m-space-4)"><p class="m-ayuda">Revisando…</p></div>',
+    despues: async function () {
+      const caja = $('#diag');
+      try {
+        const d = await api('runDiagnostics');
+        caja.innerHTML =
+          '<p><strong>' + esc(d.hoja) + '</strong></p>' +
+          '<p class="m-ayuda">Versión de Moni ' + esc(d.version) + '</p>' +
+          '<p class="m-ayuda">' + d.tablasEsperadas + ' tablas esperadas · ' + (d.listo ? 'todas listas' : d.faltantes.length + ' por crear, ' + d.diferencias.length + ' con encabezados distintos') + '</p>' +
+          (d.diferencias.length ? '<p class="m-ayuda">Con diferencias: ' + esc(d.diferencias.map(x => x.tabla).join(', ')) + '. No se modifican automáticamente.</p>' : '') +
+          '<p style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-secondary" data-acc="instalar">Instalar o reparar</button></p>' +
+          htmlTiempos();
+      } catch (e) {
+        caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>';
+      }
+    }
+  };
+}

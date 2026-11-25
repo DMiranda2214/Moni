@@ -159,15 +159,32 @@ function transaccion_(fn) {
 /**
  * Memoria de la petición actual. En Apps Script cada llamada de google.script.run es una
  * ejecución nueva, así que estas variables viven lo que dura UNA petición: dentro de ella cada
- * tabla se lee de la hoja una sola vez. Toda escritura invalida la tabla afectada.
+ * tabla se lee de la hoja una sola vez. Las escrituras de la app ACTUALIZAN lo memorizado (filas nuevas o
+ * cambiadas) en lugar de olvidarlo, así una operación compuesta no vuelve a leer la tabla tras cada paso.
+ * Los encabezados también se recuerdan: una escritura no los relee.
  */
 let MEMO_TABLAS = {};
 let MEMO_LIBRO = null;
+let MEMO_ENC = {};
+let MEMO_DERIVADOS = {};
+
+/**
+ * Resultado calculado a partir de las tablas (saldos, presupuesto de un mes, divisas…), recordado hasta la próxima
+ * escritura de la petición. Devuelve SIEMPRE una copia profunda para que nadie modifique lo recordado.
+ */
+function memoDerivado_(clave, fn) {
+  if (!Object.prototype.hasOwnProperty.call(MEMO_DERIVADOS, clave)) MEMO_DERIVADOS[clave] = JSON.stringify(fn());
+  const t = MEMO_DERIVADOS[clave];
+  return t === undefined ? undefined : JSON.parse(t);
+}
 
 /** Olvida lo leído. Se llama al empezar cada petición de la API (y entre llamadas en las pruebas). */
 function reiniciarMemoria_() {
   MEMO_TABLAS = {};
   MEMO_LIBRO = null;
+  MEMO_ENC = {};
+  if (typeof ZONA_MEMO !== 'undefined') ZONA_MEMO = null;
+  MEMO_DERIVADOS = {};
 }
 
 /**
@@ -175,14 +192,59 @@ function reiniciarMemoria_() {
  */
 function invalidateCache(sheetName) {
   const cache = cache_();
+  MEMO_DERIVADOS = {};
   if (sheetName) {
     cache.remove('TABLE_' + sheetName);
     delete MEMO_TABLAS[sheetName];
   } else {
     Object.keys(SCHEMAS).forEach(name => cache.remove('TABLE_' + name));
     MEMO_TABLAS = {};
+    MEMO_ENC = {}; // pudo cambiar el esquema (instalación, migración)
   }
 }
+
+/** Encabezados de una pestaña, leídos una vez por petición. */
+function encabezados_(sheet, tabla) {
+  // Solo dentro de la petición: si alguien cambia las columnas a mano, la próxima petición ya las lee bien.
+  if (MEMO_ENC[tabla]) return MEMO_ENC[tabla];
+  const ancho = sheet.getLastColumn();
+  const h = ancho ? sheet.getRange(1, 1, 1, ancho).getValues()[0].map(x => String(x).trim()) : [];
+  MEMO_ENC[tabla] = h;
+  return h;
+}
+
+/** Fila de la hoja → objeto { encabezado: valor, _rowIndex }, con fechas y meses como texto. */
+function filaAObjeto_(headers, row, rowIndex) {
+  const rowObj = { _rowIndex: rowIndex };
+  headers.forEach((header, colIdx) => {
+    let cellVal = row[colIdx];
+    if (cellVal === undefined || cellVal === null) cellVal = '';
+    // Normalizar fechas de Apps Script a formato ISO YYYY-MM-DD
+    if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, zonaHoraria_(), COLUMNAS_MES.indexOf(header) !== -1 ? 'yyyy-MM' : 'yyyy-MM-dd');
+    else if (COLUMNAS_MES.indexOf(header) !== -1) cellVal = normalizarMes_(cellVal);
+    rowObj[header] = cellVal;
+  });
+  return rowObj;
+}
+
+/**
+ * Después de escribir: la caché entre peticiones se olvida (la próxima petición lee la hoja) y la memoria de ESTA
+ * petición se pone al día con lo escrito. `nuevas`: [{ fila, valores }] agregadas; `cambiadas`: [{ fila, valores }].
+ * Las filas cambiadas se reemplazan por objetos nuevos: quien guardó el registro de antes lo conserva tal como era.
+ */
+function tablaEscrita_(tabla, headers, nuevas, cambiadas) {
+  cache_().remove('TABLE_' + tabla);
+  MEMO_DERIVADOS = {};
+  const memo = MEMO_TABLAS[tabla];
+  if (!memo) return;
+  (cambiadas || []).forEach(c => {
+    const i = memo.filas.findIndex(f => f._rowIndex === c.fila);
+    const obj = filaAObjeto_(headers, c.valores, c.fila);
+    if (i === -1) memo.filas.push(obj); else memo.filas[i] = obj;
+  });
+  (nuevas || []).forEach(n => { memo.filas.push(filaAObjeto_(headers, n.valores, n.fila)); });
+}
+
 
 /**
  * Lee una tabla completa desde la caché de catálogos o desde la hoja.
@@ -205,19 +267,14 @@ function leerTabla_(sheetName, forzar) {
   const filas = [];
   if (values.length > 1) {
     const headers = values[0].map(h => String(h).trim());
+    MEMO_ENC[sheetName] = headers;
     for (let i = 1; i < values.length; i++) {
       const row = values[i];
       if (row.every(cell => cell === '' || cell === null)) continue; // fila vacía
-      const rowObj = { _rowIndex: i + 1 };
-      headers.forEach((header, colIdx) => {
-        let cellVal = row[colIdx];
-        // Normalizar fechas de Apps Script a formato ISO YYYY-MM-DD
-        if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, 'America/Bogota', COLUMNAS_MES.indexOf(header) !== -1 ? 'yyyy-MM' : 'yyyy-MM-dd');
-        else if (COLUMNAS_MES.indexOf(header) !== -1) cellVal = normalizarMes_(cellVal);
-        rowObj[header] = cellVal;
-      });
-      filas.push(rowObj);
+      filas.push(filaAObjeto_(headers, row, i + 1));
     }
+  } else if (values.length === 1) {
+    MEMO_ENC[sheetName] = values[0].map(h => String(h).trim());
   }
 
   guardarEnCache_(cache, sheetName, filas);
@@ -340,7 +397,7 @@ function insertRow(sheetName, rowData) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = encabezados_(sheet, sheetName);
     const dataToInsert = Object.assign({}, rowData);
 
     // Asignar ID UUID si la primera columna es un identificador y no viene proporcionado
@@ -362,8 +419,9 @@ function insertRow(sheetName, rowData) {
       return val;
     });
 
+    const fila = sheet.getLastRow() + 1;
     sheet.appendRow(rowValues);
-    invalidateCache(sheetName);
+    tablaEscrita_(sheetName, headers, [{ fila: fila, valores: rowValues }]);
 
     return dataToInsert;
   } finally {
@@ -387,7 +445,7 @@ function insertRowsBatch(sheetName, rowsDataArray) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = encabezados_(sheet, sheetName);
     const idHeader = headers[0];
     const ahora = ahoraIso_();
 
@@ -405,7 +463,7 @@ function insertRowsBatch(sheetName, rowsDataArray) {
 
     const nextRow = sheet.getLastRow() + 1;
     sheet.getRange(nextRow, 1, matrix.length, headers.length).setValues(matrix);
-    invalidateCache(sheetName);
+    tablaEscrita_(sheetName, headers, matrix.map((v, i) => ({ fila: nextRow + i, valores: v })));
 
     return rowsDataArray;
   } finally {
@@ -488,8 +546,8 @@ function updateRows_(sheetName, lista) {
     const sheet = getSpreadsheet().getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
     const ultima = sheet.getLastRow();
-    const ancho = sheet.getLastColumn();
-    const headers = sheet.getRange(1, 1, 1, ancho).getValues()[0].map(h => String(h).trim());
+    const headers = encabezados_(sheet, sheetName);
+    const ancho = headers.length;
     const idCol = headers[0] && headers[0].indexOf('ID') === 0 ? 0 : -1;
     const ahora = ahoraIso_();
     const colAct = headers.indexOf('Actualizado_En');
@@ -545,7 +603,7 @@ function updateRows_(sheetName, lista) {
       sheet.getRange(desde, 1, cuantas, headers.length).setValues(valores.slice(desde - 1, desde - 1 + cuantas).map(r => r.slice(0, headers.length)));
       i = j + 1;
     }
-    if (nums.length) invalidateCache(sheetName);
+    if (nums.length) tablaEscrita_(sheetName, headers, [], nums.map(n => ({ fila: n, valores: valores[n - 1] })));
     return resultados;
   } finally {
     lock.releaseLock();

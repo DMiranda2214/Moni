@@ -55,3 +55,16 @@ fila('getPresupuesto', llamar('getPresupuesto', boot.hoy.slice(0, 7)));
 fila('getGraficos', llamar('getGraficos', {}));
 fila('getAnual', llamar('getAnual', Number(boot.hoy.slice(0, 4))));
 fila('getSaldos', llamar('getSaldos'));
+// ---- Escrituras compuestas ----
+{
+  const b2 = JSON.parse(JSON.stringify(e.ejecutar('getBootstrap()'))).data;
+  const bols = b2.catalogos.Bolsillos.filter(b => b.Activo !== false && !b.Es_Interno);
+  const cre = (b2.creditos || [])[0] || JSON.parse(JSON.stringify(e.ejecutar('listarCreditos()')))[0];
+  const tar = b2.catalogos.Tarjetas[0];
+  if (bols.length > 1) fila('addTransferencia', llamar('addTransferencia', { origen: bols[0].ID_Bolsillo, destino: bols[1].ID_Bolsillo, valor: 1000, fecha: boot.hoy, concepto: 'x' }));
+  if (tar) fila('addCompraTC', llamar('addCompraTC', { ID_Tarjeta: tar.ID_Tarjeta, Fecha: boot.hoy, Concepto: 'x', Valor: 5000 }));
+  if (cre) fila('payCredito', llamar('payCredito', cre.ID_Credito, undefined, boot.hoy));
+  const movs = JSON.parse(JSON.stringify(e.ejecutar("listarMovimientos({ limite: 3 })"))).items;
+  if (movs[0]) fila('voidMovimiento', llamar('voidMovimiento', movs[0].ID_Mov));
+  fila('generarPresupuesto (reemplazar)', llamar('generarPresupuesto', boot.hoy.slice(0, 7), undefined, true));
+}

@@ -6,11 +6,6 @@
  * También reparte la nómina recibida entre los bolsillos de destino.
  */
 
-function mesValido_(mes) {
-  const t = texto_(mes);
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(t)) throw new Error('El mes debe tener formato AAAA-MM.');
-  return t;
-}
 
 /**
  * Lo realmente gastado por renglón, desde los movimientos enlazados (ID_Item_Ppto):
@@ -18,11 +13,11 @@ function mesValido_(mes) {
  *   - un traslado cuenta por su pata de entrada (el dinero que llegó al destino: ahorro, fondo, cuota).
  * @returns {Object} { ID_Item: real }
  */
-function realPorRenglon_() {
+function realPorRenglon_(comprasYa) {
   const real = {};
   // Una compra con tarjeta cuenta en su renglón el día de la compra. Las de fuente "Del presupuesto" ya cuentan por
   // el traslado que aparta el dinero a la reserva (lleva el renglón), y las "De otra persona" se reembolsan.
-  const compras = comprasPorRenglon_();
+  const compras = comprasYa || comprasPorRenglon_();
   Object.keys(compras).forEach(id => { if (compras[id].contable) real[id] = redondear2_(compras[id].contable); });
   getTableData('Movimientos', { excludeAnulados: true }).forEach(m => {
     if (!m.ID_Item_Ppto) return;
@@ -55,10 +50,15 @@ function comprasPorRenglon_() {
 /** Todo lo que necesita la pantalla del presupuesto de un mes, en una sola llamada. */
 function obtenerPresupuestoMes(mes) {
   const m = mesValido_(mes || hoyIso_().slice(0, 7));
+  return memoDerivado_('ppto|' + m, () => calcularPresupuestoMes_(m));
+}
+
+function calcularPresupuestoMes_(m) {
   const items = getTableData('Presupuesto_Mes').filter(i => i.Mes === m);
-  const real = realPorRenglon_();
   const conTarjeta = comprasPorRenglon_();
+  const real = realPorRenglon_(conTarjeta);
   const bolsillos = getTableData('Bolsillos');
+  const bolPorId = {}; bolsillos.forEach(b => { bolPorId[b.ID_Bolsillo] = b; });
   const escenarios = getTableData('Escenarios');
   const plantilla = getTableData('Presupuesto_Plantilla').filter(p => estaActivo(p));
 
@@ -67,7 +67,7 @@ function obtenerPresupuestoMes(mes) {
     const p = Number(i.Plan) || 0;
     const r = real[i.ID_Item] || 0;
     const pagado = esVerdadero(i.Pagado);
-    const b = buscarPorId_(bolsillos, 'ID_Bolsillo', i.ID_Bolsillo_Destino);
+    const b = bolPorId[i.ID_Bolsillo_Destino];
     plan += p; gastado += r;
     if (pagado) { pagados++; ahorro += p - r; }
     return {
@@ -130,7 +130,7 @@ function generarPresupuestoMes(mes, idEscenario, reemplazar) {
     if (conMovimientos || existentes.some(i => real[i.ID_Item])) {
       throw new Error('No se puede reemplazar: algunos renglones ya tienen movimientos. Anúlalos primero o edita los renglones.');
     }
-    existentes.sort((a, b) => b._rowIndex - a._rowIndex).forEach(i => deleteRow('Presupuesto_Mes', i._rowIndex));
+    deleteRows('Presupuesto_Mes', existentes.map(i => i._rowIndex)); // de una vez (antes, fila por fila)
   }
 
   const plantilla = leer_('Presupuesto_Plantilla')
@@ -154,7 +154,6 @@ function generarPresupuestoMes(mes, idEscenario, reemplazar) {
 // ---------------------------------------------------------------------------
 
 /** Meses entre dos meses AAAA-MM (b − a). */
-function mesesEntre_(a, b) { return (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7)); }
 
 /** ¿Hay que pagar esta suscripción o servicio en el mes `m`? Según su periodicidad, contada desde su próximo cobro. */
 function cobroEnMes_(s, m) {

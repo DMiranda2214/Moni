@@ -13,8 +13,7 @@ const VALOR_MAXIMO = 1e12;
 function fechaMovimiento_(f) {
   const t = (texto_(f) || hoyIso_()).replace(/\//g, '-'); // se acepta AAAA/MM/DD y AAAA-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error('La fecha debe tener formato AAAA/MM/DD.');
-  const d = new Date(t + 'T00:00:00Z');
-  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t) throw new Error('La fecha no existe.');
+  if (!fechaExiste_(t)) throw new Error('La fecha no existe.');
   if (t > hoyIso_()) throw new Error('La fecha no puede ser futura.');
   return t;
 }
@@ -245,7 +244,7 @@ function filasDelGrupo_(idMov) {
 function anularMovimiento(idMov) {
   const g = filasDelGrupo_(idMov);
   const pendientes = g.filas.filter(f => !esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f, { Anulado: true }));
+  updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: true } })));
   return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
@@ -260,7 +259,7 @@ function restaurarMovimiento(idMov) {
     }
   });
   const pendientes = g.filas.filter(f => esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f, { Anulado: false }));
+  updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: false } })));
   return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 

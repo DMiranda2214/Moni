@@ -60,8 +60,15 @@ function accesoPermitido_() {
  * Uso en templates: <?!= include('css'); ?>
  */
 function include(filename) {
+  if (filename === 'app_js') {
+    // La aplicación vive en varias partes (una por módulo) que forman un solo <script>, en este orden.
+    return '<script>\n' + PARTES_JS.map(n => HtmlService.createHtmlOutputFromFile(n).getContent()).join('\n') + '\n</script>';
+  }
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
+
+/** Partes del JavaScript de la app, en el orden en que se cargan. app_js es el núcleo (utilidades, datos, navegación). */
+const PARTES_JS = ['app_js', 'js_pantallas', 'js_formularios', 'js_movimientos', 'js_planear', 'js_deudas', 'js_ahorro', 'js_graficos', 'js_divisas', 'js_asistente', 'js_eventos'];
 
 /**
  * Menú contextual superior al abrir el Google Sheet para mantenimiento y acceso rápido.

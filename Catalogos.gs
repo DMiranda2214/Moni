@@ -15,10 +15,6 @@ function nuevoId_(prefijo) {
   return prefijo + '-' + String(Utilities.getUuid()).replace(/-/g, '').slice(0, 8);
 }
 
-function hoyIso_() {
-  return Utilities.formatDate(new Date(), 'America/Bogota', 'yyyy-MM-dd');
-}
-
 function texto_(v) {
   return String(v === undefined || v === null ? '' : v).trim();
 }
@@ -54,6 +50,7 @@ function fechaIso_(v, etiqueta, defecto) {
   if (v === undefined || v === null || v === '') return defecto === undefined ? '' : defecto;
   const t = texto_(v).replace(/\//g, '-'); // se acepta AAAA/MM/DD (como se escribe en la app) y AAAA-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error(etiqueta + ' debe tener formato AAAA/MM/DD.');
+  if (!fechaExiste_(t)) throw new Error(etiqueta + ' no existe en el calendario.');
   return t;
 }
 
@@ -90,6 +87,10 @@ function divisaBanco_(banco) {
 
 /** Divisa de cada cuenta y bolsillo: { cuentas: {id: 'USD'}, bolsillos: {id: 'USD'} }. */
 function mapaDivisas_() {
+  return memoDerivado_('divisas', calcularMapaDivisas_);
+}
+
+function calcularMapaDivisas_() {
   const porBanco = {};
   getTableData('Bancos').forEach(b => { porBanco[b.ID_Banco] = divisaBanco_(b); });
   const cuentas = {};
@@ -273,8 +274,8 @@ const CATALOGOS = {
     },
     alDesactivar: function (reg) {
       // Los bolsillos de una cuenta desactivada también quedan inactivos (ya están en cero).
-      leer_('Bolsillos').filter(b => b.ID_Cuenta === reg.ID_Cuenta && estaActivo(b))
-        .forEach(b => updateRow('Bolsillos', b, { Activo: false }));
+      updateRows_('Bolsillos', leer_('Bolsillos').filter(b => b.ID_Cuenta === reg.ID_Cuenta && estaActivo(b))
+        .map(b => ({ fila: b, cambios: { Activo: false } })));
     },
     padreActivo: function (reg) {
       exigirActivo_(leer_('Bancos'), 'ID_Banco', reg.ID_Banco, 'El banco de la cuenta');
@@ -688,8 +689,8 @@ const CATALOGOS = {
     },
     despues: function (reg, anterior, item, opciones) {
       if (esVerdadero(reg.Vigente)) {
-        leer_('Nomina_Escenarios').filter(e => e.ID_Nomina_Esc !== reg.ID_Nomina_Esc && esVerdadero(e.Vigente))
-          .forEach(e => updateRow('Nomina_Escenarios', e, { Vigente: false }));
+        updateRows_('Nomina_Escenarios', leer_('Nomina_Escenarios').filter(e => e.ID_Nomina_Esc !== reg.ID_Nomina_Esc && esVerdadero(e.Vigente))
+          .map(e => ({ fila: e, cambios: { Vigente: false } })));
       }
       // Los subsidios del escenario se reemplazan por la lista recibida (si viene).
       const ids = (opciones && opciones.subsidios) || (item && item.subsidios);
@@ -716,8 +717,8 @@ const CATALOGOS = {
       const o = opciones || {};
       // Un solo escenario base: al marcar este, los demás dejan de serlo.
       if (esVerdadero(reg.Es_Base)) {
-        leer_('Escenarios').filter(e => e.ID_Escenario !== reg.ID_Escenario && esVerdadero(e.Es_Base))
-          .forEach(e => updateRow('Escenarios', e, { Es_Base: false }));
+        updateRows_('Escenarios', leer_('Escenarios').filter(e => e.ID_Escenario !== reg.ID_Escenario && esVerdadero(e.Es_Base))
+          .map(e => ({ fila: e, cambios: { Es_Base: false } })));
       }
       // Crear un escenario copiando los renglones de otro (p. ej. Contingencia a partir de Normal).
       if (!anterior && o.copiarDe) {
@@ -949,8 +950,8 @@ function fusionarBolsillos_(cuenta, idDestino) {
     else if (saldo <= -SALDO_CERO) registrarTransferencia(idDestino, b.ID_Bolsillo, -saldo, hoyIso_(), 'Fusión de bolsillos: ' + b.Nombre);
   });
   // Releer: los traslados invalidaron la lectura anterior y hay que usar números de fila vigentes.
-  leer_('Bolsillos').filter(b => otros.some(o => o.ID_Bolsillo === b.ID_Bolsillo))
-    .forEach(b => updateRow('Bolsillos', b, { Activo: false }));
+  updateRows_('Bolsillos', leer_('Bolsillos').filter(b => otros.some(o => o.ID_Bolsillo === b.ID_Bolsillo))
+    .map(b => ({ fila: b, cambios: { Activo: false } })));
   invalidateCache('Bolsillos');
 }
 

@@ -15,9 +15,7 @@
 
 const PERIODO_PAGO_CDT = { Vencimiento: 0, Mensual: 1, Trimestral: 3 };
 
-function interesCdt_(capital, ea, dias) {
-  return redondear2_((Number(capital) || 0) * (Math.pow(1 + (Number(ea) || 0), Math.max(0, dias) / 365) - 1));
-}
+function interesCdt_(capital, ea, dias) { return interesCompuesto_(capital, ea, dias); }
 
 /** Fecha del próximo pago de intereses de un CDT periódico: la primera fecha del calendario del CDT que no sea pasada. */
 function proximoPagoInteresCdt_(inicio, meses, vencimiento, desde) {

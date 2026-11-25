@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.10.1**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.11.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -73,8 +73,8 @@ Para publicar en Google, sigue [Despliegue](docs/DESPLIEGUE.md) (dos entornos, u
 ## Estructura
 
 ```
-*.gs              Backend (Apps Script): una responsabilidad por archivo
-index.html        Página; app_js.html, app_css.html y tokens.html se incluyen en ella
+*.gs              Backend (Apps Script): una responsabilidad por archivo (Fechas.gs y Finanzas.gs: ayudantes comunes)
+index.html        Página; app_js.html + js_*.html (la app, por partes), app_css.html y tokens.html se incluyen en ella
 appsscript.json   Manifiesto (permisos y web app)
 scripts/          Despliegue por entorno (publicar.sh) y el stub de producción sin datos de demostración
 tests/            Pruebas en Node con un Google Sheets simulado en memoria, y la vista previa local

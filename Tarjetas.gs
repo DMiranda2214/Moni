@@ -13,7 +13,6 @@
  *     bolsillo personal), paga el total desde la reserva y marca las compras como pagadas.
  */
 
-function dosDigitos_(n) { return String(n).padStart(2, '0'); }
 
 /** Mes (AAAA-MM) del extracto al que pertenece una compra: si pasa del día de corte, va al siguiente. */
 function calcularMesExtracto_(fecha, diaCorte) {
@@ -27,8 +26,7 @@ function calcularMesExtracto_(fecha, diaCorte) {
 function proximoDiaDelMes_(dia, desde) {
   const p = desde.split('-').map(Number);
   const en = (anio, mes) => {
-    const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
-    return anio + '-' + dosDigitos_(mes) + '-' + dosDigitos_(Math.min(dia, ultimo));
+    return fechaTexto_(anio, mes, Math.min(dia, diasDelMes_(anio, mes)));
   };
   const estaVez = en(p[0], p[1]);
   if (estaVez >= desde) return estaVez;
@@ -44,7 +42,7 @@ function rangoCorte_(mes, diaCorte, diaPago) {
   const fecha = (anio, m, dia) => {
     while (m < 1) { m += 12; anio--; }
     while (m > 12) { m -= 12; anio++; }
-    return anio + '-' + dosDigitos_(m) + '-' + dosDigitos_(Math.min(dia, new Date(Date.UTC(anio, m, 0)).getUTCDate()));
+    return fechaTexto_(anio, m, Math.min(dia, diasDelMes_(anio, m)));
   };
   const corte = Number(diaCorte) || 1;
   const anterior = fecha(p[0], p[1] - 1, corte);
@@ -272,15 +270,15 @@ function pagarExtracto(idTarjeta, mes, fecha, idOrigen, aportes) {
         ID_Mov: '', ID_Extracto: idExtracto, Notas: '', Anulado: false });
       aportesCreados.push(idPago);
     });
-    abonos.forEach(p => updateRow('Pagos_Tarjeta', p, { ID_Extracto: idExtracto }));
-    compras.forEach(c => updateRow('Compras_TC', c, { Pagado: true, ID_Extracto: idExtracto }));
+    updateRows_('Pagos_Tarjeta', abonos.map(p => ({ fila: p, cambios: { ID_Extracto: idExtracto } })));
+    updateRows_('Compras_TC', compras.map(c => ({ fila: c, cambios: { Pagado: true, ID_Extracto: idExtracto } })));
     insertRow('Extractos', { ID_Extracto: idExtracto, ID_Tarjeta: idTarjeta, Mes: m, Total: total, Estado: 'Pagado', Fecha_Pago: f, ID_Grupo_Pago: idGrupoPago, URL_PDF: '', Notas: '', Anulado: false });
   } catch (e) {
     // Atomicidad: no se deja un pago a medias.
     creados.forEach(id => { try { anularMovimiento(id); } catch (x) {} });
     aportesCreados.forEach(id => { const r = buscarPorId_(leer_('Pagos_Tarjeta'), 'ID_Pago', id); if (r) updateRow('Pagos_Tarjeta', r, { Anulado: true }); });
-    leer_('Pagos_Tarjeta').filter(p => p.ID_Extracto === idExtracto && p.Tipo === 'Abono').forEach(p => updateRow('Pagos_Tarjeta', p, { ID_Extracto: '' }));
-    leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).forEach(c => updateRow('Compras_TC', c, { Pagado: false, ID_Extracto: '' }));
+    updateRows_('Pagos_Tarjeta', leer_('Pagos_Tarjeta').filter(p => p.ID_Extracto === idExtracto && p.Tipo === 'Abono').map(p => ({ fila: p, cambios: { ID_Extracto: '' } })));
+    updateRows_('Compras_TC', leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).map(c => ({ fila: c, cambios: { Pagado: false, ID_Extracto: '' } })));
     throw e;
   }
   return { idExtracto: idExtracto, total: total, falta: falta, ids: creados, tarjeta: idTarjeta, mes: m };
@@ -298,7 +296,7 @@ function anularPagoExtracto(idExtracto) {
     if (p.Tipo === 'Aporte') updateRow('Pagos_Tarjeta', p, { Anulado: true });
     else updateRow('Pagos_Tarjeta', p, { ID_Extracto: '' });
   });
-  leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).forEach(c => updateRow('Compras_TC', c, { Pagado: false, ID_Extracto: '' }));
+  updateRows_('Compras_TC', leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).map(c => ({ fila: c, cambios: { Pagado: false, ID_Extracto: '' } })));
   updateRow('Extractos', ext, { Anulado: true });
   return { ids: ids, tarjeta: ext.ID_Tarjeta, mes: ext.Mes };
 }

@@ -6,11 +6,6 @@
 
 const DIAS_RECORDATORIO = 14;
 
-function diasEntre_(desdeIso, hastaIso) {
-  const a = Date.UTC(+desdeIso.slice(0, 4), +desdeIso.slice(5, 7) - 1, +desdeIso.slice(8, 10));
-  const b = Date.UTC(+hastaIso.slice(0, 4), +hastaIso.slice(5, 7) - 1, +hastaIso.slice(8, 10));
-  return Math.round((b - a) / 86400000);
-}
 
 /**
  * Pagos próximos (dentro de DIAS_RECORDATORIO días) y vencidos.
@@ -69,10 +64,6 @@ const FECHAS_NOMINA = [
   ['Intereses_Cesantias_Fecha', 'Intereses de cesantías: fecha límite de pago']
 ];
 
-function configEntero_(clave, defecto, min, max) {
-  const n = Number(cfgValor_(clave));
-  return isFinite(n) && cfgValor_(clave) !== '' && n >= min && n <= max ? Math.floor(n) : defecto;
-}
 
 function disparadoresRecordatorios_() {
   return ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === FUNCION_RECORDATORIOS);
@@ -218,11 +209,6 @@ function sincronizarRecordatorios_() {
   });
 }
 
-function diasMas_(iso, n) {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
 
 /** Lo que ejecuta el disparador diario. */
 function sincronizarRecordatoriosAuto() {

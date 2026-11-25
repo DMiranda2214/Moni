@@ -1,5 +1,11 @@
 # Cambios
 
+## 1.11.0 — Más rápida al guardar y código ordenado (25 nov 2026)
+- **Mejora:** guardar es más rápido. Dentro de una misma operación, Moni ya no vuelve a leer una tabla de la hoja después de cada paso: actualiza lo que ya tenía en memoria. Medido con `tests/medir_llamadas.js` sobre los datos de ejemplo: anular un movimiento pasa de 18 a 6 lecturas de la hoja, pagar una cuota de 38 a 29 y regenerar el presupuesto de 26 a 18.
+- **Mejora:** varias filas se actualizan de una vez (pagar un extracto, anular un pago de crédito, desactivar bolsillos) y el presupuesto de un mes, los saldos y las divisas se calculan una sola vez por operación.
+- **Mejora:** cambiar la tasa del dólar o los recordatorios ya no recarga toda la app.
+- **Interno:** las fechas y las fórmulas financieras viven en `Fechas.gs` y `Finanzas.gs` (antes había copias en seis módulos), y el JavaScript de la app se repartió en partes por módulo. La app se ve y funciona igual.
+
 ## 1.10.1 — Correcciones de integridad (25 nov 2026)
 - **Corregido:** las **tasas de los créditos** se redondeaban a 2 decimales: una EA de 9,5 % se guardaba como 10 % y una tasa de 0,4 % por periodo quedaba en 0 % (cuotas sin interés). Desde ahora se guardan exactas. Los créditos creados antes **no cambian solos**: si su tasa parece redondeada, Moni lo avisa en Inicio y en el crédito, con *Está bien* o *Corregir tasa* (solo se rehacen las cuotas pendientes; lo pagado y los saldos no se tocan).
 - **Corregido:** si alguien borraba o movía filas a mano en la hoja, una actualización podía escribir en **otra fila**. Ahora cada escritura comprueba el ID del registro y, si la fila se movió, lo busca.
