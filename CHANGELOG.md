@@ -1,5 +1,14 @@
 # Cambios
 
+## 1.18.2 — Documentación al día (25 nov 2026)
+- **Mejora:** la *Guía de uso* (en Ajustes) explica las cuatro secciones, el botón **i** y dónde está cada cosa: metas, lista de deseos, inversiones, ingresos, pagos y Analizar.
+- **Corregido:** el mensaje de la nómina sin configurar indicaba un menú que ya no existe. Ahora dice *Planear → Ingresos → Nómina*.
+- **Documentación** con la navegación por secciones, los módulos de la 1.16 a la 1.18 y las rutas nuevas:
+  - README (tabla por secciones), Empezar, Guía rápida y Manual (rutas, Ajustes y gráficos).
+  - API (endpoints de metas, deseos, inversiones, análisis y cargos), Arquitectura (navegación y ayudas) y Esquema (37 tablas, salario mínimo 2026, subtipos nuevos, hojas auxiliares e invariantes).
+  - Reglas de negocio (metas, lista de deseos, inversiones y calculadora), Glosario y Lista de lanzamiento (qué probar de la 1.16 a la 1.18 y en Google real).
+  - Desarrollo, Operación, Instalación, Seguridad y Comparativa de UX.
+
 ## 1.18.1 — Ayudas en los módulos nuevos (25 nov 2026)
 - **Mejora:** Metas, Lista de deseos, Inversiones y la Calculadora tienen el botón de ayuda **i**, como el resto de la app:
   - en cada campo de sus formularios (crear y editar, plan por mes, lluvia de ideas, comprar, vender, dividendo, precio y buscar una inversión);

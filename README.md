@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones, metas de ahorro, inversiones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.18.1**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones, metas de ahorro, lista de deseos, inversiones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.18.2**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -9,25 +9,32 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 
 ## Qué hace
 
-| Módulo | Para qué sirve |
-|---|---|
-| **Inicio** | Resumen y **patrimonio neto** (lo que tienes menos lo que debes; otras monedas aparte), avisos de lo que falta configurar, accesos rápidos, gráficos, próximos pagos y últimos movimientos |
-| **Bolsillos** | Saldo de cada cuenta y bolsillo; registrar, mover dinero y cuadrar con el banco |
-| **Presupuesto** | Plantilla por escenario, mes generado (con tus suscripciones y servicios), "real" calculado de tus movimientos |
-| **Nómina** | Tu sueldo y descuentos fijos, más lo de cada mes (horas extras, cesantías, prima, descuentos de la empresa); estimado con salud, pensión y prestaciones, y reparto a bolsillos |
-| **Otros ingresos** | Ingresos recurrentes (otro trabajo, arriendo, ventas…) con su cuenta de destino |
-| **Pagos: tarjetas y créditos** | Tarjetas de crédito (reserva, extracto, pago, compras en otra moneda) y créditos con un banco o de autopago, con amortización francesa y seguros por cuota |
-| **Cargos y comisiones** | Lo que cobra cada banco, cuenta, tarjeta o crédito (comisiones, 4x1000, cambio de divisa, cuota de manejo, seguros): Moni lo propone al registrar y se puede cambiar |
-| **CDT** | Lo que tienes a plazo fijo: capital "invertido" (no disponible), lo que ganarás, vencimientos, cobro y renovación |
-| **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |
-| **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
-| **Regalos** | Lista por año con estimado y gasto real |
-| **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
-| **Análisis** | Patrimonio de 12 meses, en qué gastas frente al mes anterior, lo que debes y cuándo terminas, tu dinero en 30/60/90 días y las comisiones del año |
-| **Gráficos** | Dentro de cada módulo: Inicio, Movimientos, Presupuesto, Nómina, Servicios, Regalos, CDT, Deudas, Ahorro, Vista anual y cada bolsillo) |
-| **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
-| **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |
-| **Respaldos y privacidad** | Copias en tu Drive (manuales o automáticas), registro de errores y *Borrar todos mis datos* |
+La app se ordena en cuatro secciones según lo que quieres hacer, iguales en el celular (pestañas) y en el computador (barra lateral plegable), más Inicio y Ajustes.
+
+| Sección | Módulo | Para qué sirve |
+|---|---|---|
+| | **Inicio** | Resumen y **patrimonio neto** (lo que tienes menos lo que debes; otras monedas aparte), avisos de lo que falta configurar, accesos rápidos, gráficos, próximos pagos y últimos movimientos |
+| **Mi dinero** | **Bolsillos** | Saldo de cada cuenta y bolsillo; registrar, mover dinero, convertir divisas y cuadrar con el banco |
+| | **Movimientos** | Todo lo registrado por mes, con búsqueda y gráficos |
+| | **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |
+| | **Inversiones** | Acciones, ETF, cripto y fondos: búsqueda por nombre o símbolo, precio de Google Finance o manual, costo promedio, ganancia y dividendos. Incluye los **CDT** (capital invertido, lo que ganarás, vencimientos, cobro y renovación) |
+| **Pagos** | **Servicios y suscripciones** | Cobros que se repiten, costo mensual y anual, pagar en un toque, códigos y enlaces de pago |
+| | **Tarjetas** | Reserva, extracto, pago y compras en otra moneda |
+| | **Créditos** | Con un banco o de autopago, con amortización francesa y seguros por cuota |
+| **Planear** | **Presupuesto** | Plantilla por escenario y mes generado (con tus suscripciones, servicios y metas); "real" calculado de tus movimientos |
+| | **Ingresos** | **Nómina** colombiana (sueldo, descuentos fijos, lo de cada mes, salud, pensión y prestaciones, reparto a bolsillos) y **otros ingresos** recurrentes |
+| | **Metas** | Ahorrar para algo (Navidad, viaje, moto…) con un **plan por mes que se puede cambiar**; entra al presupuesto |
+| | **Lista de deseos** | Regalos para otros y cosas para ti, con cuánto quieres gastar y lluvia de ideas |
+| **Analizar** | **Análisis** | Patrimonio de 12 meses, en qué gastas frente al mes anterior, lo que debes y cuándo terminas, tu dinero en 30/60/90 días y las comisiones del año |
+| | **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
+| | **Calculadora** | Préstamo, ahorro en el tiempo, cuánto ahorrar para una meta, CDT y conversión de tasas |
+| Ajustes | **Cargos y comisiones** | Lo que cobra cada banco, cuenta, tarjeta o crédito (comisiones, 4x1000, cambio de divisa, cuota de manejo, seguros): Moni lo propone al registrar y se puede cambiar |
+| | **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
+| | **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |
+| | **Respaldos y privacidad** | Copias en tu Drive (manuales o automáticas), registro de errores y *Borrar todos mis datos* |
+| | **Guía de uso** | Lo básico, paso a paso, y el glosario |
+
+Cada módulo trae sus propios **gráficos**, con *Ver como tabla*, y cada campo tiene su botón de ayuda **i**.
 
 ## Entornos
 | Entorno | Qué es | Datos | Cómo se llega |
@@ -53,12 +60,13 @@ Se prueba en desarrollo y, cuando está bien, se publica en producción (sin CI/
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
 | [Arquitectura](docs/ARQUITECTURA.md) | Capas, modelo de datos, convenciones |
 | [API interna](docs/API.md) | Funciones que el frontend llama |
-| [Esquema de datos](docs/ESQUEMA.md) | Las 32 tablas, columna por columna |
+| [Esquema de datos](docs/ESQUEMA.md) | Las 37 tablas, columna por columna |
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |
 | [Presupuesto y tarjetas](docs/ANALISIS_PRESUPUESTO_TARJETAS.md) | Análisis de cómo cuentan las compras con tarjeta y propuesta de cambios |
-| [Plan: unir servicios y suscripciones](docs/PLAN_SERVICIOS_UNIFICADOS.md) | Evaluación y plan para la versión 1.2 |
+| [Plan: unir servicios y suscripciones](docs/PLAN_SERVICIOS_UNIFICADOS.md) | Evaluación y plan (hecho en la 1.15) |
+| [Plan 1.16: metas, deseos, inversiones y calculadora](docs/PLAN_1.16.md) | Estudio de mercado, información legal y plan de esos módulos |
 | [Lanzamiento](docs/LANZAMIENTO.md) | Lista para pasar a producción y compartir la app |
 | [Plan del proyecto](PLAN.md) | Historia: decisiones y fases de construcción |
 | [Cambios](CHANGELOG.md) | Historia por fases |
@@ -88,7 +96,7 @@ docs/             Documentación
 
 **Listo para usarse como app personal**: cualquier persona entra con su cuenta de Google, crea su hoja y empieza ([Empezar con Moni](docs/EMPEZAR.md)). Producción no incluye datos de demostración (ver [Despliegue](docs/DESPLIEGUE.md)).
 
-Probada con cientos de pruebas automáticas sobre un Sheets simulado (`npm run verificar`). Lo que ese simulador no puede comprobar —autorización, tiempos, varias personas, el dólar de Google Finance y los avisos de Calendar— se verifica en Google real con la [lista de lanzamiento](docs/LANZAMIENTO.md). La interfaz no tiene pruebas automáticas todavía: se revisa su sintaxis y su contraste, y sus flujos se prueban a mano.
+Probada con cientos de pruebas automáticas sobre un Sheets simulado (`npm run verificar`). Lo que ese simulador no puede comprobar —autorización, tiempos, varias personas, el dólar y los precios de Google Finance, y los avisos de Calendar— se verifica en Google real con la [lista de lanzamiento](docs/LANZAMIENTO.md). La interfaz se revisa con su sintaxis y su contraste en cada verificación, y sus flujos se prueban en la vista previa local (a mano o con Playwright).
 
 ## Licencia
 

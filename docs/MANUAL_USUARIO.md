@@ -10,9 +10,8 @@ En el celular, abajo están las pestañas **Inicio, Mi dinero, Pagos y Planear**
 
 En tablet y computador, la **barra lateral** muestra Inicio y las cuatro secciones con todas sus pantallas, a un clic. Cada sección se puede **plegar** con su encabezado (Moni lo recuerda) y la barra entera se puede contraer para dejar solo los íconos. Arriba están el botón *Registrar* (atajo **N**) y la búsqueda para ir a cualquier pantalla, cuenta o bolsillo (**Ctrl K**). *Ajustes* está al pie de la barra (en el celular, arriba en Inicio y al final de Planear), y la *Guía de uso* está dentro de Ajustes.
 
-- **Dinero:** Bolsillos, Movimientos, Ahorro y CDT.
-- **Planear:** Presupuesto, Nómina, Otros ingresos, Servicios y suscripciones, Regalos y Vista anual.
-- **Deudas:** tarjetas de crédito y créditos.
+Cada campo, cifra o título que lo necesita tiene un botón **i**: tócalo para ver para qué sirve.
+
 ## 1. Primer uso
 
 1. **Abre el enlace** de la app (guárdalo como favorito o *Agregar a pantalla de inicio*). Google te pedirá iniciar sesión.
@@ -24,8 +23,8 @@ En tablet y computador, la **barra lateral** muestra Inicio y las cuatro seccion
 *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**: verás información ficticia que se borra con un toque y no toca lo tuyo. En producción no existe.
 
 ## 2. Inicio
-- **Patrimonio neto:** lo que tienes (disponible, ahorro e invertido) menos lo que debes (tarjetas sin pagar y créditos con un banco). Solo aparece si tienes deudas o inversiones. En el celular, el ícono de arriba a la derecha abre **Ajustes**; la **Guía** también está al final de Planear.
-- **Primeros pasos** (hasta que termines de configurar) y, después, **Para tener en cuenta**: avisos de lo que falta o está desactualizado (ver sección 15).
+- **Patrimonio neto:** lo que tienes (disponible, ahorro e invertido) menos lo que debes (tarjetas sin pagar y créditos con un banco). Solo aparece si tienes deudas o inversiones. En el celular, el ícono de arriba a la derecha abre **Ajustes**, donde también está la **Guía de uso**.
+- **Primeros pasos** (hasta que termines de configurar) y, después, **Para tener en cuenta**: avisos de lo que falta o está desactualizado (ver sección 16).
 - **Primeros pasos:** mientras falten, una tarjeta con tu avance y el siguiente paso; los pasos se agrupan en *Lo básico* y *Para sacarle más provecho*.
 - **Saldo total** (tarjeta pastel): total, disponible, ahorro e invertido, con un ojo para ocultar las cifras.
 - **Este mes:** lo que entró, lo gastado y lo que te queda, con el avance del presupuesto.
@@ -33,7 +32,7 @@ En tablet y computador, la **barra lateral** muestra Inicio y las cuatro seccion
 - **Tus cuentas:** saldo de cada una (toca para ver sus bolsillos).
 - **Gráficos:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
 - **Otras monedas:** los saldos en dólares o euros, aparte, con su equivalente en pesos si anotaste la tasa.
-- **Invertido:** el capital de tus CDT vigentes (no es dinero disponible).
+- **Invertido:** el capital de tus CDT vigentes y lo que valen tus inversiones (no es dinero disponible).
 - **Presupuesto del mes:** cuánto has gastado frente a lo planeado.
 - **Por recibir:** nómina estimada, otros ingresos y CDT que vencen.
 - **Próximos pagos:** extractos, cuotas, servicios y suscripciones de los próximos 14 días (o vencidos).
@@ -63,7 +62,7 @@ Cada cuenta con sus bolsillos y saldos. Si en una cuenta con bolsillos queda din
 - Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Mi dinero → Bolsillos → Convertir divisas**: escribes **cuántos dólares compras o vendes** y **la tasa que te dio el banco por cada uno**; Moni calcula cuánto sale y cuánto llega. La TRM de referencia (si la anotaste) solo se muestra para comparar.
 - Si el banco cobra **comisión aparte**, escríbela en el mismo panel y elige de qué bolsillo se cobra (origen o destino). Queda como un gasto de la categoría *Comisión bancaria*, dentro de la misma conversión: al deshacerla se deshace todo junto.
 - Entre bolsillos de la misma moneda, **Mover dinero** funciona igual que siempre.
-- Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones y regalos funcionan solo en pesos: no ofrecen bolsillos en otras monedas.
+- Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones, metas y la lista de deseos funcionan solo en pesos: no ofrecen bolsillos en otras monedas. Las inversiones pueden tener su precio en dólares o euros y se pasan a pesos con la tasa de Ajustes → Divisas.
 
 ### Saldos iniciales
 Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o en Ajustes). Si algo no cuadra con tu banco, usa **Cuadrar** en la cuenta.
@@ -100,7 +99,7 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
 
 ### Créditos con un banco o entidad
-**Deudas → Nuevo crédito → Con un banco o entidad** (hipoteca, vehículo, libre inversión…).
+**Pagos → Créditos → Nuevo crédito → Con un banco o entidad** (hipoteca, vehículo, libre inversión…).
 - Escribe el monto, las cuotas, la tasa (con decimales si los tiene: 9,5 % es 9,5), la entidad y desde qué bolsillo pagas.
 - **¿A qué bolsillo llegó el dinero?** Si lo eliges, el desembolso entra ahí (no cuenta como ingreso: es una deuda). Si el crédito ya venía, déjalo en "No registrarlo".
 - **Seguros y otros cargos en cada cuota:** lo que el banco suma a la cuota además del capital y el interés. Al pagar cada cuota, Moni lo propone aparte.
@@ -118,7 +117,7 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 
 **Compras en otra moneda:** al registrar una compra con tarjeta, en "¿Pagaste en otra moneda?" eliges la moneda y escribes cuánto costó allá; el valor de arriba es lo que te cobró la tarjeta en tu moneda.
 
-## 8. Otros ingresos
+## 8. Otros ingresos (Planear → Ingresos)
 **Planear → Ingresos → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.
 
 ## 9. Ahorro
@@ -174,7 +173,7 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 
 **Analizar → Calculadora.** Préstamo (cuota, intereses y cómo baja el saldo), ahorro en el tiempo, *¿Cuánto ahorrar?* para una meta (con *Crear esta meta*), CDT (intereses, retención y neto) y conversión de tasas (EA, mensual, nominal).
 
-## 14. Vista anual y gráficos
+## 14. Análisis, vista anual y gráficos
 **Analizar → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
 ### Análisis
@@ -194,26 +193,29 @@ Además de Análisis, **cada módulo trae los suyos**. Pasa el dedo o el cursor 
 - **Presupuesto:** cada renglón trae su barra *real frente a plan*; los que se pasan dicen "excedido".
 - **Nómina:** *A dónde va lo descontado* de tu devengado.
 - **Servicios y suscripciones:** *Lo que más pesa al mes* (los pagos anuales o semestrales se reparten por mes).
-- **Regalos:** lo gastado frente a lo estimado de cada persona.
+- **Metas:** el avance de cada meta, el plan frente a lo aportado mes a mes y cómo vas hacia el total.
+- **Lista de deseos:** lo gastado frente a lo estimado de cada persona y lo que piensas gastar por categoría.
+- **Inversiones:** lo que valen frente a lo que pagaste (12 meses) y en qué tienes invertido.
 - **CDT:** cuánto hay en cada uno y el avance de su plazo.
-- **Deudas:** *Cupo usado* de cada tarjeta y *Avance de los créditos*; dentro de un crédito, cómo baja el saldo cuota a cuota.
+- **Tarjetas y Créditos:** *Cupo usado* de cada tarjeta y *Avance de los créditos*; dentro de un crédito, cómo baja el saldo cuota a cuota.
+- **Calculadora:** cómo baja un préstamo y cómo crece un ahorro.
 - **Ahorro:** evolución del ahorro total y de cada cuenta, y avance hacia las metas.
 - **Vista anual:** entró, planeado y real mes a mes.
 - **Un bolsillo:** su saldo al cierre de cada mes.
 
-## 16. Movimientos
+## 15. Movimientos
 **Mi dinero → Movimientos:** todo lo registrado, por mes, con **búsqueda** por concepto, bolsillo o categoría y la opción de ver anulados.
 
-## 17. Avisos en Inicio
+## 16. Avisos en Inicio
 **Para tener en cuenta** te dice qué falta configurar o está desactualizado (salario mínimo, un CDT vencido, suscripciones que faltan en el presupuesto, la nómina, los recordatorios…). Toca **Resolver** para ir a donde se arregla; los que no son urgentes se pueden ocultar con **Ahora no** y volver a mostrar en *Ajustes → Avisos de Inicio*.
 
-## 18. Ajustes
+## 17. Ajustes
 
-Menú **Ajustes** (desde *Más*):
-- **Tú:** **Perfil** (nombre) y **Apariencia** (claro/oscuro/automático y color).
-- **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, y **Divisas** (tasa de referencia del dólar y el euro). Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
+**Ajustes** está al pie de la barra lateral (en el celular, arriba a la derecha en Inicio y al final de Planear):
+- **Tú:** **Guía de uso** (lo básico, paso a paso, y el glosario), **Perfil** (nombre y zona horaria) y **Apariencia** (claro/oscuro/automático y color).
+- **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, **Divisas** (tasa de referencia del dólar y el euro) y **Cargos y comisiones**. Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 - **Presupuesto y nómina:** plantilla del presupuesto, escenarios del presupuesto, mi nómina, subsidios y parámetros de nómina.
-- **Organización:** categorías, personas, hogares (inmuebles) y servicios y suscripciones.
+- **Organización:** categorías, personas, hogares (inmuebles), servicios y suscripciones, metas e inversiones (aquí se reactivan las archivadas).
 - **Mantenimiento:** *Avisos de Inicio* (volver a mostrar los ocultos), *Actualizar desde la hoja* (si editaste la hoja a mano), **Recordatorios**, **Mi cuenta**, **Respaldos**, **Registro de errores**, **Diagnóstico** y, solo en desarrollo, *Datos de demostración*.
 - **Privacidad:** **Borrar todos mis datos**.
 
@@ -232,15 +234,15 @@ De quién es la hoja: tu correo, un enlace a tu hoja (ábrela solo para consulta
 
 ### Borrar todos mis datos
 Para empezar de cero o dejar de usar la app: **Ajustes → Privacidad → Borrar todos mis datos**. La pantalla explica qué se borra y qué no; al pulsar el botón se abre una ventana que exige escribir **BORRAR** para habilitar el borrado.
-- **Se borra:** bancos, cuentas, bolsillos, tarjetas, movimientos, presupuestos, nómina, créditos, regalos, suscripciones, CDT, tu nombre y tus preferencias. Se apagan las copias automáticas y los recordatorios, y se borra el calendario Moni.
+- **Se borra:** bancos, cuentas, bolsillos, tarjetas, movimientos, presupuestos, nómina, créditos, la lista de deseos, metas, inversiones, suscripciones, CDT, tu nombre y tus preferencias. Se apagan las copias automáticas y los recordatorios, y se borra el calendario Moni.
 - **No se borra:** las copias de **"Moni Respaldos"** en tu Drive (contienen tus datos; en la ventana puedes elegir mandarlas también a la papelera) ni los archivos que hayas guardado en Drive, como extractos en PDF.
 - **No se puede deshacer.** Si dudas, crea antes un respaldo en **Ajustes → Respaldos**.
 - Al terminar vuelves a ver la bienvenida.
 
-## 19. Respaldos
+## 18. Respaldos
 **Ajustes → Respaldos:** crea una copia ahora o activa copias automáticas (cada N días, conservando las últimas N). Quedan en tu Drive, carpeta **Moni Respaldos**.
 
-## 20. Consejos
+## 19. Consejos
 - Registra el gasto **cuando lo haces**; es más fácil que recordar al final del día.
 - Usa **Cuadrar** una vez por semana con cada cuenta.
 - Si dudas de una cifra, abre el detalle del bolsillo: allí está cada movimiento.

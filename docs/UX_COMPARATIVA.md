@@ -2,6 +2,18 @@
 
 > **Qué es esto y qué no es.** Es una **evaluación heurística de experto** (28/10/2026): comparo Moni con tres *familias* de apps de finanzas personales usando criterios de usabilidad conocidos (Nielsen, Apple HIG) y el conteo de pasos de las tareas diarias. **No son datos de usuarios.** Los puntajes son mi estimación y sirven para priorizar; la medición real sigue siendo la sesión de 30 minutos con la usuaria (PLAN §7.1-C). Comparo familias y no productos con cifras exactas para no afirmar detalles de terceros que no pude verificar hoy.
 
+## Actualización (25/11/2026, versión 1.18)
+
+Lo que cambió frente a las debilidades de abajo, sin nueva medición con usuarios:
+- **Vocabulario:** hay glosario en *Ajustes → Guía de uso* y un botón **i** en cada campo, cifra clave y título que lo necesita. Antes era 3/5.
+- **Navegación:** se rediseñó por intención, según las Human Interface Guidelines. Son cuatro secciones (*Mi dinero*, *Pagos*, *Planear*, *Analizar*), iguales en el celular (4 pestañas) y en el computador (barra lateral con secciones plegables). Las cuatro propuestas evaluadas y la elegida están en el CHANGELOG de la 1.18. Falta validarlo con la sesión de abajo.
+- **Registrar:** un solo formulario para todo lo que entra, sale o se mueve; *Sumar a mis saldos* junto al valor; repetir un movimiento reciente desde el botón **+**.
+- **Nuevo frente a las familias de referencia:**
+  - **Metas** con plan por mes editable dentro del presupuesto, como los "targets" de la familia A.
+  - **Inversiones** con precio de Google Finance, parecido a la familia B pero sin conectar bancos.
+  - **Lista de deseos** y **Calculadora**.
+- **Pasos:** pagar el extracto de una tarjeta es *Pagos → Tarjetas → tarjeta → Pagar* (en el computador, 3 clics desde la barra lateral; en el celular, 4 toques).
+
 ## Las tres familias de referencia
 
 | Familia | Ejemplos típicos | Su fortaleza | Su costo |
@@ -38,7 +50,7 @@
 |---|---|---|
 | Registrar un gasto | 4 | 3–4 (A/C), 0–1 (B) |
 | Mover dinero entre bolsillos | 4 | 4 (A) |
-| Pagar el extracto de una tarjeta | 3 (Deudas → tarjeta → Pagar) | 5+ en apps sin esta lógica |
+| Pagar el extracto de una tarjeta | 3–4 (Pagos → Tarjetas → tarjeta → Pagar) | 5+ en apps sin esta lógica |
 | Pagar la luz con su código | **2** (Inicio → Pagar servicios → toque) | 3–5 |
 | Saber cuánto cuestan las suscripciones | **1** (pantalla de Servicios y suscripciones) | 2–4 |
 | Ver cuánto queda en un bolsillo | 2 | 2–3 |

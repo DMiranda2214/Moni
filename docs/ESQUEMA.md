@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
-El script de instalación (`setupDatabase`) crea estas 32 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`) crea estas 37 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -41,8 +41,8 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 | `Aporte_Salud` | `0.04` | Nomina | Porcentaje de aporte a salud del trabajador |
 | `Aporte_Pension` | `0.04` | Nomina | Porcentaje de aporte a pensión del trabajador |
 | `Redondeo_Aportes` | `-2` | Nomina | Redondeo de aportes (-2 = centena superior) |
-| `SMMLV` | `1423500` | Nomina | Salario mínimo mensual legal vigente. Actualizar cada enero |
-| `SMMLV_Anio` | `2025` | Nomina | Año del SMMLV registrado |
+| `SMMLV` | `1750905` | Nomina | Salario mínimo mensual legal vigente (2026). Actualizar cada enero. Las hojas existentes conservan el valor que tenían |
+| `SMMLV_Anio` | `2026` | Nomina | Año del SMMLV registrado |
 | `FSP_Umbral_SMMLV` | `4` | Nomina | Umbral de SMMLV para el Fondo de Solidaridad Pensional |
 | `Auxilio_Transporte_Aplica` | `FALSE` | Nomina | Aplica auxilio de transporte legal |
 | `Prima_Fechas` | `06-30,12-20` | Nomina | Fechas límite de pago de prima |
@@ -58,7 +58,8 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 | `Tasa_EUR_Fecha` | — | Divisas | Fecha en que anotaste la tasa del euro *(la gestiona la app)* |
 | `Tasa_USD_Fuente` | — | Divisas | De dónde salió la tasa del dólar: Manual o Google Finance *(la gestiona la app)* |
 | `Tasa_EUR_Fuente` | — | Divisas | De dónde salió la tasa del euro: Manual o Google Finance *(la gestiona la app)* |
-| `Tasa_Auto` | `FALSE` | Divisas | TRUE si la tasa se actualiza sola cada día con Google Finance *(la gestiona la app)* |
+| `Tasa_Auto` | `FALSE` | Divisas | TRUE si la tasa se actualiza sola cada día con Google Finance; la misma tarea actualiza los precios de las inversiones *(la gestiona la app)* |
+| `Inversiones_Ultima` | — | Divisas | Fecha y hora de la última lectura de precios de Google Finance *(la gestiona la app)* |
 | `Recordatorios_Activos` | `FALSE` | Recordatorios | TRUE si los pagos se anotan en Google Calendar *(la gestiona la app)* |
 | `Recordatorios_Dias_Antes` | `2` | Recordatorios | Días de anticipación del aviso (además del aviso del mismo día) *(la gestiona la app)* |
 | `Recordatorios_Hora` | `9` | Recordatorios | Hora del día en que suenan los avisos *(la gestiona la app)* |
@@ -89,7 +90,7 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 **Categorias** — `ID_Categoria, Nombre, Tipo, Icono, Color, Activo, Orden, Rol` · `Tipo`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
 - `Rol` (desde 1.10.1): marca las categorías que usa la app (`Salario`, `Rendimiento`, `Regalos`, `Comision`, `Cargos`). Así la persona puede renombrarlas sin romper nada. En hojas anteriores la columna llega vacía y la app reconoce esas categorías por el ID con el que se sembraron (`cat-salario`, `cat-rendim`, `cat-regalos`, `cat-comision`).
 
-**Personas** — `ID_Persona, Nombre, Rol, Activo` · `Rol`: `Titular`, `Familiar`, `Otro`. Se usan en créditos y regalos.
+**Personas** — `ID_Persona, Nombre, Rol, Activo` · `Rol`: `Titular`, `Familiar`, `Otro`. Se usan en créditos y en la Lista de deseos (para quién es un regalo).
 
 **Inmuebles** — `ID_Inmueble, Nombre, Activo, Orden`
 **Empresas_Pago** — `ID_Empresa, Nombre, URL_Pago, Notas, Activo, Orden`. *Desde 1.15 no se usa*: la pestaña se conserva intacta y sus datos se copian a `Suscripciones` (ver abajo).
@@ -113,10 +114,12 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 
 **Movimientos** (libro mayor de bolsillos) —
 `ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos, Ref`
-- `Ref` (desde 1.10.1): vínculo con lo que generó el movimiento (`Crédito <id>`, `Extracto <id>`, `Regalo <id>`, `Suscripción <id>`, `Ingreso recurrente <id>`, `Distribución <mes>`, `Pago <id>`, `Abono <id>`). Antes vivía solo en `Notas`; los movimientos viejos sin `Ref` se siguen leyendo de `Notas`, y si la persona edita esas notas el vínculo se copia a `Ref` primero.
+- `Ref` (desde 1.10.1): vínculo con lo que generó el movimiento (`Crédito <id>`, `Extracto <id>`, `Regalo <id>`, `Suscripción <id>`, `Ingreso recurrente <id>`, `Distribución <mes>`, `Pago <id>`, `Abono <id>`, `Cargo <id>`, y desde 1.16 `Meta <id>` e `Inversión <id de la operación>`). Antes vivía solo en `Notas`; los movimientos viejos sin `Ref` se siguen leyendo de `Notas`, y si la persona edita esas notas el vínculo se copia a `Ref` primero.
 - `Afecta_Saldos`: `FALSE` = movimiento **histórico** (cuenta en informes, no en saldos); vacío o `TRUE` = afecta saldos (los anteriores a la columna).
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
-- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion` (dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`).
+- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion`, `Comision`, `CDT_Apertura`, `CDT_Retorno`, `Impuesto`, `Cambio_Divisa`, `Cuota_Manejo`, `Seguro`, `Desembolso`, y desde 1.16 `Inversion_Compra`, `Inversion_Venta`, `Dividendo` y `Aporte_Meta`.
+  - `Conversion`: dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`.
+  - **No cuentan como ingreso ni como gasto** (`SUBTIPOS_INVERSION`): `CDT_Apertura`, `CDT_Retorno`, `Desembolso`, `Inversion_Compra` e `Inversion_Venta`. El dinero solo cambia de lugar.
 - `ID_Grupo`: une las filas de una misma operación (transferencia, pago de extracto, pago de cuota). **La suma de un grupo de transferencia interna es 0.**
 - `ID_Item_Ppto`: enlaza el gasto con su renglón del presupuesto del mes.
 
@@ -210,6 +213,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - Todos llevan `Ref = "Inversión <ID_Operacion>"`.
 
 **Inversiones_Precios** (desde 1.16) — `ID_Precio, Fecha, ID_Inversion, Precio, Divisa, Fuente`. Historial con un precio por día y fuente (`Google` o `Manual`) para los gráficos. Lo escriben `actualizarPreciosGoogle` (hoja auxiliar `Precios_Google`, que no es una tabla) y `guardarPrecioManual`.
+
+**Hojas auxiliares (no son tablas):** `Tasas_Google`, `Precios_Google` y `Buscar_Google` tienen fórmulas `GOOGLEFINANCE` que la app escribe y lee: la tasa del dólar y del euro, el precio de cada inversión con símbolo y la búsqueda de un símbolo. Se pueden borrar sin perder datos; la app las vuelve a crear.
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
 
@@ -230,6 +235,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 7. **Pagar un extracto:** en una sola operación completa la reserva desde `ID_Bolsillo_Personal` con lo que falte (traslado `Reserva_TC`), paga el total desde la reserva (gasto `Pago_TC`) y marca como pagadas sus compras; los movimientos llevan en `Notas` la marca `Extracto <ID>`. Luego `Estado = Pagado`. Fuente `Guardar` aparta desde el bolsillo personal en el momento; `Otro` no mueve dinero.
 8. **Pago de crédito:** la cuota se aplica con interés sobre saldo; el excedente va a capital; se reponen en `ID_Cuenta_Ahorro` capital e interés pagados; el cronograma restante se regenera manteniendo cuota y tasa (plazo nuevo `n = ⌈ −ln(1 − saldo·i / cuota) / ln(1+i) ⌉`) y la última cuota se ajusta. Un abono mayor al saldo solo cobra lo necesario.
 9. Dos escenarios distintos no pueden tener `Es_Base = TRUE` a la vez.
+10. **Metas:** una meta tiene a lo sumo un renglón por mes en el presupuesto (`ID_Meta`); agregar las metas al mes se puede repetir sin duplicar. Lo ahorrado no baja al usar el dinero (lo usado se muestra aparte).
+11. **Inversiones:** la cantidad de una inversión nunca queda negativa. No se puede vender más de lo que se tiene, ni anular una compra si una venta posterior quedaría sin unidades.
 
 ## Cambios frente al esquema anterior ("Cuentas")
 

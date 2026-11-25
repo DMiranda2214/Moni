@@ -241,15 +241,23 @@ function vGuia() {
   return {
     titulo: 'Guía de uso',
     html:
+      seccion('Cómo está ordenada Moni',
+        paso('Cuatro secciones', 'Mi dinero (bolsillos, movimientos, ahorro e inversiones), Pagos (servicios, tarjetas y créditos), Planear (presupuesto, ingresos, metas y lista de deseos) y Analizar (análisis, vista anual y calculadora). En el celular son las pestañas de abajo (Analizar está dentro de Planear); en el computador, la barra lateral, donde puedes plegar cada sección.') +
+        paso('Ayuda en cada campo', 'Toca la “i” junto a un campo, una cifra o un título para ver para qué sirve.')) +
       seccion('Cada día',
-        paso('Registrar un gasto o ingreso', 'En Inicio, toca el botón + : elige el bolsillo, el valor y la categoría. Si te equivocas, toca el aviso “Deshacer” o anula el movimiento.') +
+        paso('Registrar un gasto o ingreso', 'Toca el botón + (en el computador, “Registrar” o la tecla N): escribe el valor, decide si suma a tus saldos y elige el bolsillo. Si te equivocas, toca el aviso “Deshacer” o anula el movimiento.') +
         paso('Mover dinero entre bolsillos', 'En el mismo botón +, elige “Mover”. Sale de un bolsillo y entra en otro; el total no cambia.') +
-        paso('Ver cuánto queda', 'En Bolsillos ves cada saldo. El presupuesto del mes muestra lo planeado y lo real.')) +
+        paso('Ver cuánto queda', 'En Mi dinero → Bolsillos ves cada saldo. El presupuesto del mes muestra lo planeado y lo real.')) +
       seccion('Cada mes',
-        paso('Presupuesto', 'Genera el mes desde tu plantilla. Marca como pagado lo que ya cubriste.') +
-        paso('Nómina', 'Calcula lo que te llega y repártelo a tus bolsillos una sola vez al mes.') +
-        paso('Servicios y suscripciones', 'En Planear → Servicios y suscripciones (o “Servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
-        paso('Tarjetas y créditos', 'En Deudas registras compras con tarjeta y pagas el extracto. Los créditos de autopago se pagan desde tu ahorro y cada cuota regresa a él.')) +
+        paso('Presupuesto', 'En Planear → Presupuesto genera el mes desde tu plantilla: entran solos tus servicios, suscripciones y metas. Marca como completo lo que ya cubriste.') +
+        paso('Ingresos', 'En Planear → Ingresos: tu nómina (lo que te llega y cómo se reparte en tus bolsillos) y tus otros ingresos.') +
+        paso('Metas', 'En Planear → Metas aporta lo de este mes a cada meta. Si un mes no puedes, cambia su “Plan por mes”: Moni reparte lo que falta en los demás.') +
+        paso('Servicios y suscripciones', 'En Pagos → Servicios (o “Servicios” en Inicio) ves cuánto te cuestan al mes, cuándo se cobra cada una y puedes registrar el pago, copiar el código o ir al enlace de pago.') +
+        paso('Tarjetas y créditos', 'En Pagos → Tarjetas registras compras y pagas el extracto; en Pagos → Créditos pagas las cuotas. Los créditos de autopago se pagan desde tu ahorro y cada cuota regresa a él.')) +
+      seccion('Cuando quieras',
+        paso('Lista de deseos', 'En Planear → Lista de deseos anota lo que quieres regalar o comprarte, con cuánto quieres gastar y varias ideas para elegir.') +
+        paso('Inversiones', 'En Mi dinero → Inversiones agrega tus acciones, ETF, cripto o fondos buscándolos por nombre. Moni trae el precio de Google Finance o usa el que escribas. Los CDT están en su pestaña.') +
+        paso('Analizar', 'En Analizar ves tu patrimonio, en qué gastas y tu dinero en los próximos 90 días; la Calculadora te ayuda con préstamos, ahorro y CDT.')) +
       seccion('Cuando algo no cuadra',
         paso('Cuadrar una cuenta', 'Escribe el saldo que ves en el banco. Moni te dice la diferencia y puede dejar un ajuste.') +
         paso('Deshacer un pago', 'Los pagos de extractos y de cuotas se anulan desde su detalle; todo vuelve a como estaba.') +

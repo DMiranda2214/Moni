@@ -106,7 +106,7 @@ function saldosMensuales_(ids, mesFin, n, movs) {
 }
 
 // ---------------------------------------------------------------------------
-// Análisis: el panorama completo en una sola pantalla (Planear → Análisis)
+// Análisis: el panorama completo en una sola pantalla (Analizar → Análisis)
 // ---------------------------------------------------------------------------
 
 /** Último día de un mes AAAA-MM. */

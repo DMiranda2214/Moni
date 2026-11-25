@@ -18,8 +18,8 @@ Cómo se calcula cada cosa. Las cifras de control son ejemplos ficticios y está
 - La **moneda se elige en el banco** (`COP`, `USD` o `EUR`; pesos por defecto). Sus cuentas y bolsillos la heredan y todo se muestra en esa moneda. No se puede cambiar la moneda de un banco que ya tiene cuentas: se crea otro banco.
 - **Los saldos de monedas distintas nunca se suman.** El Total, el Disponible y el Ahorro de Inicio son en pesos; las demás monedas van aparte en *Otras monedas*, con su **equivalente en pesos** (saldo × tasa de referencia) solo si hay una tasa anotada.
 - Un **traslado** solo se hace entre bolsillos de la **misma moneda**. Para pasar dinero entre monedas se usa la **conversión**.
-- Presupuesto, nómina, tarjetas (en bancos en pesos), créditos de autopago, ahorro con deuda, suscripciones, servicios y regalos **solo usan pesos**: el servidor rechaza un bolsillo en otra moneda y la pantalla no lo ofrece.
-- **Conversión** (Dinero → Bolsillos → Convertir divisas): se escribe la **cantidad** de la moneda de afuera y la **tasa que dio el banco** por cada unidad; sale `cantidad × tasa` de un lado y llega la cantidad del otro. Son dos movimientos con el mismo `ID_Grupo` (`Subtipo = Conversion`) que **no suman cero** porque cada uno está en su moneda; la tasa implícita queda en las notas. La TRM de referencia **no interviene** (cada banco cambia a su precio): solo se muestra para comparar.
+- Presupuesto, nómina, tarjetas (en bancos en pesos), créditos de autopago, ahorro con deuda, suscripciones, servicios, metas y la lista de deseos **solo usan pesos**: el servidor rechaza un bolsillo en otra moneda y la pantalla no lo ofrece.
+- **Conversión** (Mi dinero → Bolsillos → Convertir divisas): se escribe la **cantidad** de la moneda de afuera y la **tasa que dio el banco** por cada unidad; sale `cantidad × tasa` de un lado y llega la cantidad del otro. Son dos movimientos con el mismo `ID_Grupo` (`Subtipo = Conversion`) que **no suman cero** porque cada uno está en su moneda; la tasa implícita queda en las notas. La TRM de referencia **no interviene** (cada banco cambia a su precio): solo se muestra para comparar.
 - **Comisión** del banco (opcional, se escribe cada vez): un **gasto aparte** (`Subtipo = Comision`, categoría *Comisión bancaria*, que se crea sola) cobrado del bolsillo de origen o del de destino, dentro del mismo `ID_Grupo`: anular o restaurar la conversión mueve también la comisión. Si la persona desactivó la categoría, la comisión queda sin categoría.
 - Los totales de **entró** y **salió** (Movimientos, gráficos, vista anual) son de **una sola moneda** (pesos, o la del bolsillo o cuenta que se mira) y **no cuentan** los traslados ni las conversiones.
 - **Tasa de referencia:** se anota a mano o la trae Google Finance (hoja auxiliar `Tasas_Google`, `GOOGLEFINANCE("CURRENCY:USDCOP")`; es la tasa del mercado, no la TRM oficial). Guarda fecha y fuente y **solo es informativa**.
@@ -115,11 +115,11 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - Los eventos llevan el valor de cada pago: el calendario es privado de la persona.
 
 ## 7 sexies. Gráficos
-- **No hay pantalla de gráficos:** cada módulo trae los suyos (ver el manual). Los de Movimientos, Nómina, Servicios, Regalos y CDT se calculan en la pantalla con lo que ya está cargado; los de Inicio y la Vista anual vienen de `getGraficos` y `getAnual`.
+- **Análisis** (Analizar → Análisis) reúne el panorama en una sola llamada (`getAnalisis`); además, cada módulo trae los suyos (ver el manual). Los de Movimientos, Nómina, Servicios, Lista de deseos y CDT se calculan en la pantalla con lo que ya está cargado; los de Inicio y la Vista anual vienen de `getGraficos` y `getAnual`.
 - **Entró** = movimientos positivos no anulados que no son traslado; **salió** = los negativos; **diferencia** = entró − salió. Las cifras del mes se comparan con el mes anterior (el color del cambio depende de si subir es bueno).
 - **Saldo al cierre de un mes** = saldo de apertura + todos los movimientos (también traslados y conversiones) hasta el fin de ese mes, de los bolsillos de cuentas activas de esa moneda. El del mes actual coincide con el total de Inicio.
 - **Gastos por categoría:** los del mes elegido, de mayor a menor; lo que no tiene categoría se nombra por su tipo (pago de tarjetas, cuotas de crédito, GMF…) o queda como *Sin categoría*. Se muestran las 7 mayores y "Otras".
-- En cada módulo: *plan frente a real* (Presupuesto), *cupo usado* y *avance de pago* (Deudas), evolución y avance de meta (Ahorro), entró/planeado/real por mes (Vista anual) y saldo por mes (un bolsillo).
+- En cada módulo: *plan frente a real* (Presupuesto), *cupo usado* (Tarjetas) y *avance de pago* (Créditos), evolución y avance de meta (Ahorro), plan frente a aportes y acumulado (Metas), valor frente a costo (Inversiones), entró/planeado/real por mes (Vista anual) y saldo por mes (un bolsillo).
 
 ## 7 septies. Registro de errores
 - Cada error de la API, del navegador y de los procesos automáticos se anota en la hoja (tabla `Log`, últimas 500 entradas) con función, mensaje, traza y versión. Un fallo de código es **Error**; una regla de negocio que rechazó algo ("Escribe tu nombre") es **Aviso**; los hechos importantes (borrado total) son **Info**.
@@ -130,3 +130,53 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 
 ## 9. Datos de demostración
 - Todos sus IDs empiezan por `demo-`. Borrarlos elimina **solo** esas filas (y el detalle de nómina huérfano). Solo existen en desarrollo.
+
+## 10. Metas
+- Una meta tiene **monto**, **fecha de inicio y final** (meses de la meta) y un **bolsillo** donde se guarda el dinero.
+- **Ahorrado** = ahorro inicial + lo real de sus renglones del presupuesto + los aportes directos (traslados con `Ref = Meta <ID>` fuera de un renglón). **Usado** (gastos con esa `Ref`) se muestra aparte y no baja lo ahorrado.
+- **Plan por mes:**
+  - Los meses escritos a mano quedan fijos (pueden ser 0).
+  - Los demás meses, de este en adelante, se reparten en partes iguales lo que **faltaba al empezar este mes**, redondeado hacia arriba a la centena. Así el plan del mes no cambia al aportar.
+  - Los meses pasados muestran el plan de su renglón (o el reparto original).
+  - Si todo el plan que queda está a mano y no alcanza, se informa cuánto queda por cubrir.
+- **Estado:**
+  - *Lograda*: lo ahorrado llega al monto.
+  - *Vencida*: pasó la fecha y falta dinero.
+  - *Atrasada*: lo aportado en los meses pasados está por debajo de su plan en más de 1.000 o del 5 %. En ese caso se sugiere lo que falta dividido entre los meses que quedan.
+  - Además, la persona puede marcarla *En pausa* o *Cumplida*.
+- **Presupuesto:** cada meta *Activa*, no lograda y con plan en el mes agrega un renglón **Fondo** hacia su bolsillo (`ID_Meta`). Se agrega al generar el mes, con *Agregar* del aviso, o al guardar la meta o su plan (para los meses que ya tienen presupuesto, de este en adelante). Mientras el renglón no esté completo, su plan y su bolsillo se mantienen al día. Si la meta se pausa o deja de tener plan ese mes, el renglón sin movimientos queda en 0.
+- **Aportar** es un traslado al bolsillo de la meta (subtipo `Aporte_Meta`); si el mes tiene el renglón de la meta, cuenta como su real, una sola vez.
+
+## 11. Lista de deseos
+- Usa la tabla `Regalos`. Un deseo es **para mí** (`Para = Yo` o sin persona) o para una persona.
+- **Lo gastado** = gastos y compras con tarjeta marcados `Regalo <ID>`; si no hay, el **precio pagado** anotado a mano (comprado sin registrar el gasto, sin mover saldos).
+- **Comprado** si tiene algo gastado o su estado es *Comprado*. *Descartado* y *No aplica* no suman en los totales.
+- **Totales** del año: lo estimado, lo gastado, la diferencia, para mí y para otros, por persona y por categoría.
+- **Lluvia de ideas:** al elegir una idea, su texto y enlace pasan al deseo; su precio solo pasa al estimado si este estaba en 0. El deseo queda *Decidido*.
+- Un deseo con gastos registrados no se puede quitar; al quitarlo se borran sus ideas.
+
+## 12. Inversiones
+- **Posición** con el método del **costo promedio**:
+  - Una compra suma la cantidad y su costo (valor + comisión).
+  - Una venta resta la cantidad y saca el costo en proporción. Ganancia realizada = valor − comisión − costo sacado.
+  - Un dividendo suma a los dividendos.
+  - No se puede vender más de lo que se tiene. Una compra no se puede anular si una venta posterior quedaría sin unidades.
+- **Precio vigente:** el más reciente entre el de Google Finance, el manual y el de la última operación. El mismo día gana Google, luego el manual.
+- **Valor** = cantidad × precio × tasa de la moneda del precio a pesos (`Config.Tasa_<divisa>`). Sin precio, o sin la tasa de su moneda, la inversión vale su costo y se avisa.
+- **Dinero, solo si la operación tiene bolsillo:**
+  - Una compra es un ajuste negativo (`Inversion_Compra`) y una venta uno positivo (`Inversion_Venta`). No son gasto ni ingreso.
+  - Un dividendo es un **ingreso** (`Dividendo`), con la categoría de rendimientos.
+  - Anular la operación anula su movimiento.
+- **Google Finance:** la hoja auxiliar `Precios_Google` tiene una fórmula por inversión con símbolo y solo se reescribe si cambia el símbolo. La lectura guarda el precio y el historial (uno por día y fuente). La tarea diaria de la tasa del dólar también la actualiza.
+- **Búsqueda:**
+  - El catálogo de la app busca por nombre, símbolo o palabras (sin tildes).
+  - *Buscar en Google Finance* prueba el texto tal cual y con `NASDAQ:`, `NYSE:`, `NYSEARCA:`, `BVC:` y como `CURRENCY:<texto>USD` (hoja auxiliar `Buscar_Google`). Deja uno por activo, el que tiene bolsa.
+- **Patrimonio:** lo invertido suma los CDT vigentes y el valor de las inversiones activas. El patrimonio de 12 meses usa el último precio conocido al cierre de cada mes.
+
+## 13. Calculadora
+- Todo se calcula en el navegador (`CALC` en `js_herramientas.html`, con pruebas).
+- **Préstamo:** cuota fija `P·i / (1 − (1+i)^−n)`, más los seguros por cuota. La tasa mensual sale de la EA (`(1+EA)^(1/12) − 1`), de la mensual vencida o de la nominal mes vencido (÷ 12).
+- **Ahorro:** interés compuesto mensual con el aporte al final de cada mes.
+- **¿Cuánto ahorrar?:** el aporte que, con lo que ya tienes y la rentabilidad, llega a la meta en los meses que quedan. *Crear esta meta* abre el formulario de Metas lleno.
+- **CDT:** intereses = capital × ((1 + EA)^(días/365) − 1); neto = intereses − retención.
+

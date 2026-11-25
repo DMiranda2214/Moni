@@ -18,12 +18,11 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
    - **Bancos:** dónde tienes tu dinero (Nequi, Nu, tu banco…), con su rendimiento si es de ahorro.
    - **Cuentas y bolsillos:** cada cuenta y **cómo tienes repartido tu dinero** (casa, mercado, un viaje…), con lo que hay hoy en cada uno.
    - **Tarjetas de crédito** *(opcional)*: con su día de corte y de pago.
-   - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Planear → Nómina**.
+   - **Nómina** *(opcional)*: tu sueldo. Los descuentos fijos y lo de cada mes (horas extras, cesantías, prima…) los agregas después en **Planear → Ingresos → Nómina**.
    - **Otros ingresos** *(opcional)*: otro trabajo, arriendo, ventas…
    - **CDT** *(opcional)*: los que tengas a plazo fijo; aparecen como "Invertido".
    - **Hogar** *(opcional)*: tu casa o apartamento (puedes agregar varios, por ejemplo el de tu mamá).
-   - **Servicios** *(opcional)*: el código y el enlace de pago de luz, agua, gas… de cada hogar.
-   - **Suscripciones** *(opcional)*: streaming, música, internet, el celular… (también por hogar).
+   - **Servicios y suscripciones** *(opcional)*: luz, agua, gas, internet, streaming, el celular… con su empresa, el código y el enlace de pago (por hogar).
    - **Dólar** *(opcional)*: tú decides si Moni trae la TRM de Google Finance (solo informativa).
 5. **Listo.** Desde **Inicio** ya puedes registrar tu primer gasto.
 
@@ -32,22 +31,24 @@ Una **cuenta de Google** y el **enlace** de la aplicación que te compartió qui
 ## Tu día a día
 | Quiero… | Hago… |
 |---|---|
-| Anotar un gasto o un ingreso | **Inicio → Gasto / Ingreso** (o el botón **Registrar**) |
-| Mover dinero entre bolsillos | **Inicio → Mover dinero** |
-| Ver cuánto queda en cada lugar | Pestaña **Bolsillos** |
-| Pagar la luz, el internet, Netflix… | **Inicio → Pagar servicios** |
+| Anotar un gasto o un ingreso | El botón **+** (o **Registrar**) → *Gasto* / *Ingreso* |
+| Mover dinero entre bolsillos | El botón **+** → *Mover* |
+| Ver cuánto queda en cada lugar | **Mi dinero → Bolsillos** |
+| Pagar la luz, el internet, Netflix… | **Pagos → Servicios** (o *Pagar servicios* en Inicio) |
 | Saber qué te toca pagar | **Inicio → Próximos pagos** |
-| Ver lo que vas a recibir | **Planear → Nómina** y **Otros ingresos** (también en *Por recibir*, en Inicio) |
-| Ver en qué gastas | **Inicio** y **Dinero → Movimientos** (cada módulo trae sus gráficos) |
-| Tener cuentas en dólares | Crea el banco en **USD** y usa **Dinero → Bolsillos → Convertir divisas** |
+| Ver lo que vas a recibir | **Planear → Ingresos** (también en *Por recibir*, en Inicio) |
+| Ver en qué gastas | **Analizar → Análisis** y **Mi dinero → Movimientos** (cada módulo trae sus gráficos) |
+| Ahorrar para algo | **Planear → Metas** |
+| Llevar tus inversiones | **Mi dinero → Inversiones** |
+| Tener cuentas en dólares | Crea el banco en **USD** y usa **Mi dinero → Bolsillos → Convertir divisas** |
 | Que te avisen los pagos | **Ajustes → Recordatorios** (Google Calendar) |
 
-Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y la [Guía rápida](GUIA_RAPIDA.md). Junto a cada casilla hay una **"i"** que explica para qué sirve.
+La app se ordena en cuatro secciones: **Mi dinero**, **Pagos**, **Planear** y **Analizar** (en el celular, Analizar está dentro de Planear). Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md), la [Guía rápida](GUIA_RAPIDA.md) y en la app, en *Ajustes → Guía de uso*. Junto a cada casilla hay una **"i"** que explica para qué sirve.
 
 ## Cuidar tus datos
 - **Copias de seguridad:** Ajustes → Respaldos. Actívalas para que se hagan solas en tu Drive.
 - **Tu hoja:** Ajustes → Mi cuenta tiene el enlace a tu hoja. No la edites a mano (podrías dañar la aplicación); para consultar, usa las pantallas de Moni.
-- **Compartir con tu pareja:** comparte tu hoja con su correo (permiso de edición) y que ella elija *"Ya tengo una hoja de Moni"*. Verán lo mismo con cuentas distintas.
+- **Compartir con tu pareja:** comparte tu hoja con su correo (permiso de edición) y que esa persona elija *"Ya tengo una hoja de Moni"*. Verán lo mismo con cuentas distintas.
 - **Borrar todo:** Ajustes → Borrar mis datos deja Moni como recién instalada (y quita tu calendario de recordatorios). Antes puedes crear un respaldo.
 - **Recuperar una copia:** Ajustes → Mi cuenta → Usar otra hoja, y pega el enlace de la copia que está en tu Drive (carpeta "Moni Respaldos").
 - **Cambiar de hoja:** Ajustes → Mi cuenta → Usar otra hoja (la actual no se borra).
@@ -59,5 +60,5 @@ Todo se explica con más detalle en el [Manual de usuario](MANUAL_USUARIO.md) y 
 
 ## Limitaciones a tener presentes
 - Los datos se registran **a mano**: Moni no se conecta a los bancos.
-- La **nómina** y el **salario mínimo** son los de Colombia. El salario mínimo se actualiza cada enero en *Planear → Nómina → Parámetros*; Moni te avisa cuando el guardado es de un año anterior.
+- La **nómina** y el **salario mínimo** son los de Colombia. El salario mínimo se actualiza cada enero en *Ajustes → Parámetros de nómina*; Moni te avisa cuando el guardado es de un año anterior.
 - Mientras la aplicación no esté verificada por Google, cada persona verá el aviso del paso 2.
