@@ -1,5 +1,7 @@
 # Moni 1.16 — Metas, Lista de deseos, Calculadora, Inversiones, y Pensiones y cesantías
 
+> **1.17:** el módulo de Pensiones y cesantías se retiró por decisión de producto (necesitaba demasiados parámetros y variables para dar un resultado confiable). La sección legal se conserva como referencia.
+
 Estudio previo (mercado, legislación y técnica) y plan de implementación de los cinco módulos pedidos. Fecha del estudio: noviembre de 2026.
 
 **Regla de siempre:** quien ya usa Moni solo ve cambios visuales. No se borra ni se reescribe ninguna pestaña, fila o celda. Las tablas y columnas nuevas entran por `SCHEMAS` y `MIGRACIONES_COLUMNAS`.

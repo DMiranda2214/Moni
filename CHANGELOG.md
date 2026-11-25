@@ -1,5 +1,15 @@
 # Cambios
 
+## 1.17.0 — Navegación más simple y pantallas más claras (25 nov 2026)
+- **Cambia: la barra lateral** muestra solo las cuatro áreas (Inicio, Dinero, Planear, Deudas) y Ajustes al pie. El área abierta despliega sus pantallas debajo, y la pantalla de entrada de cada área está organizada por secciones, como Ajustes. Planear queda en *Cada mes*, *Ahorrar y comprar*, *Mirar el año* y *Herramientas*.
+- **Cambia:** la *Guía de uso* sale de la barra lateral y de Planear: está en Ajustes.
+- **Cambia: Registrar.** *Sumar a mis saldos* pasa al primer paso, justo debajo del valor, para decidir de una vez si el movimiento cambia tus saldos. El último paso es solo *¿Cuándo?*.
+- **Mejora: Metas, Lista de deseos e Inversiones** tienen una cabecera con la cifra principal y su avance, y tres cifras clave:
+  - **Metas:** cada meta tiene su barra y lo de este mes. El detalle tiene una acción principal (*Aportar …*) y *Lo que viene* (los próximos meses del plan, en palabras).
+  - **Lista de deseos:** año y filtro en una sola línea, estado de cada cosa (idea, decidido, comprado), lo pendiente antes de lo comprado, y cuánto te ahorraste en lo comprado frente a lo estimado.
+- **Nuevo: buscar una inversión al agregarla.** Por nombre o símbolo, con sugerencias al instante (acciones de EE. UU. y de la BVC, ADR colombianos, ETF y cripto). Lo que no esté se busca **en Google Finance** con la misma fórmula de los precios (hoja auxiliar `Buscar_Google`), que muestra el nombre y el precio de hoy. **No pide permisos nuevos.** Al elegir, se llena el formulario.
+- **Se quita: Pensiones y cesantías.** Necesitaba demasiados parámetros para dar un resultado confiable. Quedan la Calculadora y el cálculo de prima y cesantías dentro de la Nómina.
+
 ## 1.16.0 — Metas, Lista de deseos, Inversiones, Calculadora, y Pensiones y cesantías (25 nov 2026)
 Estudio de mercado, información legal y plan en `docs/PLAN_1.16.md`.
 - **Nuevo: Metas de ahorro** (Planear → Metas):

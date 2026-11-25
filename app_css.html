@@ -465,6 +465,13 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
   .m-lat-item { display: flex; align-items: center; gap: var(--m-space-3); width: 100%; box-sizing: border-box; min-height: var(--m-hit); padding: 0 var(--m-space-3); border: 0; border-radius: 12px; background: transparent; color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; text-align: left; cursor: pointer; }
   .m-lat-item:hover { background: var(--m-fill); }
   .m-lat-item[aria-current="page"] { background: var(--m-tint-soft); color: var(--m-tint); }
+  .m-lat-item[aria-current="true"] { color: var(--m-tint); }
+  /* Pantallas del área abierta, debajo de ella (como una lista de Ajustes, sin íconos) */
+  .m-lat-subs { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 var(--m-space-2) calc(var(--m-space-3) + 12px); padding-left: var(--m-space-3); border-left: 1px solid var(--m-separator); }
+  .m-lat-sub { display: flex; align-items: center; width: 100%; min-height: 36px; padding: 0 var(--m-space-3); border: 0; border-radius: 10px; background: transparent; color: var(--m-label-2); font: inherit; font-size: var(--m-text-footnote); font-weight: 500; text-align: left; cursor: pointer; }
+  .m-lat-sub:hover { background: var(--m-fill); }
+  .m-lat-sub[aria-current="page"] { background: var(--m-tint-soft); color: var(--m-tint); font-weight: 600; }
+  body.m-lat-chica .m-lat-subs { display: none; }
   .m-lat-pie { margin-top: auto; padding-top: var(--m-space-2); border-top: 0.5px solid var(--m-separator); display: flex; flex-direction: column; gap: 2px; }
   .m-lat-usuario { display: flex; align-items: center; gap: var(--m-space-3); padding: var(--m-space-3) var(--m-space-2) 0; font-size: var(--m-text-footnote); font-weight: 700; }
   /* Barra contraída: solo íconos */
@@ -496,6 +503,14 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-destacada > span:first-child { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .m-destacada-etq, .m-destacada-sub { font-size: var(--m-text-footnote); font-weight: 600; color: var(--m-hero-tx2); }
 .m-destacada-cifra { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; }
+/* Cabecera destacada que solo informa (Metas, Lista de deseos, Inversiones): sin cursor de botón, con barra de avance opcional */
+.m-destacada-info { cursor: default; margin-bottom: var(--m-space-3); }
+.m-destacada-barra { display: block; height: 8px; margin-top: var(--m-space-2); border-radius: var(--m-radius-pill); background: var(--m-hero-chip); overflow: hidden; }
+.m-destacada-barra > i { display: block; height: 100%; border-radius: inherit; background: var(--m-hero-tx); }
+/* Año y filtro de la Lista de deseos en una sola línea */
+.m-deseos-controles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--m-space-2); margin-bottom: var(--m-space-3); }
+.m-deseos-controles > select { width: auto; min-width: 6.5rem; }
+.m-deseos-controles .m-pildoras { margin: 0; }
 
 /* Íconos pastel de colores por fila y por acceso */
 .m-row[data-tono="rosa"] .m-row-icono, .m-reg-tile[data-tono="rosa"] { background: var(--m-p-rosa); color: var(--m-p-rosa-tx); }

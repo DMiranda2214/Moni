@@ -1,6 +1,6 @@
 # Manual de usuario
 
-Moni funciona en el celular y en el computador. En el celular, abajo hay cuatro pestañas (**Inicio, Dinero, Planear y Deudas**) y, en el centro, el botón **+** para registrar un gasto, un ingreso, mover dinero o convertir divisas (también puedes repetir uno reciente). En tablet y computador las mismas áreas están en una **barra lateral** que se puede contraer, con el botón *Registrar* (atajo **N**) y una búsqueda para ir a cualquier pantalla, cuenta o bolsillo (**Ctrl K**). *Ajustes* y la *Guía de uso* están al pie de la barra lateral y, en el celular, en Ajustes.
+Moni funciona en el celular y en el computador. En el celular, abajo hay cuatro pestañas (**Inicio, Dinero, Planear y Deudas**) y, en el centro, el botón **+** para registrar un gasto, un ingreso, mover dinero o convertir divisas (también puedes repetir uno reciente). En tablet y computador las mismas áreas están en una **barra lateral** que se puede contraer, con el botón *Registrar* (atajo **N**) y una búsqueda para ir a cualquier pantalla, cuenta o bolsillo (**Ctrl K**). La barra lateral muestra solo las cuatro áreas; el área abierta despliega sus pantallas debajo, y cada área tiene su pantalla de entrada organizada por secciones, como Ajustes. *Ajustes* está al pie de la barra lateral (en el celular, arriba en Inicio y al final de Planear), y la *Guía de uso* está dentro de Ajustes.
 
 - **Dinero:** Bolsillos, Movimientos, Ahorro y CDT.
 - **Planear:** Presupuesto, Nómina, Otros ingresos, Servicios y suscripciones, Regalos y Vista anual.
@@ -38,7 +38,7 @@ Toca **Registrar** o un acceso rápido y elige:
 - **Ingreso:** dinero que entra a un bolsillo.
 - **Mover:** de un bolsillo a otro (los dos movimientos quedan ligados).
 
-La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo y cómo se cuenta?*. En el último, **Sumar a mis saldos** viene encendido. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Esto también aplica a **Mover**: si el traslado entre bolsillos ya ocurrió antes de empezar con Moni, apaga *Sumar a mis saldos* y no se moverá ningún saldo. Se puede cambiar después con **Editar** (los gastos e ingresos).
+La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo?*. En el primero, justo debajo del valor, está **Sumar a mis saldos** (viene encendido): así decides de una vez si el movimiento cambia tus saldos. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Esto también aplica a **Mover**: si el traslado entre bolsillos ya ocurrió antes de empezar con Moni, apaga *Sumar a mis saldos* y no se moverá ningún saldo. Se puede cambiar después con **Editar** (los gastos e ingresos).
 
 Al escribir el **concepto**, Moni te sugiere los que ya usaste; si eliges uno, completa el valor, el bolsillo, la categoría y el renglón de la última vez (solo lo que no hayas llenado).
 
@@ -151,9 +151,9 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 - **Vista:** filtras por *Para mí* o *Para otros*, y ves los totales para ti y para otros, lo gastado frente a lo estimado por persona y el gasto por categoría.
 - **Tus regalos de antes** siguen ahí, iguales.
 
-## 13. Inversiones, Calculadora, y Pensiones y cesantías
+## 13. Inversiones y Calculadora
 **Dinero → Inversiones.** Acciones, ETF, cripto, fondos…
-- **Agregar una inversión:** escribe su nombre, qué es, la moneda del precio y, si existe, el **símbolo de Google Finance** (por ejemplo `NASDAQ:AAPL`, `NYSEARCA:VOO` o `CURRENCY:BTCUSD`).
+- **Agregar una inversión:** **búscala** por nombre o símbolo (Apple, bitcoin, S&P 500, Ecopetrol, VOO). Moni sugiere al instante activos conocidos (acciones de EE. UU. y de la BVC, ETF y cripto), y si no está, *Buscar en Google Finance* prueba el símbolo en las bolsas más comunes y te muestra el nombre y el precio de hoy. Al elegir uno se llenan el nombre, el tipo, el símbolo y la moneda. También puedes escribir todo a mano.
 - **Compré, Vendí, Dividendo:**
   - Anotas las unidades, el precio por unidad (opcional), lo que pagaste o recibiste en pesos y la comisión.
   - Si eliges un bolsillo, el dinero sale de él (o llega a él). No cuenta como gasto ni como ingreso, salvo el dividendo, que es un ingreso.
@@ -165,13 +165,6 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 - Las inversiones suman a tu **patrimonio neto** y a *Análisis*.
 
 **Planear → Calculadora.** Préstamo (cuota, intereses y cómo baja el saldo), ahorro en el tiempo, *¿Cuánto ahorrar?* para una meta (con *Crear esta meta*), CDT (intereses, retención y neto) y conversión de tasas (EA, mensual, nominal).
-
-**Planear → Pensiones y cesantías.** Son estimados con las reglas de Colombia y el salario mínimo de tu hoja.
-- **Cesantías y prima:** escribe tu salario, las fechas y los días no pagados. Si ganas hasta 2 salarios mínimos, la base incluye el auxilio de transporte. Ves las cesantías, sus intereses (12 %), la prima del semestre, las fechas límite y para qué puedes retirarlas. El salario integral no genera cesantías.
-- **Pensión:**
-  - Escribe tu sexo, tu fecha de nacimiento, las semanas cotizadas, cuántas semanas cotizarás por año, tu salario, si eres independiente y dónde cotizas (Colpensiones o un fondo privado, con su saldo y la rentabilidad que esperas).
-  - Ves cuándo te pensionarías, cuántas semanas pide la ley (a las mujeres cada vez menos, hasta 1.000 en 2036), la mesada estimada y la tasa de reemplazo, tu aporte de cada mes y qué cambiaría si entra la reforma pensional (Ley 2381 de 2024, que todavía no rige).
-  - *Guardar mis datos* los deja en tu hoja para la próxima vez.
 
 ## 14. Vista anual y gráficos
 **Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.

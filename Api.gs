@@ -840,6 +840,11 @@ function savePrecioManual(idInversion, precio, fecha) {
   });
 }
 
+/** Busca un símbolo en Google Finance (por la hoja auxiliar Buscar_Google). */
+function searchSimbolo(texto) {
+  return responder_(function () { return buscarSimbolosGoogle(texto); });
+}
+
 function updatePreciosGoogle() {
   return responder_(function () {
     const r = actualizarPreciosGoogle();

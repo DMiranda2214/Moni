@@ -30,43 +30,57 @@ function vMetas() {
   };
 }
 
-function textoMeta(m) {
-  if (m.estado === 'lograda') return 'Lograda · ' + dinero(m.ahorrado);
-  if (m.Estado === 'Pausada') return 'En pausa · faltan ' + dinero(m.falta);
-  if (m.estado === 'vencida') return 'Pasó la fecha · faltan ' + dinero(m.falta);
-  return 'Faltan ' + dinero(m.falta) + (m.mesesRestantes ? ' · ' + dinero(m.planMes) + ' este mes' : '') + ' · para ' + fechaTxt(m.Fecha_Fin);
+/** Piezas comunes: una cabecera destacada y una fila de cifras clave (como en Análisis). */
+function cabeceraDestacada(etq, cifra, sub, barra) {
+  return '<div class="m-destacada m-destacada-info"><span><span class="m-destacada-etq">' + esc(etq) + '</span><span class="m-destacada-cifra m-num">' + cifra + '</span>' +
+    (sub ? '<span class="m-destacada-sub">' + sub + '</span>' : '') +
+    (barra !== undefined ? '<span class="m-destacada-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(barra * 100) + '" aria-label="Avance"><i style="width:' + Math.min(100, Math.max(0, barra * 100)).toFixed(1) + '%"></i></span>' : '') +
+    '</span></div>';
 }
-
-function filaMeta(m) {
+/** Dinero para una cifra clave: desde un millón, abreviado para que quepa en tres columnas en el celular ($ 2,6 M). */
+const dk = v => Math.abs(v) >= 1e6 ? esc(compactoMoneda(v, 'COP')) : dinero(v);
+function cifrasClave(items) {
+  return '<div class="m-kpis">' + items.map(k => '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(k[0]) + '</div><div class="m-kpi-valor m-num ' + (k[3] || '') + '">' + k[1] + '</div><div class="m-kpi-pie">' + (k[2] || '') + '</div></div>').join('') + '</div>';
+}
+const chipEstadoMeta = m => {
   const e = ESTADOS_META[m.estado] || ['', ''];
-  return fila({
-    icono: 'meta', titulo: esc(m.Nombre) + (m.estado === 'atrasada' || m.estado === 'vencida' ? ' <span class="m-insignia">' + esc(e[0]) + '</span>' : ''),
-    sub: esc(textoMeta(m)),
-    final: '<strong class="m-num ' + e[1] + '">' + pct(m.avance) + '</strong><span class="m-row-sub" style="display:block">' + dinero(m.ahorrado) + '</span>',
-    chevron: true, clase: m.Estado === 'Pausada' ? 'm-inactivo' : '', attrs: 'data-acc="meta" data-id="' + esc(m.ID_Meta) + '"'
-  });
+  const clase = m.estado === 'lograda' || m.estado === 'cumplida' ? ' m-insignia-ok' : (m.estado === 'atrasada' || m.estado === 'vencida' ? ' m-insignia-alerta' : '');
+  return '<span class="m-insignia' + clase + '">' + esc(e[0]) + '</span>';
+};
+
+/** Una meta en la lista: nombre y estado, barra de avance, cuánto lleva y lo de este mes. */
+function filaMeta(m) {
+  const fin = m.Fecha_Fin ? mesTexto(m.Fecha_Fin.slice(0, 7)) : '';
+  const linea2 = m.estado === 'lograda' ? 'Ya tienes lo que necesitabas'
+    : m.Estado === 'Pausada' ? 'En pausa: no entra al presupuesto'
+    : (m.mesesRestantes ? 'Este mes: ' + dinero(m.aportadoMes) + ' de ' + dinero(m.planMes) + ' · hasta ' + fin.toLowerCase() : 'Pasó la fecha: ' + fin.toLowerCase());
+  return '<div class="m-row m-renglon m-renglon-viz' + (m.Estado === 'Pausada' ? ' m-inactivo' : '') + '">' +
+    '<button class="m-row-main" data-acc="meta" data-id="' + esc(m.ID_Meta) + '"><span class="m-row-texto">' +
+    '<span class="m-row-titulo" style="display:block">' + esc(m.Nombre) + ' ' + chipEstadoMeta(m) + '</span>' +
+    '<span class="m-renglon-barra m-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(m.avance * 100) + '" aria-label="Avance de ' + esc(m.Nombre) + '"><span style="width:' + Math.min(100, m.avance * 100).toFixed(1) + '%"></span></span>' +
+    '<span class="m-row-sub" style="display:block">' + dinero(m.ahorrado) + ' de ' + dinero(m.Monto_Objetivo) + '</span>' +
+    '<span class="m-row-sub" style="display:block">' + esc(linea2) + '</span></span>' +
+    '<span class="m-row-final"><strong class="m-num">' + pct(m.avance) + '</strong></span>' + ico('der', 'm-icon-sm m-chevron') + '</button></div>';
 }
 
 function htmlMetas(d) {
   const t = d.totales;
+  const archivadas = d.archivadas.length ? seccion('Archivadas', d.archivadas.map(a => fila({ titulo: esc(a.Nombre), sub: dinero(a.ahorrado) + ' de ' + dinero(a.Monto_Objetivo), clase: 'm-inactivo', chevron: true, attrs: 'data-acc="meta-archivada" data-id="' + esc(a.ID_Meta) + '"' })).join('')) : '';
   if (!d.items.length) {
     return vacio('meta', 'Aún no tienes metas', 'Una meta es algo para lo que ahorras: la Navidad, un viaje, la moto, la cuota inicial. Dices cuánto y para cuándo, y Moni te dice cuánto apartar cada mes (puedes cambiarlo mes a mes) y lo pone en tu presupuesto.',
-      '<button class="m-btn m-btn-primary" data-acc="nueva-meta">Crear mi primera meta</button>') +
-      (d.archivadas.length ? seccion('Archivadas', d.archivadas.map(a => fila({ titulo: esc(a.Nombre), sub: dinero(a.ahorrado) + ' de ' + dinero(a.Monto_Objetivo), clase: 'm-inactivo', chevron: true, attrs: 'data-acc="meta-archivada" data-id="' + esc(a.ID_Meta) + '"' })).join('')) : '');
+      '<button class="m-btn m-btn-primary" data-acc="nueva-meta">Crear mi primera meta</button>') + archivadas;
   }
-  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Ahorrado para tus metas</div><div class="m-resumen-cifra m-num">' + dinero(t.ahorrado) + '</div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Tus metas suman</div><strong class="m-num">' + dinero(t.objetivo) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Faltan</div><strong class="m-num">' + dinero(t.falta) + '</strong></div></div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Este mes planeaste</div><strong class="m-num">' + dinero(t.planMes) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Ya apartaste</div><strong class="m-num ' + (t.aportadoMes >= t.planMes && t.planMes > 0 ? 'm-positivo' : '') + '">' + dinero(t.aportadoMes) + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
-  const medidores = d.items.filter(m => m.Monto_Objetivo > 0).map(m => ({ nombre: m.Nombre, valor: m.ahorrado, tope: m.Monto_Objetivo, texto: dinero(m.ahorrado) + ' de ' + dinero(m.Monto_Objetivo) }));
-  if (medidores.length > 1) h += tarjetaMedidores('metas-avance', 'Avance de cada meta', medidores);
   const activas = d.items.filter(m => m.Estado === 'Activa' && m.estado !== 'lograda');
   const otras = d.items.filter(m => !(m.Estado === 'Activa' && m.estado !== 'lograda'));
-  if (activas.length) h += seccion('En curso', activas.map(filaMeta).join(''), 'Cada meta activa entra a tu presupuesto del mes con lo que planeaste apartar.');
-  if (otras.length) h += seccion('Logradas, cumplidas o en pausa', otras.map(filaMeta).join(''));
-  if (d.archivadas.length) h += seccion('Archivadas', d.archivadas.map(a => fila({ titulo: esc(a.Nombre), sub: dinero(a.ahorrado) + ' de ' + dinero(a.Monto_Objetivo), clase: 'm-inactivo', chevron: true, attrs: 'data-acc="meta-archivada" data-id="' + esc(a.ID_Meta) + '"' })).join(''));
-  return h;
+  const avance = t.objetivo > 0 ? t.ahorrado / t.objetivo : 0;
+  return cabeceraDestacada('Ahorrado para tus metas', dinero(t.ahorrado), 'de ' + dinero(t.objetivo) + ' · faltan ' + dinero(t.falta), avance) +
+    cifrasClave([
+      ['Este mes', dk(t.aportadoMes), 'de ' + dinero(t.planMes) + ' planeado', t.planMes > 0 && t.aportadoMes >= t.planMes ? 'm-positivo' : ''],
+      ['En curso', String(t.cantidad), t.cantidad === 1 ? 'meta activa' : 'metas activas'],
+      ['Atrasadas', String(activas.filter(m => m.estado === 'atrasada' || m.estado === 'vencida').length), 'frente a su plan']
+    ]) +
+    (activas.length ? seccion('En curso', activas.map(filaMeta).join(''), 'Cada meta activa entra a tu presupuesto del mes con lo que planeaste apartar.') : '') +
+    (otras.length ? seccion('Logradas, cumplidas o en pausa', otras.map(filaMeta).join('')) : '') + archivadas;
 }
 
 function vMeta(id) {
@@ -85,35 +99,34 @@ function vMeta(id) {
 }
 
 function htmlMeta(m) {
-  const e = ESTADOS_META[m.estado] || ['', ''];
   const id = esc(m.ID_Meta);
-  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(MOTIVOS_META[m.Motivo] || 'Meta') + ' · ' + esc(e[0]) + '</div>' +
-    '<div class="m-resumen-cifra m-num">' + dinero(m.ahorrado) + '</div>' +
-    '<p class="m-ayuda" style="margin:0">de ' + dinero(m.Monto_Objetivo) + ' · para el ' + esc(fechaTxt(m.Fecha_Fin)) + (m.Bolsillo ? ' · en “' + esc(m.Bolsillo) + '”' : '') + '</p>' +
-    '<div class="m-progreso' + (m.avance >= 1 ? '' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(m.avance * 100) + '" aria-label="Avance de la meta" style="margin:var(--m-space-3) 0"><span style="width:' + Math.min(100, m.avance * 100).toFixed(1) + '%"></span></div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Faltan</div><strong class="m-num">' + dinero(m.falta) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Este mes</div><strong class="m-num">' + dinero(m.aportadoMes) + ' de ' + dinero(m.planMes) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Meses que quedan</div><strong class="m-num">' + m.mesesRestantes + '</strong></div></div>' +
-    (m.usado > 0 ? '<p class="m-ayuda">Ya usaste ' + dinero(m.usado) + ' de esta meta.</p>' : '') + '</div>';
+  const fin = m.Fecha_Fin ? mesTexto(m.Fecha_Fin.slice(0, 7)) : '';
+  let h = cabeceraDestacada((MOTIVOS_META[m.Motivo] || 'Meta') + ' · ' + (ESTADOS_META[m.estado] || [''])[0], dinero(m.ahorrado),
+    'de ' + dinero(m.Monto_Objetivo) + ' · para ' + esc(fin.toLowerCase()) + (m.Bolsillo ? ' · en “' + esc(m.Bolsillo) + '”' : ''), m.avance);
+  h += cifrasClave([
+    ['Faltan', dk(m.falta), pct(m.avance) + ' logrado'],
+    ['Este mes', dk(m.aportadoMes), 'de ' + dinero(m.planMes), m.planMes > 0 && m.aportadoMes >= m.planMes ? 'm-positivo' : ''],
+    ['Quedan', String(m.mesesRestantes), m.mesesRestantes === 1 ? 'mes' : 'meses']
+  ]);
 
-  // Lo que conviene saber ahora
+  // Qué hacer ahora
   if (m.estado === 'atrasada') h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Vas atrasado frente a tu plan. Para llegar a tiempo, aparta unos <strong>' + dinero(m.porMesParaLlegar) + '</strong> al mes desde ahora (Moni ya repartió lo que falta en los meses que quedan).</span></div>';
   if (m.estado === 'vencida') h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Pasó la fecha y faltan ' + dinero(m.falta) + '. Edita la meta para darle más tiempo o márcala como cumplida.</span></div>';
   if (m.sinCubrir > 0) h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Tu plan por mes no alcanza: faltan <strong>' + dinero(m.sinCubrir) + '</strong>. Súbele a algún mes o deja alguno en automático.</span></div>';
   if (m.estado === 'lograda') h += '<div class="m-banner" role="note">' + ico('check') + '<span>¡Lo lograste! Ya tienes lo que necesitabas. Cuando lo uses, regístralo con “Usar el dinero”.</span></div>';
+  h += '<div style="display:flex;flex-direction:column;gap:var(--m-space-2);margin:var(--m-space-2) 0 var(--m-space-5)">' +
+    (m.Estado !== 'Cumplida' && m.estado !== 'lograda' ? '<button class="m-btn m-btn-primary" data-acc="aportar-meta" data-id="' + id + '">Aportar ' + (m.planMes > m.aportadoMes ? dinero(m.planMes - m.aportadoMes) + ' ahora' : 'ahora') + '</button>' : '') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--m-space-2)"><button class="m-btn m-btn-secondary" data-acc="plan-meta" data-id="' + id + '">Plan por mes</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="usar-meta" data-id="' + id + '">Usar el dinero</button></div></div>';
 
-  h += '<div class="m-acciones-fila" style="display:flex;flex-wrap:wrap;gap:var(--m-space-2);margin:var(--m-space-4) 0">' +
-    (m.Estado !== 'Cumplida' ? '<button class="m-btn m-btn-primary" data-acc="aportar-meta" data-id="' + id + '">Aportar ahora</button>' : '') +
-    '<button class="m-btn m-btn-secondary" data-acc="plan-meta" data-id="' + id + '">Plan por mes</button>' +
-    '<button class="m-btn m-btn-secondary" data-acc="usar-meta" data-id="' + id + '">Usar el dinero</button></div>';
+  // Lo que viene: los próximos meses del plan, en palabras
+  const viene = m.plan.filter(p => !p.pasado).slice(0, 4);
+  if (viene.length) h += seccion('Lo que viene', viene.map(p => fila({ titulo: esc(mesTexto(p.mes)), sub: p.manual ? 'Lo escribiste tú' : 'Automático: Moni reparte lo que falta',
+    final: '<strong class="m-num">' + dinero(p.plan) + '</strong>' + (p.aportado > 0 ? '<span class="m-row-sub" style="display:block">llevas ' + dinero(p.aportado) + '</span>' : '') })).join('') +
+    (m.plan.filter(p => !p.pasado).length > viene.length ? '' : ''), 'Toca “Plan por mes” para cambiar lo que apartas en cualquier mes.');
 
-  // Plan frente a lo aportado, mes a mes
-  if (m.plan.length) {
+  if (m.plan.length > 1) {
     const puntos = puntosMeses(m.plan.map(p => p.mes));
-    h += tarjetaViz('meta-mes', 'Plan y aportes por mes',
-      vizColumnas({ puntos: puntos, series: [{ nombre: 'Plan', clave: 'viz-s2', valores: m.plan.map(p => p.plan) }, { nombre: 'Aportado', clave: 'viz-s1', valores: m.plan.map(p => p.aportado) }], divisa: 'COP', alto: 200, etiqueta: 'Plan y aportes de cada mes' }) +
-        '<p class="m-ayuda">Los meses con un valor que escribiste tú quedan fijos; en los demás, Moni reparte lo que falta. Toca “Plan por mes” para cambiarlo.</p>',
-      tablaViz(['Mes', 'Plan', 'Aportado', ''], m.plan.map(p => [mesTexto(p.mes), dinero(p.plan), dinero(p.aportado), p.manual ? 'a mano' : (p.pasado ? '' : 'automático')])));
     h += tarjetaViz('meta-acum', 'Cómo vas hacia la meta',
       vizLinea({ puntos: puntos, series: [
         { nombre: 'Si sigues el plan', clave: 'viz-s2', valores: m.acumulado.map(a => a.plan) },
@@ -121,16 +134,19 @@ function htmlMeta(m) {
         { nombre: 'Meta', clave: 'viz-s3', valores: m.acumulado.map(() => m.Monto_Objetivo) }
       ], divisa: 'COP', alto: 190, etiqueta: 'Ahorro acumulado frente a la meta' }),
       tablaViz(['Mes', 'Con el plan', 'Llevas'], m.acumulado.map(a => [mesTexto(a.mes), dinero(a.plan), a.real === null ? '—' : dinero(a.real)])));
+    h += tarjetaViz('meta-mes', 'Plan y aportes por mes',
+      vizColumnas({ puntos: puntos, series: [{ nombre: 'Plan', clave: 'viz-s2', valores: m.plan.map(p => p.plan) }, { nombre: 'Aportado', clave: 'viz-s1', valores: m.plan.map(p => p.aportado) }], divisa: 'COP', alto: 200, etiqueta: 'Plan y aportes de cada mes' }),
+      tablaViz(['Mes', 'Plan', 'Aportado', ''], m.plan.map(p => [mesTexto(p.mes), dinero(p.plan), dinero(p.aportado), p.manual ? 'a mano' : (p.pasado ? '' : 'automático')])));
   }
   if (m.movimientos.length) {
     h += seccion('Aportes y usos', m.movimientos.map(x => fila({ titulo: esc(x.Concepto), sub: esc(fechaTxt(x.Fecha)) + ' · ' + (x.tipo === 'Uso' ? 'usado' : 'aporte'),
       final: '<span class="m-num ' + (x.tipo === 'Uso' ? 'm-negativo' : 'm-positivo') + '">' + dinero(x.Valor) + '</span>', chevron: true, attrs: 'data-acc="mov" data-id="' + esc(x.ID_Mov) + '"' })).join(''));
   }
+  if (m.usado > 0) h += '<p class="m-ayuda">Ya usaste ' + dinero(m.usado) + ' de esta meta (no baja lo ahorrado).</p>';
   if (m.Notas) h += '<p class="m-ayuda">' + esc(m.Notas) + '</p>';
   return h;
 }
 
-/** Plan por mes: cada mes que queda, con su valor a mano (o vacío para que Moni lo reparta). */
 async function abrirPlanMeta(m) {
   const futuros = m.plan.filter(p => !p.pasado);
   if (!futuros.length) { aviso('La meta ya no tiene meses por delante. Edítala para cambiar la fecha.', true); return; }
@@ -208,40 +224,53 @@ function vRegalos() {
   };
 }
 
+const chipEstadoDeseo = i => {
+  const e = i.Comprado ? 'Comprado' : (i.Estado || 'Idea');
+  return '<span class="m-insignia' + (e === 'Comprado' ? ' m-insignia-ok' : e === 'Decidido' ? ' m-insignia-alerta' : '') + '">' + esc(ESTADOS_DESEO[e] || e) + '</span>';
+};
+
+/** Un deseo en la lista: qué es y su estado; categoría, ocasión y prioridad; cuánto (lo gastado si ya se compró). */
 function filaDeseo(i) {
-  const que = i.Idea || (i.ParaMi ? i.CategoriaNombre : 'Sin decidir todavía');
-  const sub = [i.ParaMi ? i.CategoriaNombre : '', i.Ocasion, i.Prioridad ? 'prioridad ' + i.Prioridad.toLowerCase() : '', i.ideas.length ? i.ideas.length + (i.ideas.length === 1 ? ' idea' : ' ideas') : '']
-    .filter(Boolean).join(' · ');
+  const que = i.Idea || (i.ParaMi ? i.CategoriaNombre : 'Regalo sin decidir');
+  const sub = [i.ParaMi || i.Categoria !== 'Regalo' ? i.CategoriaNombre : '', i.Ocasion, i.Prioridad ? 'prioridad ' + i.Prioridad.toLowerCase() : '',
+    i.ideas.length ? i.ideas.length + (i.ideas.length === 1 ? ' idea' : ' ideas') : '', i.Fecha_Objetivo ? 'para ' + fechaTxt(i.Fecha_Objetivo) : ''].filter(Boolean).join(' · ');
   const final = i.Comprado
-    ? '<strong class="m-num">' + dinero(i.Real) + '</strong>' + (i.PendienteReserva && i.PendienteReserva.length ? '<span class="m-row-sub" style="display:block;color:var(--m-danger)">mover a la reserva</span>' : '<span class="m-row-sub" style="display:block;color:var(--m-success)">comprado</span>')
-    : '<span class="m-num">' + dinero(i.Estimado) + '</span><span class="m-row-sub" style="display:block">' + esc((ESTADOS_DESEO[i.Estado] || 'idea').toLowerCase()) + '</span>';
-  return fila({ titulo: esc(que) + (i.Aplica ? '' : ' <span class="m-insignia">' + (i.Estado === 'Descartado' ? 'descartado' : 'no aplica') + '</span>') + (i.Enlace ? ' ' + ico('der', 'm-icon-sm') : ''),
-    sub: esc(sub || 'estimado ' + dinero(i.Estimado)), final: final, clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"' });
+    ? '<strong class="m-num">' + dinero(i.Real) + '</strong>' + (i.PendienteReserva && i.PendienteReserva.length ? '<span class="m-row-sub" style="display:block;color:var(--m-danger)">mover a la reserva</span>' : (i.Estimado ? '<span class="m-row-sub" style="display:block">de ' + dinero(i.Estimado) + '</span>' : ''))
+    : '<strong class="m-num">' + dinero(i.Estimado) + '</strong>';
+  return fila({ titulo: esc(que) + ' ' + (i.Aplica ? chipEstadoDeseo(i) : '<span class="m-insignia">' + (i.Estado === 'Descartado' ? 'descartado' : 'no aplica') + '</span>'),
+    sub: esc(sub), final: final, clase: i.Aplica ? '' : 'm-inactivo', chevron: true, attrs: 'data-acc="regalo" data-id="' + esc(i.ID_Regalo) + '"' });
 }
 
 function htmlRegalos(d) {
   const g = App.reg, t = d.totales;
   const filtro = g.filtro || 'todos';
-  let h = '<div class="m-campo"><label class="m-label" for="reg-anio">Año</label><select class="m-input" id="reg-anio">' +
-    d.anios.map(a => '<option value="' + a + '"' + (a === d.anio ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></div>';
-  if (!d.items.length) return h + vacio('regalo', 'Tu lista de ' + d.anio + ' está vacía', 'Anota lo que quieres regalar (y a quién) o comprarte: skincare, ropa, tecnología… Escribe cuánto quieres gastar y junta varias ideas antes de decidir. Registrar la compra es opcional.',
+  const controles = '<div class="m-deseos-controles"><select class="m-input" id="reg-anio" aria-label="Año">' +
+    d.anios.map(a => '<option value="' + a + '"' + (a === d.anio ? ' selected' : '') + '>' + a + '</option>').join('') + '</select>' +
+    (d.items.length ? '<div class="m-pildoras" role="radiogroup" aria-label="Para quién">' +
+      [['todos', 'Todo'], ['mi', 'Para mí'], ['otros', 'Para otros']].map(x => '<button class="m-pildora" role="radio" data-acc="deseo-filtro" data-f="' + x[0] + '" aria-checked="' + (filtro === x[0]) + '" aria-selected="' + (filtro === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' : '') + '</div>';
+  if (!d.items.length) return controles + vacio('regalo', 'Tu lista de ' + d.anio + ' está vacía', 'Anota lo que quieres regalar (y a quién) o comprarte: skincare, ropa, tecnología… Escribe cuánto quieres gastar y junta varias ideas antes de decidir. Registrar la compra es opcional.',
     '<button class="m-btn m-btn-primary" data-acc="nuevo-regalo">Agregar a la lista</button>');
-  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Piensas gastar</div><div class="m-resumen-cifra m-num">' + dinero(t.estimado) + '</div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Para ti</div><strong class="m-num">' + dinero(t.paraMi) + '</strong></div><div><div class="m-resumen-etiqueta">Para otros</div><strong class="m-num">' + dinero(t.paraOtros) + '</strong></div></div>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ya gastado</div><strong class="m-num">' + dinero(t.real) + '</strong></div><div><div class="m-resumen-etiqueta">Comprados</div><strong class="m-num">' + t.comprados + ' de ' + t.total + '</strong></div></div></div><div style="height:var(--m-space-4)"></div>';
-  // Avisos de dinero por mover a la reserva de una tarjeta (regalos de antes y deseos comprados con tarjeta)
-  h = (d.pendientes || []).map((p, k) => '<div class="m-banner m-pendiente m-pendiente-importante" role="note">' + ico('alerta') +
+  const avisos = (d.pendientes || []).map((p, k) => '<div class="m-banner m-pendiente m-pendiente-importante" role="note">' + ico('alerta') +
     '<span class="m-pendiente-texto"><strong>Mueve ' + dinero(p.falta) + ' a la reserva de ' + esc(p.Tarjeta) + '</strong> ' + esc((p.ParaMi ? (p.Idea || 'Tu compra') : 'Regalo de ' + p.Persona) + (p.BolsilloPlan ? ': de “' + p.BolsilloPlan + '” a “' + p.Reserva + '”' : ' → “' + p.Reserva + '”') + '. Sigue este aviso hasta que lo registres.') + '</span>' +
-    '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="regalo-mover" data-i="' + k + '">Mover ahora</button></span></div>').join('') + h;
-  h += htmlDeseosGraficos(d);
-  h += '<div class="m-pildoras" role="radiogroup" aria-label="Para quién" style="margin:var(--m-space-3) 0">' +
-    [['todos', 'Todos'], ['mi', 'Para mí'], ['otros', 'Para otros']].map(x => '<button class="m-pildora" role="radio" data-acc="deseo-filtro" data-f="' + x[0] + '" aria-checked="' + (filtro === x[0]) + '" aria-selected="' + (filtro === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+    '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="regalo-mover" data-i="' + k + '">Mover ahora</button></span></div>').join('');
+  const porComprar = d.items.filter(i => i.Aplica && !i.Comprado).reduce((a, i) => a + i.Estimado, 0);
+  // En lo ya comprado: cuánto por debajo (o por encima) de lo que pensabas gastar
+  const comprados = d.items.filter(i => i.Aplica && i.Comprado && i.Estimado > 0);
+  const ahorroCompras = comprados.reduce((a, i) => a + i.Estimado - i.Real, 0);
+  let h = avisos + controles +
+    cabeceraDestacada('Piensas gastar en ' + d.anio, dinero(t.estimado), 'Para ti ' + dinero(t.paraMi) + ' · para otros ' + dinero(t.paraOtros), t.total ? t.comprados / t.total : 0) +
+    cifrasClave([['Por comprar', dk(porComprar), (t.total - t.comprados) + ' de ' + t.total + ' cosas'], ['Ya gastado', dk(t.real), t.comprados + (t.comprados === 1 ? ' comprado' : ' comprados')],
+      comprados.length ? [ahorroCompras >= 0 ? 'Te ahorraste' : 'Te pasaste', dk(Math.abs(ahorroCompras)), 'en lo comprado, frente a lo que pensabas', ahorroCompras >= 0 ? 'm-positivo' : 'm-negativo'] : ['Te ahorraste', dinero(0), 'cuando compres, aquí ves si gastaste menos']]);
   const items = d.items.filter(i => filtro === 'todos' || (filtro === 'mi' ? i.ParaMi : !i.ParaMi));
-  // Agrupado por para quién (lo tuyo primero)
+  // Agrupado por para quién (lo tuyo primero); dentro, lo pendiente antes que lo comprado
   const grupos = [];
   items.forEach(i => { let gr = grupos.find(x => x.nombre === i.Persona); if (!gr) { gr = { nombre: i.Persona, items: [] }; grupos.push(gr); } gr.items.push(i); });
-  h += grupos.map(gr => seccion(gr.nombre + ' · ' + dinero(gr.items.filter(i => i.Aplica).reduce((a, i) => a + i.Estimado, 0)), gr.items.map(filaDeseo).join(''))).join('') ||
-    '<p class="m-ayuda">No hay nada en este filtro.</p>';
+  h += grupos.map(gr => {
+    const lista = gr.items.slice().sort((a, b) => (a.Comprado - b.Comprado) || (!a.Aplica - !b.Aplica));
+    const total = gr.items.filter(i => i.Aplica).reduce((a, i) => a + i.Estimado, 0);
+    return seccion(gr.nombre, lista.map(filaDeseo).join(''), gr.items.length + (gr.items.length === 1 ? ' cosa' : ' cosas') + ' · ' + dinero(total));
+  }).join('') || '<p class="m-ayuda">No hay nada en este filtro.</p>';
+  h += htmlDeseosGraficos(d);
   return h;
 }
 

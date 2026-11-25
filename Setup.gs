@@ -225,7 +225,6 @@ const DEFAULT_CONFIG = [
   ['Redondeo_Aportes', '-2', 'Nomina', 'numero', 'Redondeo de aportes (-2 = centena superior)'],
   ['SMMLV', '1750905', 'Nomina', 'moneda', 'Salario mínimo mensual legal vigente. Actualizar cada enero'],
   ['SMMLV_Anio', '2026', 'Nomina', 'numero', 'Año del SMMLV registrado'],
-  ['Auxilio_Transporte', '249095', 'Nomina', 'moneda', 'Auxilio de transporte legal mensual (para quien gana hasta 2 SMMLV). Actualizar cada enero'],
   ['FSP_Umbral_SMMLV', '4', 'Nomina', 'numero', 'Umbral de SMMLV para el Fondo de Solidaridad Pensional'],
   ['Auxilio_Transporte_Aplica', 'FALSE', 'Nomina', 'booleano', 'Aplica auxilio de transporte legal'],
   ['Prima_Fechas', '06-30,12-20', 'Nomina', 'texto', 'Fechas límite de pago de prima'],
@@ -249,7 +248,6 @@ const DEFAULT_CONFIG = [
   ['Calendario_ID', '', 'Recordatorios', 'texto', 'Calendario de Google que crea la app'],
   ['Recordatorios_Ultima', '', 'Recordatorios', 'texto', 'Fecha y hora de la última sincronización'],
   ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización'],
-  ['Pension_Perfil', '', 'Pension', 'texto', 'Datos para estimar tu pensión y tus cesantías (los guarda la app)'],
   ['Inversiones_Ultima', '', 'Divisas', 'texto', 'Fecha y hora de la última actualización de precios de Google Finance']
 ];
 

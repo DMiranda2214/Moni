@@ -370,6 +370,11 @@ async function abrirRegistrar(o) {
     '<div id="reg-nuevo">' +
     (modo.conceptoFijo ? '' : paso(1, '¿Cuánto y por qué?')) +
     htmlCampo(campoValor, valorInicial) +
+    // Justo después del monto: ¿este movimiento cambia mis saldos? (así se decide al escribirlo y no se olvida al final)
+    (modo.afecta ? htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
+      info: 'Apágalo para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, un gasto de la primera semana del mes, antes de empezar con Moni). Queda en tus movimientos y en los gráficos, pero no cambia ningún saldo.' },
+      edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso,Mover"') +
+      '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso,Mover" aria-live="polite"></p>' : '') +
     (modo.conceptoFijo ? '' : htmlCampo({ k: 'Concepto', label: 'Concepto', tipo: 'texto', maxlength: 120, requerido: true }, edit ? edit.Concepto : (o.concepto || '')).replace('data-campo="Concepto"', 'data-campo="Concepto" data-etiqueta="1"')) +
     (modo.conceptoFijo ? '' : paso(2, '¿En qué bolsillo?')) +
     (modo.medioFijo ? fijo(medioEtiqueta, modo.medioTexto) : selBolsillo('ID_Bolsillo', medioEtiqueta, bolsilloInicial, 'Gasto,Ingreso,Ajuste', null, modo.medioVacio)) +
@@ -386,12 +391,8 @@ async function abrirRegistrar(o) {
       '<input class="m-input m-num" id="f-Valor_Original" inputmode="decimal" aria-label="Valor en esa moneda" placeholder="Valor en esa moneda" disabled></div>' +
       '<p class="m-ayuda">Escribe arriba lo que te cobró la tarjeta en tu moneda. Si tu tarjeta cobra un recargo por compras en otra moneda, aparece abajo.</p></div>' : '') +
     (!edit && modo.cargos ? htmlCargos(modo.tipos.length > 1 ? 'Gasto,Mover' : '') : '') +
-    (modo.conceptoFijo ? '' : paso(3, '¿Cuándo y cómo se cuenta?')) +
+    (modo.conceptoFijo ? '' : paso(3, '¿Cuándo?')) +
     '<div class="m-campo" data-campo="Fecha"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo(INFO_GENERAL.Fecha) + '</div><input class="m-input" id="f-Fecha" name="Fecha" type="date" max="' + hoy + '" value="' + esc(edit ? edit.Fecha : hoy) + '"></div>' +
-    (modo.afecta ? htmlCampo({ k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor',
-      info: 'Apágalo para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, un gasto de la primera semana del mes, antes de empezar con Moni). Queda en tus movimientos y en los gráficos, pero no cambia ningún saldo.' },
-      edit ? edit.Afecta_Saldos !== false : true).replace('data-campo="Afecta"', 'data-campo="Afecta" data-solo="Gasto,Ingreso,Mover"') +
-      '<p class="m-ayuda m-hist-ayuda" id="reg-hist-ayuda" data-solo="Gasto,Ingreso,Mover" aria-live="polite"></p>' : '') +
     (modo.notas || (conTarjetas && modo.fuente) ? '<details class="m-nom-mas"><summary>Más opciones</summary>' +
       // Con tarjeta: qué hacer con el dinero ahora (lo de la antigua hoja "Compra con tarjeta")
       (conTarjetas && modo.fuente ? '<div class="m-campo" id="reg-fuente" hidden><label class="m-label" for="f-Fuente">¿Qué hacer con el dinero? (tarjeta)</label><select class="m-input" id="f-Fuente"><option value="">Automático: según el renglón</option>' +

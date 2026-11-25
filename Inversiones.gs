@@ -288,3 +288,61 @@ function actualizarPreciosGoogle() {
   guardarConfig_('Inversiones_Ultima', ahoraIso_());
   return { actualizadas: actualizadas, pendientes: pendientes };
 }
+
+// ---------- Buscar un símbolo en Google Finance ----------
+
+const HOJA_BUSCAR = 'Buscar_Google';
+
+/** Símbolos que se prueban para un texto: tal cual y en las bolsas más comunes (y como cripto o divisa en dólares). */
+function candidatosSimbolo_(texto) {
+  const t = texto_(texto).toUpperCase().replace(/\s+/g, '');
+  if (!t) return [];
+  if (!/^[A-Z0-9.:_\-]{1,40}$/.test(t)) throw new Error('Escribe el símbolo con letras y números (por ejemplo AAPL, VOO, BTC o ECOPETROL).');
+  if (t.indexOf(':') !== -1) return [t];
+  return [t, 'NASDAQ:' + t, 'NYSE:' + t, 'NYSEARCA:' + t, 'BVC:' + t, 'CURRENCY:' + t + 'USD'];
+}
+
+/**
+ * Busca un símbolo con la misma fórmula GOOGLEFINANCE (no necesita permisos nuevos): escribe los candidatos en una hoja
+ * auxiliar y lee el nombre, el precio y la moneda de los que Google reconoce. Un candidato que ya estaba escrito no se
+ * vuelve a escribir (así la fórmula no se queda "cargando").
+ * @returns {Array} [{ simbolo, nombre, precio, divisa, tipo }]
+ */
+function buscarSimbolosGoogle(texto) {
+  const cands = candidatosSimbolo_(texto);
+  if (!cands.length) return [];
+  const ss = getSpreadsheet();
+  let hoja = ss.getSheetByName(HOJA_BUSCAR);
+  if (!hoja) {
+    hoja = ss.insertSheet(HOJA_BUSCAR);
+    hoja.getRange(1, 1, 1, 4).setValues([['Simbolo', 'Nombre', 'Precio', 'Moneda']]);
+  }
+  const previos = hoja.getLastRow() > 1 ? hoja.getRange(2, 1, Math.max(hoja.getLastRow() - 1, 1), 4).getValues() : [];
+  const mismos = previos.length >= cands.length && cands.every((c, k) => previos[k][0] === c);
+  if (!mismos) {
+    if (previos.length) hoja.getRange(2, 1, previos.length, 4).clearContent();
+    cands.forEach((c, k) => {
+      const f = '"' + c.replace(/"/g, '') + '"';
+      hoja.getRange(k + 2, 1).setValue(c);
+      hoja.getRange(k + 2, 2).setFormula('=IFERROR(GOOGLEFINANCE(' + f + ',"name"),"")');
+      hoja.getRange(k + 2, 3).setFormula('=IFERROR(GOOGLEFINANCE(' + f + ',"price"),"")');
+      hoja.getRange(k + 2, 4).setFormula('=IFERROR(GOOGLEFINANCE(' + f + ',"currency"),"")');
+    });
+  }
+  const leer = () => { SpreadsheetApp.flush(); return hoja.getRange(2, 1, cands.length, 4).getValues(); };
+  let filas = leer();
+  // Google tarda un momento en responder la primera vez
+  for (let intento = 0; intento < 2 && !filas.some(f => typeof f[2] === 'number' && f[2] > 0); intento++) { Utilities.sleep(1500); filas = leer(); }
+  const vistos = {};
+  return filas.filter(f => typeof f[2] === 'number' && isFinite(f[2]) && f[2] > 0).map(f => {
+    const simbolo = String(f[0]), cripto = simbolo.indexOf('CURRENCY:') === 0;
+    const divisa = cripto ? 'USD' : String(f[3] || '').toUpperCase();
+    return { simbolo: simbolo, nombre: String(f[1] || '') || (cripto ? simbolo.slice(9, -3) + ' (cripto o divisa, en dólares)' : simbolo), precio: f[2],
+      divisa: DIVISAS.indexOf(divisa) !== -1 ? divisa : '', monedaGoogle: divisa, tipo: cripto ? 'Cripto' : (/^NYSEARCA:/.test(simbolo) ? 'ETF' : 'Accion') };
+  }).sort((a, b) => (a.simbolo.indexOf(':') === -1) - (b.simbolo.indexOf(':') === -1)).filter(r => {
+    // El mismo activo (mismo nombre y precio) con y sin bolsa: se deja el que tiene la bolsa
+    const k = r.nombre + '|' + r.precio;
+    if (vistos[k]) return false;
+    vistos[k] = true; return true;
+  });
+}

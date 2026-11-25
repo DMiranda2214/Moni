@@ -101,4 +101,23 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.deepStrictEqual(sin.faltaTasa, ['USD']);
     assert.strictEqual(sin.items[0].valor, 2000000);
   });
+
+  prueba('inversiones: buscar un símbolo en Google Finance prueba las bolsas comunes y deja uno por activo', () => {
+    const { e } = escenario();
+    assert.deepStrictEqual(e.llamar('candidatosSimbolo_', 'aapl'), ['AAPL', 'NASDAQ:AAPL', 'NYSE:AAPL', 'NYSEARCA:AAPL', 'BVC:AAPL', 'CURRENCY:AAPLUSD']);
+    assert.deepStrictEqual(e.llamar('candidatosSimbolo_', 'nasdaq:aapl'), ['NASDAQ:AAPL']);
+    assert.throws(e.falla('candidatosSimbolo_', 'a b"c'), /letras y números/);
+    // La primera vez Google aún no responde: no hay resultados
+    assert.deepStrictEqual(e.llamar('searchSimbolo', 'aapl').data, []);
+    const hoja = e.hojas.Buscar_Google;
+    assert.strictEqual(hoja.filas[2][0], 'NASDAQ:AAPL');
+    // Lo que devolvieron las fórmulas: el mismo activo con y sin bolsa, y nada en las demás
+    hoja.filas[1][1] = 'Apple Inc'; hoja.filas[1][2] = 190.5; hoja.filas[1][3] = 'USD';
+    hoja.filas[2][1] = 'Apple Inc'; hoja.filas[2][2] = 190.5; hoja.filas[2][3] = 'USD';
+    const r = e.llamar('searchSimbolo', 'AAPL').data;
+    assert.strictEqual(r.length, 1);
+    assert.strictEqual(r[0].simbolo, 'NASDAQ:AAPL');
+    assert.strictEqual(r[0].divisa, 'USD');
+    assert.strictEqual(r[0].tipo, 'Accion');
+  });
 };

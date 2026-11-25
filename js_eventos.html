@@ -185,8 +185,7 @@ const ACCIONES = {
   // Herramientas
   'calc-tab': el => { App.calc.tab = el.dataset.tab; render(); },
   'calc-crear-meta': () => crearMetaDesdeCalc(),
-  'pen-tab': el => { App.pen.tab = el.dataset.tab; render(); },
-  'pen-guardar': el => guardarPerfilPension(el),
+
   regalo: el => abrirDetalleRegalo(el.dataset.id),
   'regalo-mover': el => { const p = (App.reg.data && App.reg.data.pendientes || [])[Number(el.dataset.i)]; if (p) abrirRegistrar({ tipo: 'Mover', idBolsillo: p.ID_Bolsillo_Plan || undefined, destino: p.ID_Bolsillo_Reserva, valor: p.falta, concepto: 'Reserva ' + p.Tarjeta + ': ' + (p.ParaMi ? (p.Idea || 'compra') : 'regalo de ' + p.Persona) }); },
   'mes-anual': el => { App.ppto.mes = el.dataset.mes; App.ppto.data = null; navegar('presupuesto'); },

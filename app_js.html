@@ -29,14 +29,14 @@ const TABS = [
 const AREA_DE_RUTA = {
   inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero', inversiones: 'dinero',
   planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', deseos: 'planear', anual: 'planear', analisis: 'planear',
-  metas: 'planear', calculadora: 'planear', pensiones: 'planear',
+  metas: 'planear', calculadora: 'planear',
   tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
 };
 
 /** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
 const GRUPOS_NAV = [
   { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas'], ['inversiones', 'Inversiones', 'tendencia']] },
-  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['metas', 'Metas', 'meta'], ['deseos', 'Lista de deseos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso'], ['calculadora', 'Calculadora', 'calculadora'], ['pensiones', 'Pensiones y cesantías', 'paraguas']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['metas', 'Metas', 'meta'], ['deseos', 'Lista de deseos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso'], ['calculadora', 'Calculadora', 'calculadora']] },
   { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
 ];
 const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
@@ -700,7 +700,6 @@ function tituloRuta(ruta) {
   if (partes[0] === 'inversiones') return 'Inversiones';
   if (partes[0] === 'inversion') { const i = App.inv && App.inv.data && App.inv.data.items.find(x => x.ID_Inversion === partes[1]); return i ? i.Nombre : 'Inversión'; }
   if (partes[0] === 'calculadora') return 'Calculadora';
-  if (partes[0] === 'pensiones') return 'Pensiones y cesantías';
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
@@ -783,7 +782,6 @@ function pantalla(ruta) {
     case 'inversiones': return vInversiones();
     case 'inversion': return vInversion(partes[1]);
     case 'calculadora': return vCalculadora();
-    case 'pensiones': return vPensiones();
     case 'anual': return vAnual();
     case 'analisis': return vAnalisis();
     case 'guia': return vGuia();
