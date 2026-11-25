@@ -162,6 +162,22 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(x.e.llamar('zonaHoraria_'), 'Europe/Madrid');
   });
 
+  prueba('análisis: el patrimonio del último mes es el de Inicio y la proyección repite los cobros de cada mes', () => {
+    const x = escenario();
+    const t = tarjeta(x);
+    x.e.api('addGastoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Fecha: hoy(), Concepto: 'Ropa', Valor: 300000 });
+    x.e.api('addCredito', { Tipo_Credito: 'Bancario', Nombre: 'Libre', Monto: 1000000, EA: 0.2, Periodicidad: 'Mensual', Num_Periodos: 10, Fecha_Inicio: hoy(), ID_Bolsillo_Pago: x.casa.ID_Bolsillo, ID_Bolsillo_Desembolso: x.casa.ID_Bolsillo });
+    const en = n => bogota(n * 86400000);
+    x.e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Internet', Tipo: 'Servicio', Valor: 100000, Periodicidad: 'Mensual', Proximo_Cobro: en(5), ID_Bolsillo: x.casa.ID_Bolsillo });
+    const d = x.e.api('getAnalisis');
+    assert.strictEqual(d.patrimonioMensual.length, 12);
+    assert.strictEqual(d.patrimonioMensual[11].neto, d.patrimonio.neto, 'el último mes coincide con el patrimonio de hoy');
+    assert.strictEqual(d.proyeccion.eventos.filter(e => e.titulo === 'Internet').length, 3, 'tres cobros mensuales en 90 días');
+    assert.ok(d.proyeccion.eventos.some(e => e.tipo === 'Crédito' && e.valor < 0), 'las cuotas del crédito salen');
+    assert.ok(d.proyeccion.conocido.d90 <= d.proyeccion.inicio, 'sin ingresos conocidos, el disponible baja');
+    assert.ok(Array.isArray(d.categorias) && Array.isArray(d.deudas) && d.deudas.length === 2);
+  });
+
   prueba('crédito de autopago: sigue igual (sale del ahorro y vuelve con cada cuota)', () => {
     const x = escenario();
     const ah = x.e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: x.banco.ID_Banco, Nombre: 'Ahorros', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 3000000 });

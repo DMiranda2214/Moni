@@ -27,14 +27,14 @@ const TABS = [
 /** Cada pantalla principal pertenece a un área: el área marca la pestaña (o el grupo de la barra lateral) activa. */
 const AREA_DE_RUTA = {
   inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero',
-  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', anual: 'planear',
+  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', anual: 'planear', analisis: 'planear',
   tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
 };
 
 /** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
 const GRUPOS_NAV = [
   { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas']] },
-  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['regalos', 'Regalos', 'regalo'], ['anual', 'Vista anual', 'calendario']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['regalos', 'Regalos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso']] },
   { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
 ];
 const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
@@ -600,7 +600,7 @@ function aplicarEscritura(res) {
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;
-  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null;
+  App.aho.data = null; App.ahoC.data = null; App.reg.data = null; App.anual.data = null; if (App.ana) App.ana.data = null;
   App.inicioGraf.viejo = true; App.inicioGraf.intentado = false;
   const ruta = rutaActual();
 
@@ -743,6 +743,7 @@ function pantalla(ruta) {
     case 'nomina': return vNomina();
     case 'regalos': return vRegalos();
     case 'anual': return vAnual();
+    case 'analisis': return vAnalisis();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
     case 'ingresos': return vIngresos();

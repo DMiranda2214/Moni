@@ -66,7 +66,7 @@
 | `Demo.gs` | Datos de demostración (prefijo `demo-`). **Solo desarrollo**: producción lo reemplaza por `scripts/stubs/Demo.gs` |
 | `Multiusuario.gs` | Una hoja por persona: crear o vincular la hoja, desvincular, modo multiusuario |
 | `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
-| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta |
+| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta; `obtenerAnalisis` (patrimonio mensual, categorías frente a meses anteriores, deudas, proyección de caja a 90 días y cargos del año) |
 | `TasasGoogle.gs` | Tasa de referencia desde Google Finance (hoja auxiliar `Tasas_Google`) |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
@@ -109,7 +109,7 @@ Convenciones:
 Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la persona** (`getUserLock`) en modo multiusuario y el del **script** (`getScriptLock`) con una sola hoja. Por eso dos personas con hojas distintas nunca se esperan, y dos pestañas de la misma persona no se pisan. Desde 1.11 el bloqueo es **reentrante** dentro de una petición: una operación compuesta lo toma una vez (`conBloqueo_` o `transaccion_`) y sus escrituras internas no lo sueltan a mitad de camino. `transaccion_` además anota cómo deshacer cada paso y, si algo falla, lo deshace. Dos personas que compartan **una misma hoja** (pareja) tienen bloqueos distintos: si escriben exactamente a la vez podrían pisarse.
 
 ## Frontend
-- JavaScript sin frameworks, en un solo `<script>` incluido desde `index.html`. El código está repartido en partes (`app_js.html` = núcleo: utilidades, datos y navegación; `js_pantallas`, `js_formularios`, `js_movimientos`, `js_planear`, `js_deudas`, `js_ahorro`, `js_graficos`, `js_divisas`, `js_asistente`, `js_eventos`) que `include('app_js')` en `Code.gs` une en el orden de `PARTES_JS`.
+- JavaScript sin frameworks, en un solo `<script>` incluido desde `index.html`. El código está repartido en partes (`app_js.html` = núcleo: utilidades, datos y navegación; `js_pantallas`, `js_formularios`, `js_movimientos`, `js_planear`, `js_deudas`, `js_ahorro`, `js_graficos`, `js_analisis`, `js_divisas`, `js_asistente`, `js_eventos`) que `include('app_js')` en `Code.gs` une en el orden de `PARTES_JS`.
 - **Estado** en el objeto `App`; **pantallas** son funciones `vXxx()` que devuelven `{ titulo, html, acciones, despues }`; `render()` las pinta.
 - **Delegación de eventos** con `data-acc` (clic), `data-acc-cambio` (cambio) y `data-hoja-acc` (dentro de una hoja modal). Las acciones viven en el objeto `ACCIONES`.
 - **Hojas modales** con `<dialog>` y un único registro de oyentes (`hojaActual`).
@@ -119,7 +119,7 @@ Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la person
 - **Navegación y responsivo:** cuatro áreas (`TABS` y `AREA_DE_RUTA` en `app_js.html`: Inicio, Dinero, Planear, Deudas). En el celular, barra inferior con el botón **+** central (`abrirMenuRegistrar`); desde 768 px, barra lateral contraíble (preferencia en `localStorage`), búsqueda **Ctrl K** (`abrirBuscador`) y atajo **N**. Inicio en dos columnas desde 900 px; el asistente suma un panel de pasos y una vista previa de la cuenta desde 900 y 1240 px.
 - **Ícono de la pestaña:** `doGet` llama a `setFaviconUrl` con `assets/icono.png` del repositorio (propiedad de script opcional `ICONO_URL` para cambiarlo; solo https).
 - **Asistente de primeros pasos:** `PASOS_ASIST` define los pasos (tú, bancos, cuentas, bolsillos, tarjetas, nómina, ingresos, CDT, hogar, servicios, suscripciones y dólar); reutiliza los campos de los catálogos (`CAT`) y se retoma desde Inicio.
-- **Gráficos:** SVG sin librerías. Los componentes (`vizLinea`, `vizColumnas`, `vizBarrasH`, `vizMedidores`) se registran en `VIZ` al armar el HTML y `render()` llama a `activarViz()` para el hover, el foco y las flechas. Una sola moneda por gráfico y una tabla alternativa en cada uno.
+- **Gráficos:** SVG sin librerías. Los componentes (`vizLinea`, `vizColumnas`, `vizBarrasH`, `vizMedidores`) se registran en `VIZ` al armar el HTML y `render()` llama a `activarViz()` para el hover, el foco y las flechas. Una sola moneda por gráfico y una tabla alternativa ("Ver como tabla") en cada uno, también en los medidores (`tarjetaMedidores`). Los colores de las series (`--viz-1..3`) están en `tokens.html`.
 - **Errores del navegador** se reportan al registro del servidor (`logClientError`) con un tope por sesión.
 
 ## Seguridad

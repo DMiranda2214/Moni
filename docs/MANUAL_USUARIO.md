@@ -138,8 +138,18 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 ## 13. Vista anual y gráficos
 **Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
+### Análisis
+**Planear → Análisis:** el panorama completo.
+- **Patrimonio neto** de los últimos 12 meses.
+- **Entró y salió** mes a mes.
+- **En qué gastas** este mes frente al anterior y al promedio.
+- **Dónde está lo que tienes**.
+- **Lo que debes y cuándo terminas** cada crédito.
+- **Tu dinero disponible en 30, 60 y 90 días** (estimado). La línea naranja solo cuenta lo que ya sabes que entra y sale; la azul además resta tu gasto del día a día.
+- **Comisiones e impuestos del año**.
+
 ### Gráficos
-No hay una pantalla aparte de gráficos: **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
+Además de Análisis, **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
 - **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
 - **Movimientos:** *En qué gastaste este mes*, por categoría.
 - **Presupuesto:** cada renglón trae su barra *real frente a plan*; los que se pasan dicen "excedido".

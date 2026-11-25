@@ -1,5 +1,17 @@
 # Cambios
 
+## 1.14.0 — Análisis y gráficos coherentes (25 nov 2026)
+- **Nuevo:** pantalla **Análisis** (Planear → Análisis), todo en una sola carga:
+  - **Patrimonio neto** de los últimos 12 meses (estimado reconstruido desde tus movimientos).
+  - **Entró y salió** cada mes.
+  - **En qué gastas** este mes frente al mes anterior y al promedio de los tres anteriores.
+  - **Dónde está lo que tienes** (disponible, ahorro, invertido).
+  - **Lo que debes y cuándo terminas** cada crédito.
+  - **Tu dinero disponible en 30, 60 y 90 días**: lo que ya sabes que entra y sale (nómina, ingresos, suscripciones, cuotas con seguros, tarjetas, CDT, repetidos mes a mes) y, aparte, restando tu gasto habitual.
+  - **Comisiones e impuestos del año**.
+- **Cambia:** todos los gráficos usan la misma tarjeta y tienen **Ver como tabla**, también los medidores (cupo usado, avance de créditos, CDT, regalos, metas de ahorro) y el saldo de un crédito.
+- **Interno:** los colores de las series de los gráficos están en `tokens.html`, con los demás colores; la pantalla vive en `js_analisis.html`.
+
 ## 1.13.0 — Cargos, créditos bancarios y patrimonio neto (25 nov 2026)
 - **Nuevo:** **Comisiones e impuestos** (Ajustes → Cargos y comisiones). Anota lo que cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir o pagar, el 4x1000, el recargo por compras en otra moneda, la cuota de manejo y los seguros de cada cuota. Al registrar un gasto, mover dinero a otra cuenta, comprar con tarjeta, pagar un extracto, una cuota o un servicio, Moni los **propone** y puedes cambiarlos, quitarlos o agregar otros; ves el total con cargos. Cada cargo queda como gasto en "Comisiones e impuestos" y se anula con su operación. Sin reglas no se cobra nada.
 - **Nuevo:** **compras con tarjeta en otra moneda**: anotas la moneda y lo que costó allá; el recargo internacional va al mismo extracto.

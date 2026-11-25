@@ -200,4 +200,8 @@ body {
     scroll-behavior: auto !important;
   }
 }
+/* Colores de las series de los gráficos (azul, naranja y verde; validados en claro y oscuro contra la superficie de las tarjetas) */
+:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; } }
+:root[data-theme="dark"] { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; }
 </style>

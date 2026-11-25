@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.13.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.14.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -23,6 +23,7 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
 | **Regalos** | Lista por año con estimado y gasto real |
 | **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
+| **Análisis** | Patrimonio de 12 meses, en qué gastas frente al mes anterior, lo que debes y cuándo terminas, tu dinero en 30/60/90 días y las comisiones del año |
 | **Gráficos** | Dentro de cada módulo: Inicio, Movimientos, Presupuesto, Nómina, Servicios, Regalos, CDT, Deudas, Ahorro, Vista anual y cada bolsillo) |
 | **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
 | **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |

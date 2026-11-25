@@ -153,6 +153,7 @@ const ACCIONES = {
   'recargar-ahoc': () => { App.ahoC.error = null; App.ahoC.data = null; render(); },
   'recargar-reg': () => { App.reg.error = null; App.reg.data = null; render(); },
   'recargar-anual': () => { App.anual.error = null; App.anual.data = null; render(); },
+  'recargar-ana': () => { App.ana.error = null; App.ana.data = null; render(); },
   'recargar-resp': () => { App.resp.error = null; App.resp.data = null; render(); },
   'rend-estimado': () => { const e = App.ahoC.data && App.ahoC.data.cuenta.rendimientoEstimado; if (e) abrirRendimiento({ valor: e.pendiente }); },
   'aportar-ahorro': () => { const d = App.ahoC.data; if (d) abrirRegistrar({ tipo: 'Mover', destino: d.ID_Bolsillo, concepto: 'Aporte a ' + d.cuenta.Nombre }); },

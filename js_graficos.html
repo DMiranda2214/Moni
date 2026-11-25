@@ -156,6 +156,12 @@ function vizMedidores(items) {
   }).join('') + '</div>';
 }
 
+/** Medidores en la misma tarjeta que los demás gráficos, también con "Ver como tabla". items: [{ nombre, valor, tope, texto }]. */
+function tarjetaMedidores(id, titulo, items) {
+  return tarjetaViz(id, titulo, vizMedidores(items),
+    tablaViz(['', 'Lleva', 'De', '%'], items.map(m => [m.nombre, m.texto.split(' de ')[0] || String(m.valor), m.texto.split(' de ')[1] || String(m.tope), m.tope > 0 ? Math.round(m.valor / m.tope * 100) + ' %' : '—'])));
+}
+
 /** Línea del saldo al cierre de cada mes: [{ mes, saldo }]. */
 function lineaSaldo(serie, divisa, alto) {
   return vizLinea({ puntos: puntosMeses(serie.map(s => s.mes)), series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: serie.map(s => s.saldo) }], divisa: divisa, delta: true, alto: alto || 170, etiqueta: 'Saldo al cierre de cada mes' });
@@ -297,7 +303,7 @@ function htmlCdtGraficos(d) {
   const barras = vizBarrasH({ items: orden.map(x => ({ nombre: x.Nombre, valor: x.Capital, detalle: x.Banco + ' · ' + textoPlazo(x.dias).toLowerCase() })), divisa: 'COP' });
   const medidores = vizMedidores(v.map(x => ({ nombre: x.Nombre, valor: Math.round(x.avance * 100), tope: 100, texto: Math.round(x.avance * 100) + ' % del plazo · ' + textoPlazo(x.dias).toLowerCase() })));
   return tarjetaViz('cdt-capital', 'Cuánto hay en cada CDT', barras, tablaViz(['CDT', 'Capital', 'Ganarás (neto)'], orden.map(x => [x.Nombre, dinero(x.Capital), dinero(x.netoTotal)]))) +
-    '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance del plazo</h2><div class="m-group m-viz-tarjeta">' + medidores + '</div></section>';
+    tarjetaViz('cdt-plazo', 'Avance del plazo', medidores, tablaViz(['CDT', 'Avance', 'Vence'], v.map(x => [x.Nombre, Math.round(x.avance * 100) + ' %', textoPlazo(x.dias)])));
 }
 
 /** Regalos: lo gastado frente a lo estimado de cada persona. */
@@ -306,7 +312,7 @@ function htmlRegalosGraficos(d) {
     .map(i => ({ nombre: i.Persona, valor: Number(i.Real) || 0, tope: Number(i.Estimado), texto: dinero(Number(i.Real) || 0) + ' de ' + dinero(Number(i.Estimado)) }));
   if (items.length < 2) return '';
   items.sort((a, b) => b.valor / b.tope - a.valor / a.tope);
-  return '<section class="m-seccion"><h2 class="m-seccion-titulo">Gastado frente a lo estimado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(items) + '</div></section>';
+  return tarjetaMedidores('reg-avance', 'Gastado frente a lo estimado', items);
 }
 
 const MESES_DE_PERIODO = { Mensual: 1, Bimestral: 2, Trimestral: 3, Semestral: 6, Anual: 12 };
@@ -333,9 +339,9 @@ function htmlNominaGraficos(c) {
 function htmlMedidoresDeudas(d) {
   let h = '';
   const tarjetas = d.tarjetas.filter(t => t.Cupo > 0).map(t => { const usado = Math.round((t.Cupo - t.cupoDisponible) * 100) / 100; return { nombre: t.Nombre, valor: usado, tope: t.Cupo, texto: dinero(usado) + ' de ' + dinero(t.Cupo) }; });
-  if (tarjetas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Cupo usado</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(tarjetas) + '</div></section>';
+  if (tarjetas.length) h += tarjetaMedidores('deu-cupo', 'Cupo usado', tarjetas);
   const creditos = d.creditos.filter(c => c.Estado === 'Activo' && c.Monto > 0).map(c => { const pagado = Math.round((c.Monto - c.saldo) * 100) / 100; return { nombre: c.Nombre, valor: pagado, tope: c.Monto, texto: dinero(pagado) + ' de ' + dinero(c.Monto) }; });
-  if (creditos.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance de los créditos</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(creditos) + '</div></section>';
+  if (creditos.length) h += tarjetaMedidores('deu-creditos', 'Avance de los créditos', creditos);
   return h;
 }
 
@@ -346,7 +352,8 @@ function htmlSaldoCredito(d) {
   const puntos = [{ x: '0', anio: '', titulo: 'Al inicio', previo: '' }].concat(cuotas.map((f, i) => ({ x: String(f.Num), anio: '', titulo: 'Cuota ' + f.Num + ' · ' + fechaCorta(f.Fecha) + (f.Estado === 'Pagada' ? ' (pagada)' : ''), previo: 'vs cuota anterior' })));
   const valores = [c.Monto].concat(cuotas.map(f => f.Saldo_Final));
   return tarjetaViz('cre-saldo', 'Cómo baja el saldo, cuota a cuota',
-    vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: valores }], divisa: 'COP', delta: true, alto: 170, etiqueta: 'Saldo del crédito por cuota' }));
+    vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: valores }], divisa: 'COP', delta: true, alto: 170, etiqueta: 'Saldo del crédito por cuota' }),
+    tablaViz(['Cuota', 'Fecha', 'Saldo después'], cuotas.map(f => [String(f.Num) + (f.Estado === 'Pagada' ? ' ✓' : ''), fechaCorta(f.Fecha), dinero(f.Saldo_Final)])));
 }
 
 /** Ahorro: evolución del ahorro total (suma de las cuentas) y avance hacia cada meta. */
@@ -355,7 +362,7 @@ function htmlGraficosAhorro(d) {
   const meses = d.cuentas[0].evolucion.map((p, i) => ({ mes: p.mes, saldo: Math.round(d.cuentas.reduce((a, c) => a + c.evolucion[i].saldo, 0) * 100) / 100 }));
   let h = tarjetaViz('aho-total', 'Ahorro total · últimos 12 meses', lineaSaldo(meses, 'COP', 170), tablaSaldo(meses, 'COP'));
   const metas = d.cuentas.filter(c => c.Meta > 0).map(c => ({ nombre: c.Nombre, valor: c.Saldo, tope: c.Meta, texto: dinero(c.Saldo) + ' de ' + dinero(c.Meta) }));
-  if (metas.length) h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Avance hacia la meta</h2><div class="m-group m-viz-tarjeta">' + vizMedidores(metas) + '</div></section>';
+  if (metas.length) h += tarjetaMedidores('aho-metas', 'Avance hacia la meta', metas);
   return h;
 }
 

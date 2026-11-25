@@ -870,6 +870,9 @@ function runDiagnostics() {
 /** Datos de los gráficos: gastos por categoría, entró/salió por mes y saldo al cierre de cada mes. */
 function getGraficos(opciones) { return responder_(function () { return obtenerGraficos(opciones); }); }
 
+/** Pantalla Análisis: patrimonio, flujo, categorías, deudas, proyección y cargos, en una llamada. */
+function getAnalisis() { return responder_(function () { return obtenerAnalisis(); }); }
+
 // ---- Recordatorios en Google Calendar ----
 function getRecordatorios() { return responder_(function () { return estadoRecordatorios_(); }); }
 function saveRecordatorios(ajustes) { return responder_(function () { return configurarRecordatorios(ajustes); }); }
