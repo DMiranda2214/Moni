@@ -16,6 +16,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cuatro 
 *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**: verás información ficticia que se borra con un toque y no toca lo tuyo. En producción no existe.
 
 ## 2. Inicio
+- **Patrimonio neto:** lo que tienes (disponible, ahorro e invertido) menos lo que debes (tarjetas sin pagar y créditos con un banco). Solo aparece si tienes deudas o inversiones. En el celular, el ícono de arriba a la derecha abre **Ajustes**; la **Guía** también está al final de Planear.
 - **Primeros pasos** (hasta que termines de configurar) y, después, **Para tener en cuenta**: avisos de lo que falta o está desactualizado (ver sección 15).
 - **Primeros pasos:** mientras falten, una tarjeta con tu avance y el siguiente paso; los pasos se agrupan en *Lo básico* y *Para sacarle más provecho*.
 - **Saldo total** (tarjeta pastel): total, disponible, ahorro e invertido, con un ojo para ocultar las cifras.
@@ -87,6 +88,25 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
 - **Corregir una cuota ya pagada:** toca la cuota en la tabla de amortización y escribe lo que realmente pagaste ese mes (por ejemplo, con un abono extra que no anotaste). Moni rehace el cronograma con la misma cuota fija y tasa, así que el saldo y el plazo quedan como si siempre se hubiera pagado así. **No mueve dinero ni cambia tus saldos.**
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
+
+### Créditos con un banco o entidad
+**Deudas → Nuevo crédito → Con un banco o entidad** (hipoteca, vehículo, libre inversión…).
+- Escribe el monto, las cuotas, la tasa (con decimales si los tiene: 9,5 % es 9,5), la entidad y desde qué bolsillo pagas.
+- **¿A qué bolsillo llegó el dinero?** Si lo eliges, el desembolso entra ahí (no cuenta como ingreso: es una deuda). Si el crédito ya venía, déjalo en "No registrarlo".
+- **Seguros y otros cargos en cada cuota:** lo que el banco suma a la cuota además del capital y el interés. Al pagar cada cuota, Moni lo propone aparte.
+- **Pagar cuota:** la cuota sale de tu bolsillo como un gasto; los seguros y los demás cargos se anotan aparte, en "Comisiones e impuestos". Anular el pago anula todo.
+
+### Comisiones, impuestos y otros cargos
+**Ajustes → Cargos y comisiones.** Anota lo que te cobra cada medio de pago:
+- **El 4x1000** de un banco: *Impuesto*, *En toda salida de dinero de la cuenta*, porcentaje 0,4.
+- **Una comisión por transferir** a otra cuenta, o **por pagar** (PSE): valor fijo o porcentaje, con mínimo y máximo.
+- **La cuota de manejo** de una tarjeta: *En cada extracto (mensual)*.
+- **El recargo por compras en otra moneda** de una tarjeta: *En compras en otra moneda*, por ejemplo 3 %.
+- **El seguro de cada cuota** de un crédito: *En cada cuota del crédito*.
+
+Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pagas un extracto, una cuota o un servicio, aparece **Comisiones e impuestos** con lo que corresponde. Puedes cambiar el valor, quitarlo o **Agregar un cargo** a mano. Se ve el **total con cargos**. Cada cargo queda como un gasto en la categoría "Comisiones e impuestos" y se anula si anulas la operación. Sin reglas, Moni no cobra nada solo.
+
+**Compras en otra moneda:** al registrar una compra con tarjeta, en "¿Pagaste en otra moneda?" eliges la moneda y escribes cuánto costó allá; el valor de arriba es lo que te cobró la tarjeta en tu moneda.
 
 ## 8. Otros ingresos
 **Planear → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.

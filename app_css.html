@@ -479,9 +479,18 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 }
 .m-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--m-p-rosa); color: var(--m-p-rosa-tx); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
 
+.m-glosario { margin: 0; padding: var(--m-space-2) var(--m-space-4); }
+.m-glosario > div { padding: var(--m-space-3) 0; border-bottom: 1px solid var(--m-separator); }
+.m-glosario > div:last-child { border-bottom: 0; }
+.m-glosario dt { font-weight: 700; }
+.m-glosario dd { margin: 2px 0 0; color: var(--m-label-2); font-size: var(--m-text-subheadline); }
+
+/* Solo en el celular (en el computador lo hace la barra lateral) */
+@media (min-width: 768px) { .m-solo-movil { display: none !important; } }
+
 /* Pestañas internas del área Dinero */
 .m-pildoras { display: flex; flex-wrap: wrap; gap: var(--m-space-2); margin: 0 0 var(--m-space-4); }
-.m-pildora { min-height: 36px; padding: 0 var(--m-space-4); border: 0; border-radius: var(--m-radius-pill); background: var(--m-bg-grouped); color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; cursor: pointer; }
+.m-pildora { min-height: 44px; padding: 0 var(--m-space-4); border: 0; border-radius: var(--m-radius-pill); background: var(--m-bg-grouped); color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; cursor: pointer; }
 .m-pildora[aria-selected="true"] { background: var(--m-tint); color: var(--m-on-tint); }
 
 /* Tarjeta destacada (pastel) */

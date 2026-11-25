@@ -23,7 +23,8 @@ function zonaHoraria_() {
 }
 
 function zonaValida_(z) {
-  try { Utilities.formatDate(new Date(), z, 'yyyy'); return /^[A-Za-z_]+(\/[A-Za-z_+\-0-9]+)*$/.test(z); } catch (e) { return false; }
+  if (!/^(UTC|GMT|[A-Za-z_]+\/[A-Za-z_+\-0-9\/]+)$/.test(String(z || ''))) return false;
+  try { Utilities.formatDate(new Date(), z, 'yyyy'); return true; } catch (e) { return false; }
 }
 
 function hoyIso_() {

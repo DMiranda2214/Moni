@@ -141,3 +141,28 @@ function resumenSaldos_() {
 
   return { bolsillos: saldos, cuentas: cuentas, disponible: redondear2_(disponible), ahorro: redondear2_(ahorro), total: redondear2_(disponible + ahorro), divisas: resumenOtrasDivisas_(otras) };
 }
+
+/**
+ * Patrimonio neto: lo que tienes menos lo que debes (en la moneda principal; las demás divisas van aparte).
+ *   Tienes: disponible + ahorro + invertido (capital de los CDT vigentes).
+ *   Debes: lo comprado con tarjeta sin pagar + el capital pendiente de los créditos con un banco o entidad.
+ * Un crédito de autopago no se resta: es dinero que te debes a ti (ya salió de tu ahorro, así que no se cuenta dos veces).
+ * La reserva de una tarjeta es dinero tuyo (está en "disponible") apartado para pagarla.
+ */
+function resumenPatrimonio_() {
+  return memoDerivado_('patrimonio', () => {
+    const s = resumenSaldos_();
+    const invertido = resumenInvertido_().total;
+    const tarjetas = redondear2_(resumenTarjetas_().reduce((a, t) => a + (Number(t.deuda) || 0), 0));
+    const creditosB = listarCreditos().filter(c => c.Estado === 'Activo' && c.Tipo_Credito === 'Bancario');
+    const creditos = redondear2_(creditosB.reduce((a, c) => a + (Number(c.saldo) || 0), 0));
+    const activos = redondear2_(s.disponible + s.ahorro + invertido);
+    const pasivos = redondear2_(tarjetas + creditos);
+    return {
+      activos: { disponible: s.disponible, ahorro: s.ahorro, invertido: invertido, total: activos },
+      pasivos: { tarjetas: tarjetas, creditos: creditos, total: pasivos },
+      neto: redondear2_(activos - pasivos), divisas: s.divisas, divisa: DIVISA_BASE
+    };
+  });
+}
+

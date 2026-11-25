@@ -139,6 +139,29 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(x.saldo(x.personal.ID_Bolsillo), 1000000);
   });
 
+  prueba('patrimonio neto: lo que tienes menos tarjetas y créditos con un banco (el autopago no se resta)', () => {
+    const x = escenario();
+    const t = tarjeta(x);
+    x.e.api('addGastoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Fecha: hoy(), Concepto: 'Ropa', Valor: 300000 });
+    x.e.api('addCredito', { Tipo_Credito: 'Bancario', Nombre: 'Libre', Monto: 1000000, EA: 0.2, Periodicidad: 'Mensual', Num_Periodos: 10, Fecha_Inicio: hoy(), ID_Bolsillo_Pago: x.casa.ID_Bolsillo, ID_Bolsillo_Desembolso: x.casa.ID_Bolsillo });
+    const p = x.e.llamar('resumenPatrimonio_');
+    // Casa 2.000.000 + 1.000.000 del desembolso, Personal 1.000.000, la otra cuenta 0
+    assert.strictEqual(p.activos.total, 4000000);
+    assert.strictEqual(p.pasivos.tarjetas, 300000);
+    assert.strictEqual(p.pasivos.creditos, 1000000);
+    assert.strictEqual(p.neto, 2700000);
+    const boot = x.e.api('getBootstrap');
+    assert.strictEqual(boot.patrimonio.neto, 2700000, 'llega en el arranque');
+  });
+
+  prueba('zona horaria: se puede cambiar a otra válida; un texto cualquiera se rechaza', () => {
+    const x = escenario();
+    const r = x.e.llamar('saveConfigParam', 'Zona_Horaria', 'hola');
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(x.e.llamar('saveConfigParam', 'Zona_Horaria', 'Europe/Madrid').ok, true);
+    assert.strictEqual(x.e.llamar('zonaHoraria_'), 'Europe/Madrid');
+  });
+
   prueba('crédito de autopago: sigue igual (sale del ahorro y vuelve con cada cuota)', () => {
     const x = escenario();
     const ah = x.e.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: x.banco.ID_Banco, Nombre: 'Ahorros', Tipo: 'Ahorro', Permite_Bolsillos: false, Saldo_Apertura: 3000000 });

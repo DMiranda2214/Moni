@@ -1,5 +1,15 @@
 # Cambios
 
+## 1.13.0 — Cargos, créditos bancarios y patrimonio neto (25 nov 2026)
+- **Nuevo:** **Comisiones e impuestos** (Ajustes → Cargos y comisiones). Anota lo que cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir o pagar, el 4x1000, el recargo por compras en otra moneda, la cuota de manejo y los seguros de cada cuota. Al registrar un gasto, mover dinero a otra cuenta, comprar con tarjeta, pagar un extracto, una cuota o un servicio, Moni los **propone** y puedes cambiarlos, quitarlos o agregar otros; ves el total con cargos. Cada cargo queda como gasto en "Comisiones e impuestos" y se anula con su operación. Sin reglas no se cobra nada.
+- **Nuevo:** **compras con tarjeta en otra moneda**: anotas la moneda y lo que costó allá; el recargo internacional va al mismo extracto.
+- **Nuevo:** **créditos con un banco o entidad** (hipoteca, vehículo, libre inversión): sin cuenta de ahorro, con entidad, desembolso opcional a un bolsillo (no cuenta como ingreso) y seguros por cuota. La cuota sale como gasto. Los créditos que ya tenías siguen como créditos de autopago, sin cambios.
+- **Nuevo:** **patrimonio neto** en Inicio: lo que tienes menos lo que debes en tarjetas y créditos con un banco (aparece si tienes deudas o inversiones).
+- **Nuevo:** en el celular, **Ajustes** a un toque desde Inicio (arriba a la derecha) y **Guía y Ajustes** al final de Planear. La Guía trae el **glosario** completo.
+- **Nuevo:** **zona horaria** en Ajustes → Perfil (por defecto, Colombia) para quien vive en otro país.
+- **Accesibilidad:** al cerrar una hoja el foco vuelve al botón que la abrió; las pestañas de Dinero miden 44 px; las barras de navegación tienen nombres distintos.
+- **Cambia:** el esquema pasa a **32 tablas** (`Cargos_Reglas`) y se agregan columnas a `Creditos`, `Creditos_Pagos` y `Compras_TC`. Las hojas existentes se actualizan solas **sin cambiar ningún dato** (comprobado con la prueba de migración desde la 1.10.0).
+
 ## 1.12.0 — Una sola regla para lo que se repite y para lo que viene (25 nov 2026)
 - **Corregido:** abrir o cobrar el capital de un **CDT** ya no aparece como gasto o ingreso en los gráficos ni en los totales de Movimientos: el dinero solo cambia de lugar (sí cambia el saldo del bolsillo). Antes inflaba el gasto del mes en que abrías el CDT.
 - **Mejora:** pagar una suscripción o recibir un ingreso recurrente son **todo o nada**: si algo falla, el gasto o el ingreso no queda registrado a medias.

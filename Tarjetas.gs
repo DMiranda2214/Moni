@@ -411,7 +411,8 @@ function resumenTarjetas_() {
     return {
       ID_Tarjeta: t.ID_Tarjeta, Nombre: t.Nombre, Banco: b.Nombre || '', Cupo: Number(t.Cupo) || 0, Dia_Corte: Number(t.Dia_Corte), Dia_Pago: Number(t.Dia_Pago),
       mes: mesActual, total: total, abonado: abonosCorte, pagado: pagado, faltaParaPagar: pagado ? 0 : Math.max(0, redondear2_(total - abonosCorte - saldoReserva)),
-      saldoReserva: saldoReserva, cupoDisponible: redondear2_((Number(t.Cupo) || 0) - usado), proximoPago: proximoDiaDelMes_(Number(t.Dia_Pago), hoy)
+      saldoReserva: saldoReserva, cupoDisponible: redondear2_((Number(t.Cupo) || 0) - usado), proximoPago: proximoDiaDelMes_(Number(t.Dia_Pago), hoy),
+      deuda: usado // todo lo comprado y sin pagar (de todos los cortes), menos los abonos
     };
   });
 }

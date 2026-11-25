@@ -161,6 +161,27 @@ function htmlPrimerosPasos(estado) {
   return h;
 }
 
+/**
+ * Patrimonio neto: lo que tienes (disponible, ahorro, invertido) menos lo que debes (tarjetas y créditos con un banco).
+ * Solo se muestra cuando dice algo distinto del saldo total: si hay deudas o inversiones.
+ */
+function htmlPatrimonio() {
+  const p = App.boot.patrimonio;
+  if (!p || (!p.pasivos.total && !p.activos.invertido)) return '';
+  const oculto = cifrasOcultas();
+  const cifra = v => oculto ? '•••••' : dinero(v);
+  const linea = (etq, v, clase) => '<div><dt>' + esc(etq) + '</dt><dd class="m-num' + (clase ? ' ' + clase : '') + '">' + cifra(v) + '</dd></div>';
+  return '<section class="m-seccion" aria-label="Patrimonio neto"><h2 class="m-seccion-titulo">Patrimonio neto' + htmlInfo('Lo que tienes menos lo que debes. Lo que debes es lo comprado con tarjeta y sin pagar, más el capital pendiente de tus créditos con un banco o entidad. Un crédito de autopago no se resta: es dinero que te debes a ti.') + '</h2>' +
+    '<div class="m-group"><div class="m-row" style="display:block">' +
+    '<div class="m-resumen-cifra m-num ' + claseSaldo(p.neto) + '">' + cifra(p.neto) + '</div>' +
+    '<dl class="m-detalle" style="margin:var(--m-space-3) 0 0">' +
+    linea('Tienes', p.activos.total, 'm-positivo') +
+    (p.pasivos.tarjetas ? linea('Debes en tarjetas', -p.pasivos.tarjetas, 'm-negativo') : '') +
+    (p.pasivos.creditos ? linea('Debes en créditos', -p.pasivos.creditos, 'm-negativo') : '') +
+    '</dl>' + ((p.divisas || []).length ? '<p class="m-ayuda">Sin contar tus cuentas en otras monedas (' + p.divisas.map(d => esc(d.Divisa)).join(', ') + ').</p>' : '') +
+    '</div></div></section>';
+}
+
 function vInicio() {
   if (asistenteVisible()) return vAsistente();
   const nombre = cfg('Nombre_Usuario');
@@ -182,6 +203,7 @@ function vInicio() {
       '<div><span>Disponible</span><strong class="m-num">' + cifraHero(s.disponible) + '</strong></div>' +
       '<div><span>Ahorro</span><strong class="m-num">' + cifraHero(s.ahorro) + '</strong></div>' +
       (inv ? '<div><span>Invertido</span><strong class="m-num">' + cifraHero(inv.total) + '</strong></div>' : '') + '</div></section>';
+    html += htmlPatrimonio();
   }
 
   // Este mes de un vistazo
@@ -273,6 +295,8 @@ function vInicio() {
   html += '</div>';
   return {
     titulo: nombre ? 'Hola, ' + nombre : 'Inicio', html: html, ancha: true,
+    // En el celular no hay barra lateral: Ajustes queda a un toque desde aquí
+    acciones: '<button class="m-btn-texto m-solo-movil" data-acc="ir" data-ruta="ajustes" aria-label="Ajustes">' + ico('ajustes') + '</button>',
     // Tras un pago o una compra, la lista de próximos pagos se vuelve a pedir (liviana) en segundo plano.
     despues: () => {
       if (App.proximosViejos && !App.proximosCargando) refrescarProximos();
@@ -343,7 +367,11 @@ function vPlanear() {
       '<section class="m-seccion" aria-label="Mirar el año"><h2 class="m-seccion-titulo">Mirar el año</h2><div class="m-group">' +
       fila({ icono: 'calendario', titulo: 'Vista anual', sub: 'Mes a mes: entró, planeado, real y restante', chevron: true, attrs: 'data-acc="ir" data-ruta="anual" data-tono="lila"' }) +
       fila({ icono: 'regalo', titulo: 'Regalos', sub: 'A quién, qué y cuánto, por año', chevron: true, attrs: 'data-acc="ir" data-ruta="regalos" data-tono="lila"' }) +
-      '</div></section>'
+      '</div></section>' +
+      // En el celular, la guía y los ajustes (en el computador están en la barra lateral)
+      '<section class="m-seccion m-solo-movil" aria-label="Ayuda y ajustes"><h2 class="m-seccion-titulo">Ayuda y ajustes</h2><div class="m-group">' +
+      irA('guia', { icono: 'etiqueta', titulo: 'Guía de uso', sub: 'Lo básico, paso a paso, y qué significa cada palabra' }) +
+      irA('ajustes', { icono: 'ajustes', titulo: 'Ajustes', sub: 'Tus cuentas, tarjetas, cargos, apariencia y respaldos' }) + '</div></section>'
   };
 }
 
@@ -377,8 +405,8 @@ function htmlLateral(raiz, area, puedeRegistrar) {
     '<button class="m-lat-contraer" data-acc="lat-alternar" aria-label="' + (chica ? 'Expandir' : 'Contraer') + ' la barra lateral" title="' + (chica ? 'Expandir' : 'Contraer') + '">' + ico(chica ? 'der' : 'izq', 'm-icon-sm') + '</button></div>' +
     (puedeRegistrar ? '<button class="m-lat-registrar" data-acc="menu-registrar" title="Registrar (N)">' + ico('plus') + '<span class="m-lat-txt">Registrar</span><kbd class="m-lat-txt">N</kbd></button>' : '') +
     '<button class="m-lat-buscar" data-acc="buscar" title="Buscar o ir a… (Ctrl K)">' + ico('buscar') + '<span class="m-lat-txt">Buscar o ir a…</span><kbd class="m-lat-txt">Ctrl K</kbd></button>' +
-    '<nav class="m-lat-nav" aria-label="Principal">' + item('inicio', 'Inicio', 'inicio') +
-    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</nav>' +
+    '<div class="m-lat-nav">' + item('inicio', 'Inicio', 'inicio') +
+    GRUPOS_NAV.map(g => '<div class="m-lat-grupo m-lat-txt">' + esc(g.titulo) + '</div><div class="m-lat-sep"></div>' + g.items.map(it => item(it[0], it[1], it[2])).join('')).join('') + '</div>' +
     '<div class="m-lat-pie">' + item('guia', 'Guía de uso', 'etiqueta') + item('ajustes', 'Ajustes', 'ajustes') +
     '<div class="m-lat-usuario"><span class="m-avatar" aria-hidden="true">' + esc((nombre.charAt(0) || 'M').toUpperCase()) + '</span><span class="m-lat-txt">' + esc(nombre || 'Mi cuenta') + '</span></div></div>';
 }
@@ -509,6 +537,13 @@ function vAjustes() {
 // Perfil, apariencia, demostración y diagnóstico
 // ---------------------------------------------------------------------------
 
+const ZONAS_HORARIAS = [
+  ['America/Bogota', 'Colombia, Perú, Ecuador (Bogotá)'], ['America/Mexico_City', 'México (Ciudad de México)'], ['America/Panama', 'Panamá'],
+  ['America/Caracas', 'Venezuela (Caracas)'], ['America/Santiago', 'Chile (Santiago)'], ['America/Argentina/Buenos_Aires', 'Argentina (Buenos Aires)'],
+  ['America/Sao_Paulo', 'Brasil (São Paulo)'], ['America/New_York', 'Estados Unidos (Este)'], ['America/Los_Angeles', 'Estados Unidos (Pacífico)'],
+  ['Europe/Madrid', 'España (Madrid)'], ['Europe/London', 'Reino Unido (Londres)']
+];
+
 function vPerfil() {
   return {
     titulo: 'Perfil',
@@ -516,6 +551,10 @@ function vPerfil() {
       '<div class="m-campo"><label class="m-label" for="f-nombre">Nombre</label>' +
       '<input class="m-input" id="f-nombre" name="nombre" maxlength="60" autocomplete="given-name" value="' + esc(cfg('Nombre_Usuario')) + '">' +
       '<p class="m-ayuda">Así te saluda la app en Inicio.</p></div>' +
+      '<div class="m-campo"><label class="m-label" for="f-zona">Zona horaria</label><select class="m-input" id="f-zona">' +
+      ZONAS_HORARIAS.concat(ZONAS_HORARIAS.some(z => z[0] === (cfg('Zona_Horaria') || 'America/Bogota')) ? [] : [[cfg('Zona_Horaria'), cfg('Zona_Horaria')]])
+        .map(z => '<option value="' + esc(z[0]) + '"' + (z[0] === (cfg('Zona_Horaria') || 'America/Bogota') ? ' selected' : '') + '>' + esc(z[1]) + '</option>').join('') + '</select>' +
+      '<p class="m-ayuda">Define qué día es “hoy” para tus registros y la hora de las marcas. Cámbiala solo si vives fuera de Colombia.</p></div>' +
       '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>'
   };
 }

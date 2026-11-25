@@ -20,7 +20,7 @@
    Repo.gs (libro abierto una vez por petición, lectura memorizada, caché, escrituras con bloqueo)
         │
         ▼
-   Google Sheet de la persona (29 pestañas)
+   Google Sheet de la persona (32 tablas)
 ```
 
 **Una aplicación, muchas hojas.** Con `MODO_MULTIUSUARIO` la web app corre *como la persona que accede* y cada una trabaja con **su** hoja: el ID, la caché, el bloqueo y los activadores son de esa persona (ver [MULTIUSUARIO.md](MULTIUSUARIO.md)). Sin esa propiedad, la app usa la hoja única del script.
@@ -41,7 +41,7 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 31 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
+| `Setup.gs` | Esquema de las 32 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
 | `Repo.gs` | Lectura (memorizada por petición), inserción, actualización (`updateRow`, `updateRows_` en lote, comprobando el ID de cada registro), bloqueo reentrante (`tomarBloqueo`, `conBloqueo_`), operaciones todo o nada (`transaccion_`), resultados derivados memorizados (`memoDerivado_`), caché y propiedades de la persona |
 | `Fechas.gs` | Fechas y meses en un solo lugar: zona horaria, hoy, sumar días o meses, días entre fechas, meses anteriores |
 | `Finanzas.gs` | Fórmulas compartidas: tasa diaria, interés compuesto, EA ↔ tasa periódica, cuota francesa y plazo |
@@ -57,6 +57,7 @@
 | `Avisos.gs` | Avisos de Inicio: configuración que falta o datos desactualizados |
 | `Ingresos.gs` | Ingresos recurrentes distintos de la nómina: concepto, monto, bolsillo de llegada, próximo cobro y recibirlo |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
+| `Cargos.gs` | Comisiones, impuestos, cambio de divisa, cuota de manejo y seguros: reglas por medio de pago (`Cargos_Reglas`), sugerencias (`cargosSugeridos_`) y registro ligado a la operación (`registrarCargos_`, `registrarCargosTarjeta_`) |
 | `Recurrentes.gs` | Lo común a todo lo que se repite (suscripciones, servicios e ingresos): periodos, costo mensual y anual, estado, saltar y deshacer |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
 | `Recordatorios.gs` | `proximosEventos_`: una sola lista de lo que viene (lo que sale, lo que entra, CDT y fechas de nómina) para Inicio, Calendar y la proyección; y la sincronización con Google Calendar |
@@ -70,12 +71,12 @@
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)
-29 pestañas en cinco grupos:
+32 tablas en cinco grupos:
 - **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Servicios_Publicos, Suscripciones, CDTs, Ingresos_Recurrentes, Escenarios.
 - **Operación:** Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes.
 - **Nómina:** Subsidios, Nomina_Escenarios, Nomina_Conceptos, Nomina_Pagos, Nomina_Pagos_Detalle.
 - **Créditos:** Creditos, Creditos_Cronograma, Creditos_Pagos.
-- **Otros:** Regalos, Reportes, Log.
+- **Otros:** Regalos, Reportes, Log, Cargos_Reglas.
 
 Además hay pestañas auxiliares que no son tablas de datos: `Tasas_Google` (fórmulas de `GOOGLEFINANCE`) y las hojas de consulta `Vista_Bolsillos` y `Vista_Anual`.
 

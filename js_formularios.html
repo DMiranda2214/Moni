@@ -723,6 +723,8 @@ function abrirHoja(o) {
   return new Promise(resolve => {
     const dlg = $('#hoja');
     if (hojaActual) hojaActual.finalizar(); // nunca dos hojas a la vez
+    // Al cerrar, el foco vuelve a lo que abrió la hoja (teclado y lectores de pantalla no se pierden)
+    const origen = document.activeElement && document.activeElement !== document.body && !dlg.contains(document.activeElement) ? document.activeElement : null;
     dlg.innerHTML =
       '<div class="m-hoja-asa" aria-hidden="true"></div>' +
       '<div class="m-hoja-cabecera"><button type="button" class="m-btn-texto" data-hoja-acc="cerrar">' + esc(o.izq || 'Cancelar') + '</button>' +
@@ -793,6 +795,7 @@ function abrirHoja(o) {
         if (dlg.open) dlg.close();
         dlg.style.transform = '';
         if (hojaActual === this) hojaActual = null;
+        if (origen && document.contains(origen) && !hojaActual) { try { origen.focus({ preventScroll: true }); } catch (e) {} }
         resolve();
       }
     };

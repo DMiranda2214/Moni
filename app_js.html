@@ -596,6 +596,7 @@ function aplicarEscritura(res) {
   aplicarSaldos(res.saldos);
   if (res.ultimos) App.boot.ultimos = res.ultimos;
   if (res.invertido) App.boot.invertido = res.invertido;
+  if (res.patrimonio) App.boot.patrimonio = res.patrimonio;
   if (res.presupuesto) aplicarPresupuesto(res.presupuesto);
   App.deudas.data = null; App.tar.data = null; App.cre.data = null; // se vuelven a pedir si hace falta
   App.proximosViejos = true; App.pag.data = null; App.ing.data = null;

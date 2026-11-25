@@ -429,6 +429,8 @@ document.addEventListener('submit', async ev => {
   boton.disabled = true;
   try {
     await api('saveConfigParam', 'Nombre_Usuario', $('#f-nombre', f).value);
+    const zona = $('#f-zona', f);
+    if (zona && zona.value !== (cfg('Zona_Horaria') || 'America/Bogota')) await api('saveConfigParam', 'Zona_Horaria', zona.value);
     await refrescarParcial({ config: true });
     aviso('Guardado');
     render();

@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
-El script de instalación (`setupDatabase`) crea estas 31 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`) crea estas 32 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -122,7 +122,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 
 **Compras_TC** —
 `ID_Compra, Fecha, Concepto, Valor, ID_Tarjeta, Mes_Extracto, Fuente, ID_Categoria, ID_Item_Ppto, ID_Extracto, Pagado, ID_Mov_Reserva, Notas, Origen, Anulado, Ref`
-- `Ref` (desde 1.10.1): como en `Movimientos` (por ejemplo `Regalo <id>`).
+- `Ref` (desde 1.10.1): como en `Movimientos` (por ejemplo `Regalo <id>` o `Cargo <ID_Compra>` para el recargo de una compra en otra moneda).
+- `Divisa_Original`, `Valor_Original`, `Tasa` (desde 1.13): en una compra en otra moneda, lo que costó en esa moneda y la tasa resultante; `Valor` sigue en la moneda de la tarjeta.
 - `Fuente`: `Personal`, `Ppto`, `Guardar`, `Otro`. (`Personal` = gasto propio que se paga desde `Tarjetas.ID_Bolsillo_Personal`.)
 - `ID_Mov_Reserva`: movimiento que apartó el dinero en la reserva (Fuente `Ppto`).
 - `Mes_Extracto` se calcula con el `Dia_Corte` de la tarjeta si no se indica.
@@ -152,25 +153,33 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 **Nomina_Pagos_Detalle** — `ID_Detalle, ID_Nomina, Tipo, Concepto, Valor`
 - `Estado`: `Proyectado`, `Recibido`. Un solo registro vigente por `Periodo`.
 
-## 4. Créditos (autopago)
+## 4. Créditos (autopago y bancarios)
 
 **Creditos** —
-`ID_Credito, Nombre, ID_Persona, ID_Cuenta_Ahorro, ID_Bolsillo_Pago, Fecha_Inicio, Monto, Tasa_Periodica, Periodicidad, Num_Periodos, Cuota_Fija, Metodo_Tasa, Estado, Notas`
-- `ID_Cuenta_Ahorro`: de dónde salió el dinero y adónde se repone.
+`ID_Credito, Nombre, ID_Persona, ID_Cuenta_Ahorro, ID_Bolsillo_Pago, Fecha_Inicio, Monto, Tasa_Periodica, Periodicidad, Num_Periodos, Cuota_Fija, Metodo_Tasa, Estado, Notas, Tipo_Credito, ID_Banco, Cargos_Cuota, Detalle_Cargos`
+- `Tipo_Credito` (desde 1.13): `Autopago` (los de antes) o `Bancario`. Un **bancario** no tiene `ID_Cuenta_Ahorro`; su desembolso, si se anota, es un `Ingreso` con subtipo `Desembolso` en un bolsillo (no cuenta como ingreso en informes) y cada cuota es un `Gasto` con subtipo `Pago_Cuota`.
+- `ID_Banco`: la entidad (opcional). `Cargos_Cuota` y `Detalle_Cargos`: seguros y cargos fijos de cada cuota; se registran aparte, como cargos del pago.
+- `ID_Cuenta_Ahorro` (autopago): de dónde salió el dinero y adónde se repone.
 - `Periodicidad`: `Quincenal`, `Mensual`. `Estado`: `Activo`, `Pagado`, `Anulado`.
 - `Num_Periodos` es el plazo **vigente**; baja cuando hay abonos extra.
 
 **Creditos_Cronograma** — `ID_Cuota, ID_Credito, Version, Num, Fecha_Prevista, Saldo_Inicial, Cuota, Interes, Capital, Saldo_Final, Estado`
 - `Estado`: `Pendiente`, `Pagada`, `Reemplazada`. Un abono extra crea una `Version` nueva y marca las cuotas pendientes anteriores como `Reemplazada`.
 
-**Creditos_Pagos** — `ID_Pago, ID_Credito, Fecha, Num_Cuota, Valor_Pagado, Interes, Capital_Cuota, Abono_Extra, Saldo_Despues, Version, ID_Grupo, Anulado`
-- `ID_Grupo` apunta a los movimientos del pago (salida del bolsillo y reposición al ahorro).
+**Creditos_Pagos** — `ID_Pago, ID_Credito, Fecha, Num_Cuota, Valor_Pagado, Interes, Capital_Cuota, Abono_Extra, Saldo_Despues, Version, ID_Grupo, Anulado, Cargos`
+- `ID_Grupo` apunta a los movimientos del pago (autopago: salida del bolsillo y reposición al ahorro; bancario: el gasto de la cuota). `Cargos`: lo pagado en seguros y cargos con esa cuota.
 
 ## 5. Otros
 
 **Regalos** — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas, ID_Bolsillo_Plan` (`ID_Bolsillo_Plan`: el bolsillo del que se planea pagar; el real sale de los gastos y de las compras con tarjeta marcadas «Regalo <ID>»)
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
+
+**Cargos_Reglas** (desde 1.13) — `ID_Regla, Nombre, Tipo_Cargo, Ambito, ID_Ambito, Operacion, Modo, Valor, Minimo, Maximo, Periodicidad, Activo, Orden`
+- Lo que cobra cada medio de pago. `Tipo_Cargo`: `Comision`, `Impuesto`, `Cambio_Divisa`, `Cuota_Manejo`, `Seguro`. `Ambito` + `ID_Ambito`: el banco, la cuenta, la tarjeta o el crédito.
+- `Operacion`: `Salida` (toda salida de dinero de la cuenta), `Transferencia`, `Pago`, `Conversion`, `Apertura_CDT`, `Cuota`, `Compra`, `Compra_Internacional`, `Extracto` (cada extracto: la cuota de manejo).
+- `Modo`: `Fijo` (`Valor` en dinero) o `Porcentaje` (`Valor` en decimal: 0,004 = 4x1000; `Minimo` y `Maximo` opcionales).
+- Moni **propone** los cargos al registrar; la persona los cambia o quita. Cada cargo queda como un gasto (subtipo `Comision`, `Impuesto`, `GMF`, `Cambio_Divisa`, `Cuota_Manejo` o `Seguro`, categoría de rol `Cargos`) o, si fue con tarjeta, como una compra de la tarjeta, con `Ref = "Cargo <ID de la operación>"`. Se anula y restaura con la operación.
 
 ## Invariantes (se prueban en `tests/`)
 

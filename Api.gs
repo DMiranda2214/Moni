@@ -115,6 +115,7 @@ function armarBootstrap_() {
       // Próximos pagos e ingresos por recibir se piden aparte (getProximos / getProximosIngresos) al pintar Inicio.
       proximosPendientes: true,
       invertido: resumenInvertido_(),
+      patrimonio: resumenPatrimonio_(),
       avisos: obtenerAvisos_(),
       cuenta: estadoMiCuenta(),
       demoHabilitado: demoHabilitado_(),
@@ -250,7 +251,8 @@ function resultadoEscritura_(ids, vista, extra) {
   const base = {
     items: listarMovimientos({ ids: ids, incluirAnulados: true, idBolsillo: v.idBolsillo || undefined }).items,
     ultimos: listarMovimientos({ limite: 6 }).items,
-    saldos: resumenSaldos_()
+    saldos: resumenSaldos_(),
+    patrimonio: resumenPatrimonio_()
   };
   // Si algún movimiento afecta un renglón del presupuesto, la pantalla del presupuesto llega ya actualizada.
   const pp = presupuestoAfectado_(ids, v.idItem);
@@ -811,6 +813,7 @@ function normalizarParametro_(clave, valor) {
   if (clave === 'Tema' && TEMAS_VALIDOS.indexOf(v) === -1) throw new Error('Tema no válido.');
   if (clave === 'Color_Acento' && ACENTOS_VALIDOS.indexOf(v) === -1) throw new Error('Color de acento no válido.');
   if (clave === 'Nombre_Usuario' && v.length > 60) throw new Error('El nombre es demasiado largo.');
+  if (clave === 'Zona_Horaria' && !zonaValida_(v)) throw new Error('La zona horaria no es válida (por ejemplo America/Bogota o Europe/Madrid).');
   if (clave === 'Datos_Demo' || clave === 'Avisos_Ocultos' || /^Tasa_(Auto|USD|EUR)(_|$)/.test(clave) || clave.indexOf('Recordatorios_') === 0 || clave === 'Calendario_ID') throw new Error('Este parámetro lo gestiona la app.');
   return v;
 }
