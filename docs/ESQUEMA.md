@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
-El script de instalación (`setupDatabase`) crea estas 31 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`) crea estas 32 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -86,17 +86,20 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 - `ID_Bolsillo_Reserva`: dinero apartado para pagar el extracto.
 - `ID_Bolsillo_Personal`: bolsillo del que sale lo que falta al pagar (compras de Fuente `Personal`).
 
-**Categorias** — `ID_Categoria, Nombre, Tipo, Icono, Color, Activo, Orden` · `Tipo`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
+**Categorias** — `ID_Categoria, Nombre, Tipo, Icono, Color, Activo, Orden, Rol` · `Tipo`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
+- `Rol` (desde 1.10.1): marca las categorías que usa la app (`Salario`, `Rendimiento`, `Regalos`, `Comision`, `Cargos`). Así la persona puede renombrarlas sin romper nada. En hojas anteriores la columna llega vacía y la app reconoce esas categorías por el ID con el que se sembraron (`cat-salario`, `cat-rendim`, `cat-regalos`, `cat-comision`).
 
 **Personas** — `ID_Persona, Nombre, Rol, Activo` · `Rol`: `Titular`, `Familiar`, `Otro`. Se usan en créditos y regalos.
 
 **Inmuebles** — `ID_Inmueble, Nombre, Activo, Orden`
-**Empresas_Pago** — `ID_Empresa, Nombre, URL_Pago, Notas, Activo, Orden`. Las empresas con las que se pagan los servicios; el enlace se guarda aquí una sola vez.
+**Empresas_Pago** — `ID_Empresa, Nombre, URL_Pago, Notas, Activo, Orden`. *Desde 1.15 no se usa*: la pestaña se conserva intacta y sus datos se copian a `Suscripciones` (ver abajo).
 
-**Servicios_Publicos** — `ID_Servicio, ID_Inmueble, Tipo, ID_Empresa, Empresa, Codigo_Pago, URL_Pago, Notas, Activo`. Con `ID_Empresa`, `Empresa` es el nombre de esa empresa y el enlace sale de ella (`URL_Pago` queda vacío); sin ella, se escriben `Empresa` y `URL_Pago` como antes.
+**Servicios_Publicos** — `ID_Servicio, ID_Inmueble, Tipo, ID_Empresa, Empresa, Codigo_Pago, URL_Pago, Notas, Activo`. *Desde 1.15 no se usa*: la pestaña se conserva intacta y sus datos se copian a `Suscripciones` (ver abajo).
 
-**Suscripciones** — `ID_Suscripcion, Nombre, Tipo, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Tarjeta, ID_Categoria, ID_Servicio, ID_Inmueble, Renglon, URL_Pago, Ultimo_Pago, Notas, Activo, Orden`
-Pagos que se repiten. `Tipo` = `Suscripcion` o `Servicio`; `Periodicidad` = Mensual/Bimestral/Trimestral/Semestral/Anual. `Proximo_Cobro` y `Ultimo_Pago` son texto AAAA-MM-DD. Se paga con **un** medio: `ID_Bolsillo` (gasto) o `ID_Tarjeta` (compra de tarjeta). `Dia_Cobro` conserva el día original (31 → 28 → 31). `ID_Servicio` enlaza un servicio público (código y enlace de pago). Cada pago deja `Notas = "Suscripción <ID>"` en el gasto o la compra.
+**Suscripciones** — `ID_Suscripcion, Nombre, Tipo, Valor, Periodicidad, Proximo_Cobro, Dia_Cobro, ID_Bolsillo, ID_Tarjeta, ID_Categoria, ID_Servicio, ID_Inmueble, Renglon, URL_Pago, Ultimo_Pago, Notas, Activo, Orden, Empresa, Codigo_Pago, ID_Empresa`
+Pagos que se repiten. `Tipo` = `Suscripcion` o `Servicio`; `Periodicidad` = Mensual/Bimestral/Trimestral/Semestral/Anual. `Proximo_Cobro` y `Ultimo_Pago` son texto AAAA-MM-DD. Se paga con **un** medio: `ID_Bolsillo` (gasto) o `ID_Tarjeta` (compra de tarjeta). `Dia_Cobro` conserva el día original (31 → 28 → 31). Cada pago deja `Notas = "Suscripción <ID>"` en el gasto o la compra.
+- **Servicios, empresas y suscripciones en una sola tabla (1.15):** `Empresa`, `Codigo_Pago` (texto, para no perder ceros a la izquierda) e `ID_Empresa` (de dónde vino) se agregan con `MIGRACIONES_COLUMNAS`. Al actualizar, `unificarServicios_()` copia a esta tabla lo que había en `Servicios_Publicos` y `Empresas_Pago`, **sin cambiar ninguna celda existente**: a una suscripción enlazada (`ID_Servicio`) solo le llena las columnas nuevas si están vacías; un servicio sin suscripción se vuelve una fila `Tipo = Servicio` **sin fecha** (`Proximo_Cobro` vacío, `Valor` 0) con su hogar, código, enlace y notas; una empresa que ningún servicio usaba se vuelve una fila sin fecha con su enlace. Es repetible (no duplica) y las pestañas viejas no se tocan.
+- Una fila **sin `Proximo_Cobro`** es "solo datos de pago": aparece en *Códigos y enlaces de pago* pero no cuenta en cobros, costo mensual, presupuesto, Inicio ni Calendar (igual que antes los servicios públicos sueltos). Si se le pone fecha y valor, pasa a ser un cobro normal.
 
 **CDTs** — `ID_CDT, Nombre, ID_Banco, Capital, Tasa_EA, Fecha_Inicio, Plazo_Dias, Fecha_Vencimiento, Pago_Intereses, Retencion_Pct, Retencion_Tipo, Retencion_Valor, Estado, ID_Bolsillo_Origen, ID_Bolsillo_Destino, Renovar, Prox_Pago_Interes, Ultimo_Pago_Interes, Intereses_Cobrados, ID_Mov_Apertura, Fecha_Cierre, Notas, Activo, Orden` (`Tasa_EA` y `Retencion_Pct` en decimal; `Pago_Intereses`: `Vencimiento`, `Mensual` o `Trimestral`; `Estado`: `Vigente` o `Cerrado`; fechas como texto AAAA-MM-DD). Los movimientos del CDT usan los subtipos `CDT_Apertura` y `CDT_Retorno` (ajustes), más `Interes` y `Retencion`.
 
@@ -109,7 +112,8 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 ## 2. Operación
 
 **Movimientos** (libro mayor de bolsillos) —
-`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos`
+`ID_Mov, Fecha, Concepto, ID_Bolsillo, Valor, Tipo_Mov, Subtipo, ID_Categoria, ID_Grupo, ID_Item_Ppto, Notas, Origen, Anulado, Afecta_Saldos, Ref`
+- `Ref` (desde 1.10.1): vínculo con lo que generó el movimiento (`Crédito <id>`, `Extracto <id>`, `Regalo <id>`, `Suscripción <id>`, `Ingreso recurrente <id>`, `Distribución <mes>`, `Pago <id>`, `Abono <id>`). Antes vivía solo en `Notas`; los movimientos viejos sin `Ref` se siguen leyendo de `Notas`, y si la persona edita esas notas el vínculo se copia a `Ref` primero.
 - `Afecta_Saldos`: `FALSE` = movimiento **histórico** (cuenta en informes, no en saldos); vacío o `TRUE` = afecta saldos (los anteriores a la columna).
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
 - `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion` (dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`).
@@ -119,7 +123,9 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 > El ahorro externo **no tiene tabla propia**: las cuentas de tipo `Ahorro` usan este mismo libro. La deuda con el ahorro de una cuenta = Σ `Para_Gastos` − Σ `Reposicion`.
 
 **Compras_TC** —
-`ID_Compra, Fecha, Concepto, Valor, ID_Tarjeta, Mes_Extracto, Fuente, ID_Categoria, ID_Item_Ppto, ID_Extracto, Pagado, ID_Mov_Reserva, Notas, Origen, Anulado`
+`ID_Compra, Fecha, Concepto, Valor, ID_Tarjeta, Mes_Extracto, Fuente, ID_Categoria, ID_Item_Ppto, ID_Extracto, Pagado, ID_Mov_Reserva, Notas, Origen, Anulado, Ref`
+- `Ref` (desde 1.10.1): como en `Movimientos` (por ejemplo `Regalo <id>` o `Cargo <ID_Compra>` para el recargo de una compra en otra moneda).
+- `Divisa_Original`, `Valor_Original`, `Tasa` (desde 1.13): en una compra en otra moneda, lo que costó en esa moneda y la tasa resultante; `Valor` sigue en la moneda de la tarjeta.
 - `Fuente`: `Personal`, `Ppto`, `Guardar`, `Otro`. (`Personal` = gasto propio que se paga desde `Tarjetas.ID_Bolsillo_Personal`.)
 - `ID_Mov_Reserva`: movimiento que apartó el dinero en la reserva (Fuente `Ppto`).
 - `Mes_Extracto` se calcula con el `Dia_Corte` de la tarjeta si no se indica.
@@ -149,25 +155,33 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 **Nomina_Pagos_Detalle** — `ID_Detalle, ID_Nomina, Tipo, Concepto, Valor`
 - `Estado`: `Proyectado`, `Recibido`. Un solo registro vigente por `Periodo`.
 
-## 4. Créditos (autopago)
+## 4. Créditos (autopago y bancarios)
 
 **Creditos** —
-`ID_Credito, Nombre, ID_Persona, ID_Cuenta_Ahorro, ID_Bolsillo_Pago, Fecha_Inicio, Monto, Tasa_Periodica, Periodicidad, Num_Periodos, Cuota_Fija, Metodo_Tasa, Estado, Notas`
-- `ID_Cuenta_Ahorro`: de dónde salió el dinero y adónde se repone.
+`ID_Credito, Nombre, ID_Persona, ID_Cuenta_Ahorro, ID_Bolsillo_Pago, Fecha_Inicio, Monto, Tasa_Periodica, Periodicidad, Num_Periodos, Cuota_Fija, Metodo_Tasa, Estado, Notas, Tipo_Credito, ID_Banco, Cargos_Cuota, Detalle_Cargos`
+- `Tipo_Credito` (desde 1.13): `Autopago` (los de antes) o `Bancario`. Un **bancario** no tiene `ID_Cuenta_Ahorro`; su desembolso, si se anota, es un `Ingreso` con subtipo `Desembolso` en un bolsillo (no cuenta como ingreso en informes) y cada cuota es un `Gasto` con subtipo `Pago_Cuota`.
+- `ID_Banco`: la entidad (opcional). `Cargos_Cuota` y `Detalle_Cargos`: seguros y cargos fijos de cada cuota; se registran aparte, como cargos del pago.
+- `ID_Cuenta_Ahorro` (autopago): de dónde salió el dinero y adónde se repone.
 - `Periodicidad`: `Quincenal`, `Mensual`. `Estado`: `Activo`, `Pagado`, `Anulado`.
 - `Num_Periodos` es el plazo **vigente**; baja cuando hay abonos extra.
 
 **Creditos_Cronograma** — `ID_Cuota, ID_Credito, Version, Num, Fecha_Prevista, Saldo_Inicial, Cuota, Interes, Capital, Saldo_Final, Estado`
 - `Estado`: `Pendiente`, `Pagada`, `Reemplazada`. Un abono extra crea una `Version` nueva y marca las cuotas pendientes anteriores como `Reemplazada`.
 
-**Creditos_Pagos** — `ID_Pago, ID_Credito, Fecha, Num_Cuota, Valor_Pagado, Interes, Capital_Cuota, Abono_Extra, Saldo_Despues, Version, ID_Grupo, Anulado`
-- `ID_Grupo` apunta a los movimientos del pago (salida del bolsillo y reposición al ahorro).
+**Creditos_Pagos** — `ID_Pago, ID_Credito, Fecha, Num_Cuota, Valor_Pagado, Interes, Capital_Cuota, Abono_Extra, Saldo_Despues, Version, ID_Grupo, Anulado, Cargos`
+- `ID_Grupo` apunta a los movimientos del pago (autopago: salida del bolsillo y reposición al ahorro; bancario: el gasto de la cuota). `Cargos`: lo pagado en seguros y cargos con esa cuota.
 
 ## 5. Otros
 
 **Regalos** — `ID_Regalo, Anio, ID_Persona, Idea, Estimado, Real, Aplica, ID_Mov, Notas, ID_Bolsillo_Plan` (`ID_Bolsillo_Plan`: el bolsillo del que se planea pagar; el real sale de los gastos y de las compras con tarjeta marcadas «Regalo <ID>»)
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
+
+**Cargos_Reglas** (desde 1.13) — `ID_Regla, Nombre, Tipo_Cargo, Ambito, ID_Ambito, Operacion, Modo, Valor, Minimo, Maximo, Periodicidad, Activo, Orden`
+- Lo que cobra cada medio de pago. `Tipo_Cargo`: `Comision`, `Impuesto`, `Cambio_Divisa`, `Cuota_Manejo`, `Seguro`. `Ambito` + `ID_Ambito`: el banco, la cuenta, la tarjeta o el crédito.
+- `Operacion`: `Salida` (toda salida de dinero de la cuenta), `Transferencia`, `Pago`, `Conversion`, `Apertura_CDT`, `Cuota`, `Compra`, `Compra_Internacional`, `Extracto` (cada extracto: la cuota de manejo).
+- `Modo`: `Fijo` (`Valor` en dinero) o `Porcentaje` (`Valor` en decimal: 0,004 = 4x1000; `Minimo` y `Maximo` opcionales).
+- Moni **propone** los cargos al registrar; la persona los cambia o quita. Cada cargo queda como un gasto (subtipo `Comision`, `Impuesto`, `GMF`, `Cambio_Divisa`, `Cuota_Manejo` o `Seguro`, categoría de rol `Cargos`) o, si fue con tarjeta, como una compra de la tarjeta, con `Ref = "Cargo <ID de la operación>"`. Se anula y restaura con la operación.
 
 ## Invariantes (se prueban en `tests/`)
 

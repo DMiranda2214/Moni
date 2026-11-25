@@ -1,0 +1,786 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Catálogos: definición de cada uno
+// ---------------------------------------------------------------------------
+
+const optsActivas = (tabla, idCol, nomFn) => () => activos(tabla).filter(f => !esVerdad(f.Es_Interno)).map(f => [f[idCol], nomFn ? nomFn(f) : f.Nombre]);
+const optsEnum = (enumeracion, grupo) => () => (App.boot.enums[enumeracion[0]][enumeracion[1]] || []).filter(Boolean).map(v => [v, etiqueta(grupo, v)]);
+
+const CAT = {
+  Bancos: {
+    plural: 'Bancos', singular: 'banco', icono: 'banco', id: 'ID_Banco',
+    vacio: 'Agrega los bancos o billeteras que usas, como Nequi, Nu o tu banco de siempre.',
+    fila: b => ({
+      titulo: esc(b.Nombre),
+      sub: (n => n ? n + (n === 1 ? ' cuenta' : ' cuentas') : 'Sin cuentas')(activos('Cuentas').filter(c => c.ID_Banco === b.ID_Banco).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : '')
+    }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Divisa', label: 'Moneda', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
+        ayuda: 'La moneda de todas las cuentas de este banco. Para ahorrar en dólares, crea un banco en dólares. No se puede cambiar cuando ya tiene cuentas.' },
+      { k: 'Rendimiento_EA', label: 'Rendimiento de las cuentas de ahorro (% EA)', tipo: 'porcentaje',
+        ayuda: 'Opcional. La tasa efectiva anual que te da este banco en sus cuentas de ahorro, por ejemplo 9,5.' },
+      { k: 'Rendimiento_Pago', label: 'El banco paga el rendimiento', tipo: 'select', defecto: 'Mensual', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
+        opciones: () => [['Mensual', 'Cada mes'], ['Diario', 'Cada día']] },
+      { k: 'Rendimiento_Base', label: 'El rendimiento se paga sobre', tipo: 'select', defecto: 'Todo', visible: v => typeof v.Rendimiento_EA === 'number' && v.Rendimiento_EA > 0,
+        opciones: () => [['Todo', 'Todo el saldo de la cuenta'], ['Bolsillos', 'Solo el dinero en bolsillos (no el saldo suelto de una cuenta)']] }
+    ]
+  },
+  Cuentas: {
+    plural: 'Cuentas', singular: 'cuenta', icono: 'cuenta', id: 'ID_Cuenta',
+    vacio: 'Una cuenta es donde está tu dinero: tu billetera, una cuenta de ahorros, un débito.',
+    requiere: () => activos('Bancos').length ? '' : 'Primero agrega un banco.',
+    fila: c => {
+      const banco = porId('Bancos', 'ID_Banco', c.ID_Banco);
+      return {
+        titulo: esc(c.Nombre),
+        sub: esc(banco ? banco.Nombre : '') + ' · ' + esc(etiqueta('TipoCuenta', c.Tipo)) + (esVerdad(c.Permite_Bolsillos) ? '' : ' · sin bolsillos'),
+        final: '<span class="m-num ' + claseSaldo(saldoCuenta(c.ID_Cuenta)) + '">' + dinero(saldoCuenta(c.ID_Cuenta), divisaDeCuenta(c.ID_Cuenta)) + '</span>'
+      };
+    },
+    alEditar: c => {
+      // El saldo inicial de una cuenta sin bolsillos vive en su bolsillo interno.
+      const g = cat('Bolsillos').find(b => b.ID_Cuenta === c.ID_Cuenta && esVerdad(b.Es_Interno));
+      return Object.assign({}, c, { Saldo_Apertura: g ? g.Saldo_Apertura : '' });
+    },
+    campos: [
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: optsActivas('Bancos', 'ID_Banco', b => b.Nombre + ((b.Divisa || 'COP') !== 'COP' ? ' (' + b.Divisa + ')' : '')) },
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Tipo', label: 'Tipo', tipo: 'select', requerido: true, opciones: optsEnum(['Cuentas', 'Tipo'], 'TipoCuenta') },
+      { k: 'Permite_Bolsillos', label: 'Usar bolsillos', tipo: 'interruptor', ayuda: 'Los bolsillos reparten el dinero de la cuenta por propósito. Puedes activarlo cuando los necesites. Si lo desactivas, el dinero de todos los bolsillos se junta en un solo saldo (queda un traslado en el historial).', defecto: true },
+      { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', ayuda: 'Cuánto dinero hay hoy en esta cuenta. Si usas bolsillos, escribe solo lo que no está en ninguno: queda como “Sin asignar” y puede ser 0.' },
+      { k: 'Saldo_Real', label: 'Saldo que muestra tu banco (para cuadrar)', tipo: 'dinero', soloAlEditar: true, ayuda: 'Opcional. Cuando quieras comprobar que todo cuadra, escribe aquí lo que dice la app de tu banco: Moni lo compara con su propio saldo.' },
+      { k: 'Meta', label: 'Meta de ahorro (opcional)', tipo: 'dinero', visible: v => v.Tipo === 'Ahorro' }
+    ]
+  },
+  Bolsillos: {
+    plural: 'Bolsillos', singular: 'bolsillo', icono: 'bolsillos', id: 'ID_Bolsillo',
+    vacio: 'Un bolsillo es una parte de tu cuenta con un propósito: casa, mercado, un viaje.',
+    filtro: b => !esVerdad(b.Es_Interno),
+    requiere: () => activos('Cuentas').some(c => esVerdad(c.Permite_Bolsillos)) ? '' : 'Primero crea una cuenta que use bolsillos.',
+    fila: b => {
+      const c = porId('Cuentas', 'ID_Cuenta', b.ID_Cuenta);
+      return {
+        titulo: esc(b.Nombre),
+        sub: esc(c ? c.Nombre : '') + (b.Rol !== 'Operativo' ? ' · ' + esc(etiqueta('RolBolsillo', b.Rol)) : ''),
+        final: '<span class="m-num ' + claseSaldo(saldoBolsillo(b.ID_Bolsillo)) + '">' + dinero(saldoBolsillo(b.ID_Bolsillo), divisaDeBolsillo(b.ID_Bolsillo)) + '</span>'
+      };
+    },
+    campos: [
+      { k: 'ID_Cuenta', label: 'Cuenta', tipo: 'select', requerido: true, soloAlCrear: true,
+        opciones: () => activos('Cuentas').filter(c => esVerdad(c.Permite_Bolsillos)).map(c => [c.ID_Cuenta, c.Nombre]) },
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Rol', label: 'Para qué sirve', tipo: 'select', defecto: 'Operativo',
+        opciones: () => [['Operativo', 'Gastos del día a día'], ['Fondo', 'Fondo para una meta'], ['Reserva_Tarjeta', 'Reserva para pagar una tarjeta']] },
+      { k: 'Saldo_Apertura', label: 'Saldo inicial', tipo: 'dinero', ayuda: 'Cuánto dinero hay hoy en este bolsillo. Puede ser negativo.' }
+    ]
+  },
+  Tarjetas: {
+    plural: 'Tarjetas', singular: 'tarjeta', icono: 'tarjetas', id: 'ID_Tarjeta',
+    vacio: 'Registra tus tarjetas de crédito con su día de corte y de pago.',
+    requiere: () => activos('Bancos').length ? '' : 'Primero agrega un banco.',
+    fila: t => {
+      const b = porId('Bancos', 'ID_Banco', t.ID_Banco);
+      return { titulo: esc(t.Nombre), sub: esc(b ? b.Nombre : '') + ' · Corte día ' + esc(t.Dia_Corte) + ' · Pago día ' + esc(t.Dia_Pago), final: '<span class="m-num">' + dinero(t.Cupo) + '</span>' };
+    },
+    alEditar: t => Object.assign({}, t, { reserva: t.ID_Bolsillo_Reserva }),
+    campos: [
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: () => activos('Bancos').filter(b => (b.Divisa || 'COP') === 'COP').map(b => [b.ID_Banco, b.Nombre]),
+        ayuda: 'Las tarjetas se llevan en pesos.' },
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Cupo', label: 'Cupo', tipo: 'dinero' },
+      { k: 'Dia_Corte', label: 'Día de corte', tipo: 'entero', requerido: true, min: 1, max: 31 },
+      { k: 'Dia_Pago', label: 'Día límite de pago', tipo: 'entero', requerido: true, min: 1, max: 31 },
+      { k: 'reserva', label: 'Reserva para pagar el extracto', tipo: 'select', requerido: true,
+        opciones: () => {
+          // Cualquier bolsillo en pesos sirve de reserva (no el saldo interno "Sin asignar"); las reservas de tarjeta van primero.
+          const libres = activos('Bolsillos').filter(b => !esVerdad(b.Es_Interno) && divisaDeBolsillo(b.ID_Bolsillo) === 'COP');
+          const nombreCta = b => { const c = (App.boot.catalogos.Cuentas || []).find(x => x.ID_Cuenta === b.ID_Cuenta); return c ? ' · ' + c.Nombre : ''; };
+          const orden = b => b.Rol === 'Reserva_Tarjeta' ? 0 : 1;
+          return libres.slice().sort((a, b) => orden(a) - orden(b)).map(b => [b.ID_Bolsillo, b.Nombre + nombreCta(b)]).concat([['__nueva', 'Crear una reserva nueva…']]);
+        },
+        defecto: '__nueva', ayuda: 'Es el bolsillo donde apartas el dinero para pagar esta tarjeta: puedes usar uno que ya tengas o crear uno nuevo.' },
+      { k: 'cuentaReserva', label: 'Cuenta de la reserva nueva', tipo: 'select', requerido: true,
+        visible: v => v.reserva === '__nueva',
+        opciones: () => activos('Cuentas').filter(c => divisaDeCuenta(c.ID_Cuenta) === 'COP').map(c => [c.ID_Cuenta, c.Nombre + (esVerdad(c.Permite_Bolsillos) ? '' : ' (pasará a usar bolsillos)')]) },
+      { k: 'ID_Bolsillo_Personal', label: 'Pagar tus gastos personales desde (opcional)', tipo: 'select',
+        opciones: () => [['', 'Ninguno']].concat(activos('Bolsillos').filter(b => b.Rol !== 'Reserva_Tarjeta' && divisaDeBolsillo(b.ID_Bolsillo) === 'COP').map(b => {
+          const c = porId('Cuentas', 'ID_Cuenta', b.ID_Cuenta);
+          return [b.ID_Bolsillo, (c ? c.Nombre + ' · ' : '') + b.Nombre];
+        })) }
+    ]
+  },
+  Categorias: {
+    plural: 'Categorías', singular: 'categoría', icono: 'etiqueta', id: 'ID_Categoria',
+    vacio: 'Las categorías clasifican tus gastos e ingresos.',
+    fila: c => ({ titulo: esc(c.Nombre), sub: esc(etiqueta('TipoCategoria', c.Tipo)) }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Tipo', label: 'Tipo', tipo: 'select', requerido: true, opciones: optsEnum(['Categorias', 'Tipo'], 'TipoCategoria'), defecto: 'Gasto' }
+    ]
+  },
+  Personas: {
+    plural: 'Personas', singular: 'persona', icono: 'personas', id: 'ID_Persona',
+    vacio: 'Las personas se usan en créditos y regalos: tú, tu familia, quien necesites.',
+    fila: p => ({ titulo: esc(p.Nombre), sub: esc(etiqueta('RolPersona', p.Rol)) }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Rol', label: 'Relación', tipo: 'select', opciones: optsEnum(['Personas', 'Rol'], 'RolPersona'), defecto: 'Otro' }
+    ]
+  },
+  Inmuebles: {
+    plural: 'Inmuebles', singular: 'inmueble', icono: 'edificio', id: 'ID_Inmueble',
+    vacio: 'Agrega las casas o apartamentos cuyos servicios pagas.',
+    fila: i => ({ titulo: esc(i.Nombre), sub: (n => n + (n === 1 ? ' servicio' : ' servicios'))(activos('Suscripciones').filter(s => s.ID_Inmueble === i.ID_Inmueble).length) }),
+    campos: [{ k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 }]
+  },
+  CDTs: {
+    plural: 'CDT', singular: 'CDT', icono: 'capas', id: 'ID_CDT',
+    vacio: 'Un CDT es dinero que entregas a un banco por un plazo fijo, a una tasa pactada. Mientras está vigente no cuenta como dinero disponible: aparece como "Invertido".',
+    requiere: () => activos('Bancos').some(b => (b.Divisa || 'COP') === 'COP') ? '' : 'Primero agrega un banco en pesos.',
+    fila: x => ({ titulo: esc(x.Nombre), sub: esc(textoPlazo(diasHasta(x.Fecha_Vencimiento))) + ' · ' + esc(fechaTxt(x.Fecha_Vencimiento)), final: '<span class="m-num">' + dinero(x.Capital) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['CDT Bancolombia', 'CDT Davivienda', 'CDT Nu'] },
+      { k: 'ID_Banco', label: 'Banco', tipo: 'select', requerido: true, opciones: () => activos('Bancos').filter(b => (b.Divisa || 'COP') === 'COP').map(b => [b.ID_Banco, b.Nombre]) },
+      { k: 'Capital', label: 'Cuánto invertiste', tipo: 'dinero', requerido: true },
+      { k: 'Tasa_EA', label: 'Tasa (% EA)', tipo: 'porcentaje', requerido: true, ayuda: 'La tasa efectiva anual del CDT, por ejemplo 11,5.' },
+      { k: 'Fecha_Inicio', label: 'Fecha de inicio', tipo: 'fecha', requerido: true, ayuda: 'Si ya lo tenías antes de usar Moni, pon la fecha en que lo abriste.' },
+      { k: 'Plazo_Dias', label: 'Plazo (días)', tipo: 'entero', requerido: true, min: 1, max: 3650, ayuda: 'Por ejemplo 90, 180 o 360 días.' },
+      { k: 'Pago_Intereses', label: 'Paga los intereses', tipo: 'select', defecto: 'Vencimiento', opciones: () => [['Vencimiento', 'Al vencimiento'], ['Mensual', 'Cada mes'], ['Trimestral', 'Cada trimestre']] },
+      { k: 'Retencion_Tipo', label: 'La retención en la fuente es…', tipo: 'select', defecto: 'Porcentaje', opciones: () => [['Porcentaje', 'Un porcentaje de los intereses'], ['Valor', 'Un valor en pesos']] },
+      { k: 'Retencion_Valor', label: 'Retención en pesos (total del CDT)', tipo: 'dinero', visible: v => v.Retencion_Tipo === 'Valor', ayuda: 'Lo que el banco te retiene en total durante todo el plazo. Si paga intereses cada mes, se reparte en proporción a cada pago.' },
+      { k: 'Retencion_Pct', label: 'Retención en la fuente (%)', tipo: 'porcentaje', visible: v => v.Retencion_Tipo !== 'Valor', ayuda: 'El porcentaje que el banco retiene de los intereses. Déjalo vacío si no te retienen.' },
+      { k: 'ID_Bolsillo_Destino', label: 'Al cobrar, el dinero llega a (opcional)', tipo: 'select', opciones: () => opcionesDestino(true) },
+      { k: 'descontar', label: 'Descontar el capital de un bolsillo', tipo: 'interruptor', soloAlCrear: true,
+        ayuda: 'Actívalo si el dinero sale hoy de uno de tus bolsillos. Si el CDT ya existía antes de usar Moni, déjalo apagado.' },
+      { k: 'ID_Bolsillo_Origen', label: 'Sale del bolsillo', tipo: 'select', soloAlCrear: true, visible: v => !!v.descontar, opciones: () => opcionesDestino(false) },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
+  Ingresos_Recurrentes: {
+    plural: 'Ingresos recurrentes', singular: 'ingreso', icono: 'usuario', id: 'ID_Ingreso',
+    vacio: 'Anota lo que recibes además de tu nómina: otro trabajo, un arriendo, ventas, servicios…',
+    requiere: () => activos('Bolsillos').length ? '' : 'Primero crea una cuenta con un bolsillo.',
+    fila: i => ({ titulo: esc(i.Nombre), sub: esc(etiqueta('PeriodoCobro', i.Periodicidad)) + ' · próximo ' + esc(fechaTxt(i.Proximo_Cobro)), final: '<span class="m-num">' + dinero(i.Valor) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Otro trabajo', 'Servicios', 'Venta de productos', 'Arriendo', 'Honorarios'] },
+      { k: 'Valor', label: 'Cuánto recibes', tipo: 'dinero', requerido: true },
+      { k: 'Periodicidad', label: 'Cada cuánto', tipo: 'select', defecto: 'Mensual', opciones: () => Object.keys(ETIQUETAS.PeriodoCobro).map(k => [k, ETIQUETAS.PeriodoCobro[k]]) },
+      { k: 'Proximo_Cobro', label: 'Próxima vez', tipo: 'fecha', requerido: true },
+      { k: 'ID_Bolsillo', label: 'Llega a', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false) },
+      { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Ingreso').map(c => [c.ID_Categoria, c.Nombre])) },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
+  Suscripciones: {
+    plural: 'Servicios y suscripciones', singular: 'cobro', icono: 'tarjetas', id: 'ID_Suscripcion',
+    vacio: 'Agrega lo que pagas cada cierto tiempo: streaming, música, internet, luz, agua…',
+    fila: s => { const h = s.ID_Inmueble ? porId('Inmuebles', 'ID_Inmueble', s.ID_Inmueble) : null; return { titulo: esc(s.Nombre), sub: (s.Proximo_Cobro ? esc(etiqueta('PeriodoCobro', s.Periodicidad)) + ' · próximo ' + esc(fechaTxt(s.Proximo_Cobro)) : 'Solo datos de pago' + (s.Codigo_Pago ? ' · código ' + esc(s.Codigo_Pago) : '')) + (h ? ' · ' + esc(h.Nombre) : ''), final: s.Proximo_Cobro ? '<span class="m-num">' + dinero(s.Valor) + '</span>' : '' }; },
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Streaming', 'Música', 'Internet', 'Luz', 'Agua', 'Gas', 'Celular'] },
+      { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Suscripcion', opciones: () => [['Suscripcion', 'Suscripción (valor fijo)'], ['Servicio', 'Servicio (el valor cambia)']] },
+      { k: 'ID_Inmueble', label: 'Hogar (opcional)', tipo: 'select', visible: () => activos('Inmuebles').length > 0,
+        opciones: () => [['', 'Ninguno']].concat(activos('Inmuebles').map(i => [i.ID_Inmueble, i.Nombre])), ayuda: 'Si lo pagas en más de una casa (por ejemplo, el mismo Netflix en la tuya y en la de tu mamá), elige a cuál pertenece.' },
+      { k: 'Valor', label: 'Cuánto cuesta', tipo: 'dinero', ayuda: 'En un servicio es un estimado: al pagar lo ajustas y queda el último valor.' },
+      { k: 'Periodicidad', label: 'Cada cuánto', tipo: 'select', defecto: 'Mensual', opciones: () => Object.keys(ETIQUETAS.PeriodoCobro).map(k => [k, ETIQUETAS.PeriodoCobro[k]]) },
+      { k: 'Proximo_Cobro', label: 'Próximo cobro', tipo: 'fecha', ayuda: 'El día de este cobro se repite cada período. En un servicio puedes dejarlo vacío si solo quieres guardar su código y su enlace de pago.' },
+      { k: 'ID_Bolsillo', label: 'Pagas desde el bolsillo', tipo: 'select', opciones: () => opcionesDestino(true), ayuda: 'Elige un bolsillo o una tarjeta, no los dos.' },
+      { k: 'ID_Tarjeta', label: 'O con la tarjeta', tipo: 'select', opciones: () => [['', 'Ninguna']].concat(activos('Tarjetas').map(t => [t.ID_Tarjeta, t.Nombre])) },
+      { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre])) },
+      { k: 'Empresa', label: 'Empresa (opcional)', tipo: 'texto', maxlength: 60, lista: () => empresasDePago(), ayuda: 'A quién le pagas: Enel, Vanti, el acueducto, Claro… Agrupa tus pagos en “Pagar servicio”.' },
+      { k: 'Codigo_Pago', label: 'Código o referencia de pago (opcional)', tipo: 'texto', maxlength: 40, inputmode: 'text', ayuda: 'El número con el que pagas: contrato, matrícula o referencia.' },
+      { k: 'Renglon', label: 'Renglón del presupuesto (opcional)', tipo: 'texto', maxlength: 80, lista: ['Suscripciones', 'Servicios públicos', 'Internet', 'Entretenimiento'],
+        ayuda: 'El nombre de un renglón de tu presupuesto. Al pagar, el gasto cuenta ahí.' },
+      { k: 'URL_Pago', label: 'Enlace para pagar (opcional)', tipo: 'texto', inputmode: 'url', ayuda: 'Debe empezar por https://' },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
+  Cargos_Reglas: {
+    plural: 'Cargos y comisiones', singular: 'regla de cargo', icono: 'escudo', id: 'ID_Regla',
+    vacio: 'Anota lo que te cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir, el 4x1000, la cuota de manejo, el recargo por comprar en otra moneda o el seguro de cada cuota. Moni te los propone al registrar; siempre puedes cambiarlos o quitarlos.',
+    requiere: () => opcionesMedioCargo().length ? '' : 'Primero agrega un banco, una cuenta, una tarjeta o un crédito.',
+    fila: r => ({ titulo: esc(r.Nombre), sub: esc(nombreMedioCargo(r)) + ' · ' + esc(OPERACION_CARGO[r.Operacion] || r.Operacion), final: '<span class="m-num">' + (r.Modo === 'Porcentaje' ? esc(pctDecimal(r.Valor)) : dinero(r.Valor)) + '</span>' }),
+    // Un solo selector "medio de pago" (Ambito|ID) y el porcentaje en su propio campo
+    alEditar: r => Object.assign({}, r, { Medio: r.Ambito + '|' + r.ID_Ambito, Porcentaje: r.Modo === 'Porcentaje' ? r.Valor : '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['GMF (4x1000)', 'Comisión por transferencia', 'Cuota de manejo', 'Recargo por compra internacional', 'Seguro de vida', 'Seguro deudor', 'Comisión de retiro'] },
+      { k: 'Medio', label: 'Medio de pago', tipo: 'select', requerido: true, opciones: () => opcionesMedioCargo() },
+      { k: 'Tipo_Cargo', label: 'Tipo', tipo: 'select', requerido: true, defecto: 'Comision', opciones: () => [['Comision', 'Comisión'], ['Impuesto', 'Impuesto (por ejemplo el 4x1000)'], ['Cambio_Divisa', 'Cambio de divisa'], ['Cuota_Manejo', 'Cuota de manejo'], ['Seguro', 'Seguro']] },
+      { k: 'Operacion', label: '¿Cuándo se cobra?', tipo: 'select', requerido: true, defecto: 'Salida', opciones: () => Object.keys(OPERACION_CARGO).map(k => [k, OPERACION_CARGO[k]]),
+        ayuda: 'Cuentas: toda salida, traslados a otra cuenta, gastos y pagos, conversiones, cuotas o CDT. Tarjetas: compras, compras en otra moneda o cada extracto. Créditos: cada cuota.' },
+      { k: 'Modo', label: '¿Cómo se calcula?', tipo: 'select', requerido: true, defecto: 'Fijo', opciones: () => [['Fijo', 'Un valor fijo'], ['Porcentaje', 'Un porcentaje del valor']] },
+      { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, visible: v => v.Modo !== 'Porcentaje' },
+      { k: 'Porcentaje', label: 'Porcentaje', tipo: 'porcentaje', requerido: true, visible: v => v.Modo === 'Porcentaje', ayuda: 'Por ejemplo 0,4 para el 4x1000 o 3 para un recargo del 3 %.' },
+      { k: 'Minimo', label: 'Mínimo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' },
+      { k: 'Maximo', label: 'Máximo (opcional)', tipo: 'dinero', visible: v => v.Modo === 'Porcentaje' }
+    ]
+  },
+  Presupuesto_Plantilla: {
+    plural: 'Plantilla del presupuesto', singular: 'renglón', icono: 'presupuesto', id: 'ID_Plantilla',
+    vacio: '', fila: p => ({ titulo: esc(p.Concepto), sub: esc(p.Tipo) }),
+    campos: [
+      { k: 'Concepto', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 80 },
+      { k: 'Monto_Plan', label: 'Cuánto planeas cada mes', tipo: 'dinero', requerido: true },
+      { k: 'Tipo', label: 'Tipo', tipo: 'select', defecto: 'Gasto', opciones: () => TIPOS_RENGLON },
+      { k: 'ID_Bolsillo_Destino', label: 'Bolsillo de destino', tipo: 'select', opciones: () => opcionesDestino(true),
+        ayuda: 'Si es un gasto, el bolsillo desde donde lo pagas. Si es ahorro, fondo o cuota, donde se aparta el dinero.' },
+      { k: 'ID_Credito', label: 'Crédito que paga', tipo: 'select', visible: v => v.Tipo === 'Cuota', opciones: () => [['', 'Ninguno']].concat((App.boot.creditos || []).map(c => [c.ID_Credito, c.Nombre])),
+        ayuda: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.' },
+      { k: 'ID_Tarjeta', label: 'Se paga con', tipo: 'select', visible: v => v.Tipo === 'Gasto', opciones: () => MEDIOS_RENGLON() },
+      { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(c => c.Tipo === 'Gasto').map(c => [c.ID_Categoria, c.Nombre])) }
+    ]
+  },
+  Subsidios: {
+    plural: 'Subsidios', singular: 'subsidio', icono: 'usuario', id: 'ID_Subsidio',
+    vacio: 'Un subsidio es un pago fijo adicional a tu sueldo: trabajo remoto, bonos, auxilios.',
+    fila: x => ({ titulo: esc(x.Nombre), sub: esVerdad(x.Es_Salarial) ? 'Salarial' : 'No salarial', final: '<span class="m-num">' + dinero(x.Valor) + '</span>' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Valor', label: 'Valor mensual', tipo: 'dinero', requerido: true },
+      { k: 'Es_Salarial', label: 'Es salarial', tipo: 'interruptor', ayuda: 'Si es salarial, suma a la base de salud, pensión y prima.' },
+      { k: 'Vigente_Desde', label: 'Vigente desde (opcional)', tipo: 'fecha' },
+      { k: 'Vigente_Hasta', label: 'Vigente hasta (opcional)', tipo: 'fecha' }
+    ]
+  },
+  Nomina_Escenarios: {
+    plural: 'Escenarios de nómina', singular: 'escenario de nómina', icono: 'capas', id: 'ID_Nomina_Esc',
+    vacio: 'Un escenario de nómina es un sueldo base con sus subsidios. Puedes tener uno actual y otros para comparar (un aumento, un cambio de trabajo).',
+    fila: x => ({ titulo: esc(x.Nombre), sub: 'Sueldo base ' + dinero(x.Sueldo_Base) + ((x.subsidios || []).length ? ' · ' + x.subsidios.length + ' subsidio(s)' : ''), final: esVerdad(x.Vigente) ? '<span class="m-insignia">Vigente</span>' : '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Sueldo_Base', label: 'Sueldo base mensual', tipo: 'dinero', requerido: true },
+      { k: 'Vigente', label: 'Es el escenario vigente', tipo: 'interruptor', ayuda: 'El vigente es el que se usa por defecto para calcular la nómina de cada mes.' },
+      { k: 'subsidios', label: 'Subsidios que recibes en este escenario', tipo: 'multi', opciones: () => activos('Subsidios').map(x => [x.ID_Subsidio, x.Nombre + ' — ' + dinero(x.Valor)]),
+        ayuda: 'Se crean en Ajustes → Subsidios.' }
+    ]
+  },
+  Escenarios: {
+    plural: 'Escenarios', singular: 'escenario', icono: 'capas', id: 'ID_Escenario',
+    vacio: 'Un escenario es un presupuesto completo, por ejemplo uno normal y otro de contingencia.',
+    fila: e => ({ titulo: esc(e.Nombre), sub: esc(e.Descripcion || ''), final: esVerdad(e.Es_Base) ? '<span class="m-insignia">Base</span>' : '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60 },
+      { k: 'Descripcion', label: 'Descripción', tipo: 'texto', maxlength: 120 },
+      { k: 'Es_Base', label: 'Es el escenario base', tipo: 'interruptor', ayuda: 'El base es el que se usa por defecto al generar cada mes. Solo puede haber uno.' },
+      { k: 'copiarDe', label: 'Copiar los renglones de (opcional)', tipo: 'select', soloAlCrear: true,
+        opciones: () => [['', 'Empezar vacío']].concat(activos('Escenarios').map(e => [e.ID_Escenario, e.Nombre])) }
+    ]
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Ayudas en los campos: un botón "i" que explica para qué sirve cada casilla (al pasar el cursor,
+// al enfocarlo con el teclado o al tocarlo en el celular).
+// ---------------------------------------------------------------------------
+
+const INFO_CAMPOS = {
+  Bancos: {
+    Rendimiento_EA: 'La tasa efectiva anual que te paga este banco en sus cuentas de ahorro. Moni la usa para estimar cuánto te rinde. Déjala vacía si no rinde.',
+    Rendimiento_Pago: 'Cada día: el banco suma lo ganado a tu saldo a diario (interés compuesto). Cada mes: lo suma al cerrar el mes.',
+    Rendimiento_Base: 'Algunos bancos (por ejemplo, con "bolsillos" o "cajitas") solo pagan sobre el dinero que guardas en ellos, no sobre el saldo disponible. Elige "Solo bolsillos" y Moni ignora el saldo general de la cuenta.',
+    Nombre: 'El banco o la billetera donde tienes dinero, por ejemplo Nequi, Nu o tu banco de siempre.',
+    Divisa: 'La moneda en la que está el dinero de este banco. Si ahorras en dólares, crea otro banco en dólares. No se puede cambiar cuando ya tiene cuentas.'
+  },
+  Cuentas: {
+    ID_Banco: 'A qué banco o billetera pertenece esta cuenta.',
+    Nombre: 'Cómo la reconoces: “Cuenta de ahorros”, “Nómina”, “Billetera”…',
+    Tipo: 'Billetera: el dinero del día a día. Débito: una cuenta de banco. Ahorro: dinero que guardas, con meta y rendimientos. Otra: lo demás.',
+    Permite_Bolsillos: 'Con bolsillos repartes el dinero de la cuenta por propósito (casa, mercado, un viaje). Sin bolsillos, la cuenta es un solo saldo.',
+    Saldo_Apertura: 'Cuánto dinero hay hoy en esta cuenta. Es el punto de partida: desde aquí Moni suma y resta cada movimiento que registres.',
+    Saldo_Real: 'No es el saldo inicial. Es lo que dice la app de tu banco hoy: Moni lo compara con el saldo que ella calcula con tus movimientos y te avisa si hay diferencia. Al crear la cuenta no hace falta.',
+    Meta: 'Cuánto quieres ahorrar en esta cuenta. Moni muestra qué tanto llevas.'
+  },
+  Bolsillos: {
+    ID_Cuenta: 'La cuenta que guarda este dinero. Solo aparecen las que usan bolsillos.',
+    Nombre: 'Para qué es este dinero: casa, mercado, transporte, un viaje…',
+    Rol: 'Gastos del día a día: lo que usas cada mes. Fondo para una meta: dinero que vas juntando. Reserva de tarjeta: lo apartado para pagar una tarjeta.',
+    Saldo_Apertura: 'Cuánto dinero hay hoy en este bolsillo. Puede ser negativo si ya gastaste más de lo que tenías.'
+  },
+  Tarjetas: {
+    ID_Banco: 'El banco que emite la tarjeta. Las tarjetas se llevan en pesos.',
+    Nombre: 'Cómo la reconoces: “Visa Oro”, “Tarjeta del almacén”…',
+    Cupo: 'El máximo que el banco te deja gastar con la tarjeta. Sirve para calcular cuánto te queda disponible.',
+    Dia_Corte: 'El día del mes en que el banco cierra el extracto. Una compra hecha después de ese día entra al extracto del mes siguiente.',
+    Dia_Pago: 'El último día para pagar el extracto sin intereses. Moni te recuerda los días antes.',
+    reserva: 'Un bolsillo donde apartas el dinero para pagar esta tarjeta. Así siempre sabes cuánto tienes listo para el extracto.',
+    cuentaReserva: 'En qué cuenta se crea la reserva. Si esa cuenta se maneja como un solo saldo, empezará a usar bolsillos (tu dinero no se pierde: queda en su propio bolsillo).',
+    ID_Bolsillo_Personal: 'De dónde sale tu dinero cuando una compra es tuya. Al pagar el extracto, si la reserva no alcanza, Moni la completa desde este bolsillo.'
+  },
+  Categorias: {
+    Nombre: 'Para clasificar tus gastos e ingresos: Mercado, Transporte, Salud…',
+    Tipo: 'Gasto o ingreso: dónde aparece la categoría al registrar.'
+  },
+  Personas: {
+    Nombre: 'Alguien a quien le prestas dinero o le haces un regalo.',
+    Rol: 'Solo para ordenar: tú, un familiar u otra persona.'
+  },
+  Inmuebles: { Nombre: 'Una casa o apartamento cuyos servicios pagas, por ejemplo “Apartamento”.' },
+  Suscripciones: {
+    Nombre: 'Lo que pagas cada cierto tiempo: “Streaming”, “Internet”, “Luz”…',
+    Tipo: 'Suscripción: valor fijo (streaming, música). Servicio: el valor cambia cada vez (luz, agua).',
+    Valor: 'Cuánto cuesta cada cobro. En un servicio es un estimado: al pagar lo ajustas y queda el último valor.',
+    Periodicidad: 'Cada cuánto te lo cobran: cada mes, cada 2, 3 o 6 meses, o cada año.',
+    Proximo_Cobro: 'La fecha del próximo cobro. El día se repite cada período y Moni te avisa antes.',
+    ID_Bolsillo: 'El bolsillo del que sale el dinero cuando lo pagas. Elige este o una tarjeta, no los dos.',
+    ID_Tarjeta: 'Si lo cobran a una tarjeta de crédito, la compra queda en su extracto.',
+    ID_Categoria: 'Para que el gasto salga en los gráficos por categoría.',
+    Empresa: 'A quién le pagas. Los cobros de la misma empresa se agrupan en “Pagar servicio”.',
+    Codigo_Pago: 'El número de referencia con el que pagas (matrícula, contrato o referencia de pago).',
+    ID_Inmueble: 'La casa o apartamento al que pertenece este cobro. Te deja separar el mismo servicio o suscripción por hogar.',
+    Renglon: 'Escribe el nombre de un renglón de tu presupuesto (por ejemplo, “Suscripciones”). Al pagar, el gasto cuenta en ese renglón del mes.',
+    URL_Pago: 'La página donde se paga. Aparece como “Ir a pagar” en el cobro.',
+    Notas: 'Lo que quieras recordar de este cobro.'
+  },
+  Ingresos_Recurrentes: {
+    Nombre: 'De dónde viene: otro trabajo, un arriendo, la venta de productos, servicios que prestas…',
+    Valor: 'Cuánto esperas recibir cada vez. Es un estimado: al recibirlo puedes escribir el valor real.',
+    Periodicidad: 'Cada cuánto lo recibes: cada mes, cada 2, 3 o 6 meses, o cada año.',
+    Proximo_Cobro: 'La fecha en que esperas recibirlo. El día se repite cada período y Moni te avisa antes.',
+    ID_Bolsillo: 'La cuenta (y el bolsillo) a la que llega el dinero. Al recibirlo se suma ahí.',
+    ID_Categoria: 'Para verlo en los gráficos por categoría.',
+    Notas: 'Lo que quieras recordar de este ingreso.'
+  },
+  Presupuesto_Plantilla: {
+    Concepto: 'Lo que planeas gastar o apartar: Arriendo, Mercado, Transporte, Ahorro…',
+    Monto_Plan: 'Cuánto piensas destinar cada mes a este renglón.',
+    Tipo: 'Gasto: algo que pagas. Cuota: la cuota de un crédito. Ahorro o Fondo: dinero que apartas para ti.',
+    ID_Bolsillo_Destino: 'En un gasto, el bolsillo desde donde lo pagas. En un ahorro, fondo o cuota, el bolsillo donde se aparta el dinero.',
+    ID_Credito: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.',
+    ID_Tarjeta: 'Cómo sueles pagar este gasto. Si eliges una tarjeta, al registrar el gasto Moni la propone y aparta el dinero de este renglón en la reserva.',
+    ID_Categoria: 'Para que lo gastado en este renglón salga en los gráficos por categoría.'
+  },
+  Subsidios: {
+    Nombre: 'Un ingreso fijo que recibes además del sueldo: auxilio de conectividad, bono…',
+    Valor: 'Cuánto recibes cada mes por este concepto.',
+    Es_Salarial: 'Si hace parte del salario, suma al ingreso base de cotización y cambia salud y pensión.',
+    Vigente_Desde: 'Desde cuándo lo recibes. Déjalo vacío si ya lo tienes.',
+    Vigente_Hasta: 'Hasta cuándo lo recibes. Déjalo vacío si no tiene fecha de fin.'
+  },
+  CDTs: {
+    Capital: 'El dinero que entregaste al banco. Mientras el CDT está vigente se muestra como "Invertido", no como disponible.',
+    Tasa_EA: 'La tasa efectiva anual pactada. Moni estima los intereses como capital × ((1 + tasa)^(días/365) − 1).',
+    Plazo_Dias: 'Cuántos días dura el CDT. El vencimiento se calcula desde la fecha de inicio.',
+    Pago_Intereses: 'Al vencimiento: recibes todo al final. Cada mes o trimestre: el banco te paga los intereses por periodos y tú los registras.',
+    Retencion_Tipo: 'Elige si el banco te dice la retención como un porcentaje de los intereses o como un valor en pesos.',
+    Retencion_Pct: 'La retención en la fuente sobre los intereses. Depende de tu producto y de la norma vigente: escribe la que te aplica el banco.',
+    ID_Bolsillo_Destino: 'El bolsillo donde llegan los intereses y el capital al cobrar. Puedes elegirlo después, al cobrar.',
+    descontar: 'Si el dinero sale hoy de un bolsillo, Moni lo resta de ahí y lo muestra como invertido. Si ya lo tenías antes de usar Moni, déjalo apagado.'
+  },
+  Nomina_Escenarios: {
+    Nombre: 'Una situación de ingresos: “Actual”, “Con aumento”…',
+    Sueldo_Base: 'Tu sueldo mensual antes de descuentos.',
+    Vigente: 'El escenario que se usa para calcular tu nómina de cada mes.',
+    subsidios: 'Los subsidios que recibes en este escenario.'
+  },
+  Escenarios: {
+    Nombre: 'Una versión de tu presupuesto: “Normal”, “Contingencia”…',
+    Descripcion: 'Una nota para recordar cuándo usarlo.',
+    Es_Base: 'El escenario que se usa al generar el presupuesto de cada mes.',
+    copiarDe: 'Empieza con los renglones de otro escenario para no escribirlos de nuevo.'
+  }
+};
+
+/** Ayudas de campos que no vienen de un catálogo (registrar, compras, créditos…). */
+const INFO_GENERAL = {
+  Valor: 'Cuánto dinero es. Escríbelo sin signo: Moni sabe si entra o sale según lo que elijas.',
+  Concepto: 'En qué fue: una frase corta que te ayude a reconocerlo después.',
+  ID_Bolsillo: 'El bolsillo del que sale (o al que entra) el dinero.',
+  Origen: 'El bolsillo del que sale el dinero.',
+  Destino: 'El bolsillo al que llega el dinero. El total de tu dinero no cambia.',
+  ID_Item_Ppto: 'Si el gasto corresponde a un renglón de tu presupuesto, elígelo: así cuenta como lo real de ese renglón.',
+  ID_Categoria: 'Para clasificar el movimiento y verlo en los gráficos.',
+  Fecha: 'El día en que pasó. No puede ser futuro.',
+  Notas: 'Lo que quieras recordar de este movimiento.'
+};
+
+Object.keys(INFO_CAMPOS).forEach(t => {
+  if (!CAT[t]) return;
+  Object.keys(INFO_CAMPOS[t]).forEach(k => {
+    const c = CAT[t].campos.find(x => x.k === k);
+    if (c && !c.info) c.info = INFO_CAMPOS[t][k];
+  });
+});
+
+let _infoN = 0;
+/** El botón "i" y su globo de texto. Va junto a una etiqueta. */
+function htmlInfo(texto) {
+  if (!texto) return '';
+  const id = 'info-' + (++_infoN);
+  return '<span class="m-info-caja"><button type="button" class="m-info" aria-label="¿Para qué sirve?" aria-describedby="' + id + '" aria-expanded="false">i</button>' +
+    '<span class="m-info-txt" role="tooltip" id="' + id + '">' + esc(texto) + '</span></span>';
+}
+
+function cerrarInfos(excepto) {
+  $$('.m-info-caja.abierto').forEach(c => { if (c !== excepto) { c.classList.remove('abierto'); const b = $('.m-info', c); if (b) b.setAttribute('aria-expanded', 'false'); } });
+}
+
+// Al tocar la "i" se abre o cierra su globo; tocar fuera o pulsar Esc lo cierra. Va aparte de data-acc porque
+// debe funcionar también dentro de las hojas modales.
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('.m-info');
+  if (!b) { if (!ev.target.closest('.m-info-caja')) cerrarInfos(null); return; }
+  ev.preventDefault(); ev.stopPropagation();
+  const caja = b.closest('.m-info-caja');
+  const abrir = !caja.classList.contains('abierto');
+  cerrarInfos(caja);
+  caja.classList.toggle('abierto', abrir);
+  b.setAttribute('aria-expanded', String(abrir));
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && $('.m-info-caja.abierto')) { cerrarInfos(null); ev.stopPropagation(); }
+}, true);
+
+
+// ---------------------------------------------------------------------------
+// Lista de un catálogo
+// ---------------------------------------------------------------------------
+
+function vCatalogo(tabla) {
+  const def = CAT[tabla];
+  const todos = cat(tabla).filter(f => !def.filtro || def.filtro(f));
+  const vivos = todos.filter(f => esVerdad(f.Activo) || f.Activo === '');
+  const muertos = todos.filter(f => !(esVerdad(f.Activo) || f.Activo === ''));
+  const verInactivos = !!App.inactivos[tabla];
+  const bloqueo = def.requiere ? def.requiere() : '';
+
+  const mapa = f => {
+    const d = def.fila(f);
+    return fila({ titulo: d.titulo, sub: d.sub, final: d.final, chevron: true, clase: esVerdad(f.Activo) || f.Activo === '' ? '' : 'm-inactivo',
+      attrs: 'data-acc="editar" data-tabla="' + tabla + '" data-id="' + esc(f[def.id]) + '"' });
+  };
+
+  let html = '';
+  if (bloqueo) html += '<div class="m-banner" role="note">' + ico('alerta') + '<span>' + esc(bloqueo) + '</span></div>';
+  if (!vivos.length) {
+    html += vacio(def.icono, 'Aún no hay ' + def.plural.toLowerCase(), def.vacio,
+      bloqueo ? '' : '<button class="m-btn m-btn-primary" data-acc="nuevo" data-tabla="' + tabla + '">Agregar ' + esc(def.singular) + '</button>');
+  } else {
+    html += '<div class="m-group">' + vivos.map(mapa).join('') + '</div>';
+  }
+  if (muertos.length) {
+    html += '<div class="m-seccion" style="margin-top:var(--m-space-5)"><div class="m-group"><div class="m-row"><div class="m-interruptor-fila" style="width:100%">' +
+      '<label for="ver-inactivos">Mostrar desactivados (' + muertos.length + ')</label>' +
+      '<span class="m-interruptor"><input type="checkbox" id="ver-inactivos" role="switch" data-acc-cambio="inactivos" data-tabla="' + tabla + '"' + (verInactivos ? ' checked' : '') + '><i></i></span></div></div></div></div>';
+    if (verInactivos) html += '<div class="m-group">' + muertos.map(mapa).join('') + '</div>';
+  }
+
+  return {
+    titulo: def.plural,
+    acciones: bloqueo ? '' : '<button class="m-btn-texto" data-acc="nuevo" data-tabla="' + tabla + '" aria-label="Agregar ' + esc(def.singular) + '">' + ico('plus') + '</button>',
+    html: html
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Formularios
+// ---------------------------------------------------------------------------
+
+function idCampo(k) { return 'f-' + k; }
+
+
+function htmlCampo(c, valor, ctx) {
+  const id = idCampo(c.k);
+  const ayuda = c.ayuda ? '<p class="m-ayuda" id="' + id + '-ayuda">' + esc(c.ayuda) + '</p>' : '';
+  const desc = c.ayuda ? ' aria-describedby="' + id + '-ayuda"' : '';
+  const req = c.requerido ? ' required aria-required="true"' : '';
+  const info = htmlInfo(c.info || INFO_GENERAL[c.k]);
+  let ctl;
+
+  switch (c.tipo) {
+    case 'interruptor':
+      return '<div class="m-campo" data-campo="' + c.k + '"><div class="m-interruptor-fila"><span class="m-label-fila"><label for="' + id + '">' + esc(c.label) + '</label>' + info + '</span>' +
+        '<span class="m-interruptor"><input type="checkbox" role="switch" id="' + id + '" name="' + c.k + '"' + desc + (valor ? ' checked' : '') + '><i></i></span></div>' + ayuda + '</div>';
+    case 'select': {
+      const opts = c.opciones(ctx || {});
+      const unaOpcion = o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+      ctl = '<select class="m-input" id="' + id + '" name="' + c.k + '"' + req + desc + '>' +
+        (c.requerido && (valor === undefined || valor === '') ? '<option value="" disabled selected>Elegir…</option>' : '') +
+        opts.map(o => o.grupo ? '<optgroup label="' + esc(o.grupo) + '">' + o.opciones.map(unaOpcion).join('') + '</optgroup>' : unaOpcion(o)).join('') + '</select>';
+      break;
+    }
+    case 'dinero':
+      ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc +
+        ' value="' + (valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : esc(new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Number(valor)))) + '" data-tipo="dinero"><p class="m-ayuda" data-eco="' + id + '" aria-live="polite"></p>';
+      break;
+    case 'porcentaje': {
+      const n = valor === '' || valor === undefined || valor === null || isNaN(Number(valor)) ? '' : new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(Number(valor) * 100);
+      ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="text" inputmode="decimal" autocomplete="off"' + desc + ' placeholder="Por ejemplo, 9,5" value="' + esc(n) + '">';
+      break;
+    }
+    case 'entero':
+      ctl = '<input class="m-input m-num" id="' + id + '" name="' + c.k + '" type="number" inputmode="numeric" min="' + (c.min || 0) + '" max="' + (c.max || '') + '" step="1"' + req + desc + ' value="' + esc(valor) + '">';
+      break;
+    case 'fecha':
+      ctl = '<input class="m-input" id="' + id + '" name="' + c.k + '" type="date"' + desc + ' value="' + esc(valor) + '">';
+      break;
+    case 'multi': {
+      const marcados = Array.isArray(valor) ? valor : [];
+      const opts = c.opciones(ctx || {});
+      return '<fieldset class="m-campo" data-campo="' + c.k + '" style="border:0;padding:0;margin:0 0 var(--m-space-4)"><legend class="m-label">' + esc(c.label) + '</legend>' + (info ? '<div style="margin:-4px 0 6px">' + info + '</div>' : '') +
+        (opts.length ? opts.map(o => '<div class="m-interruptor-fila"><label for="' + id + '-' + esc(o[0]) + '">' + esc(o[1]) + '</label><span class="m-interruptor"><input type="checkbox" role="switch" id="' + id + '-' + esc(o[0]) + '" data-multi="' + c.k + '" value="' + esc(o[0]) + '"' + (marcados.indexOf(o[0]) !== -1 ? ' checked' : '') + '><i></i></span></div>').join('') : '<p class="m-ayuda">Aún no hay opciones.</p>') +
+        (c.ayuda ? '<p class="m-ayuda">' + esc(c.ayuda) + '</p>' : '') + '</fieldset>';
+    }
+    case 'area':
+      ctl = '<textarea class="m-input" id="' + id + '" name="' + c.k + '" rows="3"' + desc + '>' + esc(valor) + '</textarea>';
+      break;
+    default:
+      ctl = '<input class="m-input" id="' + id + '" name="' + c.k + '" type="text"' + (c.inputmode ? ' inputmode="' + c.inputmode + '"' : '') +
+        (c.maxlength ? ' maxlength="' + c.maxlength + '"' : '') + (c.lista ? ' list="' + id + '-lista"' : '') + req + desc + ' autocomplete="off" value="' + esc(valor) + '">' +
+        (c.lista ? '<datalist id="' + id + '-lista">' + (typeof c.lista === 'function' ? c.lista() : c.lista).map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' : '');
+  }
+  return '<div class="m-campo" data-campo="' + c.k + '"><div class="m-label-fila"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label>' + info + '</div>' + ctl + ayuda + '</div>';
+}
+
+/** Lee los valores del formulario de una hoja. */
+function leerFormulario(raiz, campos) {
+  const v = {};
+  campos.forEach(c => {
+    if (c.tipo === 'multi') { v[c.k] = $$('input[data-multi="' + c.k + '"]:checked', raiz).map(x => x.value); return; }
+    const el = $('#' + idCampo(c.k), raiz);
+    if (!el) return;
+    if (c.tipo === 'interruptor') v[c.k] = el.checked;
+    else if (c.tipo === 'dinero') v[c.k] = leerDinero(el.value);
+    else if (c.tipo === 'porcentaje') { const n = leerDinero(el.value); v[c.k] = n === '' ? '' : (isNaN(n) ? NaN : n / 100); }
+    else if (c.tipo === 'entero') v[c.k] = el.value === '' ? '' : Number(el.value);
+    else v[c.k] = el.value.trim();
+  });
+  return v;
+}
+
+function actualizarVisibilidad(raiz, campos, ctx) {
+  const v = leerFormulario(raiz, campos);
+  campos.forEach(c => {
+    const caja = $('[data-campo="' + c.k + '"]', raiz);
+    if (caja && c.visible) caja.hidden = !c.visible(v, ctx || {});
+  });
+}
+
+function activarEcoDinero(raiz) {
+  $$('input[data-tipo="dinero"]', raiz).forEach(inp => {
+    const eco = $('[data-eco="' + inp.id + '"]', raiz);
+    const actualizar = () => {
+      const n = leerDinero(inp.value);
+      eco.textContent = inp.value === '' ? '' : (isNaN(n) ? 'Escribe solo números. Usa coma para los decimales.' : '= ' + dinero(n, inp.dataset.divisa || undefined));
+    };
+    inp.addEventListener('input', actualizar);
+    inp.addEventListener('blur', () => {
+      const n = leerDinero(inp.value);
+      if (n !== '' && !isNaN(n)) inp.value = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+      actualizar();
+    });
+    actualizar();
+  });
+}
+
+/** Los saldos de una cuenta o bolsillo se escriben en la moneda de su banco: el eco "= US$ 1.000,00" la sigue. */
+function sincronizarDivisa(raiz, tabla, existente) {
+  const claves = tabla === 'Cuentas' ? ['Saldo_Apertura', 'Saldo_Real', 'Meta'] : ['Saldo_Apertura'];
+  const actual = () => {
+    if (tabla === 'Cuentas') { const s = $('#' + idCampo('ID_Banco'), raiz); return divisaDeBanco(s ? s.value : existente && existente.ID_Banco); }
+    const s = $('#' + idCampo('ID_Cuenta'), raiz); return divisaDeCuenta(s ? s.value : existente && existente.ID_Cuenta);
+  };
+  const aplicar = () => {
+    const d = actual();
+    claves.forEach(k => { const el = $('#' + idCampo(k), raiz); if (el) { el.dataset.divisa = d; el.dispatchEvent(new Event('input')); } });
+  };
+  raiz.addEventListener('change', aplicar);
+  aplicar();
+}
+
+async function abrirFormulario(tabla, id, defaults) {
+  const def = CAT[tabla];
+  const existente = id ? cat(tabla).find(f => f[def.id] === id) : null;
+  const item = existente ? (def.alEditar ? def.alEditar(existente) : existente) : {};
+  const campos = def.campos.filter(c => !(c.soloAlCrear && existente) && !(c.soloAlEditar && !existente));
+  const ctx = { existente: existente };
+
+  const valorInicial = c => {
+    if (item[c.k] !== undefined && item[c.k] !== null && item[c.k] !== '') {
+      return c.tipo === 'interruptor' ? esVerdad(item[c.k]) : item[c.k];
+    }
+    if (c.k === 'reserva' && !existente) return activos('Bolsillos').some(b => b.Rol === 'Reserva_Tarjeta') ? '' : '__nueva';
+    if (c.tipo === 'fecha' && c.requerido && !existente) return App.boot.hoy; // una fecha obligatoria nace con la de hoy
+    return c.defecto !== undefined ? c.defecto : '';
+  };
+
+  const activo = existente ? (esVerdad(existente.Activo) || existente.Activo === '') : true;
+  let cuerpo = campos.map(c => htmlCampo(c, valorInicial(c), ctx)).join('');
+  if (existente) {
+    cuerpo += activo
+      ? '<button type="button" class="m-accion-peligro" data-hoja-acc="pedir-desactivar">Desactivar ' + esc(def.singular) + '</button>' +
+        '<div id="confirma" hidden class="m-error-form" style="margin-top:var(--m-space-3)"><p style="margin-bottom:var(--m-space-3)">¿Desactivar “' + esc(existente.Nombre || existente.Tipo || '') + '”? Su historial se conserva y podrás reactivarlo.</p>' +
+          '<div class="m-hoja-acciones"><button type="button" class="m-btn m-btn-secondary" data-hoja-acc="cancelar-desactivar">No, dejarlo</button>' +
+          '<button type="button" class="m-btn m-btn-primary" style="background:var(--m-danger);color:#fff" data-hoja-acc="desactivar">Sí, desactivar</button></div></div>'
+      : '<button type="button" class="m-accion-peligro" style="color:var(--m-tint)" data-hoja-acc="reactivar">Reactivar ' + esc(def.singular) + '</button>';
+  }
+
+  await abrirHoja({
+    titulo: existente ? 'Editar ' + def.singular : 'Nueva ' + def.singular,
+    cuerpo: '<form novalidate data-form="catalogo">' + cuerpo + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      actualizarVisibilidad(raiz, campos, ctx);
+      if (tabla === 'Cuentas' || tabla === 'Bolsillos') sincronizarDivisa(raiz, tabla, existente);
+      const sel = $('#' + idCampo('Tipo'), raiz);
+      const sw = $('#' + idCampo('Permite_Bolsillos'), raiz);
+      if (tabla === 'Cuentas' && sel && sw && !existente) {
+        sw.checked = sel.value !== 'Debito';
+        sw.addEventListener('change', () => { sw.dataset.tocado = '1'; });
+        sel.addEventListener('change', () => { if (!sw.dataset.tocado) { sw.checked = sel.value !== 'Debito'; actualizarVisibilidad(raiz, campos, ctx); } });
+      }
+      raiz.addEventListener('input', () => actualizarVisibilidad(raiz, campos, ctx));
+      raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, ctx));
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      campos.forEach(c => {
+        if (c.visible && !c.visible(v, ctx)) delete v[c.k];
+        if ((c.tipo === 'dinero' || c.tipo === 'porcentaje') && v[c.k] !== undefined && typeof v[c.k] === 'number' && isNaN(v[c.k])) throw new Error(c.label + ' debe ser un número.');
+      });
+      const falta = campos.find(c => c.requerido && (!c.visible || c.visible(v, ctx)) && (v[c.k] === '' || v[c.k] === undefined));
+      if (falta) throw new Error(falta.label + ' es obligatorio.');
+
+      const envio = Object.assign({}, v);
+      const opciones = {};
+      if (existente) envio[def.id] = existente[def.id];
+      if (tabla === 'Tarjetas') {
+        if (v.reserva === '__nueva') opciones.crearReserva = { ID_Cuenta: v.cuentaReserva };
+        else envio.ID_Bolsillo_Reserva = v.reserva;
+        delete envio.reserva; delete envio.cuentaReserva;
+      }
+      if (tabla === 'Escenarios') {
+        if (v.copiarDe) opciones.copiarDe = v.copiarDe;
+        delete envio.copiarDe;
+      }
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
+      if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
+      if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
+      if (tabla === 'CDTs') { opciones.descontar = !!v.descontar; opciones.ID_Bolsillo_Origen = v.ID_Bolsillo_Origen || ''; delete envio.descontar; delete envio.ID_Bolsillo_Origen; }
+      if (tabla === 'Cuentas') {
+        // Un valor vacío de saldo real/meta significa "quitar".
+        ['Saldo_Real', 'Meta'].forEach(k => { if (v[k] === '' && existente && existente[k] !== '' && existente[k] !== undefined) envio[k] = ''; });
+      }
+      await api('saveCatalogo', tabla, envio, opciones);
+      await refrescarParcial({ tablas: [tabla] });
+      render();
+      aviso(existente ? 'Cambios guardados' : 'Se agregó ' + def.singular);
+    },
+    extra: {
+      'pedir-desactivar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = true; $('[data-hoja-acc="desactivar"]', raiz).focus(); },
+      'cancelar-desactivar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = false; },
+      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Desactivado'); return true; },
+      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Reactivado'); return true; }
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Hoja modal (<dialog>): foco, Esc, arrastre para cerrar, errores en línea
+// ---------------------------------------------------------------------------
+
+/** La hoja que está abierta. Los oyentes del <dialog> se registran una sola vez (al final) y la usan. */
+let hojaActual = null;
+
+function abrirHoja(o) {
+  return new Promise(resolve => {
+    const dlg = $('#hoja');
+    if (hojaActual) hojaActual.finalizar(); // nunca dos hojas a la vez
+    // Al cerrar, el foco vuelve a lo que abrió la hoja (teclado y lectores de pantalla no se pierden)
+    const origen = document.activeElement && document.activeElement !== document.body && !dlg.contains(document.activeElement) ? document.activeElement : null;
+    dlg.innerHTML =
+      '<div class="m-hoja-asa" aria-hidden="true"></div>' +
+      '<div class="m-hoja-cabecera"><button type="button" class="m-btn-texto" data-hoja-acc="cerrar">' + esc(o.izq || 'Cancelar') + '</button>' +
+      '<h2 id="hoja-titulo">' + esc(o.titulo) + '</h2>' +
+      (o.sinGuardar ? '<span></span>' : '<button type="button" class="m-btn-texto" data-hoja-acc="guardar"><strong>' + esc(o.der || 'Guardar') + '</strong></button>') + '</div>' +
+      '<div class="m-hoja-cuerpo"><div class="m-error-form" role="alert" hidden></div>' + o.cuerpo + '</div>';
+    dlg.style.transform = '';
+
+    const cuerpo = $('.m-hoja-cuerpo', dlg);
+    const errorBox = $('.m-error-form', dlg);
+    const mostrarError = m => { errorBox.textContent = m; errorBox.hidden = !m; if (m) errorBox.scrollIntoView({ block: 'nearest' }); };
+    // Cerrar limpia de inmediato, sin esperar al evento 'close' (que no todos los navegadores disparan a tiempo).
+    const cerrar = () => { if (dlg.open) dlg.close(); hoja.finalizar(); };
+
+    const ejecutar = async (fn) => {
+      mostrarError('');
+      const botones = $$('button', dlg);
+      const etiquetaGuardar = $('[data-hoja-acc="guardar"] strong', dlg);
+      const textoOriginal = etiquetaGuardar ? etiquetaGuardar.textContent : '';
+      botones.forEach(b => b.disabled = true);
+      if (etiquetaGuardar) etiquetaGuardar.textContent = 'Guardando…';
+      try {
+        const cerrarDespues = await fn(cuerpo);
+        cerrar();
+        return cerrarDespues;
+      } catch (e) {
+        mostrarError(e.message);
+        botones.forEach(b => b.disabled = false);
+        if (etiquetaGuardar) etiquetaGuardar.textContent = textoOriginal;
+      }
+    };
+
+    const alClic = ev => {
+      const b = ev.target.closest('[data-hoja-acc]');
+      if (ev.target === dlg) { cerrar(); return; }
+      if (!b || !dlg.contains(b)) return;
+      const acc = b.dataset.hojaAcc;
+      if (acc === 'cerrar') cerrar();
+      else if (acc === 'guardar') ejecutar(o.alGuardar);
+      else if (o.extra && o.extra[acc]) {
+        const r = o.extra[acc](cuerpo);
+        if (r && typeof r.then === 'function') ejecutar(() => r.then(() => true));
+      }
+    };
+    const alEnviar = ev => { ev.preventDefault(); if (o.alGuardar) ejecutar(o.alGuardar); };
+
+    // Arrastrar la hoja hacia abajo para cerrarla
+    let inicioY = null;
+    const abajo = ev => { if (ev.target.closest('button')) return; inicioY = ev.clientY; try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (e) {} };
+    const mueve = ev => { if (inicioY === null) return; const dy = Math.max(0, ev.clientY - inicioY); dlg.style.transform = 'translateY(' + dy + 'px)'; dlg.style.transition = 'none'; };
+    const suelta = ev => {
+      if (inicioY === null) return;
+      const dy = ev.clientY - inicioY; inicioY = null; dlg.style.transition = '';
+      if (dy > 110) cerrar(); else dlg.style.transform = '';
+    };
+    $$('.m-hoja-asa, .m-hoja-cabecera', dlg).forEach(el => {
+      el.addEventListener('pointerdown', abajo); el.addEventListener('pointermove', mueve);
+      el.addEventListener('pointerup', suelta); el.addEventListener('pointercancel', suelta);
+    });
+
+    const hoja = {
+      alClic: alClic,
+      alEnviar: alEnviar,
+      cerrada: false,
+      finalizar() {
+        if (this.cerrada) return;
+        this.cerrada = true;
+        if (dlg.open) dlg.close();
+        dlg.style.transform = '';
+        if (hojaActual === this) hojaActual = null;
+        if (origen && document.contains(origen) && !hojaActual) { try { origen.focus({ preventScroll: true }); } catch (e) {} }
+        resolve();
+      }
+    };
+    hojaActual = hoja;
+
+    dlg.showModal();
+    if (o.alAbrir) o.alAbrir(cuerpo);
+    const primero = $('input:not([type=hidden]):not([disabled]), select, textarea', cuerpo);
+    if (primero && !primero.closest('[hidden]')) primero.focus();
+  });
+}
+
+/** Confirmación en hoja. Devuelve true si la persona confirma. */
+async function confirmar(o) {
+  let ok = false;
+  await abrirHoja({
+    titulo: o.titulo, izq: 'Cancelar', der: o.accion,
+    cuerpo: '<p class="m-hoja-mensaje">' + esc(o.mensaje) + '</p>',
+    alGuardar: async () => { ok = true; }
+  });
+  return ok;
+}
+</script>

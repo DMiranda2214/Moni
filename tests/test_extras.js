@@ -363,10 +363,10 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.llamar('getTableData', 'Compras_TC').filter(c => String(c.Anulado).toUpperCase() === 'TRUE').length, 1);
 
     const srv = lista.find(x => x.Tipo === 'Servicio');
-    assert.strictEqual(srv.codigo, '0000-DEMO-1', 'trae el código del servicio enlazado');
+    assert.strictEqual(srv.codigo, '0000-DEMO-1', 'trae su código de pago');
     const p = e.llamar('paySuscripcion', srv.ID_Suscripcion, { Valor: 101500 });
     assert.strictEqual(p.data.suscripciones.items.find(x => x.ID_Suscripcion === srv.ID_Suscripcion).Valor, 101500, 'el estimado pasa a ser el último pago');
-    assert.strictEqual(e.llamar('limpiarDatosDemo').eliminadas.Suscripciones, 4);
+    assert.strictEqual(e.llamar('limpiarDatosDemo').eliminadas.Suscripciones, 5, 'también el dato de pago sin fecha');
   });
 
   // ============================================================ primeros pasos

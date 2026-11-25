@@ -26,11 +26,11 @@ module.exports = function (prueba, assert, crearEntorno) {
   }
 
   // ---------------------------------------------------------------- instalación
-  prueba('setupDatabase crea las 31 tablas con sus encabezados', () => {
+  prueba('setupDatabase crea las 32 tablas con sus encabezados', () => {
     const e = E(false);
     const r = e.llamar('setupDatabase');
-    assert.strictEqual(r.tablas, 31);
-    assert.strictEqual(r.creadas.length, 31);
+    assert.strictEqual(r.tablas, 32);
+    assert.strictEqual(r.creadas.length, 32);
     assert.strictEqual(r.ok, true);
     assert.strictEqual(e.hojas.Movimientos.filas[0][0], 'ID_Mov');
     assert.strictEqual(e.hojas.Movimientos.filas[0].slice(-2).join(), 'Creado_En,Actualizado_En');
@@ -39,7 +39,8 @@ module.exports = function (prueba, assert, crearEntorno) {
   prueba('cada catálogo del servidor tiene su pantalla de Ajustes (CAT) en la app', () => {
     const e = E();
     const fs = require('fs'), path = require('path');
-    const app = fs.readFileSync(path.join(__dirname, '..', 'app_js.html'), 'utf8');
+    const app = fs.readdirSync(path.join(__dirname, '..')).filter(f => f === 'app_js.html' || /^js_.*\.html$/.test(f)).sort()
+      .map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
     const inicio = app.indexOf('const CAT = {');
     assert.ok(inicio > 0);
     const catalogos = JSON.parse(JSON.stringify(e.ejecutar('Object.keys(CATALOGOS)')));
@@ -76,6 +77,8 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(e.hojas.Presupuesto_Mes.formatos[2], '@');
     assert.strictEqual(e.hojas.Config.formatos[2], '@');
     assert.strictEqual(e.hojas.Servicios_Publicos.formatos[6], '@');
+    const enc = e.hojas.Suscripciones.filas[0];
+    assert.strictEqual(e.hojas.Suscripciones.formatos[enc.indexOf('Codigo_Pago') + 1], '@', 'el código de un cobro también es texto');
   });
 
   // ---------------------------------------------------------------- auditoría
@@ -311,32 +314,68 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.ok(e.llamar('guardarCatalogo', 'Categorias', { Nombre: 'Mercado', Tipo: 'Ingreso' }).ID_Categoria);
   });
 
-  prueba('empresas de pago: el servicio toma su nombre y su enlace; no se desactiva con servicios usándola', () => {
+  /** Escribe filas directo en una pestaña vieja (como las dejó la versión anterior, que ya no se edita desde la app). */
+  const filasViejas = (e, tabla, registros) => {
+    const enc = e.hojas[tabla].filas[0];
+    registros.forEach(r => e.hojas[tabla].filas.push(enc.map(h => r[h] === undefined ? '' : r[h])));
+    e.ejecutar('invalidateCache()');
+  };
+
+  prueba('unificación: un servicio sin cobro pasa a ser un dato de pago (sin fecha) con su hogar, empresa, código y enlace', () => {
     const e = E();
     const inm = e.llamar('guardarCatalogo', 'Inmuebles', { Nombre: 'Casa' });
-    assert.throws(e.falla('guardarCatalogo', 'Empresas_Pago', { Nombre: 'Mala', URL_Pago: 'javascript:alert(1)' }), /http/);
-    const emp = e.llamar('guardarCatalogo', 'Empresas_Pago', { Nombre: 'Enel', URL_Pago: 'https://pagos.enel.example' });
-    assert.throws(e.falla('guardarCatalogo', 'Empresas_Pago', { Nombre: 'enel' }), /Ya existe/);
-    const s = e.llamar('guardarCatalogo', 'Servicios_Publicos', { ID_Inmueble: inm.ID_Inmueble, Tipo: 'Luz', ID_Empresa: emp.ID_Empresa, Codigo_Pago: '123' });
-    assert.strictEqual(s.Empresa, 'Enel');
-    assert.strictEqual(s.ID_Empresa, emp.ID_Empresa);
-    assert.throws(e.falla('desactivarCatalogo', 'Empresas_Pago', emp.ID_Empresa), /servicio\(s\)/);
-    assert.throws(e.falla('guardarCatalogo', 'Servicios_Publicos', { ID_Inmueble: inm.ID_Inmueble, Tipo: 'Gas', ID_Empresa: 'no-existe', Codigo_Pago: '9' }), /empresa/i);
-    // El cobro de un servicio hereda el enlace de la empresa
-    const sus = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Luz', Tipo: 'Servicio', Valor: 90000, Periodicidad: 'Mensual', Proximo_Cobro: bogota(), ID_Servicio: s.ID_Servicio, ID_Inmueble: inm.ID_Inmueble });
-    assert.ok(sus.ID_Suscripcion);
-    const cobro = e.llamar('obtenerSuscripciones').items.find(x => x.ID_Suscripcion === sus.ID_Suscripcion);
-    assert.strictEqual(cobro.url, 'https://pagos.enel.example');
+    filasViejas(e, 'Empresas_Pago', [{ ID_Empresa: 'emp-1', Nombre: 'Enel', URL_Pago: 'https://pagos.enel.example', Activo: true }]);
+    filasViejas(e, 'Servicios_Publicos', [{ ID_Servicio: 'srv-1', ID_Inmueble: inm.ID_Inmueble, Tipo: 'Luz', ID_Empresa: 'emp-1', Empresa: 'Enel', Codigo_Pago: '00123', Activo: true }]);
+    assert.strictEqual(e.llamar('unificarServicios_'), 1);
+    const d = e.llamar('obtenerSuscripciones');
+    assert.strictEqual(d.items.length, 0, 'no aparece como cobro (no tiene fecha ni valor)');
+    assert.strictEqual(d.totales.mensual, 0);
+    const c = d.codigos.find(x => x.ID_Servicio === 'srv-1');
+    assert.deepStrictEqual([c.Nombre, c.Empresa, c.codigo, c.url, c.Hogar, c.programado], ['Luz', 'Enel', '00123', 'https://pagos.enel.example', 'Casa', false]);
+    assert.strictEqual(e.llamar('proximosPagos_', 400).length, 0, 'no entra en próximos pagos');
+    // Repetir no duplica
+    assert.strictEqual(e.llamar('unificarServicios_'), 0);
+    assert.strictEqual(e.llamar('getTableData', 'Suscripciones').length, 1);
+    // Las pestañas viejas quedan como estaban
+    assert.strictEqual(e.hojas.Servicios_Publicos.filas.length, 2);
+    assert.strictEqual(e.hojas.Empresas_Pago.filas.length, 2);
   });
 
-  prueba('servicios públicos: exige inmueble activo y rechaza enlaces peligrosos', () => {
+  prueba('unificación: un cobro enlazado recibe la empresa y el código sin cambiar nada de lo que ya tenía', () => {
     const e = E();
     const inm = e.llamar('guardarCatalogo', 'Inmuebles', { Nombre: 'Casa' });
-    const base = { ID_Inmueble: inm.ID_Inmueble, Tipo: 'Luz', Codigo_Pago: '00123' };
-    assert.throws(e.falla('guardarCatalogo', 'Servicios_Publicos', Object.assign({}, base, { URL_Pago: 'javascript:alert(1)' })), /http/);
-    const s = e.llamar('guardarCatalogo', 'Servicios_Publicos', Object.assign({}, base, { URL_Pago: 'https://pagos.example.com' }));
-    assert.strictEqual(s.Codigo_Pago, '00123', 'el código conserva los ceros');
-    assert.throws(e.falla('desactivarCatalogo', 'Inmuebles', inm.ID_Inmueble), /servicio\(s\) activo/);
+    filasViejas(e, 'Empresas_Pago', [{ ID_Empresa: 'emp-1', Nombre: 'Enel', URL_Pago: 'https://pagos.enel.example', Activo: true }]);
+    filasViejas(e, 'Servicios_Publicos', [{ ID_Servicio: 'srv-1', ID_Inmueble: inm.ID_Inmueble, Tipo: 'Luz', ID_Empresa: 'emp-1', Codigo_Pago: '9', Activo: true }]);
+    filasViejas(e, 'Suscripciones', [{ ID_Suscripcion: 'sus-1', Nombre: 'Energía', Tipo: 'Servicio', Valor: 90000, Periodicidad: 'Mensual', Proximo_Cobro: bogota(), Dia_Cobro: 5, ID_Servicio: 'srv-1', ID_Inmueble: '', URL_Pago: '', Activo: true }]);
+    const antes = e.llamar('obtenerSuscripciones').items[0];
+    e.llamar('unificarServicios_');
+    const fila = e.llamar('getTableData', 'Suscripciones')[0];
+    assert.strictEqual(fila.Empresa, 'Enel'); assert.strictEqual(fila.Codigo_Pago, '9');
+    assert.strictEqual(fila.ID_Inmueble, '', 'el hogar no se toca'); assert.strictEqual(fila.URL_Pago, '', 'el enlace guardado no se toca');
+    const despues = e.llamar('obtenerSuscripciones').items[0];
+    ['Nombre', 'Valor', 'Proximo_Cobro', 'Hogar', 'url', 'codigo', 'mensual'].forEach(k => assert.deepStrictEqual(despues[k], antes[k], k));
+  });
+
+  prueba('unificación: una empresa sin servicios se conserva como enlace de pago; las inactivas siguen inactivas', () => {
+    const e = E();
+    filasViejas(e, 'Empresas_Pago', [{ ID_Empresa: 'emp-1', Nombre: 'Vanti', URL_Pago: 'https://vanti.example', Activo: true }, { ID_Empresa: 'emp-2', Nombre: 'Vieja', URL_Pago: '', Activo: false }]);
+    e.llamar('unificarServicios_');
+    const filas = e.llamar('getTableData', 'Suscripciones');
+    assert.strictEqual(filas.length, 2);
+    assert.strictEqual(e.llamar('obtenerSuscripciones').codigos.map(x => x.Nombre).join(), 'Vanti');
+    assert.strictEqual(filas.find(f => f.ID_Empresa === 'emp-2').Activo, false);
+  });
+
+  prueba('cobros: un servicio se puede guardar sin fecha (solo su código); una suscripción no', () => {
+    const e = E();
+    const inm = e.llamar('guardarCatalogo', 'Inmuebles', { Nombre: 'Casa' });
+    const s = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Agua', Tipo: 'Servicio', ID_Inmueble: inm.ID_Inmueble, Empresa: 'Acueducto', Codigo_Pago: '00777', URL_Pago: 'https://pagos.example.com' });
+    assert.strictEqual(s.Codigo_Pago, '00777', 'el código conserva los ceros');
+    assert.strictEqual(s.Proximo_Cobro, '');
+    assert.throws(e.falla('guardarCatalogo', 'Suscripciones', { Nombre: 'Música', Tipo: 'Suscripcion', Valor: 20000 }), /próximo cobro/);
+    assert.throws(e.falla('guardarCatalogo', 'Suscripciones', { Nombre: 'Gas', Tipo: 'Servicio', URL_Pago: 'javascript:alert(1)' }), /http/);
+    assert.throws(e.falla('saltarCobroSuscripcion', s.ID_Suscripcion), /no tiene fecha/);
+    assert.throws(e.falla('desactivarCatalogo', 'Inmuebles', inm.ID_Inmueble), /de este hogar/);
   });
 
   prueba('escenarios: un solo base; no se puede quitar la marca; copiar renglones de otro', () => {
@@ -488,12 +527,12 @@ module.exports = function (prueba, assert, crearEntorno) {
     const antes = e.llamar('getBootstrap');
     assert.strictEqual(antes.ok, true);
     assert.strictEqual(antes.data.instalado, false);
-    assert.strictEqual(antes.data.faltantes.length, 31);
+    assert.strictEqual(antes.data.faltantes.length, 32);
 
     assert.strictEqual(e.llamar('instalarBaseDatos').ok, true);
     const d = e.llamar('getBootstrap').data;
     assert.strictEqual(d.instalado, true);
-    ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios']
+    ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Suscripciones', 'Cargos_Reglas', 'Escenarios']
       .forEach(t => assert.ok(Array.isArray(d.catalogos[t]), t));
     assert.ok(d.saldos && d.estado && d.enums.Cuentas.Tipo);
     assert.strictEqual(d.config.Anio_Activo, bogota().slice(0, 4), 'el año activo es el actual, no uno fijo');

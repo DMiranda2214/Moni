@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.10.0**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.15.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -11,17 +11,19 @@ Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **G
 
 | Módulo | Para qué sirve |
 |---|---|
-| **Inicio** | Resumen (con otras monedas aparte), avisos de lo que falta configurar, accesos rápidos, gráficos, próximos pagos y últimos movimientos |
+| **Inicio** | Resumen y **patrimonio neto** (lo que tienes menos lo que debes; otras monedas aparte), avisos de lo que falta configurar, accesos rápidos, gráficos, próximos pagos y últimos movimientos |
 | **Bolsillos** | Saldo de cada cuenta y bolsillo; registrar, mover dinero y cuadrar con el banco |
 | **Presupuesto** | Plantilla por escenario, mes generado (con tus suscripciones y servicios), "real" calculado de tus movimientos |
 | **Nómina** | Tu sueldo y descuentos fijos, más lo de cada mes (horas extras, cesantías, prima, descuentos de la empresa); estimado con salud, pensión y prestaciones, y reparto a bolsillos |
 | **Otros ingresos** | Ingresos recurrentes (otro trabajo, arriendo, ventas…) con su cuenta de destino |
-| **Deudas** | Tarjetas de crédito (reserva, extracto, pago) y créditos de autopago con amortización francesa |
+| **Deudas** | Tarjetas de crédito (reserva, extracto, pago, compras en otra moneda) y créditos con un banco o de autopago, con amortización francesa y seguros por cuota |
+| **Cargos y comisiones** | Lo que cobra cada banco, cuenta, tarjeta o crédito (comisiones, 4x1000, cambio de divisa, cuota de manejo, seguros): Moni lo propone al registrar y se puede cambiar |
 | **CDT** | Lo que tienes a plazo fijo: capital "invertido" (no disponible), lo que ganarás, vencimientos, cobro y renovación |
 | **Ahorro** | Rendimientos (interés, retención, GMF), retiros para gastos y lo que se debe reponer |
 | **Servicios y suscripciones** | Cobros que se repiten, costo mensual/anual, pagar en un toque, códigos y enlaces de pago |
 | **Regalos** | Lista por año con estimado y gasto real |
 | **Vista anual** | Mes a mes: ingreso, plan, real, ahorro y restante |
+| **Análisis** | Patrimonio de 12 meses, en qué gastas frente al mes anterior, lo que debes y cuándo terminas, tu dinero en 30/60/90 días y las comisiones del año |
 | **Gráficos** | Dentro de cada módulo: Inicio, Movimientos, Presupuesto, Nómina, Servicios, Regalos, CDT, Deudas, Ahorro, Vista anual y cada bolsillo) |
 | **Monedas** | Cuentas en dólares o euros sin mezclarlas con los pesos, conversión con la tasa del banco y su comisión, y una tasa de referencia de Google Finance |
 | **Recordatorios** | Tus pagos de los próximos 45 días en un calendario "Moni" de Google Calendar |
@@ -51,7 +53,7 @@ Se prueba en desarrollo y, cuando está bien, se publica en producción (sin CI/
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
 | [Arquitectura](docs/ARQUITECTURA.md) | Capas, modelo de datos, convenciones |
 | [API interna](docs/API.md) | Funciones que el frontend llama |
-| [Esquema de datos](docs/ESQUEMA.md) | Las 31 tablas, columna por columna |
+| [Esquema de datos](docs/ESQUEMA.md) | Las 32 tablas, columna por columna |
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |
@@ -73,8 +75,8 @@ Para publicar en Google, sigue [Despliegue](docs/DESPLIEGUE.md) (dos entornos, u
 ## Estructura
 
 ```
-*.gs              Backend (Apps Script): una responsabilidad por archivo
-index.html        Página; app_js.html, app_css.html y tokens.html se incluyen en ella
+*.gs              Backend (Apps Script): una responsabilidad por archivo (Fechas.gs y Finanzas.gs: ayudantes comunes)
+index.html        Página; app_js.html + js_*.html (la app, por partes), app_css.html y tokens.html se incluyen en ella
 appsscript.json   Manifiesto (permisos y web app)
 scripts/          Despliegue por entorno (publicar.sh) y el stub de producción sin datos de demostración
 tests/            Pruebas en Node con un Google Sheets simulado en memoria, y la vista previa local

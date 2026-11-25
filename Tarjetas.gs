@@ -13,7 +13,6 @@
  *     bolsillo personal), paga el total desde la reserva y marca las compras como pagadas.
  */
 
-function dosDigitos_(n) { return String(n).padStart(2, '0'); }
 
 /** Mes (AAAA-MM) del extracto al que pertenece una compra: si pasa del día de corte, va al siguiente. */
 function calcularMesExtracto_(fecha, diaCorte) {
@@ -27,8 +26,7 @@ function calcularMesExtracto_(fecha, diaCorte) {
 function proximoDiaDelMes_(dia, desde) {
   const p = desde.split('-').map(Number);
   const en = (anio, mes) => {
-    const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
-    return anio + '-' + dosDigitos_(mes) + '-' + dosDigitos_(Math.min(dia, ultimo));
+    return fechaTexto_(anio, mes, Math.min(dia, diasDelMes_(anio, mes)));
   };
   const estaVez = en(p[0], p[1]);
   if (estaVez >= desde) return estaVez;
@@ -44,7 +42,7 @@ function rangoCorte_(mes, diaCorte, diaPago) {
   const fecha = (anio, m, dia) => {
     while (m < 1) { m += 12; anio--; }
     while (m > 12) { m -= 12; anio++; }
-    return anio + '-' + dosDigitos_(m) + '-' + dosDigitos_(Math.min(dia, new Date(Date.UTC(anio, m, 0)).getUTCDate()));
+    return fechaTexto_(anio, m, Math.min(dia, diasDelMes_(anio, m)));
   };
   const corte = Number(diaCorte) || 1;
   const anterior = fecha(p[0], p[1] - 1, corte);
@@ -85,6 +83,8 @@ function registrarCompraTC(c) {
   const idCategoria = categoriaMovimiento_(c.ID_Categoria, 'Gasto');
   const idCompra = nuevoId_('cmp');
 
+  // Todo o nada: si la compra no se puede guardar, el dinero apartado vuelve a su bolsillo.
+  return transaccion_(alDeshacer => {
   // Compras que apartan dinero en la reserva en el momento
   let idMovReserva = '';
   if (fuente === 'Ppto' || fuente === 'Guardar') {
@@ -102,15 +102,24 @@ function registrarCompraTC(c) {
     const r = registrarTransferencia(origen, tarjeta.ID_Bolsillo_Reserva, valor, fecha, 'Reserva ' + tarjeta.Nombre + ': ' + concepto,
       'Compra ' + idCompra, 'App', { Subtipo: 'Reserva_TC', ID_Item_Ppto: fuente === 'Ppto' ? idItem : '' });
     idMovReserva = r.patas[1].ID_Mov;
+    alDeshacer(() => anularMovimiento(r.patas[0].ID_Mov));
   }
 
   const fila = {
     ID_Compra: idCompra, Fecha: fecha, Concepto: concepto, Valor: valor, ID_Tarjeta: tarjeta.ID_Tarjeta, Mes_Extracto: mes,
     Fuente: fuente, ID_Categoria: idCategoria, ID_Item_Ppto: idItem, ID_Extracto: '', Pagado: false, ID_Mov_Reserva: idMovReserva,
-    Notas: texto_(c.Notas).slice(0, 500), Origen: opcion_(c.Origen || 'App', ENUMS.Compras_TC.Origen, 'El origen'), Anulado: false
+    Notas: texto_(c.Notas).slice(0, 500), Origen: opcion_(c.Origen || 'App', ENUMS.Compras_TC.Origen, 'El origen'), Anulado: false,
+    Ref: texto_(c.Ref).slice(0, 200)
   };
-  insertRow('Compras_TC', fila);
+  // Compra en otra moneda: se guarda lo que costó en esa moneda y la tasa (la deuda queda en la moneda de la tarjeta)
+  if (texto_(c.Divisa_Original)) {
+    fila.Divisa_Original = texto_(c.Divisa_Original).toUpperCase().slice(0, 3);
+    fila.Valor_Original = numero_(c.Valor_Original, 'El valor en ' + fila.Divisa_Original, { min: 0.01, max: VALOR_MAXIMO, requerido: true });
+    fila.Tasa = redondear2_(valor / fila.Valor_Original);
+  }
+  insertRow('Compras_TC', conRef_(fila));
   return fila;
+  });
 }
 
 /** Anula una compra (y el dinero que apartó). No se puede si su extracto ya se pagó. */
@@ -125,7 +134,9 @@ function anularCompraTC(idCompra) {
   if (abonado > quedaria + 0.005) throw new Error('Ese corte ya tiene abonos por ' + pesos_(abonado) + ': sin esta compra la deuda sería de ' + pesos_(quedaria) + '. Anula primero algún abono.');
   let ids = [];
   if (compra.ID_Mov_Reserva) ids = anularMovimiento(compra.ID_Mov_Reserva).ids;
-  updateRow('Compras_TC', compra._rowIndex, { Anulado: true });
+  // Sus cargos (por ejemplo, el recargo por compra en otra moneda) se anulan con ella
+  const cargos = leer_('Compras_TC').filter(c => texto_(c.Ref) === MARCA_CARGO + idCompra && !esVerdadero(c.Anulado));
+  updateRows_('Compras_TC', [compra].concat(cargos).map(c => ({ fila: c, cambios: { Anulado: true } })));
   return { ids: ids, tarjeta: compra.ID_Tarjeta, mes: compra.Mes_Extracto };
 }
 
@@ -137,7 +148,8 @@ function restaurarCompraTC(idCompra) {
   if (extractoPagado_(compra.ID_Tarjeta, compra.Mes_Extracto)) throw new Error('El extracto de ese mes ya está pagado.');
   let ids = [];
   if (compra.ID_Mov_Reserva) ids = restaurarMovimiento(compra.ID_Mov_Reserva).ids;
-  updateRow('Compras_TC', compra._rowIndex, { Anulado: false });
+  const cargos = leer_('Compras_TC').filter(c => texto_(c.Ref) === MARCA_CARGO + idCompra && esVerdadero(c.Anulado));
+  updateRows_('Compras_TC', [compra].concat(cargos).map(c => ({ fila: c, cambios: { Anulado: false } })));
   return { ids: ids, tarjeta: compra.ID_Tarjeta, mes: compra.Mes_Extracto };
 }
 
@@ -202,7 +214,7 @@ function anularAbonoTarjeta(idPago) {
   if (esVerdadero(p.Anulado)) return { ids: [], tarjeta: p.ID_Tarjeta, mes: p.Mes };
   if (p.ID_Extracto) throw new Error('Ese abono ya se aplicó a un extracto pagado. Anula primero el pago del extracto.');
   const ids = p.ID_Mov ? anularMovimiento(p.ID_Mov).ids : [];
-  updateRow('Pagos_Tarjeta', p._rowIndex, { Anulado: true });
+  updateRow('Pagos_Tarjeta', p, { Anulado: true });
   return { ids: ids, tarjeta: p.ID_Tarjeta, mes: p.Mes };
 }
 
@@ -268,15 +280,15 @@ function pagarExtracto(idTarjeta, mes, fecha, idOrigen, aportes) {
         ID_Mov: '', ID_Extracto: idExtracto, Notas: '', Anulado: false });
       aportesCreados.push(idPago);
     });
-    abonos.forEach(p => updateRow('Pagos_Tarjeta', p._rowIndex, { ID_Extracto: idExtracto }));
-    compras.forEach(c => updateRow('Compras_TC', c._rowIndex, { Pagado: true, ID_Extracto: idExtracto }));
+    updateRows_('Pagos_Tarjeta', abonos.map(p => ({ fila: p, cambios: { ID_Extracto: idExtracto } })));
+    updateRows_('Compras_TC', compras.map(c => ({ fila: c, cambios: { Pagado: true, ID_Extracto: idExtracto } })));
     insertRow('Extractos', { ID_Extracto: idExtracto, ID_Tarjeta: idTarjeta, Mes: m, Total: total, Estado: 'Pagado', Fecha_Pago: f, ID_Grupo_Pago: idGrupoPago, URL_PDF: '', Notas: '', Anulado: false });
   } catch (e) {
     // Atomicidad: no se deja un pago a medias.
     creados.forEach(id => { try { anularMovimiento(id); } catch (x) {} });
-    aportesCreados.forEach(id => { const r = buscarPorId_(leer_('Pagos_Tarjeta'), 'ID_Pago', id); if (r) updateRow('Pagos_Tarjeta', r._rowIndex, { Anulado: true }); });
-    leer_('Pagos_Tarjeta').filter(p => p.ID_Extracto === idExtracto && p.Tipo === 'Abono').forEach(p => updateRow('Pagos_Tarjeta', p._rowIndex, { ID_Extracto: '' }));
-    leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).forEach(c => updateRow('Compras_TC', c._rowIndex, { Pagado: false, ID_Extracto: '' }));
+    aportesCreados.forEach(id => { const r = buscarPorId_(leer_('Pagos_Tarjeta'), 'ID_Pago', id); if (r) updateRow('Pagos_Tarjeta', r, { Anulado: true }); });
+    updateRows_('Pagos_Tarjeta', leer_('Pagos_Tarjeta').filter(p => p.ID_Extracto === idExtracto && p.Tipo === 'Abono').map(p => ({ fila: p, cambios: { ID_Extracto: '' } })));
+    updateRows_('Compras_TC', leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).map(c => ({ fila: c, cambios: { Pagado: false, ID_Extracto: '' } })));
     throw e;
   }
   return { idExtracto: idExtracto, total: total, falta: falta, ids: creados, tarjeta: idTarjeta, mes: m };
@@ -287,15 +299,16 @@ function anularPagoExtracto(idExtracto) {
   const ext = buscarPorId_(leer_('Extractos'), 'ID_Extracto', idExtracto);
   if (!ext || esVerdadero(ext.Anulado)) throw new Error('No hay un pago de extracto para anular.');
   const marca = 'Extracto ' + idExtracto;
-  const movs = leer_('Movimientos').filter(m => m.Notas === marca && !esVerdadero(m.Anulado));
+  // Los movimientos del pago y sus cargos (cuota de manejo…)
+  const movs = leer_('Movimientos').filter(m => (refDe_(m) === marca || texto_(m.Ref) === MARCA_CARGO + idExtracto) && !esVerdadero(m.Anulado));
   const ids = [];
   movs.forEach(m => { anularMovimiento(m.ID_Mov).ids.forEach(i => ids.push(i)); });
   leer_('Pagos_Tarjeta').filter(p => p.ID_Extracto === idExtracto && !esVerdadero(p.Anulado)).forEach(p => {
-    if (p.Tipo === 'Aporte') updateRow('Pagos_Tarjeta', p._rowIndex, { Anulado: true });
-    else updateRow('Pagos_Tarjeta', p._rowIndex, { ID_Extracto: '' });
+    if (p.Tipo === 'Aporte') updateRow('Pagos_Tarjeta', p, { Anulado: true });
+    else updateRow('Pagos_Tarjeta', p, { ID_Extracto: '' });
   });
-  leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).forEach(c => updateRow('Compras_TC', c._rowIndex, { Pagado: false, ID_Extracto: '' }));
-  updateRow('Extractos', ext._rowIndex, { Anulado: true });
+  updateRows_('Compras_TC', leer_('Compras_TC').filter(c => c.ID_Extracto === idExtracto).map(c => ({ fila: c, cambios: { Pagado: false, ID_Extracto: '' } })));
+  updateRow('Extractos', ext, { Anulado: true });
   return { ids: ids, tarjeta: ext.ID_Tarjeta, mes: ext.Mes };
 }
 
@@ -398,7 +411,8 @@ function resumenTarjetas_() {
     return {
       ID_Tarjeta: t.ID_Tarjeta, Nombre: t.Nombre, Banco: b.Nombre || '', Cupo: Number(t.Cupo) || 0, Dia_Corte: Number(t.Dia_Corte), Dia_Pago: Number(t.Dia_Pago),
       mes: mesActual, total: total, abonado: abonosCorte, pagado: pagado, faltaParaPagar: pagado ? 0 : Math.max(0, redondear2_(total - abonosCorte - saldoReserva)),
-      saldoReserva: saldoReserva, cupoDisponible: redondear2_((Number(t.Cupo) || 0) - usado), proximoPago: proximoDiaDelMes_(Number(t.Dia_Pago), hoy)
+      saldoReserva: saldoReserva, cupoDisponible: redondear2_((Number(t.Cupo) || 0) - usado), proximoPago: proximoDiaDelMes_(Number(t.Dia_Pago), hoy),
+      deuda: usado // todo lo comprado y sin pagar (de todos los cortes), menos los abonos
     };
   });
 }

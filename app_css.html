@@ -310,9 +310,7 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 
 /* ---------- Gráficos ---------- */
 /* Dos series categóricas (azul y naranja, validadas en claro y oscuro contra la superficie de las tarjetas). */
-:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; } }
-:root[data-theme="dark"] { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; }
+/* Los colores de las series (--viz-1..3) están en tokens.html, con los demás colores. */
 
 .m-filtros-viz { display: grid; gap: var(--m-space-3); margin-bottom: var(--m-space-4); }
 .m-filtros-viz .m-mes-nav { margin-bottom: 0; }
@@ -479,9 +477,18 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 }
 .m-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--m-p-rosa); color: var(--m-p-rosa-tx); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
 
+.m-glosario { margin: 0; padding: var(--m-space-2) var(--m-space-4); }
+.m-glosario > div { padding: var(--m-space-3) 0; border-bottom: 1px solid var(--m-separator); }
+.m-glosario > div:last-child { border-bottom: 0; }
+.m-glosario dt { font-weight: 700; }
+.m-glosario dd { margin: 2px 0 0; color: var(--m-label-2); font-size: var(--m-text-subheadline); }
+
+/* Solo en el celular (en el computador lo hace la barra lateral) */
+@media (min-width: 768px) { .m-solo-movil { display: none !important; } }
+
 /* Pestañas internas del área Dinero */
 .m-pildoras { display: flex; flex-wrap: wrap; gap: var(--m-space-2); margin: 0 0 var(--m-space-4); }
-.m-pildora { min-height: 36px; padding: 0 var(--m-space-4); border: 0; border-radius: var(--m-radius-pill); background: var(--m-bg-grouped); color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; cursor: pointer; }
+.m-pildora { min-height: 44px; padding: 0 var(--m-space-4); border: 0; border-radius: var(--m-radius-pill); background: var(--m-bg-grouped); color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; cursor: pointer; }
 .m-pildora[aria-selected="true"] { background: var(--m-tint); color: var(--m-on-tint); }
 
 /* Tarjeta destacada (pastel) */
@@ -648,6 +655,8 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-nom-paso { margin-bottom: var(--m-space-4); }
 .m-nom-paso h3 { display: flex; align-items: center; gap: var(--m-space-2); margin: 0 0 var(--m-space-2); font-size: var(--m-text-headline); }
 .m-nom-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--m-tint); color: var(--m-on-tint); font-size: var(--m-text-footnote); font-weight: 800; }
+.m-cargo-fila { display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem 44px; gap: var(--m-space-2); align-items: center; margin-bottom: var(--m-space-2); }
+.m-cargos-resumen { color: var(--m-label-2); font-weight: 500; }
 .m-nom-mas > summary { cursor: pointer; padding: var(--m-space-2) 0; font-weight: 600; color: var(--m-tint); }
 </style>
 

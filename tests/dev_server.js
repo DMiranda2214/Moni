@@ -48,9 +48,16 @@ const SHIM = `<script>
 })();
 </script>`;
 
+/** Las partes del JavaScript, en el orden que define Code.gs (PARTES_JS). */
+function partesJs() {
+  const m = fs.readFileSync(path.join(raiz, 'Code.gs'), 'utf8').match(/const PARTES_JS = (\[[^\]]*\])/);
+  return JSON.parse(m[1].replace(/'/g, '"'));
+}
+
 function paginaIndex() {
   const incluir = nombre => fs.readFileSync(path.join(raiz, nombre + '.html'), 'utf8');
-  let html = incluir('index').replace(/<\?!=\s*include\('([^']+)'\);\s*\?>/g, (_, n) => (n === 'app_js' ? SHIM + incluir(n) : incluir(n)));
+  const appJs = () => partesJs().map(incluir).join('\n'); // igual que include('app_js') en Code.gs: cada parte trae su <script>
+  let html = incluir('index').replace(/<\?!=\s*include\('([^']+)'\);\s*\?>/g, (_, n) => (n === 'app_js' ? SHIM + appJs() : incluir(n)));
   return html;
 }
 

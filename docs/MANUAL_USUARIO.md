@@ -16,6 +16,7 @@ Moni funciona en el celular y en el computador. En el celular, abajo hay cuatro 
 *(Solo en el entorno de pruebas)* ¿Quieres explorar antes de usar tus datos? **Ajustes → Datos de demostración → Crear**: verás información ficticia que se borra con un toque y no toca lo tuyo. En producción no existe.
 
 ## 2. Inicio
+- **Patrimonio neto:** lo que tienes (disponible, ahorro e invertido) menos lo que debes (tarjetas sin pagar y créditos con un banco). Solo aparece si tienes deudas o inversiones. En el celular, el ícono de arriba a la derecha abre **Ajustes**; la **Guía** también está al final de Planear.
 - **Primeros pasos** (hasta que termines de configurar) y, después, **Para tener en cuenta**: avisos de lo que falta o está desactualizado (ver sección 15).
 - **Primeros pasos:** mientras falten, una tarjeta con tu avance y el siguiente paso; los pasos se agrupan en *Lo básico* y *Para sacarle más provecho*.
 - **Saldo total** (tarjeta pastel): total, disponible, ahorro e invertido, con un ojo para ocultar las cifras.
@@ -40,6 +41,8 @@ Toca **Registrar** o un acceso rápido y elige:
 La hoja va en tres pasos: *¿Cuánto y por qué?*, *¿En qué bolsillo?* y *¿Cuándo y cómo se cuenta?*. En el último, **Sumar a mis saldos** viene encendido. **Apágalo** para anotar algo que ya pasó y que tus saldos iniciales ya tienen en cuenta (por ejemplo, si instalaste Moni a mitad de mes y quieres registrar los gastos de la primera semana): queda en tus movimientos (con la marca *Histórico*), en los gráficos, en el presupuesto y en la vista anual, pero **tus saldos no cambian**. Si eliges una fecha de un mes anterior, Moni te lo sugiere. Esto también aplica a **Mover**: si el traslado entre bolsillos ya ocurrió antes de empezar con Moni, apaga *Sumar a mis saldos* y no se moverá ningún saldo. Se puede cambiar después con **Editar** (los gastos e ingresos).
 
 Al escribir el **concepto**, Moni te sugiere los que ya usaste; si eliges uno, completa el valor, el bolsillo, la categoría y el renglón de la última vez (solo lo que no hayas llenado).
+
+Es **el mismo formulario** para todo lo que entra, sale o se mueve: al pagar un servicio, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta o sacar dinero del ahorro, se abre esta misma hoja con lo que ya se sabe llenado (por ejemplo, el nombre del servicio y su medio de pago). Al pagar un servicio o una suscripción también aparecen **Comisiones e impuestos**. Al comprar con tarjeta, en *Más opciones* puedes elegir qué hacer con el dinero (apartarlo del presupuesto o de otro bolsillo, no apartar nada, o anotar que es una compra de otra persona).
 
 Al guardar verás un aviso con **Deshacer**. La fecha no puede ser futura. Para corregir un movimiento, ábrelo y **Editar** (los traslados y los pagos automáticos se anulan y se vuelven a registrar).
 
@@ -88,6 +91,25 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Corregir una cuota ya pagada:** toca la cuota en la tabla de amortización y escribe lo que realmente pagaste ese mes (por ejemplo, con un abono extra que no anotaste). Moni rehace el cronograma con la misma cuota fija y tasa, así que el saldo y el plazo quedan como si siempre se hubiera pagado así. **No mueve dinero ni cambia tus saldos.**
 - **Abonar más que la cuota:** baja el **plazo**; la cuota y la tasa no cambian. Si abonas más que el saldo, solo se cobra lo necesario.
 
+### Créditos con un banco o entidad
+**Deudas → Nuevo crédito → Con un banco o entidad** (hipoteca, vehículo, libre inversión…).
+- Escribe el monto, las cuotas, la tasa (con decimales si los tiene: 9,5 % es 9,5), la entidad y desde qué bolsillo pagas.
+- **¿A qué bolsillo llegó el dinero?** Si lo eliges, el desembolso entra ahí (no cuenta como ingreso: es una deuda). Si el crédito ya venía, déjalo en "No registrarlo".
+- **Seguros y otros cargos en cada cuota:** lo que el banco suma a la cuota además del capital y el interés. Al pagar cada cuota, Moni lo propone aparte.
+- **Pagar cuota:** la cuota sale de tu bolsillo como un gasto; los seguros y los demás cargos se anotan aparte, en "Comisiones e impuestos". Anular el pago anula todo.
+
+### Comisiones, impuestos y otros cargos
+**Ajustes → Cargos y comisiones.** Anota lo que te cobra cada medio de pago:
+- **El 4x1000** de un banco: *Impuesto*, *En toda salida de dinero de la cuenta*, porcentaje 0,4.
+- **Una comisión por transferir** a otra cuenta, o **por pagar** (PSE): valor fijo o porcentaje, con mínimo y máximo.
+- **La cuota de manejo** de una tarjeta: *En cada extracto (mensual)*.
+- **El recargo por compras en otra moneda** de una tarjeta: *En compras en otra moneda*, por ejemplo 3 %.
+- **El seguro de cada cuota** de un crédito: *En cada cuota del crédito*.
+
+Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pagas un extracto, una cuota o un servicio, aparece **Comisiones e impuestos** con lo que corresponde. Puedes cambiar el valor, quitarlo o **Agregar un cargo** a mano. Se ve el **total con cargos**. Cada cargo queda como un gasto en la categoría "Comisiones e impuestos" y se anula si anulas la operación. Sin reglas, Moni no cobra nada solo.
+
+**Compras en otra moneda:** al registrar una compra con tarjeta, en "¿Pagaste en otra moneda?" eliges la moneda y escribes cuánto costó allá; el valor de arriba es lo que te cobró la tarjeta en tu moneda.
+
 ## 8. Otros ingresos
 **Planear → Otros ingresos**: lo que recibes además de la nómina (otro trabajo, arriendo, ventas, servicios). Para cada uno anotas el concepto, el monto, cada cuánto llega, la próxima fecha y **a qué cuenta llega**. Cuando llega, toca **Ya lo recibí** (puedes corregir el valor) y se suma a esa cuenta. Los próximos aparecen en **Por recibir**, en Inicio.
 
@@ -107,9 +129,10 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - **Por pagar:** vencidas o en los próximos 7 días.
 - Toca un cobro: **Registrar el pago** (desde un bolsillo o con una tarjeta), **Ir a pagar** (enlace), **Copiar código**, **Saltar este cobro** o **Editar**.
 - Al pagar, el próximo cobro avanza un período y se mantiene el día. En un **servicio**, el valor guardado pasa a ser el último que pagaste.
-- **Agregar:** botón **+**. Elige si es *Suscripción* (valor fijo) o *Servicio* (valor variable, con código y enlace opcionales), cada cuánto se cobra, el próximo cobro y con qué se paga.
-- Abajo: **Códigos y enlaces de pago** de tus servicios públicos (Ajustes → Servicios públicos).
-- **Empresas de servicios** (Ajustes → Empresas de servicios): guarda una sola vez cada empresa con quien pagas (Enel, Vanti, el acueducto…) y su enlace de pago. Al guardar un servicio eliges la empresa y solo escribes el hogar y el código de pago; el enlace no se repite.
+- **Agregar:** botón **+**. Elige si es *Suscripción* (valor fijo) o *Servicio* (valor variable), el hogar, la **empresa**, el **código de pago** y el enlace, cada cuánto se cobra, el próximo cobro y con qué se paga. Todo en un solo lugar: ya no hay listas aparte de servicios públicos ni de empresas.
+- Un servicio **sin próximo cobro** guarda solo sus datos de pago (código y enlace): no cuenta en lo que pagas al mes ni en el presupuesto. Ponle fecha y valor cuando quieras que Moni te lo recuerde.
+- Abajo: **Códigos y enlaces de pago** de tus servicios y suscripciones.
+- **Si venías de una versión anterior,** tus servicios públicos y empresas de pago aparecen aquí tal como los tenías (mismo hogar, código y enlace); nada se borra.
 - **Pagar servicio** (botón arriba en esta pantalla): eliges la empresa y luego el hogar; Moni **abre la página de pago en otra ventana y deja el código de pago en el portapapeles** para que lo pegues. Si el navegador no deja abrir la ventana o copiar, muestra el código con los botones *Copiar código* e *Ir a pagar*.
 
 ## 12. Regalos
@@ -118,8 +141,18 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 ## 13. Vista anual y gráficos
 **Planear → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.
 
+### Análisis
+**Planear → Análisis:** el panorama completo.
+- **Patrimonio neto** de los últimos 12 meses.
+- **Entró y salió** mes a mes.
+- **En qué gastas** este mes frente al anterior y al promedio.
+- **Dónde está lo que tienes**.
+- **Lo que debes y cuándo terminas** cada crédito.
+- **Tu dinero disponible en 30, 60 y 90 días** (estimado). La línea naranja solo cuenta lo que ya sabes que entra y sale; la azul además resta tu gasto del día a día.
+- **Comisiones e impuestos del año**.
+
 ### Gráficos
-No hay una pantalla aparte de gráficos: **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
+Además de Análisis, **cada módulo trae los suyos**. Pasa el dedo o el cursor (o usa las flechas del teclado) para ver los valores exactos, y **Ver como tabla** muestra los mismos datos en texto.
 - **Inicio:** tu saldo de los últimos 6 meses y en qué gastaste este mes.
 - **Movimientos:** *En qué gastaste este mes*, por categoría.
 - **Presupuesto:** cada renglón trae su barra *real frente a plan*; los que se pasan dicen "excedido".
@@ -144,7 +177,7 @@ Menú **Ajustes** (desde *Más*):
 - **Tú:** **Perfil** (nombre) y **Apariencia** (claro/oscuro/automático y color).
 - **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, y **Divisas** (tasa de referencia del dólar y el euro). Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 - **Presupuesto y nómina:** plantilla del presupuesto, escenarios del presupuesto, mi nómina, subsidios y parámetros de nómina.
-- **Organización:** categorías, personas, hogares (inmuebles) y servicios públicos.
+- **Organización:** categorías, personas, hogares (inmuebles) y servicios y suscripciones.
 - **Mantenimiento:** *Avisos de Inicio* (volver a mostrar los ocultos), *Actualizar desde la hoja* (si editaste la hoja a mano), **Recordatorios**, **Mi cuenta**, **Respaldos**, **Registro de errores**, **Diagnóstico** y, solo en desarrollo, *Datos de demostración*.
 - **Privacidad:** **Borrar todos mis datos**.
 

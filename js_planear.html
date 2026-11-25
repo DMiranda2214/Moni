@@ -1,0 +1,661 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Presupuesto del mes, plantilla, nómina y distribución
+// ---------------------------------------------------------------------------
+
+App.ppto = { mes: null, data: null, cargando: false, error: null };
+App.nom = { mes: null, idEsc: '', data: null, opciones: null, cargando: false, error: null };
+App.plantillaEsc = null;
+
+/** Aplica un presupuesto recibido del servidor: la pantalla, el resumen de Inicio y los renglones de Registrar. */
+function aplicarPresupuesto(data) {
+  if (App.ppto.mes === data.mes) App.ppto.data = data;
+  if (data.mes === App.boot.hoy.slice(0, 7)) {
+    App.boot.ppto = { mes: data.mes, existe: data.existe, totales: data.totales };
+    App.boot.renglones = data.items.map(i => ({ ID_Item: i.ID_Item, Concepto: i.Concepto, Pagado: i.Pagado }));
+  }
+}
+
+/** "Se paga con": el bolsillo del renglón (efectivo o débito) o una de tus tarjetas, que se propone al registrar el gasto. */
+const MEDIOS_RENGLON = () => [['', 'Su bolsillo (efectivo o débito)']].concat(activos('Tarjetas').map(t => [t.ID_Tarjeta, 'Tarjeta ' + t.Nombre]));
+const TIPOS_RENGLON = [['Gasto', 'Gasto'], ['Cuota', 'Cuota de un crédito'], ['Ahorro', 'Ahorro'], ['Fondo', 'Fondo para una meta']];
+
+function opcionesDestino(conNinguno) {
+  const grupos = ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length && c.Divisa === 'COP').map(c => ({
+    grupo: c.Banco + ' · ' + c.Nombre,
+    opciones: c.bolsillos.map(b => [b.ID_Bolsillo, nombreBolsillo(b, c)])
+  }));
+  return (conNinguno ? [['', 'Ninguno']] : []).concat(grupos);
+}
+
+// ---------- Presupuesto ----------
+
+function pctTexto(n) { return n === null || n === undefined ? '—' : Math.round(n * 100) + ' %'; }
+
+function vPresupuesto() {
+  const p = App.ppto;
+  if (!p.mes) p.mes = App.boot.hoy.slice(0, 7);
+  let html = bannerDemo() + navegadorMes('ppto', p.mes, mesMas(App.boot.hoy.slice(0, 7), 1));
+  if (p.error) html += bloqueError(p.error, 'recargar-ppto');
+  else if (!p.data) html += esqueleto(5);
+  else if (!p.data.existe) html += htmlGenerarPpto(p.data);
+  else html += htmlPresupuesto(p.data);
+
+  const acciones = (p.data && p.data.existe)
+    ? '<button class="m-btn-texto" data-acc="ir" data-ruta="nomina">Nómina</button><button class="m-btn-texto" data-acc="nuevo-renglon" aria-label="Agregar un renglón">' + ico('plus') + '</button>'
+    : '<button class="m-btn-texto" data-acc="ir" data-ruta="nomina">Nómina</button>';
+  return { titulo: 'Presupuesto', acciones: acciones, html: html, despues: () => { if (!p.data && !p.cargando && !p.error) cargarPpto(); } };
+}
+
+function cargarPpto() {
+  const p = App.ppto, mes = p.mes;
+  return cargarEn(p, 'presupuesto', 'getPresupuesto', [mes], () => p.mes === mes, aplicarPresupuesto);
+}
+
+function htmlGenerarPpto(d) {
+  const conRenglones = d.escenarios.filter(e => e.renglones > 0);
+  if (!conRenglones.length) {
+    return vacio('presupuesto', 'Aún no tienes una plantilla',
+      'La plantilla es la lista de lo que planeas gastar cada mes. Con ella, el presupuesto de cada mes se genera en un toque.',
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/plantilla">Armar la plantilla</button>');
+  }
+  const base = conRenglones.find(e => e.Es_Base) || conRenglones[0];
+  const selector = conRenglones.length > 1
+    ? '<div class="m-campo" style="text-align:left;width:100%;max-width:360px"><label class="m-label" for="ppto-esc">Escenario</label><select class="m-input" id="ppto-esc">' +
+      conRenglones.map(e => '<option value="' + esc(e.ID_Escenario) + '"' + (e.ID_Escenario === base.ID_Escenario ? ' selected' : '') + '>' + esc(e.Nombre) + ' (' + e.renglones + ' renglones)</option>').join('') + '</select></div>'
+    : '';
+  return '<div class="m-vacio">' + ico('presupuesto') + '<h2>Aún no hay presupuesto de ' + esc(mesTexto(d.mes).toLowerCase()) + '</h2>' +
+    '<p>Se crea con los renglones de tu plantilla' + (conRenglones.length === 1 ? ' (' + esc(base.Nombre) + ', ' + base.renglones + ' renglones)' : '') + '. Después puedes ajustarlo.</p>' +
+    selector + '<button class="m-btn m-btn-primary" data-acc="generar-ppto">Generar el presupuesto</button></div>';
+}
+
+function filaRenglon(i) {
+  const rest = i.Restante, plan = Number(i.Plan) || 0, real = Number(i.Real) || 0;
+  const pct = plan > 0 ? real / plan * 100 : 0, excede = pct > 100.0001;
+  const final = i.Pagado
+    ? '<strong class="m-num ' + (rest < 0 ? 'm-negativo' : 'm-positivo') + '">' + dinero(Math.abs(rest)) + '</strong><span class="m-row-sub" style="display:block">' + (rest < 0 ? 'excedido' : 'ahorro') + '</span>'
+    : '<strong class="m-num ' + (rest < 0 ? 'm-negativo' : '') + '">' + dinero(Math.abs(rest)) + '</strong><span class="m-row-sub" style="display:block">' + (rest < 0 ? 'excedido' : 'falta') + '</span>';
+  return '<div class="m-row m-renglon m-renglon-viz' + (i.Pagado ? ' m-hecho' : '') + '">' +
+    '<label class="m-check"><input type="checkbox" data-acc-cambio="pagado" data-id="' + esc(i.ID_Item) + '"' + (i.Pagado ? ' checked' : '') + ' aria-label="Completo, sin más movimientos: ' + esc(i.Concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
+    '<button class="m-row-main" data-acc="renglon" data-id="' + esc(i.ID_Item) + '"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(i.Concepto) + '</span>' +
+    '<span class="m-renglon-barra m-progreso' + (excede ? ' m-progreso-excede' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, Math.round(pct)) + '" aria-label="Real frente a lo planeado: ' + esc(i.Concepto) + '"><span style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%"></span></span>' +
+    '<span class="m-row-sub" style="display:block">' + dinero(real) + ' de ' + dinero(plan) + (i.Pagado ? ' · completo' : '') + (i.Bolsillo ? ' · ' + esc(i.Bolsillo) : '') + '</span>' +
+    (i.ConTarjeta > 0 ? '<span class="m-row-sub" style="display:block">' + ico('tarjetas', 'm-icon-sm') + ' ' + dinero(i.ConTarjeta) + ' con tarjeta' + (i.PendienteTarjeta > 0 ? ' · ' + dinero(i.PendienteTarjeta) + ' por pagar en el extracto' : '') + '</span>' : '') + '</span>' +
+    '<span class="m-row-final">' + final + '</span></button></div>';
+}
+
+function htmlPresupuesto(d) {
+  const t = d.totales;
+  const faltan = d.faltanSuscripciones
+    ? '<div class="m-banner" role="note">' + ico('tarjetas') + '<span>' + (d.faltanSuscripciones === 1 ? 'Hay 1 suscripción o servicio de este mes que no está en el presupuesto.' : 'Hay ' + d.faltanSuscripciones + ' suscripciones o servicios de este mes que no están en el presupuesto.') + '</span>' +
+      '<button class="m-btn-texto" data-acc="ppto-susc">Agregar</button></div>'
+    : '';
+  const avance = t.plan > 0 ? Math.min(100, Math.round(t.real / t.plan * 100)) : 0;
+  let h = faltan + '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">Te queda</div>' +
+    '<div class="m-resumen-cifra m-num ' + claseSaldo(t.saldo) + '">' + dinero(t.saldo) + '</div>' +
+    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Entró</div><strong class="m-num m-positivo">' + dinero(t.ingresos) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Gastado</div><strong class="m-num">' + dinero(t.real) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Ahorras</div><strong class="m-num">' + pctTexto(t.porcentajeAhorro) + '</strong></div></div>' +
+    '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + avance + '" aria-label="Gastado frente a lo planeado"><span style="width:' + avance + '%"></span></div>' +
+    '<p class="m-ayuda">Gastado ' + dinero(t.real) + ' de ' + dinero(t.plan) + ' planeado · ' + t.pagados + ' de ' + t.renglones + ' completos' + (d.escenario ? ' · ' + esc(d.escenario.Nombre) : '') + '</p></div>';
+
+  // Una sola lista: cada renglón trae su barra (real frente a lo planeado) y su casilla de "completo".
+  h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Plan frente a real</h2>' +
+    '<p class="m-ayuda" style="padding:0 var(--m-space-4) var(--m-space-2)">Marca la casilla cuando un renglón ya no tendrá más movimientos.</p>' +
+    '<div class="m-group">' + d.items.map(filaRenglon).join('') + '</div>';
+  h += '<div class="m-acciones-fila" style="margin-top:var(--m-space-4)"><button class="m-btn m-btn-primary" data-acc="distribuir">Repartir la nómina en los bolsillos</button></div>';
+  return h;
+}
+
+// ---------- Renglón: detalle, editar, pagar ----------
+
+async function abrirRenglon(id) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it) return;
+  const filas = [['Tipo', esc(it.Tipo === 'Cuota' ? 'Cuota de un crédito' : it.Tipo)], ['Plan', dinero(it.Plan)], ['Real', dinero(it.Real)],
+    [it.Restante < 0 ? 'Excedido' : 'Falta', dinero(Math.abs(it.Restante))]];
+  if (it.Bolsillo) filas.push([it.Tipo === 'Gasto' ? 'Se paga desde' : 'Se aparta en', esc(it.Bolsillo)]);
+  if (it.ConTarjeta > 0) filas.push(['Con tarjeta', dinero(it.ConTarjeta) + (it.PendienteTarjeta > 0 ? ' · ' + dinero(it.PendienteTarjeta) + ' sin pagar' : ' · pagado')]);
+  if (it.ID_Tarjeta) { const tj = porId('Tarjetas', 'ID_Tarjeta', it.ID_Tarjeta); if (tj) filas.push(['Se suele pagar con', esc(tj.Nombre)]); }
+  if (it.Pagado) filas.push(['Estado', 'Completo' + (it.Ahorro ? ' · ahorro ' + dinero(it.Ahorro) : '')]);
+
+  let siguiente = null;
+  const apartar = it.Tipo !== 'Gasto';
+  const cuerpo = '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
+    '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
+    '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="pagar">' + (apartar ? 'Apartar dinero' : 'Agregar un movimiento') + '</button>' +
+    '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="' + (it.Pagado ? 'reabrir' : 'completar') + '">' + (it.Pagado ? 'Reabrir el renglón' : 'Marcar como completo') + '</button>' +
+    '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="editar">Editar el renglón</button>' +
+    '<button type="button" class="m-accion-peligro" data-hoja-acc="pedir-quitar">Quitar el renglón</button>' +
+    '<div id="confirma" hidden class="m-error-form" style="margin-top:var(--m-space-3)"><p style="margin-bottom:var(--m-space-3)">¿Quitar “' + esc(it.Concepto) + '” de este mes? Solo se puede si no tiene movimientos enlazados.</p>' +
+    '<div class="m-hoja-acciones"><button type="button" class="m-btn m-btn-secondary" data-hoja-acc="no-quitar">No, dejarlo</button><button type="button" class="m-btn m-btn-primary" style="background:var(--m-danger);color:#fff" data-hoja-acc="quitar">Sí, quitarlo</button></div></div>';
+
+  await abrirHoja({
+    titulo: 'Renglón', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,
+    extra: {
+      pagar: () => { siguiente = () => abrirPagarRenglon(it.ID_Item, { soloAgregar: true }); return Promise.resolve(); },
+      completar: () => { siguiente = () => abrirCompletarRenglon(it.ID_Item); return Promise.resolve(); },
+      reabrir: () => { siguiente = () => reabrirRenglon(it.ID_Item); return Promise.resolve(); },
+      editar: () => { siguiente = () => abrirRenglonMes(it); return Promise.resolve(); },
+      'pedir-quitar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = true; $('[data-hoja-acc="quitar"]', raiz).focus(); },
+      'no-quitar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-quitar"]', raiz).hidden = false; },
+      quitar: () => api('deleteRenglonMes', id).then(data => { aplicarPresupuesto(data); render(); aviso('Renglón quitado'); })
+    }
+  });
+  if (siguiente) siguiente();
+}
+
+/** Confirmación al marcar un renglón como pagado (o agregarle un movimiento): el formulario de registro para ese renglón. */
+function abrirPagarRenglon(id, opciones) {
+  const soloAgregar = !!(opciones && opciones.soloAgregar); // agrega un movimiento sin dar el renglón por completo
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it || (it.Pagado && !soloAgregar)) return;
+  return abrirRegistrar({ para: { tipo: 'renglon', item: it, soloAgregar: soloAgregar } });
+}
+
+/** Marcar un renglón como completo: pregunta si falta algún movimiento o si bastan los que ya están registrados. */
+async function abrirCompletarRenglon(id) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it || it.Pagado) return;
+  let accion = '';
+  const lleva = it.Real > 0 ? 'Llevas ' + dinero(it.Real) + ' de ' + dinero(it.Plan) + ' planeados.' : 'Todavía no tiene movimientos (lo planeado es ' + dinero(it.Plan) + ').';
+  await abrirHoja({
+    titulo: 'Marcar como completo', izq: 'Cancelar', sinGuardar: true,
+    cuerpo: '<p class="m-subtitulo" style="padding:0 0 var(--m-space-2);margin:0;font-weight:600;color:var(--m-label)">' + esc(it.Concepto) + '</p>' +
+      '<p style="margin-bottom:var(--m-space-4)">' + esc(lleva) + ' ¿Quieres agregar algún movimiento más o con los ya registrados basta?</p>' +
+      '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="basta">Bastan los registrados</button>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="agregar">Agregar un movimiento</button>',
+    extra: { basta: () => { accion = 'basta'; return Promise.resolve(); }, agregar: () => { accion = 'agregar'; return Promise.resolve(); } }
+  });
+  if (accion === 'agregar') return abrirPagarRenglon(id);
+  if (accion !== 'basta') { render(); return; }
+  try {
+    const data = await api('payRenglonMes', id, true);
+    aplicarPresupuesto(data); render();
+    aviso('Renglón completo', { deshacer: () => reabrirRenglon(id) });
+  } catch (e) { aviso(e.message, true); render(); }
+}
+
+/** Reabre un renglón completo (no toca sus movimientos). */
+async function reabrirRenglon(id) {
+  try {
+    const data = await api('payRenglonMes', id, false);
+    aplicarPresupuesto(data); render(); aviso('Renglón reabierto');
+  } catch (e) { aviso(e.message, true); render(); }
+}
+
+/** Desmarca un renglón; si tiene pagos registrados pregunta si también se anulan. */
+async function desmarcarRenglon(id, directoAnulando) {
+  const it = App.ppto.data && App.ppto.data.items.find(x => x.ID_Item === id);
+  if (!it) return;
+  const hacer = async anular => {
+    try {
+      const res = await api('unpayRenglon', id, anular, vistaActual());
+      aplicarEscritura(res); aplicarPresupuesto(res.presupuesto);
+      App.tar.data = null; App.deudas.data = null; render();
+      aviso(anular ? 'Renglón desmarcado y pagos anulados' : 'Renglón desmarcado');
+    } catch (e) { aviso(e.message, true); render(); }
+  };
+  if (directoAnulando) return hacer(true);
+  if (!(it.Real > 0)) return hacer(false);
+  let accion = null;
+  await abrirHoja({
+    titulo: 'Desmarcar', izq: 'Cancelar', sinGuardar: true,
+    cuerpo: '<p style="margin-bottom:var(--m-space-3)">“' + esc(it.Concepto) + '” tiene ' + dinero(it.Real) + ' registrados.' +
+      (it.Tipo === 'Cuota' && it.ID_Credito ? ' Los pagos de cuotas se anulan desde el crédito.' : ' ¿También quieres anular esos pagos y devolver el dinero?') + '</p>' +
+      (it.Tipo === 'Cuota' && it.ID_Credito ? '' : '<button type="button" class="m-btn m-btn-primary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="anular">Desmarcar y anular los pagos</button>') +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%" data-hoja-acc="solo">Solo desmarcar</button>',
+    extra: {
+      anular: () => { accion = true; return Promise.resolve(); },
+      solo: () => { accion = false; return Promise.resolve(); }
+    }
+  });
+  if (accion !== null) hacer(accion);
+}
+
+async function abrirRenglonMes(item) {
+  const campos = [
+    { k: 'Concepto', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 80 },
+    { k: 'Plan', label: 'Cuánto planeas', tipo: 'dinero', requerido: true },
+    { k: 'Tipo', label: 'Tipo', tipo: 'select', opciones: () => TIPOS_RENGLON },
+    { k: 'ID_Bolsillo_Destino', label: 'Bolsillo de destino', tipo: 'select', opciones: () => opcionesDestino(true),
+      ayuda: 'Si es un gasto, el bolsillo desde donde lo pagas. Si es ahorro, fondo o cuota, donde se aparta el dinero.' },
+    { k: 'ID_Credito', label: 'Crédito que paga', tipo: 'select', visible: v => v.Tipo === 'Cuota', opciones: () => [['', 'Ninguno']].concat((App.boot.creditos || []).map(c => [c.ID_Credito, c.Nombre])),
+      ayuda: 'Al pagar una cuota de ese crédito, cuenta como lo real de este renglón.' },
+    { k: 'ID_Tarjeta', label: 'Se paga con', tipo: 'select', visible: v => v.Tipo === 'Gasto', opciones: () => MEDIOS_RENGLON(), info: INFO_CAMPOS.Presupuesto_Plantilla.ID_Tarjeta }
+  ];
+  const v0 = item || { Tipo: 'Gasto', Plan: '' };
+  await abrirHoja({
+    titulo: item ? 'Editar renglón' : 'Nuevo renglón',
+    cuerpo: '<form novalidate data-form="renglon">' + campos.map(c => htmlCampo(c, v0[c.k] === undefined ? '' : v0[c.k], {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {});
+      raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {}));
+      const f = $('#f-Concepto', raiz); if (f && !item) f.focus();
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el concepto.');
+      if (v.Plan === '' || (typeof v.Plan === 'number' && isNaN(v.Plan))) throw new Error('Escribe cuánto planeas.');
+      const envio = { Mes: App.ppto.mes, Concepto: v.Concepto, Plan: v.Plan, Tipo: v.Tipo, ID_Bolsillo_Destino: v.ID_Bolsillo_Destino, ID_Credito: v.Tipo === 'Cuota' ? (v.ID_Credito || '') : '', ID_Tarjeta: v.Tipo === 'Gasto' ? (v.ID_Tarjeta || '') : '' };
+      if (item) envio.ID_Item = item.ID_Item;
+      const data = await api('saveRenglonMes', envio);
+      aplicarPresupuesto(data); render(); aviso(item ? 'Renglón actualizado' : 'Renglón agregado');
+    }
+  });
+}
+
+// ---------- Repartir la nómina ----------
+
+async function abrirDistribucion(mes) {
+  const pago = App.nom.data && App.nom.mes === mes ? App.nom.data.pago : null;
+  const grupos = opcionesDestino(false);
+  const ids = [].concat.apply([], grupos.map(g => g.opciones.map(x => x[0])));
+  const origenInicial = pago && ids.indexOf(pago.ID_Bolsillo_Destino) !== -1 ? pago.ID_Bolsillo_Destino : (ids.indexOf(ultimoBolsillo()) !== -1 ? ultimoBolsillo() : ids[0]);
+  let prev = null;
+
+  const cuerpo = '<form novalidate data-form="distribuir"><p class="m-hoja-mensaje">Mueve el dinero de la nómina desde el bolsillo donde llegó hasta los bolsillos de destino, según el presupuesto de ' + esc(mesTexto(mes).toLowerCase()) + '.</p>' +
+    '<div class="m-campo"><label class="m-label" for="f-Origen">¿Dónde está la nómina?</label><select class="m-input" id="f-Origen">' +
+    grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === origenInicial ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<div id="dist-prev" aria-live="polite">' + esqueleto(3) + '</div>' +
+    '<div class="m-campo" id="dist-repetir" hidden><div class="m-interruptor-fila"><label for="f-Repetir">Ya se repartió este mes. Repetirlo de todos modos</label><span class="m-interruptor"><input type="checkbox" role="switch" id="f-Repetir"><i></i></span></div></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  await abrirHoja({
+    titulo: 'Repartir nómina', der: 'Repartir', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      const sel = $('#f-Origen', raiz);
+      const cargar = async () => {
+        $('#dist-prev', raiz).innerHTML = esqueleto(3); prev = null;
+        try {
+          prev = await api('previewDistribucion', mes, sel.value);
+          const caja = $('#dist-prev', raiz);
+          caja.innerHTML = prev.lineas.length
+            ? '<dl class="m-detalle">' + prev.lineas.map(l => '<div><dt>' + (l.ID_Item ? esc(l.Renglones[0]) + ' → ' + esc(l.Destino) : esc(l.Destino) + ' (' + esc(l.Renglones.join(', ')) + ')') + '</dt><dd class="m-num">' + dinero(l.Monto) + '</dd></div>').join('') +
+              '<div><dt><strong>Total a repartir</strong></dt><dd class="m-num"><strong>' + dinero(prev.total) + '</strong></dd></div></dl>'
+            : '<p class="m-ayuda">No hay nada que repartir desde este bolsillo: los renglones del mes no tienen otro bolsillo de destino.</p>';
+          $('#dist-repetir', raiz).hidden = !prev.yaDistribuido;
+        } catch (e) { $('#dist-prev', raiz).innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>'; }
+      };
+      sel.addEventListener('change', cargar);
+      cargar();
+    },
+    alGuardar: async raiz => {
+      if (!prev) throw new Error('Espera un momento: se está calculando el reparto.');
+      if (!prev.lineas.length) throw new Error('No hay nada que repartir desde este bolsillo.');
+      const origen = $('#f-Origen', raiz).value;
+      const res = await api('distribuir', mes, origen, App.boot.hoy, !!$('#f-Repetir', raiz).checked);
+      recordarBolsillo(origen);
+      aplicarEscritura(res); render();
+      aviso('Nómina repartida: ' + res.distribucion.traslados + ' traslados', { deshacer: () => deshacerReparto(res.ids) });
+    }
+  });
+}
+
+async function deshacerReparto(ids) {
+  try {
+    const res = await api('voidVarios', ids, vistaActual());
+    aplicarEscritura(res); render();
+    aviso('Reparto deshecho');
+  } catch (e) { aviso(e.message, true); }
+}
+
+// ---------- Plantilla del presupuesto ----------
+
+function vPlantilla() {
+  const escs = activos('Escenarios');
+  if (!App.plantillaEsc || !escs.some(e => e.ID_Escenario === App.plantillaEsc)) {
+    const base = escs.find(e => esVerdad(e.Es_Base)) || escs[0];
+    App.plantillaEsc = base ? base.ID_Escenario : null;
+  }
+  const filas = activos('Presupuesto_Plantilla').filter(p => p.ID_Escenario === App.plantillaEsc)
+    .sort((a, b) => (Number(a.Orden) || 9999) - (Number(b.Orden) || 9999));
+  const total = filas.reduce((a, p) => a + (Number(p.Monto_Plan) || 0), 0);
+
+  let html = '';
+  if (escs.length > 1) {
+    html += '<div class="m-campo"><label class="m-label" for="plantilla-esc">Escenario</label><select class="m-input" id="plantilla-esc" data-acc-cambio="plantilla-esc">' +
+      escs.map(e => '<option value="' + esc(e.ID_Escenario) + '"' + (e.ID_Escenario === App.plantillaEsc ? ' selected' : '') + '>' + esc(e.Nombre) + (esVerdad(e.Es_Base) ? ' (base)' : '') + '</option>').join('') + '</select>' +
+      '<p class="m-ayuda">Cada escenario es un presupuesto completo. Crea otro en Ajustes → Escenarios (por ejemplo, uno de contingencia).</p></div>';
+  }
+  if (!filas.length) {
+    html += vacio('presupuesto', 'Esta plantilla está vacía', 'Agrega lo que planeas gastar cada mes: arriendo, servicios, mercado, ahorro… Con eso se genera cada presupuesto mensual.',
+      '<button class="m-btn m-btn-primary" data-acc="nuevo-plantilla">Agregar el primer renglón</button>');
+  } else {
+    html += '<div class="m-group">' + filas.map(p => {
+      const b = p.ID_Bolsillo_Destino ? infoBolsillo(p.ID_Bolsillo_Destino) : null;
+      return fila({
+        titulo: esc(p.Concepto), sub: esc(p.Tipo === 'Cuota' ? 'Cuota' : p.Tipo) + (b ? ' · ' + esc(nombreBolsillo(b.b, b.c)) : ''),
+        final: '<span class="m-num">' + dinero(p.Monto_Plan) + '</span>', chevron: true,
+        attrs: 'data-acc="editar-plantilla" data-id="' + esc(p.ID_Plantilla) + '"'
+      });
+    }).join('') + fila({ titulo: '<strong>Total del mes</strong>', final: '<strong class="m-num">' + dinero(total) + '</strong>' }).replace('<button', '<div').replace('</button>', '</div>') + '</div>';
+  }
+  return {
+    titulo: 'Plantilla del presupuesto',
+    acciones: filas.length ? '<button class="m-btn-texto" data-acc="nuevo-plantilla" aria-label="Agregar un renglón">' + ico('plus') + '</button>' : '',
+    html: html
+  };
+}
+
+// ---------- Nómina ----------
+
+/** El salario mínimo se actualiza cada enero: si el guardado es de un año anterior, se avisa (afecta al Fondo de Solidaridad). */
+function avisoSmmlv() {
+  const anio = Number(App.boot.hoy.slice(0, 4)), guardado = Number(cfg('SMMLV_Anio'));
+  if (!guardado || guardado >= anio) return '';
+  return '<div class="m-banner" role="note">' + ico('alerta') + '<span>El salario mínimo guardado es el de ' + guardado + '. Actualízalo al de ' + anio + ' para que el cálculo de tu nómina sea correcto.</span>' +
+    '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/parametros">Actualizar</button></div>';
+}
+
+function vNomina() {
+  const n = App.nom;
+  const mesMostrado = n.mes || (n.data && n.data.periodo) || App.boot.hoy.slice(0, 7);
+  let html = bannerDemo() + avisoSmmlv() + navegadorMes('nom', mesMostrado, mesMas(App.boot.hoy.slice(0, 7), 1));
+  if (n.error) html += bloqueError(n.error, 'recargar-nom');
+  else if (!n.data) html += esqueleto(5);
+  else html += htmlNomina(n.data);
+  return { titulo: 'Nómina', html: html, despues: () => { if (!n.data && !n.cargando && !n.error) cargarNomina(); } };
+}
+
+/** Lo que el usuario ajustó en el estimado (casillas y días), listo para mandarlo al servidor. */
+function opcionesNomina() {
+  const o = App.nom.opciones || {};
+  const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+  // Lo que se agrega "solo este mes" vale para el mes en que se agregó: al cambiar de mes se descarta.
+  const adicionales = o.mesAdicionales === mes ? (o.adicionales || []) : [];
+  return { dias: o.dias, diasPrima: o.diasPrima, diasVacaciones: o.diasVacaciones, incluir: o.incluir || {}, adicionales: adicionales };
+}
+
+function cargarNomina() {
+  const n = App.nom, mes = n.mes, idEsc = n.idEsc;
+  // Sin mes, el servidor elige el del próximo pago
+  return cargarEn(n, 'nomina', 'getNomina', [mes || '', idEsc || '', opcionesNomina()], () => n.mes === mes && n.idEsc === idEsc, d => { if (!n.mes) n.mes = d.periodo; });
+}
+
+/** Cambia una casilla o un número del estimado y lo vuelve a calcular sin perder la pantalla. */
+async function recalcularNomina(cambio) {
+  const n = App.nom;
+  n.opciones = n.opciones || { incluir: {} };
+  cambio(n.opciones);
+  try { n.data = await api('getNomina', n.mes, n.idEsc || '', opcionesNomina()); render(); }
+  catch (e) { aviso(e.message, true); }
+}
+
+function seccionNomina(titulo, lineas, clase) {
+  if (!lineas.length) return '';
+  return '<section class="m-seccion"><h2 class="m-seccion-titulo">' + esc(titulo) + '</h2><div class="m-group">' +
+    lineas.map(l => fila({ titulo: esc(l.concepto), final: '<span class="m-num ' + (clase || '') + '">' + (clase === 'm-negativo' ? '−' : '') + dinero(l.valor) + '</span>' })).join('') + '</div></section>';
+}
+
+/** Una línea del estimado: casilla para incluirla o no, su valor y, si aplica, los días. */
+function filaLineaNomina(l, bloqueado) {
+  const dias = l.dias !== undefined && ['ordinario', 'prima', 'vacaciones'].indexOf(l.clave) !== -1
+    ? '<span class="m-row-sub" style="display:flex;align-items:center;gap:var(--m-space-2)">Días <input class="m-input m-dias" type="number" inputmode="numeric" min="0" max="' + (l.clave === 'ordinario' ? 30 : 360) + '" value="' + esc(l.dias) + '" data-acc-cambio="nom-dias" data-que="' + l.clave + '" aria-label="Días de ' + esc(l.concepto) + '"' + (bloqueado ? ' disabled' : '') + '></span>' : '';
+  const quitar = l.adicional
+    ? '<button class="m-btn-texto" data-acc="nom-adic-quitar" data-id="' + esc(l.clave.slice(10)) + '" aria-label="Quitar ' + esc(l.concepto) + '">Quitar</button>'
+    : (l.propio ? '<button class="m-btn-texto" data-acc="nom-concepto-editar" data-id="' + esc(l.clave.slice(5)) + '" aria-label="Editar ' + esc(l.concepto) + '">Editar</button>' : '');
+  return '<div class="m-row m-renglon' + (l.incluido ? '' : ' m-hecho') + '">' +
+    '<label class="m-check"><input type="checkbox" data-acc-cambio="nom-incl" data-clave="' + esc(l.clave) + '"' + (l.incluido ? ' checked' : '') + (bloqueado ? ' disabled' : '') + ' aria-label="Incluir ' + esc(l.concepto) + '"><span aria-hidden="true">' + ico('check', 'm-icon-sm') + '</span></label>' +
+    '<div class="m-row-main" style="cursor:default"><span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(l.concepto) + '</span>' + dias + '</span>' +
+    '<span class="m-row-final"><span class="m-num ' + (l.grupo === 'deduccion' ? 'm-negativo' : '') + '">' + (l.grupo === 'deduccion' ? '−' : '') + dinero(l.valor) + '</span>' + quitar + '</span></div></div>';
+}
+
+/** La nómina ya registrada del mes: qué llegó, a dónde y qué se puede hacer con ella. */
+function htmlNominaRecibida(d) {
+  const b = infoBolsillo(d.pago.ID_Bolsillo_Destino);
+  const dif = d.pago.Neto_Real - d.pago.Neto_Estimado;
+  return '<section class="m-seccion"><h2 class="m-seccion-titulo">Nómina recibida</h2><div class="m-group"><dl class="m-detalle" style="padding:var(--m-space-2) var(--m-space-4);margin:0">' +
+    '<div><dt>Te llegaron</dt><dd class="m-num"><strong>' + dinero(d.pago.Neto_Real) + '</strong></dd></div>' +
+    '<div><dt>Fecha</dt><dd>' + esc(fechaTxt(d.pago.Fecha_Pago)) + '</dd></div>' +
+    (d.pago.Afecta_Saldos === false ? '<div><dt>Saldos</dt><dd>No se sumó (ya estaba contada)</dd></div>' : '<div><dt>Llegó a</dt><dd>' + esc(b ? nombreBolsillo(b.b, b.c) : '') + '</dd></div>') +
+    '<div><dt>Cuenta en el presupuesto de</dt><dd>' + esc(mesTexto(d.pago.Mes_Presupuesto || d.periodo)) + ' · <button type="button" class="m-btn-texto" data-acc="nom-cambiar-mes">Cambiar</button></dd></div>' +
+    (Math.abs(dif) >= 0.005 ? '<div><dt>Frente a lo estimado</dt><dd class="m-num ' + (dif < 0 ? 'm-negativo' : 'm-positivo') + '">' + (dif > 0 ? '+' : '') + dinero(dif) + '</dd></div>' : '') +
+    '</dl></div></section>' +
+    (d.pago.Afecta_Saldos === false ? '' : '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="distribuir-nomina">Repartir en los bolsillos</button></div>') +
+    '<button class="m-accion-peligro" data-acc="anular-nomina">Anular esta nómina</button>';
+}
+
+function htmlNomina(d) {
+  if (!d.calculo) {
+    return vacio('usuario', d.configurada ? 'No se pudo calcular tu nómina' : 'Configura tu nómina', d.configurada ? d.error : 'Escribe tu sueldo base y Moni calcula cuánto te llega cada mes, con salud, pensión, prima y cesantías.',
+      '<button class="m-btn m-btn-primary" data-acc="nom-sueldo">' + (d.configurada ? 'Revisar mi sueldo' : 'Escribir mi sueldo') + '</button>');
+  }
+  const c = d.calculo, t = c.totales;
+  const bloqueado = !!d.pago; // con la nómina ya registrada, el estimado queda como se calculó
+  const mes = mesTexto(d.periodo).toLowerCase();
+  const L = g => c.lineas.filter(l => l.grupo === g);
+  const abierto = g => !!(App.nom.abiertos && App.nom.abiertos[g]);
+  let h = '';
+
+  // 1. Lo principal: cuánto te llega
+  h += '<section class="m-nom-hero" aria-label="Cuánto te llega"><div class="m-nom-cab"><span>Te llegan en ' + esc(mes) + '</span>' +
+    '<span class="m-insignia ' + (d.pago ? 'm-insignia-ok' : '') + '">' + (d.pago ? 'Ya registrada' : 'Estimado') + '</span></div>' +
+    '<div class="m-nom-neto m-num">' + dinero(d.pago ? d.pago.Neto_Real : t.neto) + '</div>' +
+    '<div class="m-nom-flujo"><div><small>Ganas</small><strong class="m-num">' + dinero(t.devengado) + '</strong></div><span aria-hidden="true">−</span>' +
+    '<div><small>Descuentos</small><strong class="m-num">' + dinero(t.deducciones) + '</strong></div>' +
+    (t.extras ? '<span aria-hidden="true">+</span><div><small>Prestaciones</small><strong class="m-num">' + dinero(t.extras) + '</strong></div>' : '') + '</div></section>';
+
+  // 2. Lo que sigue: registrarla (o ver la ya registrada)
+  if (d.pago) h += htmlNominaRecibida(d);
+  else h += '<section class="m-nom-accion"><div><strong>¿Ya te llegó?</strong><p>Anótala y Moni la suma a tu bolsillo y al presupuesto del mes.</p></div>' +
+    '<button class="m-btn m-btn-primary" data-acc="registrar-nomina">Registrar nómina</button></section>';
+
+  // 3. Cómo se calcula: cerrado por defecto, para no abrumar
+  h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Cómo se calcula</h2>';
+  h += '<div class="m-group" style="margin-bottom:var(--m-space-3)">' +
+    fila({ titulo: 'Tu sueldo base', sub: bloqueado ? 'Valor de un día: ' + dinero(c.diaBase) : 'Toca para cambiarlo · un día vale ' + dinero(c.diaBase), final: '<span class="m-num">' + dinero(c.escenario.Sueldo_Base) + '</span>', chevron: !bloqueado, attrs: bloqueado ? '' : 'data-acc="nom-sueldo"' }) + '</div>';
+  const grupo = (clave, titulo, sub, total, signo, lineas, pie) => '<details class="m-nom-grupo" data-grupo="' + clave + '"' + (abierto(clave) ? ' open' : '') + '><summary><span><strong>' + esc(titulo) + '</strong><small>' + esc(sub) + '</small></span>' +
+    '<span class="m-num ' + (signo === '−' ? 'm-negativo' : '') + '">' + signo + dinero(total) + '</span></summary><div class="m-group">' + lineas.map(l => filaLineaNomina(l, bloqueado)).join('') + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</details>';
+  h += grupo('devengo', 'Lo que ganas', 'Sueldo y lo que te pagan además', t.devengado, '', L('devengo'),
+    bloqueado ? '' : 'Los días sirven para un mes incompleto. Desmarca una línea si este mes no te la pagan.');
+  h += grupo('extra', 'Prestaciones', 'Prima, cesantías y vacaciones', t.extras, '+', L('extra'), 'La prima se paga en junio y diciembre; los intereses de las cesantías, en enero. Las vacaciones las eliges tú (15 días = medio mes).');
+  h += grupo('deduccion', 'Descuentos', 'Salud, pensión y lo que te descuentan', t.deducciones, '−', L('deduccion'), 'Salud, pensión y fondo de solidaridad se calculan sobre ' + dinero(c.ibc) + ' (sueldo, subsidios salariales y vacaciones).');
+
+  if (!bloqueado) h += '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Ajustar este mes</h2><div class="m-group">' +
+    fila({ icono: 'plus', titulo: 'Algo de este mes', sub: 'Horas extras, un bono, cesantías, un descuento de la empresa', chevron: true, attrs: 'data-acc="nom-adic-nuevo" data-tono="menta"' }) +
+    fila({ icono: 'plus', titulo: 'Un descuento o ingreso fijo', sub: 'Libranza, medicina prepagada, un auxilio: se repite cada mes', chevron: true, attrs: 'data-acc="nom-concepto-nuevo" data-tono="lila"' }) + '</div>';
+  h += htmlNominaGraficos(c);
+  return h;
+}
+
+/** Agregar o editar un descuento (libranza, medicina prepagada…) o un ingreso fijo (bono) del escenario. */
+/** Tu sueldo base: la primera vez crea tu nómina; después solo lo cambia. */
+async function abrirSueldoNomina() {
+  const d = App.nom.data;
+  const guardada = activos('Nomina_Escenarios')[0];
+  const actual = d && d.calculo ? d.calculo.escenario.Sueldo_Base : (guardada ? guardada.Sueldo_Base : '');
+  const campos = [{ k: 'Sueldo_Base', label: 'Sueldo base mensual', tipo: 'dinero', requerido: true, info: 'Tu sueldo antes de descuentos. Los descuentos de ley (salud, pensión) los calcula Moni; los demás los agregas como descuentos fijos.' }];
+  await abrirHoja({
+    titulo: 'Mi sueldo',
+    cuerpo: '<form novalidate data-form="sueldo-nomina">' + htmlCampo(campos[0], actual, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Sueldo_Base', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Sueldo_Base === '' || (typeof v.Sueldo_Base === 'number' && isNaN(v.Sueldo_Base)) || v.Sueldo_Base <= 0) throw new Error('Escribe tu sueldo base.');
+      const r = await api('saveMiNomina', v.Sueldo_Base, App.nom.mes || '', opcionesNomina());
+      App.nom.data = r.nomina;
+      await refrescarParcial({ tablas: ['Nomina_Escenarios'] });
+      render(); aviso('Sueldo guardado');
+    }
+  });
+}
+
+/** Algo que solo cuenta en el pago de este mes: horas extras, bono, cesantías, prima, un descuento de la empresa. */
+async function abrirAdicionalNomina() {
+  const campos = [
+    { k: 'Tipo', label: 'Es…', tipo: 'select', opciones: () => [['Devengo', 'Un ingreso (horas extras, bono, comisión)'], ['Extra', 'Una prestación (prima, cesantías)'], ['Deduccion', 'Un descuento (de la empresa)']],
+      info: 'Un ingreso suma a lo que recibes y cotiza si es parte del salario. Una prestación suma pero no cotiza. Un descuento resta.' },
+    { k: 'Concepto', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Horas extras', 'Bono', 'Comisión', 'Pago de cesantías', 'Prima', 'Descuento de la empresa'] },
+    { k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true },
+    { k: 'Es_Salarial', label: 'Hace parte del salario', tipo: 'interruptor', visible: v => v.Tipo === 'Devengo', info: 'Si lo es (las horas extras sí), cuenta para salud y pensión. Un bono ocasional normalmente no lo es.' }
+  ];
+  await abrirHoja({
+    titulo: 'Agregar algo de este mes',
+    cuerpo: '<form novalidate data-form="adicional-nomina">' + campos.map(c => htmlCampo(c, c.k === 'Tipo' ? 'Devengo' : '', {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {}); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {})); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el nombre.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe el valor.');
+      const mes = App.nom.mes || (App.nom.data && App.nom.data.periodo);
+      await recalcularNomina(o => {
+        if (o.mesAdicionales !== mes) { o.adicionales = []; o.mesAdicionales = mes; }
+        o.adicionales = (o.adicionales || []).concat([{ Tipo: v.Tipo, Concepto: v.Concepto, Valor: v.Valor, Es_Salarial: v.Tipo === 'Devengo' && !!v.Es_Salarial }]);
+      });
+      aviso('Agregado a este mes');
+    }
+  });
+}
+
+async function abrirConceptoNomina(idConcepto) {
+  const d = App.nom.data;
+  if (!d || !d.calculo) return;
+  const actual = idConcepto ? d.conceptos.find(x => x.ID === idConcepto) : null;
+  const campos = [
+    { k: 'Tipo', label: 'Es un…', tipo: 'select', opciones: () => [['Deduccion', 'Descuento (resta de lo que recibes)'], ['Devengo', 'Ingreso fijo (suma a lo que recibes)']],
+      info: 'Un descuento es algo que te quitan cada mes (libranza, medicina prepagada). Un ingreso fijo es algo extra que te pagan con la nómina (un bono).' },
+    { k: 'Concepto', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Libranza', 'Medicina prepagada', 'Fondo de empleados', 'Bono'] },
+    { k: 'Valor', label: 'Valor cada mes', tipo: 'dinero', requerido: true, info: 'Lo que se descuenta o se suma cada vez.' },
+    { k: 'Es_Salarial', label: 'Hace parte del salario', tipo: 'interruptor', visible: v => v.Tipo === 'Devengo', info: 'Si lo es, cuenta para salud, pensión y prima. Un bono ocasional o un auxilio normalmente no lo es.' }
+  ];
+  const v0 = actual ? { Tipo: actual.Tipo, Concepto: actual.Concepto, Valor: actual.Valor, Es_Salarial: actual.Es_Salarial } : { Tipo: 'Deduccion' };
+  await abrirHoja({
+    titulo: actual ? 'Editar concepto' : 'Nuevo concepto',
+    cuerpo: '<form novalidate data-form="concepto-nomina">' + campos.map(c => htmlCampo(c, v0[c.k] === undefined ? '' : v0[c.k], {})).join('') +
+      (actual ? '<button type="button" class="m-accion-peligro" data-hoja-acc="quitar">Quitar este concepto</button>' : '') +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, {}); raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, {})); },
+    extra: {
+      quitar: async () => {
+        App.nom.data = await api('removeConceptoNomina', idConcepto, App.nom.mes, opcionesNomina());
+        render(); aviso('Concepto quitado');
+      }
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Concepto) throw new Error('Escribe el nombre.');
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe el valor.');
+      const envio = { Tipo: v.Tipo, Concepto: v.Concepto, Valor: v.Valor, Es_Salarial: v.Tipo === 'Devengo' && v.Es_Salarial };
+      if (actual) envio.ID_Concepto = idConcepto; else envio.ID_Nomina_Esc = d.calculo.escenario.ID_Nomina_Esc;
+      const r = await api('saveConceptoNomina', envio, App.nom.mes, opcionesNomina());
+      App.nom.data = r.nomina; render(); aviso(actual ? 'Concepto actualizado' : 'Concepto agregado');
+    }
+  });
+}
+
+async function abrirRegistrarNomina() {
+  const d = App.nom.data;
+  if (!d || !d.calculo) return;
+  const estimado = d.calculo.totales.neto, mes = mesTexto(App.nom.mes).toLowerCase();
+  const campos = [
+    { k: 'Valor', label: 'Neto que te llegó', tipo: 'dinero', requerido: true },
+    { k: 'Bolsillo', label: 'Bolsillo donde llegó', tipo: 'select', requerido: true, opciones: () => opcionesDestino(false), visible: v => v.Afecta !== false },
+    { k: 'MesPpto', label: 'Cuenta en el presupuesto de', tipo: 'select', requerido: true,
+      opciones: () => [-1, 0, 1].map(x => [mesMas(App.nom.mes, x), mesTexto(mesMas(App.nom.mes, x))]),
+      ayuda: 'Si te pagaron a fin de mes por el mes siguiente, elige el siguiente: el ingreso cuenta en su presupuesto. Tus saldos y el historial siguen con la fecha real.' },
+    { k: 'Afecta', label: 'Sumar a mis saldos', tipo: 'interruptor' }
+  ];
+  const paso = (n, titulo, cuerpo) => '<section class="m-nom-paso"><h3><span class="m-nom-num" aria-hidden="true">' + n + '</span>' + esc(titulo) + '</h3>' + cuerpo + '</section>';
+  await abrirHoja({
+    titulo: 'Registrar nómina', der: 'Guardar',
+    cuerpo: '<form novalidate data-form="nomina">' +
+      '<p class="m-nom-intro">Moni calculó <strong>' + dinero(estimado) + '</strong> para ' + esc(mes) + '. Confirma lo que realmente te consignaron.</p>' +
+      paso(1, '¿Cuánto te llegó?', htmlCampo(campos[0], estimado, {}) + '<p class="m-ayuda" id="nom-dif" aria-live="polite">Es el estimado: si el valor fue otro, cámbialo.</p>') +
+      paso(2, '¿Dónde y cuándo?', htmlCampo(campos[1], ultimoBolsillo(), {}) +
+        '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha en que llegó</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>') +
+      paso(3, '¿Cómo la contamos?', htmlCampo(campos[3], true, {}) +
+        '<p class="m-ayuda">Déjalo encendido si este dinero entró <strong>ahora</strong>: se suma al bolsillo. Apágalo si ya lo tenías contado en los saldos que escribiste al empezar: la nómina queda registrada pero tus saldos no cambian.</p>') +
+      '<details class="m-nom-mas"><summary>Más opciones</summary>' + htmlCampo(campos[2], App.nom.mes, {}) + '</details>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz); actualizarVisibilidad(raiz, campos, { Afecta: true });
+      const entrada = $('#f-Valor', raiz), dif = $('#nom-dif', raiz);
+      const actualizarDif = () => {
+        const v = leerDinero(entrada.value);
+        if (v === '' || isNaN(v) || Math.abs(v - estimado) < 0.005) { dif.textContent = 'Es el estimado: si el valor fue otro, cámbialo.'; return; }
+        dif.textContent = (v > estimado ? 'Es ' + dinero(v - estimado) + ' más' : 'Es ' + dinero(estimado - v) + ' menos') + ' que lo estimado.';
+      };
+      entrada.addEventListener('input', actualizarDif);
+      raiz.addEventListener('change', () => actualizarVisibilidad(raiz, campos, leerFormulario(raiz, campos)));
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      const afecta = v.Afecta !== false;
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor))) throw new Error('Escribe cuánto te llegó.');
+      if (afecta && !v.Bolsillo) throw new Error('Elige el bolsillo donde llegó.');
+      const res = await api('registrarNomina', App.nom.mes, App.nom.idEsc, v.Valor, $('#f-Fecha', raiz).value, afecta ? v.Bolsillo : '', opcionesNomina(), afecta, v.MesPpto || App.nom.mes);
+      if (afecta) recordarBolsillo(v.Bolsillo);
+      aplicarEscritura(res); (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; render();
+      aviso(afecta ? 'Nómina registrada' : 'Nómina registrada sin cambiar tus saldos', { deshacer: () => anularNominaYAvisar() });
+    }
+  });
+}
+
+const anularNominaYAvisar = () => escribirYAvisar('anularNomina', [App.nom.mes], {
+  mensaje: 'Nómina anulada', aplicar: [res => { (res.presupuestos || []).forEach(aplicarPresupuesto); App.nom.data = res.nomina; }]
+});
+
+// ---------- Parámetros de nómina ----------
+
+const PARAMETROS_NOMINA = [
+  { k: 'SMMLV', label: 'Salario mínimo (SMMLV)', tipo: 'dinero', ayuda: 'Se usa para saber desde cuándo aplica el Fondo de Solidaridad Pensional. Actualízalo cada enero.' },
+  { k: 'SMMLV_Anio', label: 'Año del SMMLV', tipo: 'entero', min: 2000, max: 2100 },
+  { k: 'Aporte_Salud', label: 'Aporte a salud', tipo: 'porcentaje' },
+  { k: 'Aporte_Pension', label: 'Aporte a pensión', tipo: 'porcentaje' },
+  { k: 'Tasa_Interes_Cesantias', label: 'Intereses de cesantías (anual)', tipo: 'porcentaje' },
+  { k: 'FSP_Umbral_SMMLV', label: 'Fondo de Solidaridad desde (SMMLV)', tipo: 'entero', min: 1, max: 100 },
+  { k: 'Cesantias_Dias_Actual', label: 'Días del año de cesantías con tu sueldo actual', tipo: 'entero', min: 0, max: 360, defecto: '360' },
+  { k: 'Cesantias_Sueldo_Anterior', label: 'Sueldo anterior (solo si cambió este año)', tipo: 'dinero', defecto: '0' }
+];
+
+const AYUDA_PARAM = {
+  SMMLV: 'Lo que dice el decreto del año. Se usa para saber desde cuándo aplica el Fondo de Solidaridad Pensional.',
+  SMMLV_Anio: 'El año al que corresponde el salario mínimo que escribes.',
+  Aporte_Salud: 'Lo que se te descuenta para salud. Por ley es 4 %.',
+  Aporte_Pension: 'Lo que se te descuenta para pensión. Por ley es 4 %.',
+  Tasa_Interes_Cesantias: 'Tasa anual con la que se calculan los intereses de tus cesantías. Por ley es 12 %.',
+  FSP_Umbral_SMMLV: 'Desde cuántos salarios mínimos de ingreso se descuenta el Fondo de Solidaridad Pensional (por ley, 4).',
+  Cesantias_Dias_Actual: 'Cuántos días del año de cesantías llevas con tu sueldo actual. 360 si todo el año ganaste lo mismo.',
+  Cesantias_Sueldo_Anterior: 'Solo si tu sueldo cambió este año: cuánto ganabas antes. Si no cambió, déjalo en 0.'
+};
+
+/** Un campo de los parámetros de nómina. `forzado` reemplaza el valor guardado (por ejemplo, para pedir el del año nuevo). */
+function campoParam(c, forzado) {
+  const id = 'p-' + c.k, ayuda = AYUDA_PARAM[c.k] || c.ayuda || '';
+  const pie = ayuda ? '<p class="m-ayuda">' + esc(ayuda) + '</p>' : '';
+  const guardado = forzado !== undefined ? forzado : (cfg(c.k) || c.defecto || '');
+  if (c.tipo === 'porcentaje') {
+    const n = Number(String(guardado).replace(',', '.'));
+    return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + ' (%)</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" data-pct="1" type="text" inputmode="decimal" value="' +
+      (guardado !== '' && isFinite(n) ? String(Math.round(n * 10000) / 100).replace('.', ',') : '') + '">' + pie + '</div>';
+  }
+  if (c.tipo === 'dinero') {
+    const n = Number(guardado);
+    return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" type="text" inputmode="decimal" placeholder="' + (guardado === '' ? 'Escríbelo aquí' : '') + '" value="' +
+      (guardado !== '' && isFinite(n) ? new Intl.NumberFormat('es-CO').format(n) : '') + '">' + pie + '</div>';
+  }
+  return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(c.label) + '</label><input class="m-input m-num" id="' + id + '" data-param="' + c.k + '" type="number" inputmode="numeric" min="' + c.min + '" max="' + c.max + '" value="' + esc(guardado) + '">' + pie + '</div>';
+}
+
+function vParametros() {
+  const anio = Number(App.boot.hoy.slice(0, 4)), guardado = Number(cfg('SMMLV_Anio'));
+  const vencido = !!guardado && guardado < anio;
+  const smmlv = PARAMETROS_NOMINA.find(c => c.k === 'SMMLV'), smmlvAnio = PARAMETROS_NOMINA.find(c => c.k === 'SMMLV_Anio');
+  const resto = PARAMETROS_NOMINA.filter(c => c.k !== 'SMMLV' && c.k !== 'SMMLV_Anio');
+  const cierre = texto => '<div id="param-error" class="m-error-form" role="alert" hidden></div><button type="submit" class="m-btn m-btn-primary" style="width:100%">' + texto + '</button>';
+  // El salario mínimo va aparte y primero: es lo único que hay que actualizar cada año
+  const tarjeta = '<form class="m-group m-param-destacado" data-form="parametros" novalidate>' +
+    '<h2 class="m-param-titulo">Salario mínimo ' + (vencido ? '<span class="m-insignia m-insignia-alerta">Por actualizar</span>' : '<span class="m-insignia m-insignia-ok">Al día</span>') + '</h2>' +
+    '<p class="m-ayuda">' + (vencido
+      ? 'Tienes guardado el de ' + guardado + ' (' + dinero(Number(cfg('SMMLV')) || 0) + '). Escribe el de ' + anio + ' y guarda: tu nómina se calcula con ese valor.'
+      : 'Es el de ' + (guardado || anio) + '. Cámbialo cada enero, cuando se publique el nuevo.') + '</p>' +
+    campoParam(smmlv, vencido ? '' : undefined) + campoParam(smmlvAnio, vencido ? String(anio) : undefined) + cierre('Guardar salario mínimo') + '</form>';
+  const otros = '<h2 class="m-seccion-titulo" style="margin-top:var(--m-space-5)">Aportes y prestaciones</h2>' +
+    '<form class="m-group" style="padding:var(--m-space-4)" data-form="parametros" novalidate>' + resto.map(c => campoParam(c)).join('') + cierre('Guardar aportes y prestaciones') + '</form>' +
+    '<p class="m-seccion-pie">Los valores por defecto son los de la ley colombiana. Cámbialos solo si tu situación es distinta.</p>';
+  return { titulo: 'Parámetros de nómina', html: tarjeta + otros };
+}
+</script>

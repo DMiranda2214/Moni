@@ -13,8 +13,7 @@ const VALOR_MAXIMO = 1e12;
 function fechaMovimiento_(f) {
   const t = (texto_(f) || hoyIso_()).replace(/\//g, '-'); // se acepta AAAA/MM/DD y AAAA-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error('La fecha debe tener formato AAAA/MM/DD.');
-  const d = new Date(t + 'T00:00:00Z');
-  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t) throw new Error('La fecha no existe.');
+  if (!fechaExiste_(t)) throw new Error('La fecha no existe.');
   if (t > hoyIso_()) throw new Error('La fecha no puede ser futura.');
   return t;
 }
@@ -37,6 +36,38 @@ function categoriaMovimiento_(idCategoria, tipo) {
 }
 
 /** Normaliza el valor con su signo: Gasto negativo, Ingreso positivo, Ajuste con el signo recibido. */
+/**
+ * Vínculos que la app escribe para reconocer lo que generó un movimiento o una compra (un crédito, un extracto, un regalo,
+ * una suscripción, la distribución de un mes…). Antes vivían solo en Notas; desde 1.11 se guardan también en la columna
+ * Ref, así la persona puede editar sus notas sin romper el vínculo. Los registros viejos sin Ref siguen leyéndose de Notas.
+ */
+const MARCAS_SISTEMA = /^(Crédito |Extracto |Abono |Pago |Suscripción |Ingreso recurrente |Regalo |Distribución |Cargo )/;
+
+/** Ref de un cargo (comisión, impuesto…): "Cargo <ID de la operación>" (ver Cargos.gs). */
+const MARCA_CARGO = 'Cargo ';
+
+function esMarcaSistema_(t) { return MARCAS_SISTEMA.test(texto_(t)); }
+
+/** El vínculo de un registro: su Ref o, en los registros de antes de 1.11, sus Notas. */
+function refDe_(fila) { return texto_(fila && fila.Ref) || texto_(fila && fila.Notas); }
+
+/** Completa Ref en un registro nuevo cuyas Notas son una marca de la app. */
+function conRef_(fila) {
+  if (fila && !texto_(fila.Ref) && esMarcaSistema_(fila.Notas)) fila.Ref = texto_(fila.Notas);
+  return fila;
+}
+
+/**
+ * Una sola regla para decir si un movimiento es ingreso o gasto en informes y totales. No lo son: los traslados (y las
+ * conversiones entre divisas, que son traslados) ni el dinero que entra o sale de una inversión (abrir o cobrar el
+ * capital de un CDT): el dinero solo cambia de lugar. Sí cambian el saldo del bolsillo.
+ */
+const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso']; // el desembolso de un crédito es una deuda, no un ingreso
+
+function esIngresoOGasto_(m) {
+  return m.Tipo_Mov !== 'Transferencia' && SUBTIPOS_INVERSION.indexOf(m.Subtipo) === -1;
+}
+
 function valorConSigno_(valor, tipo) {
   const n = numero_(valor, 'El valor', { requerido: true, max: VALOR_MAXIMO, min: -VALOR_MAXIMO });
   if (tipo === 'Ajuste') {
@@ -75,9 +106,10 @@ function registrarMovimiento(m) {
     Notas: texto_(m.Notas).slice(0, 500),
     Origen: opcion_(m.Origen || 'App', ENUMS.Movimientos.Origen, 'El origen'),
     Anulado: false,
-    Afecta_Saldos: afecta
+    Afecta_Saldos: afecta,
+    Ref: texto_(m.Ref).slice(0, 200)
   };
-  insertRow('Movimientos', fila);
+  insertRow('Movimientos', conRef_(fila));
   return fila;
 }
 
@@ -149,17 +181,17 @@ function registrarTransferencia(origenId, destinoId, valor, fecha, concepto, not
 
   const salida = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: desde.ID_Bolsillo, Valor: -monto }, comun);
   const entrada = Object.assign({ ID_Mov: nuevoId_('mov'), ID_Bolsillo: hacia.ID_Bolsillo, Valor: monto }, comun);
-  insertRows('Movimientos', [salida, entrada]);
+  insertRows('Movimientos', [conRef_(salida), conRef_(entrada)]);
 
   return { ok: true, idGrupo: idGrupo, patas: [salida, entrada] };
 }
 
 /** Categoría de las comisiones de conversión: se crea la primera vez; si la persona la desactivó, queda sin categoría. */
 function categoriaComision_() {
-  const cats = leer_('Categorias');
-  const existente = buscarPorId_(cats, 'ID_Categoria', 'cat-comision');
+  const existente = categoriaPorRol_('Comision', true);
   if (existente) return estaActivo(existente) ? existente.ID_Categoria : '';
-  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats) });
+  const cats = leer_('Categorias');
+  insertRow('Categorias', { ID_Categoria: 'cat-comision', Nombre: 'Comisión bancaria', Tipo: 'Gasto', Icono: '', Color: '', Activo: true, Orden: siguienteOrden_(cats), Rol: 'Comision' });
   return 'cat-comision';
 }
 
@@ -226,9 +258,12 @@ function filasDelGrupo_(idMov) {
 /** Anula un movimiento; si es un traslado, anula las dos patas. Devuelve los IDs afectados. */
 function anularMovimiento(idMov) {
   const g = filasDelGrupo_(idMov);
-  const pendientes = g.filas.filter(f => !esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f._rowIndex, { Anulado: true }));
-  return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
+  // Sus cargos (comisiones, impuestos…) se anulan con él
+  const refs = g.filas.map(f => MARCA_CARGO + f.ID_Mov);
+  const cargos = getTableData('Movimientos').filter(m => refs.indexOf(texto_(m.Ref)) !== -1);
+  const pendientes = g.filas.concat(cargos).filter(f => !esVerdadero(f.Anulado));
+  updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: true } })));
+  return { ids: g.filas.concat(cargos).map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
 /** Deshace una anulación. Exige que los bolsillos involucrados sigan activos. */
@@ -241,9 +276,11 @@ function restaurarMovimiento(idMov) {
       throw new Error('El bolsillo "' + (b ? b.Nombre : f.ID_Bolsillo) + '" está desactivado. Reactívalo para restaurar el movimiento.');
     }
   });
-  const pendientes = g.filas.filter(f => esVerdadero(f.Anulado));
-  pendientes.forEach(f => updateRow('Movimientos', f._rowIndex, { Anulado: false }));
-  return { ids: g.filas.map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
+  const refs = g.filas.map(f => MARCA_CARGO + f.ID_Mov);
+  const cargos = getTableData('Movimientos').filter(m => refs.indexOf(texto_(m.Ref)) !== -1);
+  const pendientes = g.filas.concat(cargos).filter(f => esVerdadero(f.Anulado));
+  updateRows_('Movimientos', pendientes.map(f => ({ fila: f, cambios: { Anulado: false } })));
+  return { ids: g.filas.concat(cargos).map(f => f.ID_Mov), cambiados: pendientes.length, grupo: g.filas.length > 1 };
 }
 
 /**
@@ -275,7 +312,9 @@ function editarMovimiento(idMov, cambios) {
     Notas: c.Notas !== undefined ? texto_(c.Notas).slice(0, 500) : mov.Notas
   };
   if (c.Afecta_Saldos !== undefined) datos.Afecta_Saldos = quiereAfectarSaldos_(c.Afecta_Saldos, tipo);
-  updateRow('Movimientos', mov._rowIndex, datos);
+  // Un registro de antes de 1.11 guarda su vínculo (regalo, suscripción…) en Notas: se copia a Ref antes de cambiar la nota.
+  if (!texto_(mov.Ref) && esMarcaSistema_(mov.Notas) && datos.Notas !== mov.Notas) datos.Ref = texto_(mov.Notas);
+  updateRow('Movimientos', mov, datos);
   return Object.assign({}, mov, datos, { bolsilloAnterior: mov.ID_Bolsillo });
 }
 
@@ -373,6 +412,7 @@ function listarMovimientos(f) {
   items.forEach(i => {
     if (i.Anulado || i.Divisa !== divisaTotales) return;
     if (i.esTransferencia) { traslados += conFiltroDeLugar ? i.Valor : 0; return; }
+    if (SUBTIPOS_INVERSION.indexOf(i.Subtipo) !== -1) return; // abrir o cobrar un CDT no es ingreso ni gasto
     if (i.Valor >= 0) ingresos += i.Valor; else gastos += -i.Valor;
   });
 
@@ -432,6 +472,6 @@ function cuadrarCuenta(idCuenta, saldoReal, idBolsilloAjuste) {
     });
   }
 
-  updateRow('Cuentas', cuenta._rowIndex, { Saldo_Real: real, Fecha_Saldo_Real: hoyIso_() });
+  updateRow('Cuentas', cuenta, { Saldo_Real: real, Fecha_Saldo_Real: hoyIso_() });
   return { diferenciaAnterior: diferencia, ajustado: !!ajuste, idMov: ajuste ? ajuste.ID_Mov : '' };
 }

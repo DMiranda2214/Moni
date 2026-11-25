@@ -15,9 +15,7 @@
 
 const PERIODO_PAGO_CDT = { Vencimiento: 0, Mensual: 1, Trimestral: 3 };
 
-function interesCdt_(capital, ea, dias) {
-  return redondear2_((Number(capital) || 0) * (Math.pow(1 + (Number(ea) || 0), Math.max(0, dias) / 365) - 1));
-}
+function interesCdt_(capital, ea, dias) { return interesCompuesto_(capital, ea, dias); }
 
 /** Fecha del próximo pago de intereses de un CDT periódico: la primera fecha del calendario del CDT que no sea pasada. */
 function proximoPagoInteresCdt_(inicio, meses, vencimiento, desde) {
@@ -143,7 +141,7 @@ function cobrarInteresesCdt(id, d) {
   const m = movimientosInteresCdt_(c, datos, idBolsillo, fecha);
   const meses = PERIODO_PAGO_CDT[c.Pago_Intereses] || 0;
   const siguiente = r.proximoPago.esFinal ? c.Fecha_Vencimiento : proximoPagoInteresCdt_(c.Fecha_Inicio, meses, c.Fecha_Vencimiento, sumarDias_(c.Prox_Pago_Interes, 1));
-  updateRow('CDTs', c._rowIndex, {
+  updateRow('CDTs', c, {
     Intereses_Cobrados: redondear2_((Number(c.Intereses_Cobrados) || 0) + m.interes), Ultimo_Pago_Interes: c.Prox_Pago_Interes, Prox_Pago_Interes: siguiente
   });
   invalidateCache('CDTs');
@@ -174,7 +172,7 @@ function cerrarCdt(id, d) {
   }
   const m = movimientosInteresCdt_(c, datos, idBolsillo, fecha);
   m.ids.forEach(i => ids.push(i));
-  updateRow('CDTs', c._rowIndex, {
+  updateRow('CDTs', c, {
     Estado: 'Cerrado', Fecha_Cierre: fecha, Prox_Pago_Interes: '', Intereses_Cobrados: redondear2_((Number(c.Intereses_Cobrados) || 0) + m.interes)
   });
   invalidateCache('CDTs');
@@ -201,7 +199,7 @@ function anularCdt(id) {
   if (Number(c.Intereses_Cobrados) > 0) throw new Error('Este CDT ya tiene intereses cobrados; no se puede anular.');
   const ids = [];
   if (c.ID_Mov_Apertura) { anularMovimiento(c.ID_Mov_Apertura); ids.push(c.ID_Mov_Apertura); }
-  updateRow('CDTs', c._rowIndex, { Activo: false });
+  updateRow('CDTs', c, { Activo: false });
   invalidateCache('CDTs');
   return { ids: ids };
 }

@@ -42,7 +42,7 @@
 | **Otras monedas** | Los saldos que no están en pesos; se muestran aparte y nunca se suman al total |
 | **Tasa de referencia** | Cuántos pesos vale una unidad de otra moneda según Google Finance o lo que anotes; solo informativa (cada banco cambia a su precio) |
 | **Conversión** | Pasar dinero de una moneda a otra (por ejemplo, comprar dólares), con la tasa que dio el banco |
-| **Comisión** | Lo que cobra el banco por convertir; se anota aparte, dentro de la conversión |
+| **Comisión** | Lo que cobra el banco por una operación (convertir, transferir, pagar). Se anota aparte, como gasto en "Comisiones e impuestos" |
 | **Hoja** | La hoja de cálculo de Google, en tu Drive, donde están tus datos. Cada persona tiene la suya |
 | **Asistente de primeros pasos** | La configuración guiada de la primera vez: nombre, bancos, cuentas, bolsillos, tarjetas, nómina, ingresos, CDT, hogar, servicios, suscripciones y dólar |
 | **Aviso (de Inicio)** | Algo por configurar o actualizar, calculado desde tu hoja; se va solo al resolverse |
@@ -50,3 +50,10 @@
 | **Ingreso recurrente** | Un ingreso distinto de la nómina que se repite (otro trabajo, arriendo); lo marcas como recibido y avanza |
 | **Registro de errores** | La lista de lo que falló o se rechazó, en *Ajustes*; sirve para reportar un problema |
 | **Datos de demostración** | Información ficticia para explorar la app; solo existe en el entorno de desarrollo y se borra sin tocar lo real |
+| **Patrimonio neto** | Lo que tienes (disponible, ahorro e invertido) menos lo que debes (tarjetas sin pagar y créditos con un banco). Está en Inicio |
+| **Crédito bancario** | Un préstamo de un banco o entidad (hipoteca, vehículo, libre inversión). La cuota sale de tu bolsillo como gasto; los seguros se anotan aparte |
+| **Desembolso** | El dinero que te entrega el banco al darte un crédito. Llega a un bolsillo, pero no es un ingreso: es una deuda |
+| **Cargo** | Lo que te cobra un banco, una tarjeta o un crédito por una operación: comisión, impuesto (4x1000), cambio de divisa, cuota de manejo o seguro. Se anotan reglas en *Ajustes → Cargos y comisiones* y Moni los propone al registrar |
+| **Cuota de manejo** | Lo que cobra la tarjeta cada mes; Moni la propone al pagar el extracto |
+| **Compra en otra moneda** | Una compra con tarjeta hecha en dólares u otra moneda: anotas lo que te cobraron en tu moneda y, si quieres, el valor original; el recargo internacional va aparte |
+| **Zona horaria** | Define qué día es "hoy" para tus registros. Por defecto, Colombia; se cambia en *Ajustes → Perfil* |

@@ -1,0 +1,101 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Análisis (Planear → Análisis): el panorama completo en una pantalla. Todo sale de getAnalisis (una sola llamada).
+// Cada gráfico usa la misma tarjeta (tarjetaViz) con "Ver como tabla".
+// ---------------------------------------------------------------------------
+
+App.ana = { data: null, cargando: false, error: null };
+
+function vAnalisis() {
+  const a = App.ana;
+  let html = bannerDemo();
+  if (a.error) html += bloqueError(a.error, 'recargar-ana');
+  else if (!a.data) html += esqueleto(6);
+  else html += htmlAnalisis(a.data);
+  return { titulo: 'Análisis', html: html, despues: () => { if (!a.data && !a.cargando && !a.error) cargarEn(a, 'analisis', 'getAnalisis', []); } };
+}
+
+/** Cambio de un valor frente a otro, en palabras cortas: "+12 %", "−5 %" o "nuevo". */
+function cambioTexto(actual, antes) {
+  if (!antes) return actual ? 'nuevo' : '';
+  const p = Math.round((actual - antes) / antes * 100);
+  return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p) + ' %';
+}
+
+function htmlAnalisis(d) {
+  const dv = d.divisa;
+  // Cifras abreviadas para que quepan en tres columnas en el celular (la exacta va en el título y para lectores de pantalla)
+  const corta = v => esc(compactoMoneda(v, dv));
+  const kpi = (etq, valor, pie, clase, exacto) => '<div class="m-kpi"' + (exacto ? ' title="' + esc(exacto) + '"' : '') + '><div class="m-kpi-etiqueta">' + esc(etq) + '</div><div class="m-kpi-valor m-num ' + (clase || '') + '"' + (exacto ? ' aria-label="' + esc(exacto) + '"' : '') + '>' + valor + '</div><div class="m-kpi-pie">' + (pie || '') + '</div></div>';
+  const pm = d.patrimonioMensual, ultimo = pm[pm.length - 1], antes = pm[pm.length - 2];
+  const flujoMes = d.flujo[d.flujo.length - 1] || { ingresos: 0, gastos: 0, neto: 0 };
+  let h = '<div class="m-kpis">' +
+    kpi('Patrimonio neto', corta(d.patrimonio.neto), antes ? 'vs mes anterior ' + esc(cambioTexto(ultimo.neto, antes.neto)) : '', claseSaldo(d.patrimonio.neto), dinero(d.patrimonio.neto, dv)) +
+    kpi('Este mes', (flujoMes.neto >= 0 ? '+' : '') + corta(flujoMes.neto), 'entró menos salió', claseSaldo(flujoMes.neto), dinero(flujoMes.neto, dv)) +
+    kpi('En 30 días', corta(d.proyeccion.d30), 'disponible estimado', claseSaldo(d.proyeccion.d30), dinero(d.proyeccion.d30, dv)) + '</div>';
+
+  // 1. Patrimonio neto, 12 meses
+  h += tarjetaViz('ana-patr', 'Patrimonio neto · últimos 12 meses',
+    vizLinea({ puntos: puntosMeses(pm.map(p => p.mes)), series: [{ nombre: 'Patrimonio', clave: 'viz-acento', valores: pm.map(p => p.neto) }], divisa: dv, delta: true, alto: 180, etiqueta: 'Patrimonio neto al cierre de cada mes' }) +
+      '<p class="m-ayuda">Lo que tenías al cierre de cada mes (bolsillos + CDT) menos lo que debías (tarjetas sin pagar y créditos con un banco). Es un estimado reconstruido desde tus movimientos.</p>',
+    tablaViz(['Mes', 'Bolsillos', 'Invertido', 'Tarjetas', 'Créditos', 'Neto'], pm.map(p => [mesTexto(p.mes), dinero(p.caja, dv), dinero(p.invertido, dv), dinero(-p.tarjetas, dv), dinero(-p.creditos, dv), dinero(p.neto, dv)])));
+
+  // 2. Entró y salió cada mes
+  if (d.flujo.some(m => m.ingresos || m.gastos)) {
+    h += tarjetaViz('ana-flujo', 'Entró y salió cada mes',
+      vizColumnas({ puntos: puntosMeses(d.flujo.map(m => m.mes)), series: [{ nombre: 'Entró', clave: 'viz-s1', valores: d.flujo.map(m => m.ingresos) }, { nombre: 'Salió', clave: 'viz-s2', valores: d.flujo.map(m => m.gastos) }], divisa: dv, alto: 200, etiqueta: 'Ingresos y gastos por mes' }),
+      tablaViz(['Mes', 'Entró', 'Salió', 'Diferencia'], d.flujo.map(m => [mesTexto(m.mes), dinero(m.ingresos, dv), dinero(m.gastos, dv), dinero(m.neto, dv)])));
+  }
+
+  // 3. En qué gastas: este mes frente al anterior y al promedio
+  if (d.categorias.length) {
+    h += tarjetaViz('ana-cat', 'En qué gastas este mes',
+      vizBarrasH({ items: d.categorias.filter(c => c.actual > 0).map(c => ({ nombre: c.nombre, valor: c.actual, detalle: 'mes anterior ' + dinero(c.anterior, dv) + (c.anterior ? ' (' + cambioTexto(c.actual, c.anterior) + ')' : '') + ' · promedio ' + dinero(c.promedio, dv) })), divisa: dv, vacio: 'Este mes todavía no hay gastos.' }),
+      tablaViz(['Categoría', 'Este mes', 'Mes anterior', 'Promedio 3 meses'], d.categorias.map(c => [c.nombre, dinero(c.actual, dv), dinero(c.anterior, dv), dinero(c.promedio, dv)])));
+  }
+
+  // 4. Dónde está lo que tienes
+  const act = d.patrimonio.activos;
+  const dist = [['Disponible', act.disponible], ['Ahorro', act.ahorro], ['Invertido (CDT)', act.invertido]].filter(x => x[1] > 0);
+  if (dist.length) {
+    h += tarjetaViz('ana-dist', 'Dónde está lo que tienes',
+      vizBarrasH({ items: dist.map(x => ({ nombre: x[0], valor: x[1], detalle: porcentajeDe(x[1], act.total) + ' de lo que tienes' })), divisa: dv }) +
+        ((d.patrimonio.divisas || []).length ? '<p class="m-ayuda">Aparte, en otras monedas: ' + d.patrimonio.divisas.map(x => esc(dinero(x.Total, x.Divisa))).join(' · ') + '.</p>' : ''),
+      tablaViz(['', 'Valor', '%'], dist.map(x => [x[0], dinero(x[1], dv), porcentajeDe(x[1], act.total)])));
+  }
+
+  // 5. Lo que debes y cuándo terminas
+  if (d.deudas.length) {
+    const fin = x => x.tipo === 'Tarjeta' ? 'pago ' + fechaCorta(x.fin) : (x.fin ? 'terminas en ' + mesTexto(x.fin.slice(0, 7)).toLowerCase() + ' · ' + x.cuotas + ' cuotas' : '');
+    h += tarjetaViz('ana-deudas', 'Lo que debes y cuándo terminas',
+      vizBarrasH({ items: d.deudas.slice().sort((a, b) => b.saldo - a.saldo).map(x => ({ nombre: x.nombre, valor: x.saldo, detalle: x.tipo + ' · ' + fin(x) })), divisa: dv }) +
+        (d.deudas.some(x => x.tipo === 'Autopago') ? '<p class="m-ayuda">Los créditos de autopago te los debes a ti: no se restan del patrimonio.</p>' : ''),
+      tablaViz(['Deuda', 'Tipo', 'Saldo', 'Termina'], d.deudas.map(x => [x.nombre, x.tipo, dinero(x.saldo, dv), x.fin ? fechaCorta(x.fin) : '—'])));
+  }
+
+  // 6. Proyección del dinero disponible
+  const pr = d.proyeccion;
+  const fuente = { promedio: 'el promedio de tus gastos de los últimos 3 meses', presupuesto: 'el presupuesto de este mes', plantilla: 'tu plantilla del presupuesto' }[pr.fuenteHabitual] || '';
+  h += tarjetaViz('ana-proy', 'Tu dinero disponible en los próximos 90 días',
+    '<div class="m-kpis" style="margin-bottom:var(--m-space-3)">' + kpi('En 30 días', corta(pr.d30), '', claseSaldo(pr.d30), dinero(pr.d30, dv)) + kpi('En 60 días', corta(pr.d60), '', claseSaldo(pr.d60), dinero(pr.d60, dv)) + kpi('En 90 días', corta(pr.d90), '', claseSaldo(pr.d90), dinero(pr.d90, dv)) + '</div>' +
+    vizLinea({ puntos: pr.semanas.map(s => ({ x: s.dia ? '+' + s.dia : 'hoy', anio: '', titulo: s.dia ? 'En ' + s.dia + ' días (' + fechaCorta(s.fecha) + ')' : 'Hoy', previo: '' })),
+      series: [{ nombre: 'Con tu gasto habitual', clave: 'viz-s1', valores: pr.semanas.map(s => s.saldo) }, { nombre: 'Solo lo que ya sabes', clave: 'viz-s2', valores: pr.semanas.map(s => s.conocido) }],
+      divisa: dv, alto: 190, etiqueta: 'Dinero disponible estimado, semana a semana' }) +
+    '<p class="m-ayuda">Parte de lo que tienes disponible hoy (' + dinero(pr.inicio, dv) + ') y suma lo que ya sabes que entra (nómina, otros ingresos, CDT) y resta lo que sale (suscripciones, servicios, cuotas con sus seguros y el pago de las tarjetas)' +
+      (pr.habitual ? '. La línea azul también resta tu gasto del día a día: unos ' + dinero(pr.habitual, dv) + ' al mes, según ' + esc(fuente) + '.' : '.') + ' Es un estimado.</p>',
+    tablaViz(['Fecha', 'Qué', 'Valor'], pr.eventos.map(e => [fechaCorta(e.fecha), e.titulo, (e.valor > 0 ? '+' : '') + dinero(e.valor, dv)])));
+
+  // 7. Comisiones e impuestos del año
+  if (d.cargos && d.cargos.total > 0) {
+    const ETQ = { Comision: 'Comisiones', Impuesto: 'Impuestos', GMF: '4x1000 (GMF)', Retencion: 'Retención en la fuente', Cambio_Divisa: 'Cambio de divisa', Cuota_Manejo: 'Cuota de manejo', Seguro: 'Seguros', Tarjeta: 'Cargos de tarjetas' };
+    const tipos = Object.keys(d.cargos.porTipo).map(k => ({ nombre: ETQ[k] || k, valor: d.cargos.porTipo[k] })).sort((a, b) => b.valor - a.valor);
+    h += tarjetaViz('ana-cargos', 'Comisiones e impuestos de ' + d.anio + ' · ' + dinero(d.cargos.total, dv),
+      vizBarrasH({ items: tipos.map(t => Object.assign(t, { detalle: porcentajeDe(t.valor, d.cargos.total) + ' del total' })), divisa: dv }) +
+        '<p class="m-ayuda">Lo que te han cobrado los bancos y las tarjetas este año. Para que Moni te los proponga al registrar, anota las reglas en Ajustes → Cargos y comisiones.</p>',
+      tablaViz(['Mes', 'Cargos'], Object.keys(d.cargos.porMes).sort().map(m => [mesTexto(m), dinero(d.cargos.porMes[m], dv)])));
+  }
+  return h;
+}
+</script>

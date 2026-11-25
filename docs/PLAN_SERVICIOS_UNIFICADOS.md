@@ -1,5 +1,7 @@
 # Plan: unir "Servicios del hogar" con "Suscripciones"
 
+> **Estado: hecho en la 1.15.0.** Diferencia con este plan: los servicios que no estaban enlazados a una suscripción pasan **sin fecha** ("solo datos de pago", valor 0) en lugar de con un próximo cobro inventado, para que no aparezcan cobros nuevos en el presupuesto ni en Inicio de quien actualiza. Detalle en `docs/ESQUEMA.md` (Suscripciones).
+
 **Evaluación: sí conviene.** Hoy son dos cosas separadas que la persona percibe como una sola ("lo que pago cada mes"):
 
 | Hoy | Problema |

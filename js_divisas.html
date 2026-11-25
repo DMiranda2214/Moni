@@ -1,0 +1,169 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Divisas: tasas de referencia y conversión entre monedas
+// ---------------------------------------------------------------------------
+
+function vDivisas() {
+  const filas = ['USD', 'EUR'].map(d => {
+    const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha'), fuente = cfg('Tasa_' + d + '_Fuente');
+    return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(NOMBRE_DIVISA[d].toLowerCase()) + ') vale, en pesos</label>' +
+      '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" data-tipo="dinero" data-divisa="COP" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
+      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + (fuente ? ' · ' + esc(fuente) : '') + '</p>' : '') + '</div>';
+  }).join('');
+  return {
+    titulo: 'Divisas',
+    html: '<div class="m-group" style="padding:var(--m-space-4);margin-bottom:var(--m-space-4)">' +
+      '<p class="m-subtitulo-cuerpo">Moni guarda cada cuenta en su moneda y no mezcla los saldos. La tasa de referencia solo sirve para ver cuánto equivale un saldo en pesos y para compararla con lo que te cobró el banco: <strong>no cambia tus saldos ni tus conversiones</strong>, porque cada banco cambia a su propio precio.</p>' +
+      '<div class="m-interruptor-fila"><label for="tasa-auto">Traerla sola de Google Finance cada día</label><span class="m-interruptor"><input type="checkbox" role="switch" id="tasa-auto" data-acc-cambio="tasa-auto"' + (esVerdad(cfg('Tasa_Auto')) ? ' checked' : '') + '><i></i></span></div>' +
+      '<p class="m-ayuda">Es la tasa del mercado, no la TRM oficial. Si la actualización automática está activa, reemplaza lo que escribas aquí.</p>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-top:var(--m-space-3)" data-acc="tasas-google">Actualizar ahora con Google Finance</button></div>' +
+      '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
+      '<p class="m-subtitulo-cuerpo">O anótala tú. Las monedas se eligen al crear el banco.</p>' +
+      filas + '<div class="m-error-form" id="tasas-error" role="alert" hidden></div>' +
+      '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>',
+    despues: () => { const f = $('form[data-form="tasas"]'); if (f) activarEcoDinero(f); }
+  };
+}
+
+/**
+ * Compra o venta de moneda. Se escribe cuánta moneda se compra o se vende y la tasa que dio el banco por cada
+ * unidad (la TRM solo es una referencia: cada banco cambia a su precio). La comisión, si la hay, se cobra aparte.
+ */
+async function abrirConversion() {
+  const todos = opcionesBolsillos();
+  const ids = [].concat.apply([], todos.map(g => g.opciones.map(x => x[0])));
+  const origenInicial = ids.find(i => divisaDeBolsillo(i) === 'COP') || ids[0] || '';
+  const destinoInicial = ids.find(i => divisaDeBolsillo(i) !== divisaDeBolsillo(origenInicial)) || '';
+  const sel = (k, label, valor) => '<div class="m-campo"><label class="m-label" for="' + idCampo(k) + '">' + esc(label) + '</label><select class="m-input" id="' + idCampo(k) + '" name="' + k + '">' +
+    todos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === valor ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>';
+  const hoy = App.boot.hoy;
+  const cuerpo = '<form novalidate data-form="conversion">' +
+    '<p class="m-hoja-mensaje">Escribe cuánta moneda compras o vendes y la tasa que te dio el banco por cada unidad. Moni calcula cuánto sale y cuánto llega.</p>' +
+    sel('Origen', 'Sale de', origenInicial) + sel('Destino', 'Llega a', destinoInicial) +
+    htmlCampo({ k: 'Cantidad', label: 'Cantidad', tipo: 'dinero', requerido: true }, '') +
+    htmlCampo({ k: 'Tasa', label: 'Tasa del banco', tipo: 'dinero', requerido: true }, '') +
+    '<p class="m-ayuda" id="conv-resumen" aria-live="polite" style="margin:calc(-1 * var(--m-space-2)) 0 var(--m-space-4)"></p>' +
+    htmlCampo({ k: 'Comision', label: 'Comisión del banco (opcional)', tipo: 'dinero' }, '') +
+    '<div class="m-campo"><label class="m-label" for="f-ComisionEn">La comisión se cobra de</label><select class="m-input" id="f-ComisionEn"><option value="origen"></option><option value="destino"></option></select></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + hoy + '" value="' + esc(hoy) + '"></div>' +
+    htmlCampo({ k: 'Notas', label: 'Notas (opcional)', tipo: 'area' }, '') +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  /** Qué se está convirtiendo: la moneda "de afuera", si se compra (sale pesos) y las tasas de referencia. */
+  const leer = raiz => {
+    const dO = divisaDeBolsillo($('#f-Origen', raiz).value), dD = divisaDeBolsillo($('#f-Destino', raiz).value);
+    const ext = dO === 'COP' ? dD : (dD === 'COP' ? dO : null);
+    return { dO: dO, dD: dD, ext: ext, compra: dO === 'COP', cant: leerDinero($('#f-Cantidad', raiz).value), tasa: leerDinero($('#f-Tasa', raiz).value), com: leerDinero($('#f-Comision', raiz).value) };
+  };
+  const valido = n => n !== '' && !isNaN(n) && n > 0;
+  const pct = x => (Math.round(Math.abs(x) * 10) / 10).toLocaleString('es-CO') + ' %';
+
+  await abrirHoja({
+    titulo: 'Convertir divisas', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const actualizar = () => {
+        const c = leer(raiz), nombre = c.ext ? (NOMBRE_DIVISA[c.ext] || c.ext).toLowerCase() : 'moneda', resumen = $('#conv-resumen', raiz);
+        const cant = $('#f-Cantidad', raiz), tasa = $('#f-Tasa', raiz), com = $('#f-Comision', raiz), comEn = $('#f-ComisionEn', raiz);
+        cant.dataset.divisa = c.ext || ''; tasa.dataset.divisa = 'COP';
+        com.dataset.divisa = comEn.value === 'destino' ? c.dD : c.dO;
+        comEn.options[0].textContent = 'El bolsillo de origen (' + c.dO + ')'; comEn.options[1].textContent = 'El bolsillo de destino (' + c.dD + ')';
+        $('label[for="f-Cantidad"]', raiz).textContent = 'Cuántos ' + nombre + ' ' + (c.compra ? 'compras' : 'vendes');
+        $('label[for="f-Tasa"]', raiz).textContent = 'Tasa del banco: pesos por cada ' + (c.ext || 'unidad');
+        [cant, tasa, com].forEach(i => i.dispatchEvent(new Event('input')));
+        if (valido(c.tasa)) $('[data-eco="f-Tasa"]', raiz).textContent = '= ' + tasaPesos(c.tasa) + ' por unidad';
+
+        if (c.dO === c.dD) { resumen.textContent = 'Elige bolsillos en monedas distintas.'; return; }
+        if (!c.ext) { resumen.textContent = 'Las conversiones se hacen entre pesos y otra moneda.'; return; }
+        if (!valido(c.cant) || !valido(c.tasa)) { resumen.textContent = ''; return; }
+        const cop = Math.round(c.cant * c.tasa * 100) / 100;
+        let t = c.compra ? 'Sale ' + dinero(cop, 'COP') + ' · llega ' + dinero(c.cant, c.ext) : 'Sale ' + dinero(c.cant, c.ext) + ' · llega ' + dinero(cop, 'COP');
+        const ref = Number(String(cfg('Tasa_' + c.ext)).replace(',', '.'));
+        if (ref > 0) { // solo informativa: el banco cambia a su propio precio
+          const d = (c.tasa / ref - 1) * 100;
+          t += ' · Referencia (TRM estimada) ' + tasaPesos(ref) + (Math.abs(d) < 0.05 ? ': igual a la tuya' : (c.compra ? ': pagas ' + pct(d) + (d > 0 ? ' más' : ' menos') : ': recibes ' + pct(d) + (d > 0 ? ' más' : ' menos')));
+        }
+        resumen.textContent = t;
+      };
+      raiz.addEventListener('input', actualizar); raiz.addEventListener('change', actualizar);
+      actualizar();
+      $('#f-Cantidad', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const c = leer(raiz);
+      if (c.dO === c.dD) throw new Error('Elige bolsillos en monedas distintas.');
+      if (!c.ext) throw new Error('Las conversiones se hacen entre pesos y otra moneda.');
+      if (!valido(c.cant)) throw new Error('Escribe la cantidad.');
+      if (!valido(c.tasa)) throw new Error('Escribe la tasa que te dio el banco.');
+      if (c.com !== '' && (isNaN(c.com) || c.com < 0)) throw new Error('Revisa la comisión.');
+      const cop = Math.round(c.cant * c.tasa * 100) / 100;
+      const res = await api('addConversion', { origen: $('#f-Origen', raiz).value, destino: $('#f-Destino', raiz).value, valorOrigen: c.compra ? cop : c.cant, valorDestino: c.compra ? c.cant : cop,
+        comision: c.com === '' ? 0 : c.com, comisionEn: $('#f-ComisionEn', raiz).value, fecha: $('#f-Fecha', raiz).value, notas: ($('#f-Notas', raiz) || {}).value || '' }, vistaActual());
+      aplicarEscritura(res); render();
+      const id = res.items[0] && res.items[0].ID_Mov;
+      aviso('Conversión registrada · ' + res.tasa + (res.comision ? ' · comisión ' + dinero(res.comision.valor, res.comision.divisa) : ''), { deshacer: () => anularYAvisar(id) });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Registro de errores (Ajustes → Registro de errores)
+// ---------------------------------------------------------------------------
+
+App.log = { soloErrores: true, data: null, error: null };
+
+function fechaLog(iso) {
+  const p = String(iso || '').split('T');
+  return p[0] ? fechaCorta(p[0]) + (p[1] ? ' ' + p[1].slice(0, 5) : '') : '';
+}
+
+function htmlRegistro(d) {
+  if (!d.items.length) {
+    return vacio('check', App.log.soloErrores ? 'Sin errores registrados' : 'El registro está vacío', App.log.soloErrores ? 'Cuando algo falle quedará anotado aquí.' : '');
+  }
+  return '<div class="m-group">' + d.items.map(l =>
+    '<details class="m-log"><summary><span class="m-log-cab"><span class="m-insignia' + (l.Nivel === 'Error' ? ' m-nivel-error' : '') + '">' + esc(l.Nivel) + '</span>' +
+    '<span class="m-log-meta">' + esc(fechaLog(l.Fecha_Hora)) + ' · ' + esc(l.Funcion) + '</span></span>' +
+    '<span class="m-log-msg">' + esc(l.Mensaje) + '</span></summary>' +
+    '<pre class="m-log-detalle">' + esc(l.Detalle || 'Sin detalle') + '</pre></details>').join('') + '</div>' +
+    (d.hayMas ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Se muestran las ' + d.items.length + ' más recientes.</p>' : '');
+}
+
+async function cargarRegistro() {
+  const caja = $('#log-lista');
+  if (!caja) return;
+  try {
+    App.log.data = await api('getLogs', { soloErrores: App.log.soloErrores });
+    App.log.error = null;
+    caja.innerHTML = htmlRegistro(App.log.data);
+    const resumen = $('#log-resumen');
+    if (resumen) resumen.textContent = App.log.data.errores + (App.log.data.errores === 1 ? ' error' : ' errores') + ' en total · versión ' + App.log.data.version;
+  } catch (e) {
+    caja.innerHTML = '<div class="m-error-form" role="alert">' + esc(e.message) + '</div>';
+  }
+}
+
+function vRegistro() {
+  return {
+    titulo: 'Registro de errores',
+    subtitulo: 'Lo que falla queda anotado aquí. Si algo no funciona, copia el registro y envíalo para corregirlo.',
+    html:
+      '<div class="m-segmentado" role="radiogroup" aria-label="Qué mostrar" style="margin-bottom:var(--m-space-3)">' +
+      '<label><input type="radio" name="log-filtro" value="errores"' + (App.log.soloErrores ? ' checked' : '') + '><span>Errores</span></label>' +
+      '<label><input type="radio" name="log-filtro" value="todo"' + (App.log.soloErrores ? '' : ' checked') + '><span>Todo</span></label></div>' +
+      '<p class="m-ayuda" id="log-resumen" aria-live="polite" style="margin-bottom:var(--m-space-3)"></p>' +
+      '<div id="log-lista"><div class="m-cargando">Cargando…</div></div>' +
+      '<div class="m-acciones-fila"><button class="m-btn m-btn-secondary" data-acc="log-copiar">Copiar el registro</button>' +
+      '<button class="m-btn m-btn-secondary" data-acc="log-limpiar">Limpiar</button></div>',
+    despues: cargarRegistro
+  };
+}
+
+/** Texto plano para pegar en un mensaje: versión, fecha de cada entrada y su detalle. */
+function textoRegistro(d) {
+  return 'Moni v' + d.version + ' — registro (' + d.items.length + ' entradas)\n\n' + d.items.map(l =>
+    '[' + l.Fecha_Hora + '] ' + l.Nivel + ' · ' + l.Funcion + ' · ' + l.Mensaje + (l.Detalle ? '\n' + String(l.Detalle).split('\n').map(x => '    ' + x).join('\n') : '')).join('\n\n');
+}
+</script>

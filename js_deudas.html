@@ -1,0 +1,630 @@
+<script>
+/* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
+'use strict';
+// ---------------------------------------------------------------------------
+// Deudas: tarjetas de crédito y créditos de autopago
+// ---------------------------------------------------------------------------
+
+App.deudas = { data: null, cargando: false, error: null };
+App.tar = { id: null, mes: null, data: null, cargando: false, error: null };
+App.cre = { id: null, data: null, cargando: false, error: null };
+
+const FUENTES = [
+  ['Personal', 'Sin apartar ahora', 'No mueve dinero hoy: al pagar el extracto indicas de qué bolsillo sale. Úsalo para compras que no están en el presupuesto.'],
+  ['Ppto', 'Del presupuesto', 'Aparta ahora el dinero desde el bolsillo del renglón y cuenta como gasto de ese renglón. Es lo recomendado cuando la compra está en tu presupuesto.'],
+  ['Guardar', 'Apartar de otro bolsillo', 'Aparta ahora el dinero desde el bolsillo que elijas, para tenerlo listo en la reserva.'],
+  ['Otro', 'De otra persona', 'Compra para alguien más: no cuenta como tu gasto ni mueve dinero hasta que te lo reembolsen.']
+];
+const etiquetaFuente = f => (FUENTES.find(x => x[0] === f) || [f, f])[1];
+
+function fechaCorta(iso) { return iso ? fechaTxt(iso) : ''; }
+
+/** Mes (AAAA-MM) del extracto al que entra una compra con esta fecha, según el día de corte. */
+function mesExtractoDe(fecha, diaCorte) {
+  const p = fecha.split('-').map(Number);
+  let a = p[0], m = p[1];
+  if (p[2] > diaCorte) { m++; if (m > 12) { m = 1; a++; } }
+  return a + '-' + String(m).padStart(2, '0');
+}
+
+// ---------- Pantalla de Deudas ----------
+
+function vDeudas() {
+  const d = App.deudas;
+  let html = bannerDemo();
+  if (d.error) html += bloqueError(d.error, 'recargar-deudas');
+  else if (!d.data) html += esqueleto(4);
+  else html += htmlDeudas(d.data);
+  return {
+    titulo: 'Deudas', html: html,
+    acciones: d.data ? '<button class="m-btn-texto" data-acc="nuevo-credito">Nuevo crédito</button>' : '',
+    despues: () => { if (!d.data && !d.cargando && !d.error) cargarDeudas(); }
+  };
+}
+
+const cargarDeudas = () => cargarEn(App.deudas, 'tarjetas', 'getDeudas', []);
+
+function htmlDeudas(d) {
+  let h = '';
+  if (!d.tarjetas.length) {
+    h += vacio('tarjetas', 'Sin tarjetas', 'Registra tus tarjetas de crédito para llevar sus compras y pagar los extractos.',
+      '<button class="m-btn m-btn-primary" data-acc="ir" data-ruta="ajustes/Tarjetas">Agregar una tarjeta</button>');
+  } else {
+    h += seccion('Tarjetas de crédito', d.tarjetas.map(t => fila({
+      icono: 'tarjetas', titulo: esc(t.Nombre),
+      sub: 'Extracto de ' + esc(mesTexto(t.mes).toLowerCase()) + ': ' + dinero(t.total) + ' · pago el ' + esc(fechaCorta(t.proximoPago)),
+      final: t.pagado ? '<span class="m-insignia">Pagado</span>'
+        : (t.total === 0 ? '<span class="m-row-sub">Sin compras</span>' : (t.faltaParaPagar > 0 ? '<strong class="m-num">' + dinero(t.faltaParaPagar) + '</strong><span class="m-row-sub" style="display:block">por apartar</span>' : '<span class="m-insignia">Apartado</span>')),
+      chevron: true, attrs: 'data-acc="ir" data-ruta="tarjeta/' + esc(t.ID_Tarjeta) + '"'
+    })).join(''));
+  }
+
+  const activos_ = d.creditos.filter(c => c.Estado === 'Activo');
+  const pagados = d.creditos.filter(c => c.Estado === 'Pagado');
+  // Créditos con un banco o entidad, y los de autopago (te prestas de tu ahorro)
+  const bancarios = activos_.filter(c => c.Tipo_Credito === 'Bancario'), autopago = activos_.filter(c => c.Tipo_Credito !== 'Bancario');
+  if (bancarios.length) {
+    const debes = bancarios.reduce((a, c) => a + (c.saldo || 0), 0);
+    h += seccion('Créditos', bancarios.map(filaCredito).join(''), 'Debes <strong class="m-num">' + dinero(debes) + '</strong> de capital en total.');
+  }
+  if (autopago.length) {
+    h += seccion('Créditos de autopago', autopago.map(filaCredito).join(''),
+      'Debes a tu ahorro <strong class="m-num">' + dinero(d.deudaAhorro) + '</strong> en total. Cada cuota que pagas vuelve a tu ahorro.');
+  }
+  if (!activos_.length && !pagados.length) {
+    h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Créditos</h2><div class="m-group">' +
+      vacio('capas', 'Sin créditos', 'Anota tus créditos con un banco o entidad (hipoteca, vehículo, libre inversión…) o los de autopago (te prestas de tu ahorro y te devuelves en cuotas). Moni lleva la tabla de amortización, los seguros de cada cuota y lo que falta.',
+        '<button class="m-btn m-btn-secondary" data-acc="nuevo-credito">Crear un crédito</button>') + '</div></section>';
+  }
+  if (pagados.length) h += seccion('Pagados', pagados.map(filaCredito).join(''));
+  return h + htmlMedidoresDeudas(d);
+}
+
+function filaCredito(c) {
+  const sub = (c.Persona ? esc(c.Persona) + ' · ' : '') + (c.Estado === 'Activo' && c.proxima
+    ? 'cuota ' + (c.cuotasPagadas + 1) + ' de ' + c.cuotasTotal + ' · ' + esc(fechaCorta(c.proxima.Fecha)) + ' · ' + dinero(c.proxima.Cuota)
+    : c.cuotasTotal + ' cuotas');
+  return fila({
+    icono: 'capas', titulo: esc(c.Nombre), sub: sub,
+    final: c.Estado === 'Activo' ? '<strong class="m-num">' + dinero(c.saldo) + '</strong><span class="m-row-sub" style="display:block">' + (c.Tipo_Credito === 'Bancario' ? 'debes' : 'saldo') + '</span>' : '<span class="m-insignia">Pagado</span>',
+    chevron: true, attrs: 'data-acc="ir" data-ruta="credito/' + esc(c.ID_Credito) + '"'
+  });
+}
+
+// ---------- Detalle de una tarjeta ----------
+
+function vTarjeta(id) {
+  const t = App.tar;
+  if (t.id !== id) Object.assign(t, { id: id, mes: null, data: null, error: null, cargando: false });
+  let html = '';
+  if (t.error) html += bloqueError(t.error, 'recargar-tar');
+  else if (!t.data) html += esqueleto(5);
+  else html += htmlTarjeta(t.data);
+  const nombre = t.data ? t.data.tarjeta.Nombre : 'Tarjeta';
+  return {
+    titulo: nombre, html: html,
+    acciones: t.data ? '<button class="m-btn-texto" data-acc="editar-tarjeta">Editar</button>' : '',
+    despues: () => { if (!t.data && !t.cargando && !t.error) cargarTarjeta(); }
+  };
+}
+
+function cargarTarjeta() {
+  const t = App.tar, id = t.id, mes = t.mes;
+  return cargarEn(t, 'tarjeta/' + id, 'getTarjeta', [id, mes], () => t.id === id && t.mes === mes, d => { t.mes = d.mes; });
+}
+
+function htmlTarjeta(d) {
+  const t = d.totales;
+  const pagado = !!d.extracto;
+  let estado;
+  if (pagado) estado = 'Pagado el ' + esc(fechaCorta(d.extracto.Fecha_Pago));
+  else if (t.total === 0) estado = 'Sin compras en este extracto';
+  else if (t.faltaParaPagar > 0) estado = 'Falta apartar ' + dinero(t.faltaParaPagar) + (d.personal ? ' (se toma de ' + esc(d.personal.Nombre) + ')' : '');
+  else estado = 'La reserva ya alcanza para pagarlo';
+
+  // Cortes: cada extracto con sus fechas, lo gastado y si ya se pagó. Tocar uno muestra sus compras.
+  const sinPagar = d.meses.filter(m => !m.pagado && m.total > 0 && m.mes < d.mesActual);
+  let h = sinPagar.length ? '<div class="m-banner" role="status"><span>Tienes ' + (sinPagar.length === 1 ? 'un corte anterior sin pagar' : sinPagar.length + ' cortes anteriores sin pagar') + ': ' + sinPagar.map(m => esc(mesTexto(m.mes)) + ' (' + dinero(m.total) + ')').join(', ') + '.</span></div>' : '';
+  h += '<h3 class="m-seccion-titulo">Cortes</h3><div class="m-group m-cortes">' + d.meses.map(m => {
+    const rango = esc(fechaCorta(m.desde)) + ' – ' + esc(fechaCorta(m.hasta));
+    const estadoCorte = m.pagado ? 'Pagado' : m.abierto ? 'Abierto' : m.total > 0 ? 'Por pagar hasta el ' + esc(fechaCorta(m.pago)) : 'Sin compras';
+    return fila({
+      titulo: esc(mesTexto(m.mes)) + (m.mes === d.mes ? ' <span class="m-insignia">Viendo</span>' : ''),
+      sub: rango + ' · ' + estadoCorte + (m.numCompras ? ' · ' + m.numCompras + (m.numCompras === 1 ? ' compra' : ' compras') : ''),
+      final: '<span class="m-monto">' + dinero(m.total) + '</span>', attrs: 'data-acc="tar-corte" data-id="' + esc(m.mes) + '"' + (m.mes === d.mes ? ' aria-current="true"' : '')
+    });
+  }).join('') + '</div><div style="height:var(--m-space-4)"></div>';
+
+  h += '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(d.tarjeta.Banco) + ' · corte de ' + esc(mesTexto(d.mes).toLowerCase()) + ' (' + esc(fechaCorta(d.corte.desde)) + ' – ' + esc(fechaCorta(d.corte.hasta)) + ')</div>' +
+    '<div class="m-resumen-cifra m-num">' + dinero(t.total) + '</div>' +
+    (!pagado && t.abonado > 0 ? '<p class="m-ayuda">Abonado ' + dinero(t.abonado) + ' · <strong>debes ' + dinero(t.saldo) + '</strong> de este corte</p>' : '') +
+    '<p class="m-ayuda">' + estado + '</p>' +
+    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">En la reserva</div><strong class="m-num">' + dinero(d.reserva.Saldo) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Cupo disponible</div><strong class="m-num">' + dinero(d.cupo.disponible) + '</strong></div></div>' +
+    '<div class="m-acciones-fila">' +
+    (pagado ? '<button class="m-btn m-btn-secondary" data-acc="anular-pago-extracto">Anular el pago</button>'
+      : '<button class="m-btn m-btn-primary" data-acc="pagar-extracto"' + (t.total === 0 ? ' disabled' : '') + '>Pagar el extracto</button>') +
+    '<button class="m-btn m-btn-secondary" data-acc="abrir-compra">Nueva compra</button></div>' +
+    (!pagado && t.total > 0 ? '<div class="m-acciones-fila" style="margin-top:var(--m-space-2)"><button class="m-btn m-btn-secondary" data-acc="abrir-abono">Registrar un abono</button></div>' : '') +
+    '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Corte el día ' + d.tarjeta.Dia_Corte + ' · pago el día ' + d.tarjeta.Dia_Pago + ' (próximo: ' + esc(fechaCorta(d.proximoPago)) + ')</p></div>';
+
+  h += '<div style="height:var(--m-space-4)"></div>';
+  if (!d.compras.length) {
+    h += vacio('tarjetas', 'Sin compras en este extracto', 'Registra lo que compres con la tarjeta para saber cuánto vas a deber.');
+  } else {
+    h += '<div class="m-group">' + d.compras.map(c => fila({
+      titulo: esc(c.Concepto), sub: esc(fechaCorta(c.Fecha)) + ' · ' + esc(etiquetaFuente(c.Fuente)) + (c.Categoria ? ' · ' + esc(c.Categoria) : '') + (c.Pagado ? ' · pagada' : ''),
+      final: '<span class="m-monto">' + dinero(c.Valor) + '</span>', attrs: 'data-acc="compra" data-id="' + esc(c.ID_Compra) + '"'
+    })).join('') + '</div>';
+    const pf = t.porFuente;
+    h += '<p class="m-seccion-pie">' + FUENTES.filter(f => pf[f[0]]).map(f => esc(f[1]) + ' ' + dinero(pf[f[0]])).join(' · ') + '</p>';
+  }
+  if (d.pagos && d.pagos.length) {
+    h += seccion('Abonos y aportes', d.pagos.map(p => fila({
+      titulo: esc(p.Pagador || 'Tú') + ' · ' + (p.Tipo === 'Abono' ? 'abono' : 'aporte al pago'),
+      sub: esc(fechaCorta(p.Fecha)) + (p.Pagador ? ' · no movió tus bolsillos' : (p.Bolsillo ? ' · sale de ' + esc(p.Bolsillo) : '')),
+      final: '<span class="m-monto">' + dinero(p.Valor) + '</span>', clase: p.Editable ? '' : 'm-inactivo',
+      attrs: p.Editable ? 'data-acc="abono" data-id="' + esc(p.ID_Pago) + '"' : '', deshabilitada: !p.Editable
+    })).join(''), 'Un abono baja la deuda y libera cupo; no aparta dinero en la reserva. Toca uno para anularlo.');
+  }
+  return h;
+}
+
+/** Registra un abono a la deuda del corte que se está viendo: lo paga la persona (desde un bolsillo) u otra persona. */
+async function abrirAbonoTarjeta() {
+  const td = App.tar.data;
+  if (!td || td.extracto || !(td.totales.saldo > 0)) return;
+  const grupos = opcionesDestino(false);
+  const cuerpo = '<form novalidate data-form="abono"><p class="m-hoja-mensaje">Un abono baja lo que debes de este corte y libera cupo. No aparta dinero en la reserva. Hoy debes ' + dinero(td.totales.saldo) + '.</p>' +
+    htmlCampo({ k: 'Valor', label: 'Valor del abono', tipo: 'dinero', requerido: true }, td.totales.saldo, {}) +
+    '<div class="m-campo"><label class="m-label" for="f-Quien">¿Quién lo paga?</label><select class="m-input" id="f-Quien"><option value="yo">Yo, desde un bolsillo mío</option><option value="otro">Otra persona (desde un banco que no está en Moni)</option></select></div>' +
+    '<div class="m-campo" id="ab-bolsillo"><label class="m-label" for="f-Origen">Sale del bolsillo</label><select class="m-input" id="f-Origen">' +
+      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (td.personal && x[0] === td.personal.ID_Bolsillo ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<div class="m-campo" id="ab-nombre" hidden><label class="m-label" for="f-Pagador">Nombre de quien paga</label><input class="m-input" id="f-Pagador" maxlength="60" list="ab-sug" autocomplete="off" placeholder="Por ejemplo, Mamá"><datalist id="ab-sug">' + (td.pagadores || []).map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist><p class="m-ayuda">No se mueve ningún bolsillo tuyo: solo queda anotado quién abonó.</p></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  await abrirHoja({
+    titulo: 'Abono a la tarjeta', der: 'Abonar', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const sync = () => { const otro = $('#f-Quien', raiz).value === 'otro'; $('#ab-bolsillo', raiz).hidden = otro; $('#ab-nombre', raiz).hidden = !otro; };
+      $('#f-Quien', raiz).addEventListener('change', sync); sync();
+    },
+    alGuardar: async raiz => {
+      const v = leerDinero($('#f-Valor', raiz).value);
+      if (v === '' || isNaN(v) || v <= 0) throw new Error('Escribe el valor del abono.');
+      const otro = $('#f-Quien', raiz).value === 'otro';
+      const pagador = otro ? $('#f-Pagador', raiz).value.trim() : '';
+      if (otro && !pagador) throw new Error('Escribe el nombre de quien paga.');
+      const res = await api('addAbonoTarjeta', { ID_Tarjeta: td.tarjeta.ID_Tarjeta, Mes: td.mes, Valor: v, Fecha: $('#f-Fecha', raiz).value, Pagador: pagador, ID_Bolsillo: otro ? '' : $('#f-Origen', raiz).value });
+      aplicarEscritura(res); aplicarTarjeta(res); render();
+      aviso('Abono registrado', { deshacer: () => anularAbonoYAvisar(res.idPago) });
+    }
+  });
+}
+
+const anularAbonoYAvisar = idPago => escribirYAvisar('voidAbonoTarjeta', [idPago], { mensaje: 'Abono anulado', aplicar: [aplicarTarjeta] });
+
+/** Aplica el resultado de una escritura sobre la tarjeta que se está viendo. */
+function aplicarTarjeta(res) {
+  App.deudas.data = null;
+  if (res.tarjeta && App.tar.id === res.tarjeta.tarjeta.ID_Tarjeta) { App.tar.data = res.tarjeta; App.tar.mes = res.tarjeta.mes; }
+}
+
+// ---- Autocompletado de conceptos: lo que ya registraste, con su bolsillo, categoría y valor de la última vez ----
+const SUG = { datos: null, hasta: 0, pidiendo: null };
+function cargarSugerencias() {
+  if (SUG.datos && Date.now() < SUG.hasta) return Promise.resolve(SUG.datos);
+  if (!SUG.pidiendo) {
+    SUG.pidiendo = api('getSugerenciasConceptos').then(d => { SUG.datos = d; SUG.hasta = Date.now() + 5 * 60000; return d; })
+      .catch(() => SUG.datos || { Gasto: [], Ingreso: [] }).then(d => { SUG.pidiendo = null; return d; });
+  }
+  return SUG.pidiendo;
+}
+/** Pone la lista de conceptos (datalist) del campo y devuelve una función que busca el concepto escrito. */
+function conectarSugerencias(raiz, campo, tipoActual) {
+  if (!campo) return () => null;
+  let lista = $('#sug-conceptos', raiz);
+  if (!lista) { lista = document.createElement('datalist'); lista.id = 'sug-conceptos'; campo.parentNode.appendChild(lista); campo.setAttribute('list', 'sug-conceptos'); }
+  const pintar = () => {
+    const t = tipoActual();
+    const items = ((SUG.datos || {})[t === 'Ingreso' ? 'Ingreso' : 'Gasto']) || [];
+    lista.innerHTML = t === 'Mover' ? '' : items.map(s => '<option value="' + esc(s.Concepto) + '"></option>').join('');
+  };
+  cargarSugerencias().then(pintar);
+  pintar();
+  const buscar = () => {
+    const t = tipoActual(), clave = campo.value.trim().toLowerCase();
+    if (!clave || t === 'Mover') return null;
+    return (((SUG.datos || {})[t === 'Ingreso' ? 'Ingreso' : 'Gasto']) || []).find(s => s.Concepto.toLowerCase() === clave) || null;
+  };
+  buscar.repintar = pintar;
+  return buscar;
+}
+
+/** Compra con una tarjeta: el formulario de registro con la tarjeta ya elegida. */
+const abrirCompra = idTarjeta => abrirRegistrar({ para: { tipo: 'compra', idTarjeta: idTarjeta } });
+
+const restaurarCompraYAvisar = idCompra => escribirYAvisar('restoreCompraTC', [idCompra], { mensaje: 'Compra restaurada', aplicar: [aplicarTarjeta] });
+
+async function abrirDetalleCompra(id) {
+  const td = App.tar.data;
+  const c = td && td.compras.find(x => x.ID_Compra === id);
+  if (!c) return;
+  const filas = [['Valor', dinero(c.Valor)], ['Fecha', esc(fechaTxt(c.Fecha))], ['Fuente', esc(etiquetaFuente(c.Fuente)) + (c.ApartoDinero ? ' · dinero apartado' : '')]];
+  if (c.Categoria) filas.push(['Categoría', esc(c.Categoria)]);
+  if (c.Notas) filas.push(['Notas', esc(c.Notas)]);
+  if (c.Pagado) filas.push(['Estado', 'En un extracto pagado']);
+  await abrirHoja({
+    titulo: 'Compra', izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(c.Concepto) + '</p><dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
+      (c.Pagado ? '<p class="m-ayuda">Para anularla, primero anula el pago del extracto.</p>' : '<button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular la compra</button>'),
+    extra: { anular: () => api('voidCompraTC', id).then(res => { aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Compra anulada', { deshacer: () => restaurarCompraYAvisar(id) }); }) }
+  });
+}
+
+async function abrirPagoExtracto() {
+  const td = App.tar.data;
+  if (!td || td.extracto) return;
+  const saldo = td.totales.saldo, enReserva = td.reserva.Saldo;
+  const grupos = opcionesDestino(false).map(g => ({ grupo: g.grupo, opciones: g.opciones.filter(x => x[0] !== td.reserva.ID_Bolsillo) })).filter(g => g.opciones.length);
+  const preferido = td.personal ? td.personal.ID_Bolsillo : '';
+  const filaAporte = () => '<div class="m-aporte" style="display:flex;gap:var(--m-space-2);margin-bottom:var(--m-space-2)"><input class="m-input" data-ap="nombre" maxlength="60" list="ap-sug" autocomplete="off" placeholder="Quién (nombre)" style="flex:2;min-width:0"><input class="m-input" data-ap="valor" inputmode="decimal" placeholder="Valor" style="flex:1;min-width:0"><button type="button" class="m-btn-texto" data-ap="quitar" aria-label="Quitar">✕</button></div>';
+  const cuerpo = '<form novalidate data-form="extracto"><dl class="m-detalle">' +
+    '<div><dt>Total del extracto</dt><dd class="m-num"><strong>' + dinero(td.totales.total) + '</strong></dd></div>' +
+    (td.totales.abonado > 0 ? '<div><dt>Ya abonado</dt><dd class="m-num">' + dinero(td.totales.abonado) + '</dd></div>' : '') +
+    '<div><dt>Falta por pagar</dt><dd class="m-num"><strong>' + dinero(saldo) + '</strong></dd></div>' +
+    '<div><dt>Aportan otras personas</dt><dd class="m-num" id="px-terceros">' + dinero(0) + '</dd></div>' +
+    '<div><dt>Ya apartado en la reserva</dt><dd class="m-num">' + dinero(Math.min(enReserva, saldo)) + '</dd></div>' +
+    '<div><dt>Falta completar</dt><dd class="m-num" id="px-falta">' + dinero(td.totales.faltaParaPagar) + '</dd></div></dl>' +
+    '<div class="m-campo"><div class="m-label-fila"><label class="m-label">¿Alguien más aporta al pago?</label>' + htmlInfo('Si otra persona paga una parte del extracto desde un banco que no tienes en Moni, anota quién y cuánto. No se mueve ningún bolsillo tuyo: solo baja lo que tú pagas.') + '</div>' +
+      '<div id="px-aportes"></div><datalist id="ap-sug">' + (td.pagadores || []).map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist>' +
+      '<button type="button" class="m-btn-texto" id="px-mas">' + ico('plus', 'm-icon-sm') + ' Agregar a alguien</button></div>' +
+    '<div class="m-campo" id="px-origen"><div class="m-label-fila"><label class="m-label" for="f-Origen">¿De qué bolsillo sale lo que falta?</label>' + htmlInfo('Lo que falta en la reserva (compras que no apartaron dinero) sale del bolsillo que elijas, y así queda registrado de dónde salió.') + '</div>' +
+      '<select class="m-input" id="f-Origen">' + (preferido ? '' : '<option value="" disabled selected>Elegir…</option>') +
+      grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === preferido ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    htmlCargos() +
+    '<p class="m-hoja-mensaje">Lo tuyo se paga desde la reserva y las compras quedan marcadas como pagadas.</p>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha del pago</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+  const aportes = raiz => $$('.m-aporte', raiz).map(f => ({ Pagador: $('[data-ap="nombre"]', f).value.trim(), Valor: leerDinero($('[data-ap="valor"]', f).value) }))
+    .filter(x => x.Pagador || (x.Valor !== '' && !isNaN(x.Valor) && x.Valor > 0));
+  await abrirHoja({
+    titulo: 'Pagar extracto', der: 'Pagar', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      const calcular = () => {
+        const terceros = aportes(raiz).reduce((a, x) => a + (typeof x.Valor === 'number' && !isNaN(x.Valor) ? x.Valor : 0), 0);
+        const mia = Math.max(0, saldo - terceros), falta = Math.max(0, Math.round((mia - enReserva) * 100) / 100);
+        $('#px-terceros', raiz).textContent = dinero(terceros);
+        $('#px-falta', raiz).textContent = dinero(falta);
+        // El bolsillo también hace falta si hay cargos (cuota de manejo…): salen de ahí
+        $('#px-origen', raiz).hidden = !(falta > 0 || leerCargos(raiz).length);
+      };
+      activarCargos(raiz, () => ({ operacion: 'Extracto', ctx: { idTarjeta: td.tarjeta.ID_Tarjeta, idBolsillo: ($('#f-Origen', raiz) || {}).value || preferido, valor: saldo } }));
+      raiz.addEventListener('input', calcular); raiz.addEventListener('click', () => setTimeout(calcular, 0));
+      new MutationObserver(calcular).observe($('[data-cargos-lista]', raiz), { childList: true });
+      $('#px-mas', raiz).addEventListener('click', () => { $('#px-aportes', raiz).insertAdjacentHTML('beforeend', filaAporte()); const n = $$('.m-aporte [data-ap="nombre"]', raiz); n[n.length - 1].focus(); });
+      raiz.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.ap) calcular(); });
+      raiz.addEventListener('click', ev => { const q = ev.target.closest('[data-ap="quitar"]'); if (q) { q.closest('.m-aporte').remove(); calcular(); } });
+      calcular();
+    },
+    alGuardar: async raiz => {
+      const lista = aportes(raiz);
+      lista.forEach(x => { if (!x.Pagador) throw new Error('Escribe el nombre de quien aporta.'); if (typeof x.Valor !== 'number' || isNaN(x.Valor) || x.Valor <= 0) throw new Error('Escribe cuánto aporta ' + x.Pagador + '.'); });
+      const terceros = lista.reduce((a, x) => a + x.Valor, 0);
+      const falta = Math.max(0, saldo - terceros - enReserva);
+      const origen = $('#f-Origen', raiz);
+      const cargos = leerCargos(raiz);
+      if ((falta > 0 || cargos.length) && (!origen || !origen.value)) throw new Error(falta > 0 ? 'Elige de qué bolsillo sale lo que falta.' : 'Elige de qué bolsillo salen los cargos.');
+      const res = await api('payExtracto', td.tarjeta.ID_Tarjeta, td.mes, $('#f-Fecha', raiz).value, (falta > 0 || cargos.length) && origen ? origen.value : '', lista, cargos);
+      aplicarEscritura(res); aplicarTarjeta(res); render();
+      aviso('Extracto pagado', { deshacer: () => anularPagoExtractoYAvisar(res.idExtracto) });
+    }
+  });
+}
+
+const anularPagoExtractoYAvisar = idExtracto => escribirYAvisar('voidPagoExtracto', [idExtracto], { mensaje: 'Pago anulado', aplicar: [aplicarTarjeta] });
+
+// ---------- Detalle de un crédito ----------
+
+function vCredito(id) {
+  const c = App.cre;
+  if (c.id !== id) Object.assign(c, { id: id, data: null, error: null, cargando: false });
+  let html = '';
+  if (c.error) html += bloqueError(c.error, 'recargar-cre');
+  else if (!c.data) html += esqueleto(5);
+  else html += htmlCredito(c.data);
+  return {
+    titulo: c.data ? c.data.credito.Nombre : 'Crédito', html: html,
+    acciones: c.data && c.data.credito.Estado === 'Activo' ? '<button class="m-btn-texto" data-acc="editar-credito">Editar</button>' : '',
+    despues: () => { if (!c.data && !c.cargando && !c.error) cargarCredito(); }
+  };
+}
+
+function cargarCredito() {
+  const c = App.cre, id = c.id;
+  return cargarEn(c, 'credito/' + id, 'getCredito', [id], () => c.id === id);
+}
+
+function htmlCredito(d) {
+  const c = d.credito;
+  const activo = c.Estado === 'Activo';
+  let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + (c.Persona ? esc(c.Persona) + ' · ' : '') + 'saldo pendiente' + (activo ? '' : ' · pagado') + '</div>' +
+    '<div class="m-resumen-cifra m-num">' + dinero(c.saldo) + '</div>' +
+    '<div class="m-progreso" style="margin-top:var(--m-space-3)" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(c.avance * 100) + '" aria-label="Avance del pago"><span style="width:' + Math.round(c.avance * 100) + '%"></span></div>' +
+    '<p class="m-ayuda">' + c.cuotasPagadas + ' de ' + c.cuotasTotal + ' cuotas pagadas · ' + Math.round(c.avance * 100) + ' % del capital</p>' +
+    (activo && c.proxima ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Próxima cuota (' + c.proxima.Num + ')</div><strong class="m-num">' + dinero(c.proxima.Cuota) + '</strong></div><div><div class="m-resumen-etiqueta">Fecha prevista</div><strong>' + esc(fechaCorta(c.proxima.Fecha)) + '</strong></div></div>' : '') +
+    (activo ? '<div class="m-acciones-fila"><button class="m-btn m-btn-primary" data-acc="pagar-credito">Pagar cuota</button></div>' : '') + '</div><div style="height:var(--m-space-5)"></div>' + htmlSaldoCredito(d);
+
+  // Créditos creados cuando la app redondeaba las tasas: la persona confirma o corrige (nada cambia solo)
+  if (activo && c.tasaPorRevisar) {
+    h += '<div class="m-banner m-pendiente m-pendiente-sugerencia" role="note">' + ico('alerta') +
+      '<span class="m-pendiente-texto"><strong>Revisa la tasa: Moni tiene ' + esc(String(Math.round(c.EA * 10000) / 100).replace('.', ',')) + ' % EA</strong> ' +
+      'Las versiones anteriores redondeaban las tasas con decimales (9,5 % quedaba en 10 %). Si la de tu crédito es otra, corrígela: solo cambian las cuotas pendientes; lo pagado y tus saldos no se tocan.</span>' +
+      '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="tasa-corregir">Corregir tasa</button>' +
+      '<button type="button" class="m-btn-texto m-btn-suave" data-acc="tasa-ok">Está bien</button></span></div>';
+  }
+
+  const bancario = c.Tipo_Credito === 'Bancario';
+  const entidad = bancario && c.ID_Banco ? porId('Bancos', 'ID_Banco', c.ID_Banco) : null;
+  h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
+    (bancario
+      ? (entidad ? '<div><dt>Entidad</dt><dd>' + esc(entidad.Nombre) + '</dd></div>' : '') + '<div><dt>Pagas desde</dt><dd>' + esc(d.BolsilloPago) + '</dd></div>'
+      : '<div><dt>Sale de</dt><dd>' + esc(d.BolsilloPago) + '</dd></div><div><dt>Vuelve a</dt><dd>' + esc(c.CuentaAhorro) + '</dd></div>') +
+    '<div><dt>Monto del crédito</dt><dd class="m-num">' + dinero(c.Monto) + '</dd></div><div><dt>Cuota fija</dt><dd class="m-num">' + dinero(c.Cuota_Fija) + '</dd></div>' +
+    (bancario && c.Cargos_Cuota ? '<div><dt>' + esc(c.Detalle_Cargos || 'Seguros y cargos') + ' por cuota</dt><dd class="m-num">' + dinero(c.Cargos_Cuota) + '</dd></div>' +
+      '<div><dt>Pagas cada cuota</dt><dd class="m-num"><strong>' + dinero(c.Cuota_Fija + c.Cargos_Cuota) + '</strong></dd></div>' : '') +
+    '<div><dt>Intereses pagados</dt><dd class="m-num">' + dinero(d.totales.interesPagado) + '</dd></div><div><dt>Intereses por pagar</dt><dd class="m-num">' + dinero(d.totales.interesPendiente) + '</dd></div></dl></div>',
+    bancario ? 'La cuota sale de tu bolsillo como un gasto; los seguros y cargos se anotan aparte, en “Comisiones e impuestos”.' : 'Los intereses también vuelven a tu ahorro: te los pagas a ti.');
+
+  h += '<section class="m-seccion"><h2 class="m-seccion-titulo">Tabla de amortización</h2><div class="m-group">' + d.cronograma.map(f => {
+    const proxima = c.proxima && f.Num === c.proxima.Num && activo;
+    if (f.Estado === 'Pagada') {
+      // Una cuota pagada se puede corregir (por ejemplo, un abono extra que ese mes no se anotó).
+      const pago = d.pagos.find(q => q.Num_Cuota === f.Num);
+      return fila({ clase: 'm-hecho', icono: 'check', attrs: 'data-acc="corregir-cuota" data-num="' + f.Num + '"', chevron: true,
+        titulo: 'Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)),
+        sub: 'Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + (pago && pago.Abono_Extra ? ' · abono ' + dinero(pago.Abono_Extra) : ''),
+        final: '<strong class="m-num">' + dinero(pago ? pago.Valor_Pagado : f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span>' });
+    }
+    return '<div class="m-row"' + (proxima ? ' style="background:var(--m-tint-soft)"' : '') + '>' +
+      '<span class="m-row-icono">' + (f.Estado === 'Pagada' ? ico('check', 'm-icon-sm') : '<span class="m-num" style="font-size:var(--m-text-footnote);font-weight:600">' + f.Num + '</span>') + '</span>' +
+      '<span class="m-row-texto"><span class="m-row-titulo" style="display:block">Cuota ' + f.Num + ' · ' + esc(fechaCorta(f.Fecha)) + (proxima ? ' · próxima' : '') + '</span>' +
+      '<span class="m-row-sub" style="display:block">Interés ' + dinero(f.Interes) + ' · capital ' + dinero(f.Capital) + '</span></span>' +
+      '<span class="m-row-final"><strong class="m-num">' + dinero(f.Cuota) + '</strong><span class="m-row-sub" style="display:block">saldo ' + dinero(f.Saldo_Final) + '</span></span></div>';
+  }).join('') + '</div></section>' +
+    (d.cronograma.some(f => f.Estado === 'Pagada') ? '<p class="m-seccion-pie" style="margin-top:calc(var(--m-space-3) * -1)">Toca una cuota pagada para corregir lo que pagaste ese mes. El plazo y los saldos del crédito se recalculan; tus saldos de dinero no cambian.</p>' : '');
+
+  if (d.pagos.length) {
+    h += seccion('Pagos hechos', d.pagos.map(p => fila({
+      titulo: 'Cuota ' + p.Num_Cuota + (p.Abono_Extra ? ' + abono' : ''), sub: esc(fechaCorta(p.Fecha)) + (p.Abono_Extra ? ' · abono a capital ' + dinero(p.Abono_Extra) : ''),
+      final: '<strong class="m-num">' + dinero(p.Valor_Pagado) + '</strong>', chevron: p.ID_Pago === d.ultimoPago,
+      attrs: p.ID_Pago === d.ultimoPago ? 'data-acc="pago-credito" data-id="' + esc(p.ID_Pago) + '"' : 'disabled aria-disabled="true"'
+    })).join(''), 'Solo se puede anular el último pago.');
+  } else if (activo) {
+    h += '<button class="m-accion-peligro" data-acc="anular-credito">Anular este crédito</button>';
+  }
+  return h;
+}
+
+function aplicarCredito(res) {
+  App.deudas.data = null;
+  if (res.credito && App.cre.id === res.credito.credito.ID_Credito) App.cre.data = res.credito;
+}
+
+/** Corrige la tasa de un crédito creado cuando la app redondeaba las tasas (o confirma que está bien). */
+const confirmarTasaCredito = () => escribirYAvisar('fixTasaCredito', [App.cre.id, { soloConfirmar: true }], { mensaje: 'Listo, la tasa queda como está', aplicar: [aplicarCredito] });
+
+async function abrirCorregirTasa() {
+  const d = App.cre.data;
+  if (!d) return;
+  const c = d.credito;
+  const campos = [{ k: 'EA', label: 'Tasa efectiva anual (% EA)', tipo: 'porcentaje', requerido: true,
+    ayuda: 'Escríbela como aparece en tu crédito, con decimales si los tiene (por ejemplo 9,5). Las cuotas pendientes se recalculan desde el saldo de hoy, con el mismo número de cuotas.' }];
+  await abrirHoja({
+    titulo: 'Corregir la tasa', der: 'Guardar',
+    cuerpo: '<form novalidate data-form="corregir-tasa">' + htmlCampo(campos[0], Math.round(c.EA * 1e6) / 1e6, {}) +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { const i = $('#f-EA', raiz); if (i) { i.focus(); i.select && i.select(); } },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.EA === '' || isNaN(v.EA) || v.EA < 0 || v.EA > 5) throw new Error('Escribe la tasa en porcentaje, por ejemplo 9,5.');
+      const res = await api('fixTasaCredito', App.cre.id, { EA: v.EA });
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso('Tasa corregida: la cuota pendiente es ' + dinero(res.credito.credito.Cuota_Fija));
+    }
+  });
+}
+
+/** Corrige el valor pagado de una cuota ya pagada: el crédito se recalcula, el dinero de tus bolsillos no se toca. */
+async function abrirCorregirCuota(num) {
+  const d = App.cre.data;
+  if (!d) return;
+  const f = d.cronograma.find(x => x.Num === num);
+  const pago = d.pagos.find(x => x.Num_Cuota === num);
+  if (!f) return;
+  const campos = [{ k: 'Valor', label: 'Lo que pagaste en esta cuota', tipo: 'dinero', requerido: true,
+    ayuda: 'La cuota es ' + dinero(f.Cuota) + '. Si ese mes pagaste de más, escribe el total: el excedente abona a capital y el plazo se acorta.' }];
+  await abrirHoja({
+    titulo: 'Cuota ' + num, der: 'Guardar',
+    cuerpo: '<form novalidate data-form="corregir-cuota">' + htmlCampo(campos[0], pago ? pago.Valor_Pagado : f.Cuota, {}) +
+      '<p class="m-ayuda">Solo corrige el crédito. No mueve dinero ni cambia los saldos de tus bolsillos: si el pago real ya quedó anotado, no se toca. Todo lo posterior se recalcula con la misma cuota fija.</p>' +
+      '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Valor', raiz); if (i) i.focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (v.Valor === '' || (typeof v.Valor === 'number' && isNaN(v.Valor)) || v.Valor <= 0) throw new Error('Escribe lo que pagaste.');
+      const res = await api('editPagoCredito', App.cre.id, num, v.Valor);
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso('Cuota ' + num + ' corregida');
+    }
+  });
+}
+
+async function abrirPagoCredito() {
+  const d = App.cre.data;
+  if (!d || !d.credito.proxima) return;
+  const c = d.credito;
+  const grupos = opcionesDestino(false);
+  const campos = [{ k: 'Valor', label: 'Valor del pago', tipo: 'dinero', requerido: true, ayuda: 'La cuota es ' + dinero(c.proxima.Cuota) + '. Si pagas más, el excedente abona a capital y el plazo se acorta.' }];
+  let temporizador = null, previa = null;
+  const cuerpo = '<form novalidate data-form="pagocredito">' + htmlCampo(campos[0], c.proxima.Cuota, {}) +
+    '<div id="pago-prev" aria-live="polite" class="m-hoja-mensaje"></div>' +
+    htmlCargos() +
+    '<div class="m-campo"><label class="m-label" for="f-Origen">Pagas desde</label><select class="m-input" id="f-Origen">' +
+    grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (x[0] === c.ID_Bolsillo_Pago ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  await abrirHoja({
+    titulo: 'Pagar cuota', der: 'Pagar', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const entrada = $('#f-Valor', raiz);
+      const calcular = async () => {
+        const v = leerDinero(entrada.value);
+        const caja = $('#pago-prev', raiz);
+        if (v === '' || isNaN(v)) { caja.textContent = ''; previa = null; return; }
+        try {
+          previa = await api('previewPagoCredito', c.ID_Credito, v);
+          caja.innerHTML = 'Cuota ' + previa.Num + ': ' + dinero(previa.cuota) + ' (interés ' + dinero(previa.interes) + ', capital ' + dinero(previa.capital) + ').' +
+            (previa.excedente > 0 ? '<br>Abono a capital: <strong>' + dinero(previa.excedente) + '</strong>' + (previa.cancela ? ' · con esto <strong>se termina el crédito</strong>.' : (previa.cuotasAhorradas > 0 ? ' · el plazo baja de ' + previa.cuotasRestantesAntes + ' a ' + previa.cuotasRestantes + ' cuotas restantes (ahorras ' + previa.cuotasAhorradas + ').' : ' · el plazo se mantiene, pero la última cuota será más pequeña.')) : '') +
+            '<br>Total a pagar: <strong>' + dinero(previa.valorCobrado) + '</strong>' + (previa.valorCobrado < v ? ' (solo se cobra lo necesario)' : '') + '.';
+        } catch (e) { previa = null; caja.textContent = e.message; }
+      };
+      entrada.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(calcular, 350); });
+      calcular(); entrada.focus();
+      // Seguros y cargos de la cuota (los fijos del crédito y las reglas del medio de pago); se pueden cambiar
+      if (c.Tipo_Credito === 'Bancario' || activos('Cargos_Reglas').length) activarCargos(raiz, () => {
+        const v = leerDinero(entrada.value);
+        return { operacion: 'Cuota', ctx: { idCredito: c.ID_Credito, idBolsillo: $('#f-Origen', raiz).value, valor: typeof v === 'number' && !isNaN(v) ? v : c.proxima.Cuota } };
+      });
+    },
+    alGuardar: async raiz => {
+      const v = leerDinero($('#f-Valor', raiz).value);
+      if (v === '' || isNaN(v)) throw new Error('Escribe el valor del pago.');
+      const res = await api('payCredito', c.ID_Credito, v, $('#f-Fecha', raiz).value, $('#f-Origen', raiz).value, leerCargos(raiz));
+      aplicarEscritura(res); aplicarCredito(res); render();
+      aviso(res.pago.cancela ? 'Crédito pagado por completo' : (res.pago.excedente ? (res.pago.cuotasAhorradas > 0 ? 'Pago registrado: el plazo bajó ' + res.pago.cuotasAhorradas + (res.pago.cuotasAhorradas === 1 ? ' cuota' : ' cuotas') : 'Pago registrado con abono a capital') : 'Cuota pagada'), { deshacer: () => anularPagoCreditoYAvisar(res.pago.idPago) });
+    }
+  });
+}
+
+const anularPagoCreditoYAvisar = idPago => escribirYAvisar('voidPagoCredito', [idPago], { mensaje: 'Pago anulado', aplicar: [aplicarCredito] });
+
+async function abrirNuevoCredito() {
+  const ahorros = activos('Cuentas').filter(c => c.Tipo === 'Ahorro');
+  // Dos clases: con un banco o entidad (hipoteca, vehículo, libre inversión…) o de autopago (te prestas desde tu ahorro)
+  const tipoInicial = 'Bancario';
+  const solo = (tipo, html) => '<div data-tipo-cred="' + tipo + '"' + (tipo === tipoInicial ? '' : ' hidden') + '>' + html + '</div>';
+  const bolsillosSel = (id, vacio) => '<select class="m-input" id="' + id + '">' + (vacio ? '<option value="">' + esc(vacio) + '</option>' : '') +
+    opcionesDestino(false).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select>';
+  const personas = [['', 'Nadie en particular']].concat(activos('Personas').map(p => [p.ID_Persona, p.Nombre]));
+  const campos = [
+    { k: 'Nombre', label: 'Nombre del crédito', tipo: 'texto', requerido: true, maxlength: 80 },
+    { k: 'Monto', label: 'Monto', tipo: 'dinero', requerido: true },
+    { k: 'ID_Persona', label: '¿Para quién es?', tipo: 'select', opciones: () => personas },
+    { k: 'Num_Periodos', label: 'Número de cuotas', tipo: 'entero', requerido: true, min: 1, max: 360 }
+  ];
+  const cuerpo = '<form novalidate data-form="credito">' +
+    '<div class="m-campo"><div class="m-label" id="lbl-tipocred">¿Qué clase de crédito es?</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-tipocred">' +
+      '<label><input type="radio" name="tipoCred" value="Bancario" checked><span>Con un banco o entidad</span></label>' +
+      '<label><input type="radio" name="tipoCred" value="Autopago"' + (ahorros.length ? '' : ' disabled') + '><span>Me presto de mi ahorro</span></label></div>' +
+      (ahorros.length ? '' : '<p class="m-ayuda">Para un crédito de autopago necesitas una cuenta de tipo Ahorro.</p>') + '</div>' +
+    campos.map(c => htmlCampo(c, c.k === 'Num_Periodos' ? 12 : '', {})).join('') +
+    solo('Bancario', '<div class="m-campo"><label class="m-label" for="f-Entidad">Entidad (opcional)</label><select class="m-input" id="f-Entidad"><option value="">Sin elegir</option>' +
+      activos('Bancos').map(b => '<option value="' + esc(b.ID_Banco) + '">' + esc(b.Nombre) + '</option>').join('') + '</select></div>') +
+    '<div class="m-campo"><div class="m-label" id="lbl-per">Cada cuánto se paga</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-per"><label><input type="radio" name="per" value="Mensual" checked><span>Mensual</span></label><label><input type="radio" name="per" value="Quincenal"><span>Quincenal</span></label></div></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Tasa">Tasa de interés (%)</label><input class="m-input m-num" id="f-Tasa" type="text" inputmode="decimal" value="0"><div class="m-segmentado" style="margin-top:var(--m-space-2)" role="radiogroup" aria-label="Tipo de tasa"><label><input type="radio" name="tipoTasa" value="EA" checked><span>Efectiva anual</span></label><label><input type="radio" name="tipoTasa" value="Periodo"><span>Por periodo</span></label></div><p class="m-ayuda">La tasa efectiva anual (EA) es la que suelen informar los bancos. “Por periodo” es la de cada cuota.</p></div>' +
+    '<div class="m-campo"><label class="m-label" for="f-Inicio">Fecha de inicio</label><input class="m-input" id="f-Inicio" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div>' +
+    solo('Autopago', '<div class="m-campo"><label class="m-label" for="f-Cuenta">El dinero sale de la cuenta de ahorro</label><select class="m-input" id="f-Cuenta">' + ahorros.map(a => '<option value="' + esc(a.ID_Cuenta) + '">' + esc(a.Nombre) + '</option>').join('') + '</select></div>') +
+    '<div class="m-campo"><label class="m-label" for="f-BolsilloPago">Pagas las cuotas desde</label><select class="m-input" id="f-BolsilloPago">' + opcionesDestino(false).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.opciones.map(x => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    htmlCampo({ k: 'Pagadas', label: 'Cuotas que ya pagaste', tipo: 'entero', min: 0, max: 359, ayuda: 'Déjalo en 0 si el crédito es nuevo. Si ya venía en marcha, escribe cuántas llevas.' }, 0, {}) +
+    solo('Autopago', '<div class="m-campo" id="caja-desembolso"><div class="m-interruptor-fila"><label for="f-Desembolso">Registrar la salida del dinero del ahorro</label><span class="m-interruptor"><input type="checkbox" role="switch" id="f-Desembolso" checked><i></i></span></div><p class="m-ayuda">Descuenta el monto de tu cuenta de ahorro, porque es el dinero que te prestas.</p></div>') +
+    solo('Bancario',
+      '<div class="m-campo" id="caja-desembolso-b"><label class="m-label" for="f-Desembolso-b">¿A qué bolsillo llegó el dinero?</label>' + bolsillosSel('f-Desembolso-b', 'No registrarlo (ya lo tenía en cuenta o ya lo gasté)') +
+      '<p class="m-ayuda">Si eliges un bolsillo, el desembolso entra ahí. No cuenta como ingreso: es una deuda.</p></div>' +
+      htmlCampo({ k: 'Cargos_Cuota', label: 'Seguros y otros cargos en cada cuota (opcional)', tipo: 'dinero', ayuda: 'Lo que el banco suma a la cuota además del capital y el interés: seguro de vida, seguro deudor, cuota de manejo…' }, '', {}) +
+      htmlCampo({ k: 'Detalle_Cargos', label: '¿Qué son esos cargos? (opcional)', tipo: 'texto', maxlength: 120 }, '', {})) +
+    '<div id="credito-prev" class="m-hoja-mensaje" aria-live="polite"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+
+  const leer = raiz => {
+    const v = leerFormulario(raiz, campos);
+    const tasa = Number(($('#f-Tasa', raiz).value || '0').replace(',', '.')) / 100;
+    const tipo = $('input[name="tipoCred"]:checked', raiz).value;
+    const envio = { Tipo_Credito: tipo, Nombre: v.Nombre, Monto: v.Monto, ID_Persona: v.ID_Persona, Num_Periodos: v.Num_Periodos, Periodicidad: $('input[name="per"]:checked', raiz).value,
+      Fecha_Inicio: $('#f-Inicio', raiz).value, ID_Bolsillo_Pago: $('#f-BolsilloPago', raiz).value, cuotasPagadas: Number($('#f-Pagadas', raiz).value) || 0 };
+    if (tipo === 'Autopago') Object.assign(envio, { ID_Cuenta_Ahorro: ($('#f-Cuenta', raiz) || {}).value, desembolsar: $('#f-Desembolso', raiz).checked });
+    else {
+      const cargos = leerDinero(($('#f-Cargos_Cuota', raiz) || {}).value || '');
+      Object.assign(envio, { ID_Banco: $('#f-Entidad', raiz).value, ID_Bolsillo_Desembolso: $('#f-Desembolso-b', raiz).value,
+        Cargos_Cuota: typeof cargos === 'number' && !isNaN(cargos) ? cargos : 0, Detalle_Cargos: ($('#f-Detalle_Cargos', raiz) || {}).value || '' });
+    }
+    if ($('input[name="tipoTasa"]:checked', raiz).value === 'EA') envio.EA = tasa; else envio.Tasa_Periodica = tasa;
+    return envio;
+  };
+
+  let temporizador = null;
+  await abrirHoja({
+    titulo: 'Nuevo crédito', cuerpo: cuerpo,
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const previsualizar = async () => {
+        const e = leer(raiz), caja = $('#credito-prev', raiz);
+        $$('[data-tipo-cred]', raiz).forEach(el => { el.hidden = el.dataset.tipoCred !== e.Tipo_Credito; });
+        const cd = $('#caja-desembolso', raiz); if (cd) cd.hidden = e.cuotasPagadas > 0;
+        const cb = $('#caja-desembolso-b', raiz); if (cb) cb.hidden = e.cuotasPagadas > 0;
+        if (!e.Nombre || !e.Monto || !e.Num_Periodos) { caja.textContent = ''; return; }
+        try {
+          const p = await api('previewCredito', e);
+          caja.innerHTML = 'Pagarías <strong>' + dinero(p.cuotaTotal || p.cuota) + '</strong> por cada una de ' + p.cuotas + ' cuotas' +
+            (p.cargosCuota ? ' (' + dinero(p.cuota) + ' de capital e interés + ' + dinero(p.cargosCuota) + ' de seguros y cargos)' : '') +
+            ' · intereses ' + dinero(p.interesTotal) + (p.cargosTotal ? ' · cargos ' + dinero(p.cargosTotal) : '') + ' · en total ' + dinero(p.totalAPagar) + '.';
+        } catch (x) { caja.textContent = x.message; }
+      };
+      const programar = () => { clearTimeout(temporizador); temporizador = setTimeout(previsualizar, 400); };
+      raiz.addEventListener('input', programar); raiz.addEventListener('change', programar);
+      raiz.addEventListener('change', ev => { if (ev.target.name === 'tipoCred') previsualizar(); });
+      $('#f-Nombre', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const e = leer(raiz);
+      if (!e.Nombre) throw new Error('Escribe el nombre del crédito.');
+      if (!e.Monto || isNaN(e.Monto)) throw new Error('Escribe el monto.');
+      const res = await api('addCredito', e);
+      aplicarEscritura(res); App.deudas.data = null;
+      App.boot.creditos = (App.boot.creditos || []).concat([{ ID_Credito: res.credito.credito.ID_Credito, Nombre: res.credito.credito.Nombre }]);
+      App.cre.id = res.credito.credito.ID_Credito; App.cre.data = res.credito;
+      navegar('credito/' + App.cre.id);
+      aviso('Crédito creado');
+    }
+  });
+}
+
+async function abrirEditarCredito() {
+  const d = App.cre.data;
+  if (!d) return;
+  const c = d.credito;
+  const personas = [['', 'Nadie en particular']].concat(activos('Personas').map(p => [p.ID_Persona, p.Nombre]));
+  const campos = [
+    { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80 },
+    { k: 'ID_Persona', label: '¿Para quién es?', tipo: 'select', opciones: () => personas },
+    { k: 'ID_Bolsillo_Pago', label: 'Pagas las cuotas desde', tipo: 'select', opciones: () => opcionesDestino(false) },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ];
+  const valores = { Nombre: c.Nombre, ID_Persona: c.ID_Persona, ID_Bolsillo_Pago: c.ID_Bolsillo_Pago, Notas: c.Notas };
+  await abrirHoja({
+    titulo: 'Editar crédito',
+    cuerpo: '<form novalidate data-form="credito-edit">' + campos.map(x => htmlCampo(x, valores[x.k], {})).join('') +
+      '<p class="m-ayuda">El monto, la tasa y las cuotas no se cambian aquí: afectarían la tabla de amortización. Para eso, anula el crédito y créalo de nuevo.</p>' +
+      (d.pagos.length ? '' : '<button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular este crédito</button>') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (!v.Nombre) throw new Error('Escribe el nombre.');
+      const res = await api('saveCredito', c.ID_Credito, v);
+      aplicarEscritura(res); aplicarCredito(res); render(); aviso('Cambios guardados');
+    },
+    extra: { anular: () => api('cancelCredito', c.ID_Credito).then(res => { aplicarEscritura(res); App.deudas.data = null; App.cre.data = null; App.boot.creditos = (App.boot.creditos || []).filter(x => x.ID_Credito !== c.ID_Credito); aviso('Crédito anulado'); volver(); }) }
+  });
+}
+</script>

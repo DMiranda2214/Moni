@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '11';
+const ESQUEMA_VERSION = '14';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -40,7 +40,7 @@ const SCHEMAS = {
   Tarjetas: tabla_(
     ['ID_Tarjeta', 'ID_Banco', 'Nombre', 'Cupo', 'Dia_Corte', 'Dia_Pago', 'ID_Bolsillo_Reserva', 'ID_Bolsillo_Personal', 'Color', 'Activo', 'Orden'],
     [170, 170, 200, 120, 90, 90, 170, 170, 90, 70, 60]),
-  Categorias: tabla_(['ID_Categoria', 'Nombre', 'Tipo', 'Icono', 'Color', 'Activo', 'Orden'], [170, 220, 120, 90, 90, 70, 60]),
+  Categorias: tabla_(['ID_Categoria', 'Nombre', 'Tipo', 'Icono', 'Color', 'Activo', 'Orden', 'Rol'], [170, 220, 120, 90, 90, 70, 60, 120]),
   Personas: tabla_(['ID_Persona', 'Nombre', 'Rol', 'Activo'], [170, 220, 110, 70]),
   Inmuebles: tabla_(['ID_Inmueble', 'Nombre', 'Activo', 'Orden'], [170, 220, 70, 60]),
   Empresas_Pago: tabla_(['ID_Empresa', 'Nombre', 'URL_Pago', 'Notas', 'Activo', 'Orden'], [170, 200, 280, 220, 70, 60]),
@@ -48,8 +48,8 @@ const SCHEMAS = {
     ['ID_Servicio', 'ID_Inmueble', 'Tipo', 'ID_Empresa', 'Empresa', 'Codigo_Pago', 'URL_Pago', 'Notas', 'Activo'],
     [170, 170, 110, 170, 180, 150, 260, 200, 70]),
   Suscripciones: tabla_(
-    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60]),
+    ['ID_Suscripcion', 'Nombre', 'Tipo', 'Valor', 'Periodicidad', 'Proximo_Cobro', 'Dia_Cobro', 'ID_Bolsillo', 'ID_Tarjeta', 'ID_Categoria', 'ID_Servicio', 'ID_Inmueble', 'Renglon', 'URL_Pago', 'Ultimo_Pago', 'Notas', 'Activo', 'Orden', 'Empresa', 'Codigo_Pago', 'ID_Empresa'],
+    [170, 220, 110, 120, 110, 120, 80, 170, 170, 170, 170, 170, 200, 260, 120, 220, 70, 60, 180, 150, 170]),
   CDTs: tabla_(
     ['ID_CDT', 'Nombre', 'ID_Banco', 'Capital', 'Tasa_EA', 'Fecha_Inicio', 'Plazo_Dias', 'Fecha_Vencimiento', 'Pago_Intereses', 'Retencion_Pct', 'Retencion_Tipo', 'Retencion_Valor', 'Estado', 'ID_Bolsillo_Origen', 'ID_Bolsillo_Destino', 'Renovar', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Intereses_Cobrados', 'ID_Mov_Apertura', 'Fecha_Cierre', 'Notas', 'Activo', 'Orden'],
     [170, 220, 170, 130, 90, 110, 90, 120, 120, 100, 110, 120, 90, 170, 170, 80, 120, 120, 130, 170, 110, 220, 70, 60]),
@@ -60,11 +60,11 @@ const SCHEMAS = {
 
   // ---- Operación ----
   Movimientos: tabla_(
-    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos'],
-    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110]),
+    ['ID_Mov', 'Fecha', 'Concepto', 'ID_Bolsillo', 'Valor', 'Tipo_Mov', 'Subtipo', 'ID_Categoria', 'ID_Grupo', 'ID_Item_Ppto', 'Notas', 'Origen', 'Anulado', 'Afecta_Saldos', 'Ref'],
+    [170, 110, 260, 170, 120, 110, 110, 170, 170, 170, 220, 80, 80, 110, 200]),
   Compras_TC: tabla_(
-    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado'],
-    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80]),
+    ['ID_Compra', 'Fecha', 'Concepto', 'Valor', 'ID_Tarjeta', 'Mes_Extracto', 'Fuente', 'ID_Categoria', 'ID_Item_Ppto', 'ID_Extracto', 'Pagado', 'ID_Mov_Reserva', 'Notas', 'Origen', 'Anulado', 'Ref', 'Divisa_Original', 'Valor_Original', 'Tasa'],
+    [170, 110, 260, 120, 170, 110, 90, 170, 170, 170, 70, 170, 220, 80, 80, 200, 100, 120, 100]),
   Extractos: tabla_(
     ['ID_Extracto', 'ID_Tarjeta', 'Mes', 'Total', 'Estado', 'Fecha_Pago', 'ID_Grupo_Pago', 'URL_PDF', 'Notas', 'Anulado'],
     [170, 170, 90, 120, 90, 110, 170, 260, 200, 80]),
@@ -92,19 +92,23 @@ const SCHEMAS = {
 
   // ---- Créditos (autopago) ----
   Creditos: tabla_(
-    ['ID_Credito', 'Nombre', 'ID_Persona', 'ID_Cuenta_Ahorro', 'ID_Bolsillo_Pago', 'Fecha_Inicio', 'Monto', 'Tasa_Periodica', 'Periodicidad', 'Num_Periodos', 'Cuota_Fija', 'Metodo_Tasa', 'Estado', 'Notas'],
-    [170, 200, 170, 170, 170, 110, 120, 110, 100, 100, 120, 100, 90, 200]),
+    ['ID_Credito', 'Nombre', 'ID_Persona', 'ID_Cuenta_Ahorro', 'ID_Bolsillo_Pago', 'Fecha_Inicio', 'Monto', 'Tasa_Periodica', 'Periodicidad', 'Num_Periodos', 'Cuota_Fija', 'Metodo_Tasa', 'Estado', 'Notas', 'Tipo_Credito', 'ID_Banco', 'Cargos_Cuota', 'Detalle_Cargos'],
+    [170, 200, 170, 170, 170, 110, 120, 110, 100, 100, 120, 100, 90, 200, 110, 170, 120, 220]),
   Creditos_Cronograma: tabla_(
     ['ID_Cuota', 'ID_Credito', 'Version', 'Num', 'Fecha_Prevista', 'Saldo_Inicial', 'Cuota', 'Interes', 'Capital', 'Saldo_Final', 'Estado'],
     [170, 170, 70, 60, 110, 120, 110, 110, 110, 120, 100]),
   Creditos_Pagos: tabla_(
-    ['ID_Pago', 'ID_Credito', 'Fecha', 'Num_Cuota', 'Valor_Pagado', 'Interes', 'Capital_Cuota', 'Abono_Extra', 'Saldo_Despues', 'Version', 'ID_Grupo', 'Anulado'],
-    [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80]),
+    ['ID_Pago', 'ID_Credito', 'Fecha', 'Num_Cuota', 'Valor_Pagado', 'Interes', 'Capital_Cuota', 'Abono_Extra', 'Saldo_Despues', 'Version', 'ID_Grupo', 'Anulado', 'Cargos'],
+    [170, 170, 110, 90, 120, 110, 120, 110, 130, 70, 170, 80, 110]),
 
   // ---- Otros ----
   Regalos: tabla_(['ID_Regalo', 'Anio', 'ID_Persona', 'Idea', 'Estimado', 'Real', 'Aplica', 'ID_Mov', 'Notas', 'ID_Bolsillo_Plan'], [170, 70, 170, 220, 120, 120, 70, 170, 200, 170]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
-  Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400])
+  Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400]),
+  // 1.13: comisiones, impuestos, cambio de divisa, cuota de manejo y seguros que cobra cada medio de pago
+  Cargos_Reglas: tabla_(
+    ['ID_Regla', 'Nombre', 'Tipo_Cargo', 'Ambito', 'ID_Ambito', 'Operacion', 'Modo', 'Valor', 'Minimo', 'Maximo', 'Periodicidad', 'Activo', 'Orden'],
+    [170, 220, 120, 90, 170, 150, 90, 100, 100, 100, 120, 70, 60])
 };
 
 /** Listas cerradas. Las usan la validación del Sheet y los servicios de catálogo. */
@@ -118,7 +122,8 @@ const ENUMS = {
   Personas: { Rol: ['Titular', 'Familiar', 'Otro'] },
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
-    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno'],
+    Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno',
+      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -127,7 +132,14 @@ const ENUMS = {
   Presupuesto_Plantilla: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Presupuesto_Mes: { Tipo: ['Gasto', 'Cuota', 'Ahorro', 'Fondo'] },
   Nomina_Pagos: { Estado: ['Proyectado', 'Recibido'], Origen: ['App', 'Demo', 'Import'] },
-  Creditos: { Periodicidad: ['Quincenal', 'Mensual'], Metodo_Tasa: ['Excel', 'Exacta'], Estado: ['Activo', 'Pagado', 'Anulado'] },
+  Creditos: { Periodicidad: ['Quincenal', 'Mensual'], Metodo_Tasa: ['Excel', 'Exacta'], Estado: ['Activo', 'Pagado', 'Anulado'], Tipo_Credito: ['Autopago', 'Bancario'] },
+  Cargos_Reglas: {
+    Tipo_Cargo: ['Comision', 'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro'],
+    Ambito: ['Banco', 'Cuenta', 'Tarjeta', 'Credito'],
+    Operacion: ['Salida', 'Transferencia', 'Pago', 'Compra', 'Compra_Internacional', 'Conversion', 'Cuota', 'Apertura_CDT', 'Extracto'],
+    Modo: ['Fijo', 'Porcentaje'],
+    Periodicidad: ['Por_Operacion', 'Mensual']
+  },
   Creditos_Cronograma: { Estado: ['Pendiente', 'Pagada', 'Reemplazada'] },
   Suscripciones: { Tipo: ['Suscripcion', 'Servicio'], Periodicidad: ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] },
   Log: { Nivel: ['Info', 'Aviso', 'Error'] }
@@ -144,7 +156,7 @@ const COLUMNAS_TEXTO = {
   Config: ['Valor'],
   Cuentas: ['Fecha_Apertura', 'Fecha_Saldo_Real'],
   Servicios_Publicos: ['Codigo_Pago'],
-  Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago'],
+  Suscripciones: ['Proximo_Cobro', 'Ultimo_Pago', 'Codigo_Pago'],
   Ingresos_Recurrentes: ['Proximo_Cobro', 'Ultimo_Cobro'],
   CDTs: ['Fecha_Inicio', 'Fecha_Vencimiento', 'Prox_Pago_Interes', 'Ultimo_Pago_Interes', 'Fecha_Cierre'],
   Movimientos: ['Fecha'],
@@ -206,34 +218,29 @@ const DEFAULT_CONFIG = [
   ['Recordatorios_Resumen', '', 'Recordatorios', 'texto', 'Resultado de la última sincronización']
 ];
 
-/** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden]. */
+/** Categorías iniciales (editables): [ID, Nombre, Tipo, Icono, Color, Activo, Orden, Rol]. Rol marca las que usa la app. */
 const DEFAULT_CATEGORIAS = [
-  ['cat-mercado', 'Mercado', 'Gasto', 'carrito', '', true, 1],
-  ['cat-servicios', 'Servicios públicos', 'Gasto', 'rayo', '', true, 2],
-  ['cat-transporte', 'Transporte', 'Gasto', 'auto', '', true, 3],
-  ['cat-salud', 'Salud y farmacia', 'Gasto', 'corazon', '', true, 4],
-  ['cat-suscrip', 'Suscripciones', 'Gasto', 'pantalla', '', true, 5],
-  ['cat-hogar', 'Arriendo y hogar', 'Gasto', 'casa', '', true, 6],
-  ['cat-salidas', 'Salidas y restaurantes', 'Gasto', 'cubiertos', '', true, 7],
-  ['cat-familia', 'Apoyo familiar', 'Gasto', 'personas', '', true, 8],
-  ['cat-cuota', 'Cuota de crédito', 'Gasto', 'tarjeta', '', true, 9],
-  ['cat-regalos', 'Regalos', 'Gasto', 'regalo', '', true, 10],
-  ['cat-salario', 'Salario / nómina', 'Ingreso', 'billete', '', true, 11],
-  ['cat-extra', 'Ingreso extra', 'Ingreso', 'mas', '', true, 12],
-  ['cat-rendim', 'Rendimientos', 'Ingreso', 'grafico', '', true, 13],
-  ['cat-transfer', 'Transferencia', 'Transferencia', 'flechas', '', true, 14],
-  ['cat-ajuste', 'Ajuste contable', 'Ajuste', 'ajuste', '', true, 15]
+  ['cat-mercado', 'Mercado', 'Gasto', 'carrito', '', true, 1, ''],
+  ['cat-servicios', 'Servicios públicos', 'Gasto', 'rayo', '', true, 2, ''],
+  ['cat-transporte', 'Transporte', 'Gasto', 'auto', '', true, 3, ''],
+  ['cat-salud', 'Salud y farmacia', 'Gasto', 'corazon', '', true, 4, ''],
+  ['cat-suscrip', 'Suscripciones', 'Gasto', 'pantalla', '', true, 5, ''],
+  ['cat-hogar', 'Arriendo y hogar', 'Gasto', 'casa', '', true, 6, ''],
+  ['cat-salidas', 'Salidas y restaurantes', 'Gasto', 'cubiertos', '', true, 7, ''],
+  ['cat-familia', 'Apoyo familiar', 'Gasto', 'personas', '', true, 8, ''],
+  ['cat-cuota', 'Cuota de crédito', 'Gasto', 'tarjeta', '', true, 9, ''],
+  ['cat-regalos', 'Regalos', 'Gasto', 'regalo', '', true, 10, 'Regalos'],
+  ['cat-salario', 'Salario / nómina', 'Ingreso', 'billete', '', true, 11, 'Salario'],
+  ['cat-extra', 'Ingreso extra', 'Ingreso', 'mas', '', true, 12, ''],
+  ['cat-rendim', 'Rendimientos', 'Ingreso', 'grafico', '', true, 13, 'Rendimiento'],
+  ['cat-transfer', 'Transferencia', 'Transferencia', 'flechas', '', true, 14, ''],
+  ['cat-ajuste', 'Ajuste contable', 'Ajuste', 'ajuste', '', true, 15, '']
 ];
 
 /** Escenario inicial: [ID, Nombre, Es_Base, Descripcion, Activo]. */
 const DEFAULT_ESCENARIOS = [
   ['esc-normal', 'Normal', true, 'Presupuesto habitual', true]
 ];
-
-/** Fecha y hora actual en ISO local (para Creado_En / Actualizado_En). */
-function ahoraIso_() {
-  return Utilities.formatDate(new Date(), 'America/Bogota', "yyyy-MM-dd'T'HH:mm:ss");
-}
 
 /**
  * Compara los encabezados reales de cada pestaña con los del esquema.
@@ -291,7 +298,25 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Regalos', columna: 'ID_Bolsillo_Plan', valor: '' },
   { tabla: 'Servicios_Publicos', columna: 'ID_Empresa', valor: '' },
   { tabla: 'CDTs', columna: 'Retencion_Tipo', valor: 'Porcentaje' },
-  { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 }
+  { tabla: 'CDTs', columna: 'Retencion_Valor', valor: 0 },
+  // 1.11: el vínculo con lo que generó el registro (crédito, extracto, regalo…) vive en su propia columna; Notas queda libre
+  { tabla: 'Movimientos', columna: 'Ref', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Ref', valor: '' },
+  // 1.11: las categorías que usa la app (salario, rendimientos, regalos, comisiones) se reconocen por su rol, no por un ID fijo
+  { tabla: 'Categorias', columna: 'Rol', valor: '' },
+  // 1.13: créditos bancarios y cargos (los créditos que ya existen son de autopago)
+  { tabla: 'Creditos', columna: 'Tipo_Credito', valor: 'Autopago' },
+  { tabla: 'Creditos', columna: 'ID_Banco', valor: '' },
+  { tabla: 'Creditos', columna: 'Cargos_Cuota', valor: 0 },
+  { tabla: 'Creditos', columna: 'Detalle_Cargos', valor: '' },
+  { tabla: 'Creditos_Pagos', columna: 'Cargos', valor: 0 },
+  { tabla: 'Compras_TC', columna: 'Divisa_Original', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Valor_Original', valor: '' },
+  { tabla: 'Compras_TC', columna: 'Tasa', valor: '' },
+  // 1.15: servicios, empresas y suscripciones en una sola tabla (Suscripciones). Las pestañas viejas se conservan.
+  { tabla: 'Suscripciones', columna: 'Empresa', valor: '' },
+  { tabla: 'Suscripciones', columna: 'Codigo_Pago', valor: '' },
+  { tabla: 'Suscripciones', columna: 'ID_Empresa', valor: '' }
 ];
 
 /**
@@ -411,6 +436,9 @@ function setupDatabase(spreadsheet, opciones) {
   });
 
   const migradas = migrarColumnas_(ss);
+  // Datos que una versión nueva reorganiza (sin borrar nada de lo que ya había)
+  let unificados = 0;
+  try { invalidateCache(); unificados = unificarServicios_(); } catch (e) { try { registrarLog('ERROR', 'unificarServicios_', 'No se pudieron unificar los servicios', String(e && e.message)); } catch (x) {} }
   sembrarPorDefecto_(ss);
   completarConfig_(ss);
   invalidateCache();
@@ -495,6 +523,19 @@ function asegurarConfig_(clave) {
   const d = configInicial_().find(item => item[0] === clave);
   if (!d) throw new Error('No hay parámetro "' + clave + '".');
   insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
+}
+
+/** Valor de un parámetro de Config, como texto ('' si no está). */
+function cfgValor_(clave) {
+  const f = getTableData('Config').find(x => x.Clave === clave);
+  return f ? texto_(f.Valor) : '';
+}
+
+/** Un parámetro numérico entero entre min y max, o el valor por defecto si falta o no es válido. */
+function configEntero_(clave, defecto, min, max) {
+  const t = cfgValor_(clave);
+  const n = Number(t);
+  return t !== '' && isFinite(n) && n >= (min === undefined ? -Infinity : min) && n <= (max === undefined ? Infinity : max) ? Math.floor(n) : defecto;
 }
 
 function guardarConfig_(clave, valor) {

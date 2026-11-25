@@ -3,7 +3,7 @@
 ## Visión general
 ```
  Navegador (celular o PC)
-   index.html + app_js.html + app_css.html + tokens.html   ← SPA sin frameworks
+   index.html + app_js.html y js_*.html + app_css.html + tokens.html   ← SPA sin frameworks
         │  google.script.run  (una llamada por pantalla)
         ▼
    Api.gs  ── responder_() ──►  sobre { ok, data | error, ms }
@@ -14,13 +14,13 @@
             Respaldos · Vistas · Logs · Reinicio · Multiusuario · Demo (solo desarrollo)
         │
         ▼
-   Catalogos.gs (CRUD configurable) · Saldos.gs
+   Catalogos.gs (CRUD configurable) · Saldos.gs · Fechas.gs · Finanzas.gs
         │
         ▼
    Repo.gs (libro abierto una vez por petición, lectura memorizada, caché, escrituras con bloqueo)
         │
         ▼
-   Google Sheet de la persona (29 pestañas)
+   Google Sheet de la persona (32 tablas)
 ```
 
 **Una aplicación, muchas hojas.** Con `MODO_MULTIUSUARIO` la web app corre *como la persona que accede* y cada una trabaja con **su** hoja: el ID, la caché, el bloqueo y los activadores son de esa persona (ver [MULTIUSUARIO.md](MULTIUSUARIO.md)). Sin esa propiedad, la app usa la hoja única del script.
@@ -41,8 +41,10 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 31 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
-| `Repo.gs` | Lectura (memorizada por petición), inserción, actualización, bloqueo, caché y propiedades de la persona (`modoMultiusuario_`, `propiedades_`, `cache_`, `tomarBloqueo`) |
+| `Setup.gs` | Esquema de las 32 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
+| `Repo.gs` | Lectura (memorizada por petición), inserción, actualización (`updateRow`, `updateRows_` en lote, comprobando el ID de cada registro), bloqueo reentrante (`tomarBloqueo`, `conBloqueo_`), operaciones todo o nada (`transaccion_`), resultados derivados memorizados (`memoDerivado_`), caché y propiedades de la persona |
+| `Fechas.gs` | Fechas y meses en un solo lugar: zona horaria, hoy, sumar días o meses, días entre fechas, meses anteriores |
+| `Finanzas.gs` | Fórmulas compartidas: tasa diaria, interés compuesto, EA ↔ tasa periódica, cuota francesa y plazo |
 | `Catalogos.gs` | Definición y CRUD de los catálogos; estado de configuración |
 | `Saldos.gs` | Saldos por bolsillo, cuenta y total |
 | `Movimientos.gs` | Registrar, transferir, anular, editar, listar, cuadrar |
@@ -55,24 +57,26 @@
 | `Avisos.gs` | Avisos de Inicio: configuración que falta o datos desactualizados |
 | `Ingresos.gs` | Ingresos recurrentes distintos de la nómina: concepto, monto, bolsillo de llegada, próximo cobro y recibirlo |
 | `Regalos.gs`, `Anual.gs` | Regalos por año; vista anual |
+| `Cargos.gs` | Comisiones, impuestos, cambio de divisa, cuota de manejo y seguros: reglas por medio de pago (`Cargos_Reglas`), sugerencias (`cargosSugeridos_`) y registro ligado a la operación (`registrarCargos_`, `registrarCargosTarjeta_`) |
+| `Recurrentes.gs` | Lo común a todo lo que se repite (suscripciones, servicios e ingresos): periodos, costo mensual y anual, estado, saltar y deshacer |
 | `Suscripciones.gs` | Cobros recurrentes y servicios |
-| `Recordatorios.gs` | Próximos pagos para Inicio y sincronización con Google Calendar |
+| `Recordatorios.gs` | `proximosEventos_`: una sola lista de lo que viene (lo que sale, lo que entra, CDT y fechas de nómina) para Inicio, Calendar y la proyección; y la sincronización con Google Calendar |
 | `Respaldos.gs` | Copias en Drive y disparador diario |
 | `Vistas.gs` | Hojas de consulta con fórmulas |
 | `Demo.gs` | Datos de demostración (prefijo `demo-`). **Solo desarrollo**: producción lo reemplaza por `scripts/stubs/Demo.gs` |
 | `Multiusuario.gs` | Una hoja por persona: crear o vincular la hoja, desvincular, modo multiusuario |
 | `Logs.gs` | Registro de errores y hechos en la tabla `Log` |
-| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta |
+| `Graficos.gs` | Datos de los gráficos: categorías del mes, entró/salió, saldo por mes y evolución de un bolsillo o cuenta; `obtenerAnalisis` (patrimonio mensual, categorías frente a meses anteriores, deudas, proyección de caja a 90 días y cargos del año) |
 | `TasasGoogle.gs` | Tasa de referencia desde Google Finance (hoja auxiliar `Tasas_Google`) |
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)
-29 pestañas en cinco grupos:
-- **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Servicios_Publicos, Suscripciones, CDTs, Ingresos_Recurrentes, Escenarios.
+32 tablas en cinco grupos:
+- **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Suscripciones (con los servicios y empresas de pago desde 1.15; `Servicios_Publicos` y `Empresas_Pago` quedan como pestañas viejas sin uso), CDTs, Ingresos_Recurrentes, Escenarios.
 - **Operación:** Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes.
 - **Nómina:** Subsidios, Nomina_Escenarios, Nomina_Conceptos, Nomina_Pagos, Nomina_Pagos_Detalle.
 - **Créditos:** Creditos, Creditos_Cronograma, Creditos_Pagos.
-- **Otros:** Regalos, Reportes, Log.
+- **Otros:** Regalos, Reportes, Log, Cargos_Reglas.
 
 Además hay pestañas auxiliares que no son tablas de datos: `Tasas_Google` (fórmulas de `GOOGLEFINANCE`) y las hojas de consulta `Vista_Bolsillos` y `Vista_Anual`.
 
@@ -87,7 +91,9 @@ Convenciones:
 - `Origen` = App · Demo · Import.
 
 ## Rendimiento
-- **Libro abierto una vez por petición** y **memoización por petición:** cada tabla se lee una vez por llamada; una escritura invalida solo su tabla.
+- **Libro abierto una vez por petición** y **memoización por petición:** cada tabla se lee una vez por llamada. Una escritura de la app **actualiza** lo memorizado (filas nuevas o cambiadas) en vez de olvidarlo, y olvida la caché entre peticiones de esa tabla. Los encabezados se leen una vez por petición.
+- **Resultados derivados memorizados** (`memoDerivado_`): saldos, presupuesto de un mes y divisas se calculan una vez hasta la próxima escritura.
+- **Escrituras en lote** (`updateRows_`): varias filas con un bloqueo y una escritura por tramo de filas seguidas.
 - **Caché de todas las tablas**, guardada en trozos: catálogos 1 h (`CACHE_TTL_SECONDS`), movimientos y demás tablas de operación 10 min (`CACHE_TTL_MOVIMIENTOS`). Toda escritura de la app invalida su tabla; *Ajustes → Actualizar desde la hoja* fuerza la relectura. Con caché, cargar la app casi no lee la hoja (`node tests/medir_llamadas.js` cuenta las llamadas por operación).
 - **Revisión del esquema recordada 6 h**, con una firma (`ESQUEMA_VERSION` + `VERSION_APP`): cada versión nueva de la app vuelve a revisar la hoja, y si falta una tabla se olvida lo recordado.
 - **Instalación por partes:** crear las pestañas va en pasos de unos 20 s (`PRESUPUESTO_INSTALACION_MS`); si se acaba el tiempo devuelve `parcial` y la pantalla continúa donde quedó, sin chocar con el límite de Apps Script.
@@ -100,10 +106,11 @@ Convenciones:
 - Con varias personas la hoja de cada una se actualiza sola la primera vez que entra tras una versión nueva; con una sola hoja la app ofrece **Instalar**.
 
 ## Concurrencia
-Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la persona** (`getUserLock`) en modo multiusuario y el del **script** (`getScriptLock`) con una sola hoja. Por eso dos personas con hojas distintas nunca se esperan, y dos pestañas de la misma persona no se pisan. El bloqueo **no es reentrante**: ninguna función que lo tenga puede llamar a otra que también lo tome. Dos personas que compartan **una misma hoja** (pareja) tienen bloqueos distintos: si escriben exactamente a la vez podrían pisarse.
+Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la persona** (`getUserLock`) en modo multiusuario y el del **script** (`getScriptLock`) con una sola hoja. Por eso dos personas con hojas distintas nunca se esperan, y dos pestañas de la misma persona no se pisan. Desde 1.11 el bloqueo es **reentrante** dentro de una petición: una operación compuesta lo toma una vez (`conBloqueo_` o `transaccion_`) y sus escrituras internas no lo sueltan a mitad de camino. `transaccion_` además anota cómo deshacer cada paso y, si algo falla, lo deshace. Dos personas que compartan **una misma hoja** (pareja) tienen bloqueos distintos: si escriben exactamente a la vez podrían pisarse.
 
 ## Frontend
-- JavaScript sin frameworks, en un solo `<script>` incluido desde `index.html`.
+- JavaScript sin frameworks, incluido desde `index.html`. El código está repartido en partes (`app_js.html` = núcleo: utilidades, datos y navegación; `js_pantallas`, `js_formularios`, `js_movimientos`, `js_planear`, `js_deudas`, `js_ahorro`, `js_graficos`, `js_analisis`, `js_divisas`, `js_asistente`, `js_eventos`) que `include('app_js')` en `Code.gs` une en el orden de `PARTES_JS`. **Cada parte es su propio bloque `<script>`**: Apps Script exige que todo archivo `.html` incluido sea HTML válido (un JavaScript suelto falla con "Contenido HTML con formato incorrecto"); una prueba lo comprueba.
+- **Un solo formulario de registro** (`abrirRegistrar` en `js_movimientos`, desde 1.15): gasto, ingreso, mover, compra con tarjeta, pagar un servicio o suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto y sacar o reponer dinero del ahorro. `modoRegistro(o)` dice, para cada caso (`o.para.tipo`), qué se fija, qué campos se muestran y con qué operación del servidor se guarda; campos, cargos, validaciones y avisos son los mismos. `abrirCompra`, `abrirPagarCobro`, `abrirRecibirIngreso`, `abrirCompraRegalo`, `abrirPagarRenglon` y `abrirMovimientoAhorro` son llamadas a él. Siguen aparte, por tener su propia lógica, la nómina, el pago del extracto y de la cuota de un crédito, los abonos a tarjeta, convertir divisas, los CDT, los rendimientos y cuadrar.
 - **Estado** en el objeto `App`; **pantallas** son funciones `vXxx()` que devuelven `{ titulo, html, acciones, despues }`; `render()` las pinta.
 - **Delegación de eventos** con `data-acc` (clic), `data-acc-cambio` (cambio) y `data-hoja-acc` (dentro de una hoja modal). Las acciones viven en el objeto `ACCIONES`.
 - **Hojas modales** con `<dialog>` y un único registro de oyentes (`hojaActual`).
@@ -113,7 +120,7 @@ Las escrituras toman un bloqueo (`tomarBloqueo` en `Repo.gs`): el de **la person
 - **Navegación y responsivo:** cuatro áreas (`TABS` y `AREA_DE_RUTA` en `app_js.html`: Inicio, Dinero, Planear, Deudas). En el celular, barra inferior con el botón **+** central (`abrirMenuRegistrar`); desde 768 px, barra lateral contraíble (preferencia en `localStorage`), búsqueda **Ctrl K** (`abrirBuscador`) y atajo **N**. Inicio en dos columnas desde 900 px; el asistente suma un panel de pasos y una vista previa de la cuenta desde 900 y 1240 px.
 - **Ícono de la pestaña:** `doGet` llama a `setFaviconUrl` con `assets/icono.png` del repositorio (propiedad de script opcional `ICONO_URL` para cambiarlo; solo https).
 - **Asistente de primeros pasos:** `PASOS_ASIST` define los pasos (tú, bancos, cuentas, bolsillos, tarjetas, nómina, ingresos, CDT, hogar, servicios, suscripciones y dólar); reutiliza los campos de los catálogos (`CAT`) y se retoma desde Inicio.
-- **Gráficos:** SVG sin librerías. Los componentes (`vizLinea`, `vizColumnas`, `vizBarrasH`, `vizMedidores`) se registran en `VIZ` al armar el HTML y `render()` llama a `activarViz()` para el hover, el foco y las flechas. Una sola moneda por gráfico y una tabla alternativa en cada uno.
+- **Gráficos:** SVG sin librerías. Los componentes (`vizLinea`, `vizColumnas`, `vizBarrasH`, `vizMedidores`) se registran en `VIZ` al armar el HTML y `render()` llama a `activarViz()` para el hover, el foco y las flechas. Una sola moneda por gráfico y una tabla alternativa ("Ver como tabla") en cada uno, también en los medidores (`tarjetaMedidores`). Los colores de las series (`--viz-1..3`) están en `tokens.html`.
 - **Errores del navegador** se reportan al registro del servidor (`logClientError`) con un tope por sesión.
 
 ## Seguridad

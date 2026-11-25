@@ -15,10 +15,6 @@ function nuevoId_(prefijo) {
   return prefijo + '-' + String(Utilities.getUuid()).replace(/-/g, '').slice(0, 8);
 }
 
-function hoyIso_() {
-  return Utilities.formatDate(new Date(), 'America/Bogota', 'yyyy-MM-dd');
-}
-
 function texto_(v) {
   return String(v === undefined || v === null ? '' : v).trim();
 }
@@ -40,13 +36,21 @@ function numero_(v, etiqueta, opc) {
   if (o.entero && Math.floor(n) !== n) throw new Error(etiqueta + ' debe ser un número entero.');
   if (o.min !== undefined && n < o.min) throw new Error(etiqueta + ' no puede ser menor que ' + o.min + '.');
   if (o.max !== undefined && n > o.max) throw new Error(etiqueta + ' no puede ser mayor que ' + o.max + '.');
-  return Math.round(n * 100) / 100;
+  // Dinero: 2 decimales. Tasas y porcentajes en decimal (0,095 = 9,5 %) necesitan más: { decimales: 9 }.
+  const f = Math.pow(10, o.decimales === undefined ? 2 : o.decimales);
+  return Math.round(n * f) / f;
+}
+
+/** Una tasa o porcentaje en decimal (0,095 = 9,5 %): nunca se redondea a 2 decimales. */
+function tasa_(v, etiqueta, opc) {
+  return numero_(v, etiqueta, Object.assign({ decimales: 9 }, opc || {}));
 }
 
 function fechaIso_(v, etiqueta, defecto) {
   if (v === undefined || v === null || v === '') return defecto === undefined ? '' : defecto;
   const t = texto_(v).replace(/\//g, '-'); // se acepta AAAA/MM/DD (como se escribe en la app) y AAAA-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error(etiqueta + ' debe tener formato AAAA/MM/DD.');
+  if (!fechaExiste_(t)) throw new Error(etiqueta + ' no existe en el calendario.');
   return t;
 }
 
@@ -83,6 +87,10 @@ function divisaBanco_(banco) {
 
 /** Divisa de cada cuenta y bolsillo: { cuentas: {id: 'USD'}, bolsillos: {id: 'USD'} }. */
 function mapaDivisas_() {
+  return memoDerivado_('divisas', calcularMapaDivisas_);
+}
+
+function calcularMapaDivisas_() {
   const porBanco = {};
   getTableData('Bancos').forEach(b => { porBanco[b.ID_Banco] = divisaBanco_(b); });
   const cuentas = {};
@@ -117,6 +125,20 @@ function tasaDivisa_(divisa) {
   if (divisa === DIVISA_BASE) return 1;
   const n = Number(String(cfgValor_('Tasa_' + divisa)).replace(',', '.'));
   return isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Categorías que usa la app. Se reconocen por su columna Rol; las hojas de antes de 1.11 no la tienen llena y se
+ * reconocen por el ID con el que se sembraron (sin cambiar nada en la hoja).
+ */
+const ROLES_CATEGORIA = { Salario: 'cat-salario', Rendimiento: 'cat-rendim', Regalos: 'cat-regalos', Comision: 'cat-comision', Cargos: 'cat-cargos' };
+
+/** La categoría activa con ese rol (o la sembrada con su ID de antes), o null. */
+function categoriaPorRol_(rol, incluirInactivas) {
+  const cats = leer_('Categorias');
+  const ok = c => incluirInactivas || estaActivo(c);
+  return cats.find(c => texto_(c.Rol) === rol && ok(c)) ||
+    cats.find(c => c.ID_Categoria === ROLES_CATEGORIA[rol] && !texto_(c.Rol) && ok(c)) || null;
 }
 
 function buscarPorId_(filas, idCol, id) {
@@ -237,7 +259,7 @@ const CATALOGOS = {
       if (item.Saldo_Apertura !== undefined) {
         const interno = leer_('Bolsillos').find(b => b.ID_Cuenta === reg.ID_Cuenta && esVerdadero(b.Es_Interno));
         if (interno) {
-          updateRow('Bolsillos', interno._rowIndex, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
+          updateRow('Bolsillos', interno, { Saldo_Apertura: numero_(item.Saldo_Apertura, 'El saldo inicial', { defecto: 0 }) });
         }
       }
     },
@@ -252,8 +274,8 @@ const CATALOGOS = {
     },
     alDesactivar: function (reg) {
       // Los bolsillos de una cuenta desactivada también quedan inactivos (ya están en cero).
-      leer_('Bolsillos').filter(b => b.ID_Cuenta === reg.ID_Cuenta && estaActivo(b))
-        .forEach(b => updateRow('Bolsillos', b._rowIndex, { Activo: false }));
+      updateRows_('Bolsillos', leer_('Bolsillos').filter(b => b.ID_Cuenta === reg.ID_Cuenta && estaActivo(b))
+        .map(b => ({ fila: b, cambios: { Activo: false } })));
     },
     padreActivo: function (reg) {
       exigirActivo_(leer_('Bancos'), 'ID_Banco', reg.ID_Banco, 'El banco de la cuenta');
@@ -411,49 +433,13 @@ const CATALOGOS = {
       return { Nombre: nombre, Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
     },
     bloqueos: function (reg) {
-      const n = leer_('Servicios_Publicos').filter(s => s.ID_Inmueble === reg.ID_Inmueble && estaActivo(s)).length;
-      return n ? [n + ' servicio(s) activo(s); desactívalos primero'] : [];
+      const n = leer_('Suscripciones').filter(s => s.ID_Inmueble === reg.ID_Inmueble && estaActivo(s)).length;
+      return n ? [n + ' servicio(s) o suscripción(es) activo(s) de este hogar; cámbialos o desactívalos primero'] : [];
     }
   },
 
-  // Empresas con las que se pagan los servicios (Enel, Vanti, el acueducto…): su enlace se guarda una sola vez.
-  Empresas_Pago: {
-    id: 'ID_Empresa', prefijo: 'emp', etiqueta: 'La empresa',
-    normalizar: function (item, actual, filas) {
-      const nombre = textoRequerido_(item.Nombre !== undefined ? item.Nombre : actual && actual.Nombre, 'El nombre');
-      exigirNombreUnico_(filas, nombre, actual, 'ID_Empresa');
-      const url = urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago);
-      return { Nombre: nombre, URL_Pago: url, Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
-    },
-    bloqueos: function (reg) {
-      const n = leer_('Servicios_Publicos').filter(s => s.ID_Empresa === reg.ID_Empresa && estaActivo(s)).length;
-      return n ? [n + ' servicio(s) activo(s) usan esta empresa; cámbialos o desactívalos primero'] : [];
-    }
-  },
-
-  Servicios_Publicos: {
-    id: 'ID_Servicio', prefijo: 'srv', etiqueta: 'El servicio',
-    normalizar: function (item, actual) {
-      const idInmueble = item.ID_Inmueble !== undefined ? item.ID_Inmueble : actual && actual.ID_Inmueble;
-      exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El inmueble');
-      // Con una empresa registrada, el nombre y el enlace salen de ella; sin empresa, se escriben aquí (como antes).
-      const idEmpresa = texto_(item.ID_Empresa !== undefined ? item.ID_Empresa : actual && actual.ID_Empresa);
-      const empresa = idEmpresa ? exigirActivo_(leer_('Empresas_Pago'), 'ID_Empresa', idEmpresa, 'La empresa') : null;
-      return {
-        ID_Inmueble: idInmueble,
-        ID_Empresa: idEmpresa,
-        Tipo: textoRequerido_(item.Tipo !== undefined ? item.Tipo : actual && actual.Tipo, 'El tipo de servicio'),
-        Empresa: empresa ? empresa.Nombre : texto_(item.Empresa !== undefined ? item.Empresa : actual && actual.Empresa),
-        Codigo_Pago: textoRequerido_(item.Codigo_Pago !== undefined ? item.Codigo_Pago : actual && actual.Codigo_Pago, 'El código de pago'),
-        URL_Pago: empresa ? '' : urlSegura_(item.URL_Pago !== undefined ? item.URL_Pago : actual && actual.URL_Pago),
-        Notas: texto_(item.Notas !== undefined ? item.Notas : actual && actual.Notas)
-      };
-    },
-    bloqueos: function () { return []; },
-    padreActivo: function (reg) {
-      exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', reg.ID_Inmueble, 'El inmueble del servicio');
-    }
-  },
+  // Desde 1.15 las empresas de pago y los servicios públicos son datos de cada cobro (Suscripciones: Empresa, Codigo_Pago,
+  // URL_Pago). Sus pestañas siguen en la hoja con lo que tenían, pero ya no se editan desde la app (ver unificarServicios_).
 
   Suscripciones: {
     id: 'ID_Suscripcion', prefijo: 'sus', etiqueta: 'La suscripción',
@@ -464,23 +450,26 @@ const CATALOGOS = {
       const idInmueble = texto_(pick('ID_Inmueble'));
       if (idInmueble) exigirActivo_(leer_('Inmuebles'), 'ID_Inmueble', idInmueble, 'El hogar');
       exigirNombreUnico_(filas, nombre, actual, 'ID_Suscripcion', f => texto_(f.ID_Inmueble) === idInmueble);
+      const tipo = opcion_(pick('Tipo'), ENUMS.Suscripciones.Tipo, 'El tipo', 'Suscripcion');
       const proximo = fechaIso_(pick('Proximo_Cobro'), 'La fecha del próximo cobro');
-      if (!proximo) throw new Error('Indica cuándo es el próximo cobro.');
+      // Un servicio puede guardarse sin fecha: solo sus datos de pago (empresa, código, enlace)
+      if (!proximo && tipo !== 'Servicio') throw new Error('Indica cuándo es el próximo cobro.');
       const idBolsillo = texto_(pick('ID_Bolsillo')), idTarjeta = texto_(pick('ID_Tarjeta'));
       if (idBolsillo) { exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo'); exigirPesos_(idBolsillo, 'El bolsillo'); }
       if (idTarjeta) exigirActivo_(leer_('Tarjetas'), 'ID_Tarjeta', idTarjeta, 'La tarjeta');
       if (idBolsillo && idTarjeta) throw new Error('Elige cómo se paga: desde un bolsillo o con una tarjeta, no ambos.');
       const idCat = texto_(pick('ID_Categoria'));
       if (idCat) exigirActivo_(leer_('Categorias'), 'ID_Categoria', idCat, 'La categoría');
-      const idSrv = texto_(pick('ID_Servicio'));
-      if (idSrv) exigirActivo_(leer_('Servicios_Publicos'), 'ID_Servicio', idSrv, 'El servicio');
+      // ID_Servicio solo recuerda de qué servicio público vino un cobro (unificarServicios_); ya no se elige
+      const idSrv = texto_(actual ? actual.ID_Servicio : '');
       return {
         Nombre: nombre,
-        Tipo: opcion_(pick('Tipo'), ENUMS.Suscripciones.Tipo, 'El tipo', 'Suscripcion'),
-        Valor: numero_(pick('Valor'), 'El valor', { requerido: true, min: 0, max: VALOR_MAXIMO }),
+        Tipo: tipo,
+        Valor: numero_(pick('Valor'), 'El valor', { requerido: !!proximo, min: 0, max: VALOR_MAXIMO, defecto: 0 }),
         Periodicidad: opcion_(pick('Periodicidad'), ENUMS.Suscripciones.Periodicidad, 'La periodicidad', 'Mensual'),
-        Proximo_Cobro: proximo, Dia_Cobro: Number(proximo.slice(8, 10)),
+        Proximo_Cobro: proximo, Dia_Cobro: proximo ? Number(proximo.slice(8, 10)) : '',
         ID_Bolsillo: idBolsillo, ID_Tarjeta: idTarjeta, ID_Categoria: idCat, ID_Servicio: idSrv, ID_Inmueble: idInmueble,
+        Empresa: texto_(pick('Empresa')).slice(0, 60), Codigo_Pago: texto_(pick('Codigo_Pago')).slice(0, 40),
         Renglon: texto_(pick('Renglon')).slice(0, 80),
         URL_Pago: urlSegura_(pick('URL_Pago')), Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
@@ -561,6 +550,39 @@ const CATALOGOS = {
       updateRowById('CDTs', 'ID_CDT', reg.ID_CDT, { ID_Mov_Apertura: mov.ID_Mov });
     },
     bloqueos: function (reg) { return reg.Estado === 'Vigente' ? ['está vigente: ciérralo o anúlalo desde la pantalla de CDT'] : []; }
+  },
+
+  // Comisiones, impuestos, cambio de divisa, cuota de manejo y seguros de cada medio de pago (ver Cargos.gs)
+  Cargos_Reglas: {
+    id: 'ID_Regla', prefijo: 'crg', etiqueta: 'La regla',
+    normalizar: function (item, actual) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre').slice(0, 80);
+      // La pantalla manda el medio de pago como "Ambito|ID" en un solo selector
+      let ambito = texto_(pick('Ambito')), idAmbito = texto_(pick('ID_Ambito'));
+      const medio = texto_(item.Medio);
+      if (medio.indexOf('|') > 0) { ambito = medio.split('|')[0]; idAmbito = medio.split('|').slice(1).join('|'); }
+      ambito = opcion_(ambito, ENUMS.Cargos_Reglas.Ambito, 'El medio de pago');
+      const DE = { Banco: ['Bancos', 'ID_Banco', 'El banco'], Cuenta: ['Cuentas', 'ID_Cuenta', 'La cuenta'], Tarjeta: ['Tarjetas', 'ID_Tarjeta', 'La tarjeta'], Credito: ['Creditos', 'ID_Credito', 'El crédito'] }[ambito];
+      if (!idAmbito) throw new Error('Elige a qué medio de pago aplica.');
+      if (!buscarPorId_(leer_(DE[0]), DE[1], idAmbito)) throw new Error(DE[2] + ' no existe.');
+      const tipo = opcion_(pick('Tipo_Cargo'), ENUMS.Cargos_Reglas.Tipo_Cargo, 'El tipo de cargo');
+      const operacion = opcion_(pick('Operacion'), ENUMS.Cargos_Reglas.Operacion, 'Cuándo se cobra');
+      const PERMITIDAS = { Tarjeta: ['Compra', 'Compra_Internacional', 'Extracto'], Credito: ['Cuota'], Cuenta: ['Salida', 'Transferencia', 'Pago', 'Conversion', 'Cuota', 'Apertura_CDT', 'Extracto'] };
+      if (PERMITIDAS[ambito] && PERMITIDAS[ambito].indexOf(operacion) === -1) throw new Error('Ese cobro no aplica a ' + DE[2].toLowerCase() + '. Opciones: ' + PERMITIDAS[ambito].join(', ') + '.');
+      const modo = opcion_(pick('Modo') || 'Fijo', ENUMS.Cargos_Reglas.Modo, 'Cómo se calcula');
+      const valor = modo === 'Porcentaje'
+        ? tasa_(item.Porcentaje !== undefined ? item.Porcentaje : actual && actual.Valor, 'El porcentaje', { requerido: true, min: 0, max: 1 })
+        : numero_(pick('Valor'), 'El valor', { requerido: true, min: 0, max: VALOR_MAXIMO });
+      const minimo = modo === 'Porcentaje' ? numero_(pick('Minimo'), 'El mínimo', { min: 0, max: VALOR_MAXIMO, defecto: '' }) : '';
+      const maximo = modo === 'Porcentaje' ? numero_(pick('Maximo'), 'El máximo', { min: 0, max: VALOR_MAXIMO, defecto: '' }) : '';
+      if (minimo !== '' && maximo !== '' && maximo > 0 && minimo > maximo) throw new Error('El mínimo no puede ser mayor que el máximo.');
+      return {
+        Nombre: nombre, Tipo_Cargo: tipo, Ambito: ambito, ID_Ambito: idAmbito, Operacion: operacion, Modo: modo, Valor: valor,
+        Minimo: minimo, Maximo: maximo, Periodicidad: 'Por_Operacion', Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
+      };
+    },
+    bloqueos: function () { return []; } // los cargos ya cobrados quedan en tus movimientos
   },
 
   Ingresos_Recurrentes: {
@@ -667,8 +689,8 @@ const CATALOGOS = {
     },
     despues: function (reg, anterior, item, opciones) {
       if (esVerdadero(reg.Vigente)) {
-        leer_('Nomina_Escenarios').filter(e => e.ID_Nomina_Esc !== reg.ID_Nomina_Esc && esVerdadero(e.Vigente))
-          .forEach(e => updateRow('Nomina_Escenarios', e._rowIndex, { Vigente: false }));
+        updateRows_('Nomina_Escenarios', leer_('Nomina_Escenarios').filter(e => e.ID_Nomina_Esc !== reg.ID_Nomina_Esc && esVerdadero(e.Vigente))
+          .map(e => ({ fila: e, cambios: { Vigente: false } })));
       }
       // Los subsidios del escenario se reemplazan por la lista recibida (si viene).
       const ids = (opciones && opciones.subsidios) || (item && item.subsidios);
@@ -695,8 +717,8 @@ const CATALOGOS = {
       const o = opciones || {};
       // Un solo escenario base: al marcar este, los demás dejan de serlo.
       if (esVerdadero(reg.Es_Base)) {
-        leer_('Escenarios').filter(e => e.ID_Escenario !== reg.ID_Escenario && esVerdadero(e.Es_Base))
-          .forEach(e => updateRow('Escenarios', e._rowIndex, { Es_Base: false }));
+        updateRows_('Escenarios', leer_('Escenarios').filter(e => e.ID_Escenario !== reg.ID_Escenario && esVerdadero(e.Es_Base))
+          .map(e => ({ fila: e, cambios: { Es_Base: false } })));
       }
       // Crear un escenario copiando los renglones de otro (p. ej. Contingencia a partir de Normal).
       if (!anterior && o.copiarDe) {
@@ -723,7 +745,7 @@ function sincronizarSubsidios_(idEsc, idsSubsidio) {
   const subsidios = leer_('Subsidios');
   idsSubsidio.forEach(id => exigirActivo_(subsidios, 'ID_Subsidio', id, 'El subsidio'));
   const actuales = leer_('Nomina_Conceptos').filter(c => c.ID_Nomina_Esc === idEsc && estaActivo(c));
-  actuales.forEach(c => { if (idsSubsidio.indexOf(c.ID_Subsidio) === -1) updateRow('Nomina_Conceptos', c._rowIndex, { Activo: false }); });
+  actuales.forEach(c => { if (idsSubsidio.indexOf(c.ID_Subsidio) === -1) updateRow('Nomina_Conceptos', c, { Activo: false }); });
   const yaEstan = actuales.map(c => c.ID_Subsidio);
   const nuevos = idsSubsidio.filter(id => yaEstan.indexOf(id) === -1).map(id => {
     const sub = buscarPorId_(subsidios, 'ID_Subsidio', id);
@@ -778,7 +800,7 @@ function guardarCatalogo(tabla, item, opciones) {
   let registro;
   if (actual) {
     if (sinOrden) delete datos.Orden; // al editar, el orden se conserva si no se envía
-    updateRow(tabla, actual._rowIndex, datos);
+    updateRow(tabla, actual, datos);
     registro = Object.assign({}, actual, datos);
   } else {
     datos[def.id] = nuevoId_(def.prefijo);
@@ -806,7 +828,7 @@ function desactivarCatalogo(tabla, id) {
     throw new Error('No se puede desactivar "' + (reg.Nombre || id) + '": ' + motivos.join('; ') + '.');
   }
 
-  updateRow(tabla, reg._rowIndex, { Activo: false });
+  updateRow(tabla, reg, { Activo: false });
   if (def.alDesactivar) def.alDesactivar(reg);
   invalidateCache(tabla);
   return Object.assign({}, reg, { Activo: false });
@@ -818,7 +840,7 @@ function reactivarCatalogo(tabla, id) {
   const reg = buscarPorId_(leer_(tabla), def.id, id);
   if (!reg) throw new Error(def.etiqueta + ' no existe.');
   if (def.padreActivo) def.padreActivo(reg);
-  updateRow(tabla, reg._rowIndex, { Activo: true });
+  updateRow(tabla, reg, { Activo: true });
   invalidateCache(tabla);
   return Object.assign({}, reg, { Activo: true });
 }
@@ -928,8 +950,8 @@ function fusionarBolsillos_(cuenta, idDestino) {
     else if (saldo <= -SALDO_CERO) registrarTransferencia(idDestino, b.ID_Bolsillo, -saldo, hoyIso_(), 'Fusión de bolsillos: ' + b.Nombre);
   });
   // Releer: los traslados invalidaron la lectura anterior y hay que usar números de fila vigentes.
-  leer_('Bolsillos').filter(b => otros.some(o => o.ID_Bolsillo === b.ID_Bolsillo))
-    .forEach(b => updateRow('Bolsillos', b._rowIndex, { Activo: false }));
+  updateRows_('Bolsillos', leer_('Bolsillos').filter(b => otros.some(o => o.ID_Bolsillo === b.ID_Bolsillo))
+    .map(b => ({ fila: b, cambios: { Activo: false } })));
   invalidateCache('Bolsillos');
 }
 
@@ -947,7 +969,7 @@ function cambiarModoBolsillos_(cuenta, permite) {
   }
   if (!permite) fusionarBolsillos_(cuenta, interno.ID_Bolsillo);
   const vigente = leer_('Bolsillos').find(b => b.ID_Bolsillo === interno.ID_Bolsillo);
-  updateRow('Bolsillos', vigente._rowIndex, { Nombre: permite ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre, Rol: 'General', Es_Interno: true });
+  updateRow('Bolsillos', vigente, { Nombre: permite ? NOMBRE_SIN_ASIGNAR : cuenta.Nombre, Rol: 'General', Es_Interno: true });
   invalidateCache('Bolsillos');
 }
 
@@ -979,8 +1001,7 @@ function obtenerEstadoConfiguracion(verificacionPrevia) {
     { id: 'ingresos', titulo: 'Anota otros ingresos que se repiten', hecho: listarCatalogo('Ingresos_Recurrentes').length > 0, opcional: true, pantalla: 'ingresos' },
     { id: 'cdt', titulo: 'Registra tus CDT', hecho: listarCatalogo('CDTs').length > 0, opcional: true, pantalla: 'cdt' },
     { id: 'hogar', titulo: 'Agrega tu hogar', hecho: listarCatalogo('Inmuebles').length > 0, opcional: true, pantalla: 'ajustes/Inmuebles' },
-    { id: 'servicios', titulo: 'Guarda los códigos de tus servicios públicos', hecho: listarCatalogo('Servicios_Publicos').length > 0, opcional: true, pantalla: 'ajustes/Servicios_Publicos' },
-    { id: 'suscripciones', titulo: 'Anota tus suscripciones y servicios', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
+    { id: 'suscripciones', titulo: 'Anota tus servicios y suscripciones (con su código de pago)', hecho: listarCatalogo('Suscripciones').length > 0, opcional: true, pantalla: 'ajustes/Suscripciones' },
     { id: 'tasa', titulo: 'Vincula el dólar de Google Finance', hecho: esVerdadero(config.Tasa_Auto), opcional: true, pantalla: 'ajustes/divisas' }
   ];
   const completo = pasos.filter(p => !p.opcional).every(p => p.hecho);

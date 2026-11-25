@@ -105,6 +105,44 @@ prueba('accesoPermitido_ respeta la lista de usuarios permitidos', () => {
   assert.strictEqual(e.ejecutar('accesoPermitido_()'), true, 'sin distinguir mayúsculas');
 });
 
+prueba('include("app_js") junta las partes de la app en orden, cada una en su propio <script> con modo estricto', () => {
+  const fs = require('fs'), path = require('path');
+  const e = crearEntorno({});
+  e.ctx.HtmlService = { createHtmlOutputFromFile: n => ({ getContent: () => fs.readFileSync(path.join(__dirname, '..', n + '.html'), 'utf8') }) };
+  e.cargar('Code.gs');
+  const html = e.ejecutar("include('app_js')");
+  const partes = e.ejecutar('PARTES_JS.slice()');
+  assert.strictEqual((html.match(/<script>/g) || []).length, partes.length, 'un bloque por parte');
+  assert.strictEqual((html.match(/<\/script>/g) || []).length, partes.length);
+  let pos = -1;
+  partes.forEach(p => {
+    const texto = fs.readFileSync(path.join(__dirname, '..', p + '.html'), 'utf8');
+    const i = html.indexOf(texto.trim().slice(0, 400));
+    assert.ok(i > pos, p + ' debe ir después de la parte anterior');
+    pos = i;
+    assert.ok(/^<script>\s*(\/\*[^]*?\*\/\s*)?'use strict';/.test(texto.trim()), p + ' debe empezar con su <script> y el modo estricto');
+  });
+});
+
+prueba('Apps Script: todo .html que se incluye es HTML válido (empieza con una etiqueta), nunca código suelto', () => {
+  // HtmlService.createHtmlOutputFromFile rechaza un archivo que no es HTML ("Contenido HTML con formato incorrecto").
+  const fs = require('fs'), path = require('path');
+  const raiz = path.join(__dirname, '..');
+  const incluidos = new Set();
+  const index = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+  (index.match(/include\('([^']+)'\)/g) || []).forEach(m => incluidos.add(m.match(/'([^']+)'/)[1]));
+  const partes = JSON.parse(fs.readFileSync(path.join(raiz, 'Code.gs'), 'utf8').match(/const PARTES_JS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  partes.forEach(p => incluidos.add(p));
+  fs.readdirSync(raiz).filter(f => /^js_.*\.html$/.test(f)).forEach(f => incluidos.add(f.replace('.html', '')));
+  incluidos.forEach(n => {
+    const t = fs.readFileSync(path.join(raiz, n + '.html'), 'utf8').trim();
+    assert.ok(/^<(script|style|link|!--|!doctype|html|div|template)/i.test(t), n + '.html no empieza con una etiqueta HTML');
+    // Fuera de las etiquetas <script> y <style> no puede quedar código suelto
+    const sinBloques = t.replace(/<script[^>]*>[^]*?<\/script>/gi, '').replace(/<style[^>]*>[^]*?<\/style>/gi, '').trim();
+    if (/^(script|style)/.test(t.slice(1))) assert.strictEqual(sinBloques, '', n + '.html tiene texto fuera de sus bloques');
+  });
+});
+
 prueba('todos los .gs se cargan juntos sin declaraciones repetidas (como en Apps Script)', () => {
   // En Apps Script los archivos comparten un solo espacio global: un const repetido rompe la carga.
   const fs = require('fs');
@@ -137,6 +175,10 @@ require('./test_graficos')(prueba, assert, crearEntorno);
 require('./test_recordatorios')(prueba, assert, crearEntorno);
 require('./test_multiusuario')(prueba, assert, crearEntorno);
 require('./test_produccion')(prueba, assert, crearEntorno);
+require('./test_migracion_datos')(prueba, assert, crearEntorno);
+require('./test_integridad')(prueba, assert, crearEntorno);
+require('./test_unificacion')(prueba, assert, crearEntorno);
+require('./test_cargos')(prueba, assert, crearEntorno);
 
 let fallos = 0;
 pruebas.forEach(p => {

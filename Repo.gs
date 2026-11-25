@@ -9,7 +9,7 @@ const CACHE_TTL_SECONDS = 3600; // catálogos: 1 h (toda escritura de la app los
 const CACHE_TTL_MOVIMIENTOS = 600; // tablas de movimientos: 10 min
 
 /** Catálogos pequeños que cambian poco: se guardan en caché. Toda escritura la invalida. */
-const TABLAS_CACHEABLES = ['Config', 'Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Servicios_Publicos', 'Escenarios', 'Subsidios'];
+const TABLAS_CACHEABLES = ['Config', 'Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Categorias', 'Personas', 'Inmuebles', 'Escenarios', 'Subsidios', 'Cargos_Reglas'];
 
 /**
  * Interpreta un valor booleano de una celda (TRUE de Sheets, texto en español o inglés).
@@ -104,26 +104,87 @@ function idHojaUsuario_() {
  * Toma el bloqueo (un solo escritor a la vez).
  * Una hoja: es del script y protege también de dos personas que comparten la hoja.
  * Varias hojas: es de la persona, para que unas no esperen a otras.
- * No es reentrante: ninguna función que lo tenga puede llamar a otra que también lo tome.
+ * Es reentrante dentro de una petición: si ya se tiene, solo se cuenta una vez más y se suelta al devolver la última.
+ * Así una operación compuesta (pagar un extracto, abonar un crédito) puede tomarlo una vez con conBloqueo_ y
+ * sus escrituras internas no lo sueltan a mitad de camino.
  */
+let BLOQUEO_ACTUAL = null; // { lock, n }
+
 function tomarBloqueo(ms) {
+  if (BLOQUEO_ACTUAL) {
+    BLOQUEO_ACTUAL.n++;
+    return { releaseLock: soltarBloqueo_ };
+  }
   const lock = modoMultiusuario_() ? LockService.getUserLock() : LockService.getScriptLock();
   lock.waitLock(ms || 10000);
-  return lock;
+  BLOQUEO_ACTUAL = { lock: lock, n: 1 };
+  return { releaseLock: soltarBloqueo_ };
+}
+
+function soltarBloqueo_() {
+  if (!BLOQUEO_ACTUAL) return;
+  BLOQUEO_ACTUAL.n--;
+  if (BLOQUEO_ACTUAL.n <= 0) {
+    const lock = BLOQUEO_ACTUAL.lock;
+    BLOQUEO_ACTUAL = null;
+    lock.releaseLock();
+  }
+}
+
+/** Ejecuta fn con el bloqueo tomado una sola vez para toda la operación. */
+function conBloqueo_(fn, ms) {
+  const b = tomarBloqueo(ms || 15000);
+  try { return fn(); } finally { b.releaseLock(); }
+}
+
+/**
+ * Operación compuesta "todo o nada": fn(alDeshacer) recibe una función para anotar cómo deshacer cada paso ya hecho.
+ * Si algo falla, se deshacen en orden inverso (lo que no se pueda deshacer se registra en el Log) y se relanza el error.
+ * Todo ocurre con el bloqueo tomado una vez.
+ */
+function transaccion_(fn) {
+  return conBloqueo_(() => {
+    const pasos = [];
+    try {
+      return fn(deshacer => pasos.push(deshacer));
+    } catch (e) {
+      for (let i = pasos.length - 1; i >= 0; i--) {
+        try { pasos[i](); } catch (x) { try { registrarLog('ERROR', 'transaccion', 'No se pudo deshacer un paso', String(x && x.message)); } catch (y) {} }
+      }
+      throw e;
+    }
+  });
 }
 
 /**
  * Memoria de la petición actual. En Apps Script cada llamada de google.script.run es una
  * ejecución nueva, así que estas variables viven lo que dura UNA petición: dentro de ella cada
- * tabla se lee de la hoja una sola vez. Toda escritura invalida la tabla afectada.
+ * tabla se lee de la hoja una sola vez. Las escrituras de la app ACTUALIZAN lo memorizado (filas nuevas o
+ * cambiadas) en lugar de olvidarlo, así una operación compuesta no vuelve a leer la tabla tras cada paso.
+ * Los encabezados también se recuerdan: una escritura no los relee.
  */
 let MEMO_TABLAS = {};
 let MEMO_LIBRO = null;
+let MEMO_ENC = {};
+let MEMO_DERIVADOS = {};
+
+/**
+ * Resultado calculado a partir de las tablas (saldos, presupuesto de un mes, divisas…), recordado hasta la próxima
+ * escritura de la petición. Devuelve SIEMPRE una copia profunda para que nadie modifique lo recordado.
+ */
+function memoDerivado_(clave, fn) {
+  if (!Object.prototype.hasOwnProperty.call(MEMO_DERIVADOS, clave)) MEMO_DERIVADOS[clave] = JSON.stringify(fn());
+  const t = MEMO_DERIVADOS[clave];
+  return t === undefined ? undefined : JSON.parse(t);
+}
 
 /** Olvida lo leído. Se llama al empezar cada petición de la API (y entre llamadas en las pruebas). */
 function reiniciarMemoria_() {
   MEMO_TABLAS = {};
   MEMO_LIBRO = null;
+  MEMO_ENC = {};
+  if (typeof ZONA_MEMO !== 'undefined') ZONA_MEMO = null;
+  MEMO_DERIVADOS = {};
 }
 
 /**
@@ -131,14 +192,59 @@ function reiniciarMemoria_() {
  */
 function invalidateCache(sheetName) {
   const cache = cache_();
+  MEMO_DERIVADOS = {};
   if (sheetName) {
     cache.remove('TABLE_' + sheetName);
     delete MEMO_TABLAS[sheetName];
   } else {
     Object.keys(SCHEMAS).forEach(name => cache.remove('TABLE_' + name));
     MEMO_TABLAS = {};
+    MEMO_ENC = {}; // pudo cambiar el esquema (instalación, migración)
   }
 }
+
+/** Encabezados de una pestaña, leídos una vez por petición. */
+function encabezados_(sheet, tabla) {
+  // Solo dentro de la petición: si alguien cambia las columnas a mano, la próxima petición ya las lee bien.
+  if (MEMO_ENC[tabla]) return MEMO_ENC[tabla];
+  const ancho = sheet.getLastColumn();
+  const h = ancho ? sheet.getRange(1, 1, 1, ancho).getValues()[0].map(x => String(x).trim()) : [];
+  MEMO_ENC[tabla] = h;
+  return h;
+}
+
+/** Fila de la hoja → objeto { encabezado: valor, _rowIndex }, con fechas y meses como texto. */
+function filaAObjeto_(headers, row, rowIndex) {
+  const rowObj = { _rowIndex: rowIndex };
+  headers.forEach((header, colIdx) => {
+    let cellVal = row[colIdx];
+    if (cellVal === undefined || cellVal === null) cellVal = '';
+    // Normalizar fechas de Apps Script a formato ISO YYYY-MM-DD
+    if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, zonaHoraria_(), COLUMNAS_MES.indexOf(header) !== -1 ? 'yyyy-MM' : 'yyyy-MM-dd');
+    else if (COLUMNAS_MES.indexOf(header) !== -1) cellVal = normalizarMes_(cellVal);
+    rowObj[header] = cellVal;
+  });
+  return rowObj;
+}
+
+/**
+ * Después de escribir: la caché entre peticiones se olvida (la próxima petición lee la hoja) y la memoria de ESTA
+ * petición se pone al día con lo escrito. `nuevas`: [{ fila, valores }] agregadas; `cambiadas`: [{ fila, valores }].
+ * Las filas cambiadas se reemplazan por objetos nuevos: quien guardó el registro de antes lo conserva tal como era.
+ */
+function tablaEscrita_(tabla, headers, nuevas, cambiadas) {
+  cache_().remove('TABLE_' + tabla);
+  MEMO_DERIVADOS = {};
+  const memo = MEMO_TABLAS[tabla];
+  if (!memo) return;
+  (cambiadas || []).forEach(c => {
+    const i = memo.filas.findIndex(f => f._rowIndex === c.fila);
+    const obj = filaAObjeto_(headers, c.valores, c.fila);
+    if (i === -1) memo.filas.push(obj); else memo.filas[i] = obj;
+  });
+  (nuevas || []).forEach(n => { memo.filas.push(filaAObjeto_(headers, n.valores, n.fila)); });
+}
+
 
 /**
  * Lee una tabla completa desde la caché de catálogos o desde la hoja.
@@ -161,19 +267,14 @@ function leerTabla_(sheetName, forzar) {
   const filas = [];
   if (values.length > 1) {
     const headers = values[0].map(h => String(h).trim());
+    MEMO_ENC[sheetName] = headers;
     for (let i = 1; i < values.length; i++) {
       const row = values[i];
       if (row.every(cell => cell === '' || cell === null)) continue; // fila vacía
-      const rowObj = { _rowIndex: i + 1 };
-      headers.forEach((header, colIdx) => {
-        let cellVal = row[colIdx];
-        // Normalizar fechas de Apps Script a formato ISO YYYY-MM-DD
-        if (cellVal instanceof Date) cellVal = Utilities.formatDate(cellVal, 'America/Bogota', COLUMNAS_MES.indexOf(header) !== -1 ? 'yyyy-MM' : 'yyyy-MM-dd');
-        else if (COLUMNAS_MES.indexOf(header) !== -1) cellVal = normalizarMes_(cellVal);
-        rowObj[header] = cellVal;
-      });
-      filas.push(rowObj);
+      filas.push(filaAObjeto_(headers, row, i + 1));
     }
+  } else if (values.length === 1) {
+    MEMO_ENC[sheetName] = values[0].map(h => String(h).trim());
   }
 
   guardarEnCache_(cache, sheetName, filas);
@@ -296,7 +397,7 @@ function insertRow(sheetName, rowData) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = encabezados_(sheet, sheetName);
     const dataToInsert = Object.assign({}, rowData);
 
     // Asignar ID UUID si la primera columna es un identificador y no viene proporcionado
@@ -318,8 +419,9 @@ function insertRow(sheetName, rowData) {
       return val;
     });
 
+    const fila = sheet.getLastRow() + 1;
     sheet.appendRow(rowValues);
-    invalidateCache(sheetName);
+    tablaEscrita_(sheetName, headers, [{ fila: fila, valores: rowValues }]);
 
     return dataToInsert;
   } finally {
@@ -343,7 +445,7 @@ function insertRowsBatch(sheetName, rowsDataArray) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = encabezados_(sheet, sheetName);
     const idHeader = headers[0];
     const ahora = ahoraIso_();
 
@@ -361,7 +463,7 @@ function insertRowsBatch(sheetName, rowsDataArray) {
 
     const nextRow = sheet.getLastRow() + 1;
     sheet.getRange(nextRow, 1, matrix.length, headers.length).setValues(matrix);
-    invalidateCache(sheetName);
+    tablaEscrita_(sheetName, headers, matrix.map((v, i) => ({ fila: nextRow + i, valores: v })));
 
     return rowsDataArray;
   } finally {
@@ -412,31 +514,97 @@ function updateRowById(sheetName, idColumnName, idValue, updatesObj) {
  * Actualiza una fila identificada por su número real de fila en la hoja (fila 1 = encabezados).
  * Usar el `_rowIndex` que entrega getTableData; nunca calcularlo a partir de la posición en el arreglo,
  * porque getTableData omite filas vacías y las posiciones dejan de coincidir.
+ * Lo recomendado es pasar el REGISTRO leído (con su `_rowIndex` y su ID): antes de escribir se comprueba que la fila
+ * siga siendo la de ese ID y, si se movió (alguien borró o insertó filas a mano en la hoja), se busca por el ID.
+ * Así nunca se sobrescribe otro registro. Con un número a secas se escribe en esa fila sin comprobar.
  * @param {string} sheetName Nombre de la pestaña.
- * @param {number} rowNumber Número de fila en la hoja (mínimo 2).
+ * @param {number|Object} filaORegistro Número de fila en la hoja (mínimo 2) o el registro leído.
  * @param {Object} updatesObj Campos a modificar; las claves que no son columnas se ignoran.
  */
-function updateRow(sheetName, rowNumber, updatesObj) {
-  const fila = Number(rowNumber);
-  if (!Number.isInteger(fila) || fila < 2) {
-    throw new Error(`Número de fila no válido para "${sheetName}": ${rowNumber}.`);
-  }
+function updateRow(sheetName, filaORegistro, updatesObj) {
+  return updateRows_(sheetName, [{ fila: filaORegistro, cambios: updatesObj }])[0];
+}
+
+/**
+ * Actualiza varias filas de una tabla con UN bloqueo, UNA lectura de la hoja y una escritura por tramo seguido.
+ * @param {string} sheetName
+ * @param {Array<{fila: number|Object, cambios: Object}>} lista
+ * @returns {Array<{ok, fila}>}
+ */
+function updateRows_(sheetName, lista) {
+  const items = (lista || []).filter(x => x);
+  if (!items.length) return [];
+  const pedidos = items.map(x => {
+    const registro = x.fila && typeof x.fila === 'object' ? x.fila : null;
+    const n = Number(registro ? registro._rowIndex : x.fila);
+    if (!Number.isInteger(n) || n < 2) throw new Error(`Número de fila no válido para "${sheetName}": ${registro ? registro._rowIndex : x.fila}.`);
+    return { n: n, registro: registro, cambios: x.cambios || {} };
+  });
 
   const lock = tomarBloqueo(10000);
-
   try {
-    const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName(sheetName);
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
     if (!sheet) throw new Error(`Tabla "${sheetName}" no encontrada.`);
-    if (fila > sheet.getLastRow()) {
-      throw new Error(`La fila ${fila} no existe en "${sheetName}".`);
+    const ultima = sheet.getLastRow();
+    const headers = encabezados_(sheet, sheetName);
+    const ancho = headers.length;
+    const idCol = headers[0] && headers[0].indexOf('ID') === 0 ? 0 : -1;
+    const ahora = ahoraIso_();
+    const colAct = headers.indexOf('Actualizado_En');
+    const tocadas = {};
+    const idDe = p => (p.registro && idCol !== -1 ? p.registro[headers[idCol]] : '');
+    const conId = p => { const v = idDe(p); return v !== undefined && v !== null && v !== ''; };
+
+    // Se lee solo el tramo de filas pedido; si alguna se movió, la hoja entera (una vez) para buscarla por su ID.
+    const dentro = pedidos.map(p => p.n).filter(n => n <= ultima);
+    const min = dentro.length ? Math.min.apply(null, dentro) : 2;
+    const max = dentro.length ? Math.max.apply(null, dentro) : 1;
+    const valores = []; // valores[fila - 1] = arreglo de la fila
+    if (max >= min) sheet.getRange(min, 1, max - min + 1, ancho).getValues().forEach((r, i) => { valores[min - 1 + i] = r; });
+    const movidas = pedidos.some(p => conId(p) && (p.n > ultima || String(valores[p.n - 1][idCol]) !== String(idDe(p))));
+    if (movidas && ultima >= 2) sheet.getRange(2, 1, ultima - 1, ancho).getValues().forEach((r, i) => { valores[i + 1] = r; });
+
+    const resultados = pedidos.map(p => {
+      let fila = p.n;
+      if (conId(p)) {
+        const actual = fila <= ultima ? valores[fila - 1][idCol] : undefined;
+        if (String(actual) !== String(idDe(p))) {
+          // La fila se movió: se busca el registro por su ID.
+          fila = -1;
+          for (let i = 1; i < ultima; i++) if (valores[i] && String(valores[i][idCol]) === String(idDe(p))) { fila = i + 1; break; }
+          if (fila === -1) throw new Error(`El registro ${idDe(p)} ya no está en "${sheetName}". Actualiza desde la hoja e inténtalo de nuevo.`);
+        }
+      } else if (fila > ultima) {
+        throw new Error(`La fila ${fila} no existe en "${sheetName}".`);
+      }
+      const fila0 = valores[fila - 1];
+      let hay = false;
+      Object.keys(p.cambios).forEach(key => {
+        const c = headers.indexOf(key);
+        if (c === -1) return;
+        const v = p.cambios[key];
+        fila0[c] = (v === undefined || v === null) ? '' : v;
+        hay = true;
+      });
+      if (hay) {
+        if (colAct !== -1) fila0[colAct] = ahora;
+        tocadas[fila] = true;
+      }
+      return { ok: true, fila: fila };
+    });
+
+    // Una escritura por tramo de filas seguidas.
+    const nums = Object.keys(tocadas).map(Number).sort((a, b) => a - b);
+    let i = 0;
+    while (i < nums.length) {
+      let j = i;
+      while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+      const desde = nums[i], cuantas = nums[j] - nums[i] + 1;
+      sheet.getRange(desde, 1, cuantas, headers.length).setValues(valores.slice(desde - 1, desde - 1 + cuantas).map(r => r.slice(0, headers.length)));
+      i = j + 1;
     }
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    escribirCambiosFila_(sheet, headers, fila, updatesObj);
-
-    invalidateCache(sheetName);
-    return { ok: true, fila: fila };
+    if (nums.length) tablaEscrita_(sheetName, headers, [], nums.map(n => ({ fila: n, valores: valores[n - 1] })));
+    return resultados;
   } finally {
     lock.releaseLock();
   }

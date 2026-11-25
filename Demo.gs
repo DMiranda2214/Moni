@@ -92,14 +92,6 @@ function sembrarDatosDemo() {
   ];
 
   const inmuebles = [{ ID_Inmueble: 'demo-inm-1', Nombre: 'Casa (demo)', Activo: true, Orden: 1 }];
-  const empresas = [
-    { ID_Empresa: 'demo-emp-1', Nombre: 'Energía Demo', URL_Pago: 'https://example.com/energia', Notas: 'Dato ficticio', Activo: true, Orden: 1 },
-    { ID_Empresa: 'demo-emp-2', Nombre: 'Acueducto Demo', URL_Pago: 'https://example.com/acueducto', Notas: 'Dato ficticio', Activo: true, Orden: 2 }
-  ];
-  const servicios = [
-    { ID_Servicio: 'demo-srv-1', ID_Inmueble: 'demo-inm-1', Tipo: 'Luz', ID_Empresa: 'demo-emp-1', Empresa: 'Energía Demo', Codigo_Pago: '0000-DEMO-1', URL_Pago: '', Notas: 'Dato ficticio', Activo: true },
-    { ID_Servicio: 'demo-srv-2', ID_Inmueble: 'demo-inm-1', Tipo: 'Agua', ID_Empresa: 'demo-emp-2', Empresa: 'Acueducto Demo', Codigo_Pago: '0000-DEMO-2', URL_Pago: '', Notas: 'Dato ficticio', Activo: true }
-  ];
 
   const mov = (id, dias, concepto, bolsillo, valor, tipo, subtipo, grupo) => ({
     ID_Mov: id, Fecha: fechaRelativa_(dias), Concepto: concepto, ID_Bolsillo: bolsillo, Valor: valor,
@@ -121,9 +113,7 @@ function sembrarDatosDemo() {
   insertRows('Tarjetas', tarjetas);
   insertRows('Personas', personas);
   insertRows('Inmuebles', inmuebles);
-  insertRows('Empresas_Pago', empresas);
-  insertRows('Servicios_Publicos', servicios);
-  insertRows('Movimientos', movimientos);
+  insertRows('Movimientos', movimientos.map(conRef_));
 
   // Plantilla de presupuesto y nómina de ejemplo (sobre el escenario base que ya existe)
   const esc = getTableData('Escenarios', { forceRefresh: true }).find(e => esVerdadero(e.Es_Base));
@@ -172,7 +162,9 @@ function sembrarDatosDemo() {
     susc(1, 'Películas en streaming (demo)', 'Suscripcion', 39900, 'Mensual', 3, { ID_Tarjeta: 'demo-tar-1' }),
     susc(2, 'Música (demo)', 'Suscripcion', 16900, 'Mensual', 12, { ID_Bolsillo: 'demo-bol-personal' }),
     susc(3, 'Almacenamiento en la nube (demo)', 'Suscripcion', 120000, 'Anual', 80, { ID_Tarjeta: 'demo-tar-1' }),
-    susc(4, 'Energía (demo)', 'Servicio', 95000, 'Mensual', 5, { ID_Bolsillo: 'demo-bol-servicios', ID_Servicio: 'demo-srv-1' })
+    susc(4, 'Energía (demo)', 'Servicio', 95000, 'Mensual', 5, { ID_Bolsillo: 'demo-bol-servicios', ID_Inmueble: 'demo-inm-1', Empresa: 'Energía Demo', Codigo_Pago: '0000-DEMO-1', URL_Pago: 'https://example.com/energia', Notas: 'Dato ficticio' }),
+    // Un servicio del que solo se guardan los datos de pago (sin fecha ni valor)
+    susc(5, 'Agua (demo)', 'Servicio', 0, 'Mensual', 0, { Proximo_Cobro: '', Dia_Cobro: '', ID_Inmueble: 'demo-inm-1', Empresa: 'Acueducto Demo', Codigo_Pago: '0000-DEMO-2', URL_Pago: 'https://example.com/acueducto', Notas: 'Dato ficticio' })
   ]);
 
   // Un ingreso recurrente (otro trabajo)

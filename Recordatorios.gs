@@ -6,10 +6,31 @@
 
 const DIAS_RECORDATORIO = 14;
 
-function diasEntre_(desdeIso, hastaIso) {
-  const a = Date.UTC(+desdeIso.slice(0, 4), +desdeIso.slice(5, 7) - 1, +desdeIso.slice(8, 10));
-  const b = Date.UTC(+hastaIso.slice(0, 4), +hastaIso.slice(5, 7) - 1, +hastaIso.slice(8, 10));
-  return Math.round((b - a) / 86400000);
+
+/**
+ * TODO lo que viene, en una sola lista ordenada por fecha: lo que sale (extractos, cuotas, suscripciones y servicios),
+ * lo que entra (nómina estimada, ingresos recurrentes, intereses y vencimientos de CDT) y, si se pide, las fechas
+ * límite de la nómina (prima, cesantías). Lo usan Inicio (próximos pagos y por recibir), los recordatorios de
+ * Calendar y la proyección de caja. Cada evento lleva `direccion` ('sale' | 'entra' | 'fecha') y `fuente`.
+ * @param {number} horizonte días hacia adelante (los atrasados siempre se incluyen, salvo las fechas de nómina)
+ * @param {Object} [o] { pagos: true, ingresos: true, cdt: true, fechasNomina: false }
+ */
+function proximosEventos_(horizonte, o) {
+  const opc = o || {};
+  const lista = [];
+  const con = (direccion, fuente) => e => lista.push(Object.assign({}, e, { direccion: direccion, fuente: fuente }));
+  if (opc.pagos !== false) proximosPagos_(horizonte).forEach(con('sale', 'pago'));
+  if (opc.ingresos !== false) ingresosEsperados_(horizonte).forEach(con('entra', 'ingreso'));
+  if (opc.cdt !== false) eventosCdt_(horizonte).forEach(con('entra', 'cdt'));
+  if (opc.fechasNomina) fechasNomina_(hoyIso_(), horizonte).forEach(con('fecha', 'nomina'));
+  return lista.sort((a, b) => a.dias - b.dias || a.titulo.localeCompare(b.titulo));
+}
+
+/** El evento sin los campos internos (para respuestas que ya tenían su forma). */
+function quitarDireccion_(e) {
+  const x = Object.assign({}, e);
+  delete x.direccion; delete x.fuente;
+  return x;
 }
 
 /**
@@ -39,7 +60,7 @@ function proximosPagos_(horizonte) {
   });
 
   const ctx = contextoSuscripciones_();
-  getTableData('Suscripciones').filter(estaActivo).forEach(x => {
+  getTableData('Suscripciones').filter(s => estaActivo(s) && cobroProgramado_(s)).forEach(x => {
     const r = resumenSuscripcion_(x, hoy, ctx);
     if (r.dias > limite) return;
     lista.push({ tipo: r.Tipo, id: r.ID_Suscripcion, titulo: r.Nombre, fecha: r.Proximo_Cobro, dias: r.dias, valor: r.Valor, detalle: r.Tipo === 'Servicio' ? 'Servicio' + (r.medio ? ' · ' + r.medio : '') : 'Suscripción' + (r.medio ? ' · ' + r.medio : ''), susc: r });
@@ -69,10 +90,6 @@ const FECHAS_NOMINA = [
   ['Intereses_Cesantias_Fecha', 'Intereses de cesantías: fecha límite de pago']
 ];
 
-function configEntero_(clave, defecto, min, max) {
-  const n = Number(cfgValor_(clave));
-  return isFinite(n) && cfgValor_(clave) !== '' && n >= min && n <= max ? Math.floor(n) : defecto;
-}
 
 function disparadoresRecordatorios_() {
   return ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === FUNCION_RECORDATORIOS);
@@ -131,7 +148,7 @@ function fechasNomina_(hoy, horizonte) {
     cfgValor_(def[0]).split(',').map(s => s.trim()).filter(s => /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s)).forEach(mmdd => {
       [Number(hoy.slice(0, 4)), Number(hoy.slice(0, 4)) + 1].forEach(anio => {
         const f = anio + '-' + mmdd;
-        if (new Date(f + 'T00:00:00Z').toISOString().slice(0, 10) !== f) return; // un 30 de febrero no existe
+        if (!fechaExiste_(f)) return; // un 30 de febrero no existe
         const dias = diasEntre_(hoy, f);
         if (dias >= 0 && dias <= horizonte) salida.push({ tipo: 'Nomina', id: def[0] + '-' + mmdd, titulo: def[1], fecha: f, dias: dias, valor: null, detalle: '' });
       });
@@ -142,10 +159,8 @@ function fechasNomina_(hoy, horizonte) {
 
 /** Lo que debería haber en el calendario: [{ clave, titulo, descripcion, fecha }]. */
 function recordatoriosDeseados_(ajustes) {
-  const hoy = hoyIso_();
-  let lista = proximosPagos_(HORIZONTE_CALENDARIO).filter(p => p.dias >= 0);
-  if (ajustes.nomina) lista = lista.concat(fechasNomina_(hoy, HORIZONTE_CALENDARIO));
-  lista = lista.concat(eventosCdt_(HORIZONTE_CALENDARIO).filter(e => e.dias >= 0));
+  // Los pagos, los CDT y (si se quiere) las fechas de la nómina; los ingresos recurrentes no van al calendario.
+  const lista = proximosEventos_(HORIZONTE_CALENDARIO, { ingresos: false, fechasNomina: ajustes.nomina }).filter(p => p.dias >= 0);
   return lista.map(p => {
     const titulo = p.tipo === 'Nomina' ? p.titulo
       : p.tipo === 'Tarjeta' ? 'Pagar tarjeta ' + p.titulo
@@ -169,7 +184,11 @@ function aplicarAvisos_(ev, ajustes) {
 /** Deja el calendario como debe estar. Devuelve cuántos eventos creó, corrigió y borró. */
 function sincronizarRecordatorios_() {
   return conCalendario_(function () {
-    const lock = tomarBloqueo(15000);
+    // No se toma el bloqueo de escritura mientras se habla con Calendar (podía tardar y frenar todos los registros).
+    // Para que dos sincronizaciones no se crucen basta una marca en la caché; si se cruzaran, la siguiente borra duplicados.
+    const cache = cache_();
+    if (cache.get('SYNC_RECORDATORIOS')) return { omitido: true, creados: 0, corregidos: 0, eliminados: 0, total: 0, resumen: 'Ya se estaba sincronizando' };
+    cache.put('SYNC_RECORDATORIOS', '1', 300);
     try {
       const ajustes = ajustesRecordatorios_();
       const cal = calendarioMoni_(true);
@@ -209,16 +228,11 @@ function sincronizarRecordatorios_() {
       guardarConfig_('Recordatorios_Resumen', resumen);
       return { creados: creados, corregidos: corregidos, eliminados: eliminados, total: deseados.length, resumen: resumen };
     } finally {
-      lock.releaseLock();
+      cache.remove('SYNC_RECORDATORIOS');
     }
   });
 }
 
-function diasMas_(iso, n) {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
 
 /** Lo que ejecuta el disparador diario. */
 function sincronizarRecordatoriosAuto() {

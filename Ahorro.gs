@@ -38,7 +38,7 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
     if (m.Subtipo === 'Interes' && v > 0) interes += v;
     else if (m.Subtipo === 'Retencion' && v < 0) retencion += -v;
     else if (m.Subtipo === 'GMF' && v < 0) gmf += -v;
-    else if (m.Subtipo === 'Para_Gastos' && v < 0 && texto_(m.Notas).indexOf('Crédito ') !== 0) paraGastos += -v; // el desembolso de un crédito va por su propio saldo
+    else if (m.Subtipo === 'Para_Gastos' && v < 0 && refDe_(m).indexOf('Crédito ') !== 0) paraGastos += -v; // el desembolso de un crédito va por su propio saldo
     else if (m.Subtipo === 'Reposicion' && v > 0) reposicion += v;
   });
 
@@ -59,14 +59,6 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
   };
 }
 
-/** Primer día de un mes y fecha siguiente, en texto AAAA-MM-DD. */
-function sumarDias_(fechaIso, n) {
-  const d = new Date(Date.UTC(+fechaIso.slice(0, 4), +fechaIso.slice(5, 7) - 1, +fechaIso.slice(8, 10) + n));
-  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
-}
-
-/** Tasa diaria equivalente a una tasa efectiva anual: (1 + EA)^(1/365) − 1. */
-function tasaDiaria_(ea) { return Math.pow(1 + ea, 1 / 365) - 1; }
 
 /**
  * Cuánto rindió una cuenta de ahorro desde el último rendimiento registrado (o desde el inicio del mes) hasta ayer.
@@ -168,7 +160,7 @@ function registrarRendimiento(r) {
   const cuenta = cuentaAhorroActiva_(r.ID_Cuenta);
   const tipo = opcion_(r.Tipo, SUBTIPOS_RENDIMIENTO, 'El tipo');
   const bolsillo = bolsilloDeCuenta_(cuenta.ID_Cuenta);
-  const cat = leer_('Categorias').find(c => c.ID_Categoria === 'cat-rendim' && estaActivo(c));
+  const cat = categoriaPorRol_('Rendimiento');
   const etiqueta = { Interes: 'Rendimientos', Retencion: 'Retención en la fuente', GMF: 'GMF (4x1000)' }[tipo];
   return registrarMovimiento({
     Tipo_Mov: tipo === 'Interes' ? 'Ingreso' : 'Gasto', Subtipo: tipo, Valor: r.Valor, Fecha: r.Fecha,

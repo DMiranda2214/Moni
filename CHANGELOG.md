@@ -1,5 +1,58 @@
 # Cambios
 
+## 1.15.0 — Un solo formulario de registro y servicios en un solo lugar (25 nov 2026)
+- **Cambia:** **un solo formulario** para registrar todo lo que entra, sale o se mueve. Pagar un servicio o una suscripción, recibir un ingreso recurrente, comprar un regalo, completar un renglón del presupuesto, comprar con una tarjeta y sacar o reponer dinero del ahorro abren la misma hoja de *Registrar*, con lo que ya se sabe llenado. Se ve y se usa igual en todos los casos.
+- **Nuevo:** al **pagar un servicio o una suscripción** aparecen las **comisiones e impuestos** del medio de pago (antes no se podían anotar ahí). Al comprar con tarjeta desde *Registrar*, en *Más opciones* eliges qué hacer con el dinero (lo que antes solo estaba en la compra desde la tarjeta) y ves a qué extracto entra.
+- **Cambia:** **servicios, empresas de pago y suscripciones en un solo lugar** (*Servicios y suscripciones*): cada uno guarda su empresa, su código de pago y su enlace. Se quitan de Ajustes las listas *Servicios públicos* y *Empresas de servicios*, y el asistente tiene un paso menos.
+- **Tus datos:** al actualizar, Moni copia tus servicios públicos y empresas de pago a *Servicios y suscripciones* **tal como los tenías** (hogar, código, enlace y notas). Los que no tenían cobro quedan como "solo datos de pago": siguen en *Códigos y enlaces de pago* y en *Pagar servicio*, sin contar en lo que pagas al mes ni en el presupuesto, como antes. Las pestañas viejas de la hoja **no se borran ni se modifican**, y ninguna celda existente cambia (comprobado con la prueba de migración desde la 1.10.0). Es repetible: no duplica nada.
+- **Corregido:** recibir un ingreso recurrente mostraba una sección de comisiones que no se guardaba.
+- **Interno:** `modoRegistro()` define cada caso del formulario; las hojas `abrirCompra`, `abrirPagarCobro`, `abrirRecibirIngreso`, `abrirCompraRegalo`, `abrirPagarRenglon` y `abrirMovimientoAhorro` son llamadas a `abrirRegistrar`. Esquema `14` (columnas `Empresa`, `Codigo_Pago`, `ID_Empresa` en `Suscripciones`).
+
+## 1.14.1 — Corrige la carga en Google (25 nov 2026)
+- **Corregido:** desde la 1.11, la app publicada en Apps Script no abría ("Exception: Contenido HTML con formato incorrecto"). Las partes del JavaScript eran archivos de código suelto y Apps Script exige que cada archivo `.html` incluido sea HTML válido. Ahora cada parte es su propio bloque `<script>`. La vista previa local arma la página igual que Apps Script, y una prueba nueva comprueba que ningún archivo incluido tenga código suelto.
+
+## 1.14.0 — Análisis y gráficos coherentes (25 nov 2026)
+- **Nuevo:** pantalla **Análisis** (Planear → Análisis), todo en una sola carga:
+  - **Patrimonio neto** de los últimos 12 meses (estimado reconstruido desde tus movimientos).
+  - **Entró y salió** cada mes.
+  - **En qué gastas** este mes frente al mes anterior y al promedio de los tres anteriores.
+  - **Dónde está lo que tienes** (disponible, ahorro, invertido).
+  - **Lo que debes y cuándo terminas** cada crédito.
+  - **Tu dinero disponible en 30, 60 y 90 días**: lo que ya sabes que entra y sale (nómina, ingresos, suscripciones, cuotas con seguros, tarjetas, CDT, repetidos mes a mes) y, aparte, restando tu gasto habitual.
+  - **Comisiones e impuestos del año**.
+- **Cambia:** todos los gráficos usan la misma tarjeta y tienen **Ver como tabla**, también los medidores (cupo usado, avance de créditos, CDT, regalos, metas de ahorro) y el saldo de un crédito.
+- **Interno:** los colores de las series de los gráficos están en `tokens.html`, con los demás colores; la pantalla vive en `js_analisis.html`.
+
+## 1.13.0 — Cargos, créditos bancarios y patrimonio neto (25 nov 2026)
+- **Nuevo:** **Comisiones e impuestos** (Ajustes → Cargos y comisiones). Anota lo que cobra cada banco, cuenta, tarjeta o crédito: comisiones por transferir o pagar, el 4x1000, el recargo por compras en otra moneda, la cuota de manejo y los seguros de cada cuota. Al registrar un gasto, mover dinero a otra cuenta, comprar con tarjeta, pagar un extracto, una cuota o un servicio, Moni los **propone** y puedes cambiarlos, quitarlos o agregar otros; ves el total con cargos. Cada cargo queda como gasto en "Comisiones e impuestos" y se anula con su operación. Sin reglas no se cobra nada.
+- **Nuevo:** **compras con tarjeta en otra moneda**: anotas la moneda y lo que costó allá; el recargo internacional va al mismo extracto.
+- **Nuevo:** **créditos con un banco o entidad** (hipoteca, vehículo, libre inversión): sin cuenta de ahorro, con entidad, desembolso opcional a un bolsillo (no cuenta como ingreso) y seguros por cuota. La cuota sale como gasto. Los créditos que ya tenías siguen como créditos de autopago, sin cambios.
+- **Nuevo:** **patrimonio neto** en Inicio: lo que tienes menos lo que debes en tarjetas y créditos con un banco (aparece si tienes deudas o inversiones).
+- **Nuevo:** en el celular, **Ajustes** a un toque desde Inicio (arriba a la derecha) y **Guía y Ajustes** al final de Planear. La Guía trae el **glosario** completo.
+- **Nuevo:** **zona horaria** en Ajustes → Perfil (por defecto, Colombia) para quien vive en otro país.
+- **Accesibilidad:** al cerrar una hoja el foco vuelve al botón que la abrió; las pestañas de Dinero miden 44 px; las barras de navegación tienen nombres distintos.
+- **Cambia:** el esquema pasa a **32 tablas** (`Cargos_Reglas`) y se agregan columnas a `Creditos`, `Creditos_Pagos` y `Compras_TC`. Las hojas existentes se actualizan solas **sin cambiar ningún dato** (comprobado con la prueba de migración desde la 1.10.0).
+
+## 1.12.0 — Una sola regla para lo que se repite y para lo que viene (25 nov 2026)
+- **Corregido:** abrir o cobrar el capital de un **CDT** ya no aparece como gasto o ingreso en los gráficos ni en los totales de Movimientos: el dinero solo cambia de lugar (sí cambia el saldo del bolsillo). Antes inflaba el gasto del mes en que abrías el CDT.
+- **Mejora:** pagar una suscripción o recibir un ingreso recurrente son **todo o nada**: si algo falla, el gasto o el ingreso no queda registrado a medias.
+- **Interno:** suscripciones, servicios e ingresos recurrentes comparten sus reglas (`Recurrentes.gs`): periodos, costo mensual y anual, saltar y deshacer. Lo que viene (pagos, ingresos, CDT y fechas de nómina) sale de una sola lista (`proximosEventos_`) para Inicio y Calendar. En la app, cargar una pantalla y anular-avisar-deshacer usan un solo mecanismo (`cargarEn`, `escribirYAvisar`).
+
+## 1.11.0 — Más rápida al guardar y código ordenado (25 nov 2026)
+- **Mejora:** guardar es más rápido. Dentro de una misma operación, Moni ya no vuelve a leer una tabla de la hoja después de cada paso: actualiza lo que ya tenía en memoria. Medido con `tests/medir_llamadas.js` sobre los datos de ejemplo: anular un movimiento pasa de 18 a 6 lecturas de la hoja, pagar una cuota de 38 a 29 y regenerar el presupuesto de 26 a 18.
+- **Mejora:** varias filas se actualizan de una vez (pagar un extracto, anular un pago de crédito, desactivar bolsillos) y el presupuesto de un mes, los saldos y las divisas se calculan una sola vez por operación.
+- **Mejora:** cambiar la tasa del dólar o los recordatorios ya no recarga toda la app.
+- **Interno:** las fechas y las fórmulas financieras viven en `Fechas.gs` y `Finanzas.gs` (antes había copias en seis módulos), y el JavaScript de la app se repartió en partes por módulo. La app se ve y funciona igual.
+
+## 1.10.1 — Correcciones de integridad (25 nov 2026)
+- **Corregido:** las **tasas de los créditos** se redondeaban a 2 decimales: una EA de 9,5 % se guardaba como 10 % y una tasa de 0,4 % por periodo quedaba en 0 % (cuotas sin interés). Desde ahora se guardan exactas. Los créditos creados antes **no cambian solos**: si su tasa parece redondeada, Moni lo avisa en Inicio y en el crédito, con *Está bien* o *Corregir tasa* (solo se rehacen las cuotas pendientes; lo pagado y los saldos no se tocan).
+- **Corregido:** si alguien borraba o movía filas a mano en la hoja, una actualización podía escribir en **otra fila**. Ahora cada escritura comprueba el ID del registro y, si la fila se movió, lo busca.
+- **Corregido:** editar las **notas** de un movimiento generado por la app (un regalo, una suscripción…) rompía su vínculo. El vínculo vive ahora en su propia columna (`Ref`); en los movimientos viejos se copia ahí antes de cambiar la nota.
+- **Corregido:** las categorías que usa la app (salario, rendimientos, regalos, comisiones) se reconocen por un **rol** y no por un ID fijo: puedes renombrarlas sin perder nada.
+- **Corregido:** pagar una cuota, crear un crédito o una compra con tarjeta que aparta dinero son ahora **todo o nada**: si algo falla a mitad de camino, lo hecho se deshace (antes el cronograma o el dinero apartado podían quedar a medias).
+- **Mejora:** sincronizar los recordatorios con Google Calendar ya no frena los registros mientras habla con Calendar.
+- **Cambia:** columnas nuevas `Movimientos.Ref`, `Compras_TC.Ref` y `Categorias.Rol`; las hojas existentes se actualizan solas **sin cambiar ningún dato**. Una prueba nueva toma una hoja de la 1.10.0 con un mes de uso, la actualiza y comprueba celda por celda que nada cambió.
+
 ## 1.10.0 — Abonos y terceros en la tarjeta, y regalos con tarjeta (24 nov 2026)
 - **Nuevo:** al pagar un extracto puedes anotar **quién más aporta** (nombre libre, con sugerencias) y cuánto. No mueve tus bolsillos: solo baja lo que tú pagas.
 - **Nuevo:** **Registrar un abono** a un corte de la tarjeta, de ti (desde un bolsillo) o de otra persona. Baja la deuda y libera cupo, sin apartar dinero en la reserva. Se descuenta al pagar el extracto y se puede anular.
