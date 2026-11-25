@@ -408,6 +408,9 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
 .m-info:hover, .m-info:focus-visible, .m-info-caja.abierto .m-info { color: var(--m-tint); border-color: var(--m-tint); }
 .m-info-txt { display: none; position: absolute; z-index: 60; top: calc(100% + 8px); left: -8px; width: max-content; max-width: min(280px, 78vw); padding: var(--m-space-3); border-radius: var(--m-radius-md); background: var(--m-label); color: var(--m-bg); font-size: var(--m-text-footnote); font-weight: 400; line-height: 1.4; text-align: left; text-transform: none; letter-spacing: 0; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
 .m-info-caja:hover .m-info-txt, .m-info:focus-visible + .m-info-txt, .m-info-caja.abierto .m-info-txt { display: block; }
+/* Junto a un texto que no es una fila de etiqueta (cifras clave, títulos de sección, mensajes): un poco de aire */
+.m-kpi-etiqueta .m-info-caja, .m-seccion-titulo .m-info-caja, .m-resumen-etiqueta .m-info-caja, .m-reg-paso .m-info-caja, .m-hoja-mensaje .m-info-caja { margin-left: 6px; vertical-align: middle; }
+.m-kpi-etiqueta .m-info, .m-seccion-titulo .m-info, .m-resumen-etiqueta .m-info { width: 20px; height: 20px; font-size: 12px; }
 /* ---------- Asistente: bolsillos dentro de la cuenta ---------- */
 .m-bols-asist { margin: var(--m-space-4) 0; padding-top: var(--m-space-3); border-top: 0.5px solid var(--m-separator); }
 .m-fila-bols { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--m-space-3); align-items: start; margin-bottom: var(--m-space-3); }

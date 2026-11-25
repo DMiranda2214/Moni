@@ -76,7 +76,7 @@ function htmlInversiones(d) {
       tablaViz(['Tipo', 'Valor', '%'], d.porTipo.map(x => [x.nombre, dinero(x.valor), porcentajeDe(x.valor, t.valor)])));
   }
   const conUnidades = d.items.filter(i => i.cantidad > 0), sinUnidades = d.items.filter(i => !(i.cantidad > 0));
-  if (conUnidades.length) h += seccion('Tus inversiones', conUnidades.map(filaInversion).join(''));
+  if (conUnidades.length) h += seccion('Tus inversiones', conUnidades.map(filaInversion).join(''), '', 'El valor de hoy de cada inversión y su rentabilidad frente a lo que pagaste (costo promedio). Toca una para registrar compras, ventas, dividendos o su precio.');
   if (sinUnidades.length) h += seccion('Sin unidades', sinUnidades.map(filaInversion).join(''), 'Las que vendiste por completo o en las que aún no registras una compra.');
   if (d.archivadas.length) h += '<p class="m-ayuda">Archivadas: ' + d.archivadas.map(a => esc(a.Nombre)).join(', ') + '. Puedes reactivarlas en Ajustes → Inversiones.</p>';
   return h;
@@ -102,9 +102,9 @@ function htmlInversion(i) {
   let h = '<div class="m-group m-saldo-grande"><div class="m-resumen-etiqueta">' + esc(i.TipoNombre) + (i.Simbolo ? ' · ' + esc(i.Simbolo) : '') + '</div>' +
     '<div class="m-resumen-cifra m-num">' + dinero(i.valor) + '</div>' +
     '<p class="m-ayuda" style="margin:0">' + esc(cantidadTxt(i.cantidad)) + ' unidades · ' + esc(textoPrecio(i)) + '</p>' +
-    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Pagaste</div><strong class="m-num">' + dinero(i.costo) + '</strong></div>' +
-    '<div><div class="m-resumen-etiqueta">Ganancia</div><strong class="m-num ' + claseSaldo(i.ganancia) + (i.ganancia > 0 ? ' m-positivo' : '') + '">' + dinero(i.ganancia) + (i.rentabilidad !== null ? ' (' + esc(rentaTxt(i.rentabilidad)) + ')' : '') + '</strong></div></div>' +
-    ((i.realizado || i.dividendos) ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganado al vender</div><strong class="m-num">' + dinero(i.realizado) + '</strong></div><div><div class="m-resumen-etiqueta">Dividendos</div><strong class="m-num">' + dinero(i.dividendos) + '</strong></div></div>' : '') +
+    '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Pagaste' + htmlInfo(INFO_CIFRAS['Pagaste']) + '</div><strong class="m-num">' + dinero(i.costo) + '</strong></div>' +
+    '<div><div class="m-resumen-etiqueta">Ganancia' + htmlInfo(INFO_CIFRAS['Ganancia']) + '</div><strong class="m-num ' + claseSaldo(i.ganancia) + (i.ganancia > 0 ? ' m-positivo' : '') + '">' + dinero(i.ganancia) + (i.rentabilidad !== null ? ' (' + esc(rentaTxt(i.rentabilidad)) + ')' : '') + '</strong></div></div>' +
+    ((i.realizado || i.dividendos) ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganado al vender' + htmlInfo(INFO_CIFRAS['Ganado al vender']) + '</div><strong class="m-num">' + dinero(i.realizado) + '</strong></div><div><div class="m-resumen-etiqueta">Dividendos' + htmlInfo(INFO_CIFRAS['Dividendos']) + '</div><strong class="m-num">' + dinero(i.dividendos) + '</strong></div></div>' : '') +
     (i.sinTasa ? '<p class="m-ayuda">Falta la tasa de ' + esc(i.Divisa) + ' para pasarla a pesos (Ajustes → Divisas).</p>' : '') + '</div>';
   h += '<div style="display:flex;flex-wrap:wrap;gap:var(--m-space-2);margin:var(--m-space-4) 0">' +
     '<button class="m-btn m-btn-primary" data-acc="inv-op" data-tipo="Compra" data-id="' + id + '">Compré</button>' +
@@ -116,7 +116,7 @@ function htmlInversion(i) {
       titulo: esc(o.Tipo === 'Compra' ? 'Compra' : o.Tipo === 'Venta' ? 'Venta' : 'Dividendo') + (o.Cantidad ? ' · ' + esc(cantidadTxt(o.Cantidad)) + ' u.' : ''),
       sub: esc(fechaTxt(o.Fecha) + (o.Precio ? ' · a ' + dinero(o.Precio, i.Divisa) : '') + (o.Comision ? ' · comisión ' + dinero(o.Comision) : '') + (o.ID_Bolsillo ? '' : ' · sin mover dinero')),
       final: '<span class="m-num ' + (o.Tipo === 'Compra' ? '' : 'm-positivo') + '">' + dinero(o.Valor) + '</span>', chevron: true, attrs: 'data-acc="inv-anular" data-id="' + esc(o.ID_Operacion) + '"'
-    })).join(''), 'Toca una operación para anularla (el dinero vuelve a su bolsillo).');
+    })).join(''), 'Toca una operación para anularla (el dinero vuelve a su bolsillo).', 'Compras, ventas y dividendos de esta inversión, de la más reciente a la más antigua.');
   } else h += '<p class="m-ayuda">Registra tu primera compra con “Compré”: cuántas unidades y cuánto pagaste en pesos.</p>';
   if (i.Notas) h += '<p class="m-ayuda">' + esc(i.Notas) + '</p>';
   return h;
@@ -129,12 +129,12 @@ async function abrirOperacionInversion(i, tipo) {
   const titulo = tipo === 'Compra' ? 'Compré ' + i.Nombre : tipo === 'Venta' ? 'Vendí ' + i.Nombre : 'Dividendo de ' + i.Nombre;
   const grupos = [['', tipo === 'Compra' ? 'No sacar dinero de un bolsillo (ya lo tenía)' : 'No llevar el dinero a un bolsillo']].concat(opcionesDestino(false));
   const campos = [
-    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true },
-    !esDiv && { k: 'Cantidad', label: tipo === 'Venta' ? 'Cuántas unidades vendiste (tienes ' + cantidadTxt(i.cantidad) + ')' : 'Cuántas unidades', tipo: 'decimal', requerido: true, ayuda: 'Puede tener decimales (0,005 bitcoin, 12,5 unidades de un fondo).' },
-    !esDiv && { k: 'Precio', label: 'Precio por unidad en ' + i.Divisa + ' (opcional)', tipo: 'decimal', ayuda: tasa && i.Divisa !== 'COP' ? 'Con la tasa de hoy (' + dinero(tasa) + ' por ' + i.Divisa + ') Moni calcula el valor en pesos; corrígelo con lo que dijo tu banco o comisionista.' : '' },
-    { k: 'Valor', label: esDiv ? 'Cuánto recibiste (en pesos)' : tipo === 'Compra' ? 'Cuánto pagaste en pesos' : 'Cuánto recibiste en pesos', tipo: 'dinero', requerido: true },
-    !esDiv && { k: 'Comision', label: 'Comisión (opcional)', tipo: 'dinero', ayuda: tipo === 'Compra' ? 'Se suma a lo que te costó la inversión.' : 'Se descuenta de lo que recibiste.' },
-    { k: 'ID_Bolsillo', label: tipo === 'Compra' ? 'Sale de' : 'Llega a', tipo: 'select', opciones: () => grupos },
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true, info: 'El día de la operación. Con bolsillo, el dinero se mueve en esta fecha.' },
+    !esDiv && { k: 'Cantidad', label: tipo === 'Venta' ? 'Cuántas unidades vendiste (tienes ' + cantidadTxt(i.cantidad) + ')' : 'Cuántas unidades', tipo: 'decimal', requerido: true, ayuda: 'Puede tener decimales (0,005 bitcoin, 12,5 unidades de un fondo).', info: 'Las acciones, unidades o monedas de la operación. Moni suma las compras y resta las ventas para saber cuántas tienes.' },
+    !esDiv && { k: 'Precio', label: 'Precio por unidad en ' + i.Divisa + ' (opcional)', tipo: 'decimal', info: 'Lo que valía cada unidad, en la moneda del activo. Si no hay otro precio más reciente, Moni lo usa para valorar la inversión.', ayuda: tasa && i.Divisa !== 'COP' ? 'Con la tasa de hoy (' + dinero(tasa) + ' por ' + i.Divisa + ') Moni calcula el valor en pesos; corrígelo con lo que dijo tu banco o comisionista.' : '' },
+    { k: 'Valor', label: esDiv ? 'Cuánto recibiste (en pesos)' : tipo === 'Compra' ? 'Cuánto pagaste en pesos' : 'Cuánto recibiste en pesos', tipo: 'dinero', requerido: true, info: esDiv ? 'El dividendo que te llegó, en pesos. Cuenta como un ingreso.' : 'El total en pesos, sin la comisión. Es lo que mueve tu bolsillo y lo que define tu costo o tu ganancia.' },
+    !esDiv && { k: 'Comision', label: 'Comisión (opcional)', tipo: 'dinero', info: 'Lo que te cobró el comisionista o la plataforma por la operación.', ayuda: tipo === 'Compra' ? 'Se suma a lo que te costó la inversión.' : 'Se descuenta de lo que recibiste.' },
+    { k: 'ID_Bolsillo', label: tipo === 'Compra' ? 'Sale de' : 'Llega a', tipo: 'select', opciones: () => grupos, info: 'Si eliges un bolsillo, el dinero sale de él (o llega a él) y cambia su saldo. Si ya lo tenías registrado aparte, deja que no se mueva.' },
     { k: 'Notas', label: 'Notas', tipo: 'area' }
   ].filter(Boolean);
   await abrirHoja({
@@ -188,8 +188,8 @@ async function abrirPrecioManual(i) {
   await abrirHoja({
     titulo: 'Precio de ' + i.Nombre,
     cuerpo: '<form novalidate data-form="inv-precio"><p class="m-hoja-mensaje">El valor de una unidad hoy, en ' + esc(i.Divisa) + '. Sirve cuando Google Finance no tiene el activo (varias acciones de la BVC, fondos) o para corregirlo.</p>' +
-      htmlCampo({ k: 'Precio', label: 'Precio por unidad', tipo: 'decimal', requerido: true }, i.precio || '', {}) +
-      htmlCampo({ k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true }, App.boot.hoy, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+      htmlCampo({ k: 'Precio', label: 'Precio por unidad', tipo: 'decimal', requerido: true, info: 'Lo que vale hoy una acción o una unidad del fondo, en ' + i.Divisa + '. Lo ves en tu plataforma o en el extracto del fondo.' }, i.precio || '', {}) +
+      htmlCampo({ k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true, info: 'El día de ese precio. Gana el precio más reciente entre el tuyo y el de Google Finance.' }, App.boot.hoy, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Precio', raiz).focus(); },
     alGuardar: async raiz => {
       const p = leerDecimal($('#f-Precio', raiz).value);
@@ -272,7 +272,7 @@ async function nuevaInversion() {
   let enCatalogo = [], enGoogle = [];
   await abrirHoja({
     titulo: 'Agregar una inversión', izq: 'Cancelar', sinGuardar: true,
-    cuerpo: '<div class="m-campo"><label class="m-label" for="inv-buscar">Busca por nombre o símbolo</label>' +
+    cuerpo: '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="inv-buscar">Busca por nombre o símbolo</label>' + htmlInfo('Las sugerencias salen de una lista de activos conocidos (acciones de EE. UU. y de la BVC, ETF y cripto). Si no aparece, “Buscar en Google Finance” prueba el símbolo en las bolsas más comunes.') + '</div>' +
       '<input class="m-input" id="inv-buscar" type="search" autocomplete="off" placeholder="Apple, bitcoin, S&P 500, Ecopetrol, VOO…"></div>' +
       '<div id="inv-res" aria-live="polite"><p class="m-ayuda">Escribe para ver sugerencias. Si no aparece, búscalo por su símbolo en Google Finance.</p></div>' +
       '<div style="display:flex;flex-direction:column;gap:var(--m-space-2);margin-top:var(--m-space-3)">' +

@@ -57,11 +57,44 @@ const CALC = {
 
 App.calc = { tab: 'prestamo', v: {} };
 
+/** Qué es cada dato de la calculadora (el botón "i" junto a su nombre), por pestaña y campo. */
+const INFO_CALC = {
+  'prestamo.monto': 'El dinero que te desembolsa el banco, sin intereses.',
+  'prestamo.plazo': 'En cuántas cuotas mensuales lo pagas.',
+  'prestamo.tasa': 'La tasa que te ofrecen. Compara siempre la efectiva anual (EA): incluye el efecto de cobrar intereses cada mes.',
+  'prestamo.tipoTasa': 'Cómo viene expresada la tasa. EA: efectiva anual. MV: mensual vencida. NAMV: nominal anual que se divide en 12.',
+  'prestamo.seguros': 'Lo que el banco suma a cada cuota aparte del interés: seguro de vida deudores, de desempleo, cuota de manejo…',
+  'ahorro.inicial': 'Lo que ya tienes guardado al empezar.',
+  'ahorro.aporte': 'Lo que agregas al final de cada mes.',
+  'ahorro.tasa': 'Lo que te paga tu cuenta, bolsillo o fondo al año, en efectiva anual. El interés se suma cada mes (interés compuesto).',
+  'ahorro.meses': 'Por cuánto tiempo ahorras.',
+  'meta.objetivo': 'Lo que necesitas reunir.',
+  'meta.inicial': 'Lo que ya tienes para esa meta.',
+  'meta.fecha': 'Para cuándo lo necesitas. Moni cuenta los meses desde este.',
+  'meta.tasa': 'Lo que rinde el lugar donde ahorras. Con 0, el aporte es lo que falta dividido entre los meses.',
+  'cdt.capital': 'Lo que pones en el CDT.',
+  'cdt.tasa': 'La tasa efectiva anual que te ofrece el banco.',
+  'cdt.dias': 'Cuántos días queda el dinero en el CDT.',
+  'cdt.retencion': 'El porcentaje de los intereses que el banco retiene para impuestos. En Colombia suele ser 4 %.',
+  'tasas.tasa': 'La tasa que quieres convertir, en porcentaje.',
+  'tasas.tipo': 'Cómo viene expresada la tasa que escribiste.'
+};
+/** Qué significa cada resultado que usa una palabra técnica. */
+const INFO_RES = {
+  'Tasa mensual': 'Lo que cobra el préstamo cada mes, en efectivo.',
+  'Tasa EA': 'La tasa efectiva anual equivalente: la que sirve para comparar créditos entre sí.',
+  'Efectiva anual': 'Lo que rinde o cuesta al año, contando el interés sobre el interés de cada mes.',
+  'Mensual vencida': 'La tasa de cada mes, pagada al final del mes.',
+  'Nominal mes vencido': 'La tasa mensual multiplicada por 12. Es menor que la efectiva anual.',
+  'Retención': 'Lo que el banco descuenta de los intereses para impuestos.',
+  'Ganas (neto)': 'Los intereses menos la retención: lo que realmente ganas.'
+};
+
 /** Campo numérico de las herramientas (los valores se guardan mientras navegas). */
 function campoCalc(grupo, k, label, valor, o) {
   const op = o || {};
   const id = 'c-' + grupo + '-' + k;
-  return '<div class="m-campo"><label class="m-label" for="' + id + '">' + esc(label) + '</label>' +
+  return '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="' + id + '">' + esc(label) + '</label>' + htmlInfo(op.info || INFO_CALC[grupo + '.' + k]) + '</div>' +
     (op.opciones
       ? '<select class="m-input" id="' + id + '" data-calc="' + k + '">' + op.opciones.map(x => '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor) ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</select>'
       : '<input class="m-input' + (op.tipo === 'date' ? '' : ' m-num') + '" id="' + id + '" data-calc="' + k + '" ' + (op.tipo === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" autocomplete="off"') + ' value="' + esc(valor === undefined || valor === null ? '' : valor) + '"' + (op.placeholder ? ' placeholder="' + esc(op.placeholder) + '"' : '') + '>') +
@@ -72,7 +105,7 @@ const dr = n => dinero(Math.round(n));
 const numCalc = v => { const n = leerDecimal(v); return typeof n === 'number' && !isNaN(n) ? n : 0; };
 const pctCalc = v => numCalc(v) / 100;
 const pct1 = n => (Math.round(n * 100) / 100).toLocaleString('es-CO') + ' %';
-const filaRes = (etq, valor, clase) => '<div><div class="m-resumen-etiqueta">' + esc(etq) + '</div><strong class="m-num ' + (clase || '') + '">' + valor + '</strong></div>';
+const filaRes = (etq, valor, clase) => '<div><div class="m-resumen-etiqueta">' + esc(etq) + htmlInfo(INFO_RES[etq]) + '</div><strong class="m-num ' + (clase || '') + '">' + valor + '</strong></div>';
 
 // ---------------------------------------------------------------------------
 // Calculadora

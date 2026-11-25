@@ -39,8 +39,25 @@ function cabeceraDestacada(etq, cifra, sub, barra) {
 }
 /** Dinero para una cifra clave: desde un millón, abreviado para que quepa en tres columnas en el celular ($ 2,6 M). */
 const dk = v => Math.abs(v) >= 1e6 ? esc(compactoMoneda(v, 'COP')) : dinero(v);
+/** Qué significa cada cifra clave (el botón "i" junto a su nombre). */
+const INFO_CIFRAS = {
+  'Este mes': 'Lo que llevas apartado este mes frente a lo que planeaste apartar.',
+  'En curso': 'Metas activas: cada una entra a tu presupuesto del mes con lo que planeaste.',
+  'Atrasadas': 'Metas en las que llevas menos de lo que decía su plan hasta el mes pasado.',
+  'Faltan': 'Lo que te falta para llegar a la meta (el monto menos lo ahorrado).',
+  'Quedan': 'Meses que quedan hasta la fecha final de la meta, contando este.',
+  'Por comprar': 'Lo que piensas gastar en lo que todavía no has comprado.',
+  'Ya gastado': 'Lo que pagaste por lo que ya compraste, registrado como gasto o anotado a mano.',
+  'Te ahorraste': 'La diferencia entre lo que pensabas gastar y lo que pagaste, solo en lo ya comprado.',
+  'Te pasaste': 'Lo que pagaste de más frente a lo que pensabas gastar, solo en lo ya comprado.',
+  'Ganancia': 'Lo que valen hoy tus inversiones menos lo que pagaste por ellas. Es ganancia en papel hasta que vendas.',
+  'Al vender': 'Lo que ganaste (o perdiste) en tus ventas, frente a lo que te costaron esas unidades.',
+  'Dividendos': 'Lo que te pagaron las empresas o los fondos por tener sus acciones o unidades.',
+  'Pagaste': 'Lo que te costaron las unidades que tienes hoy, con sus comisiones (costo promedio: al vender, sale la parte proporcional).',
+  'Ganado al vender': 'Lo que ganaste (o perdiste) en tus ventas, frente a lo que te costaron esas unidades.'
+};
 function cifrasClave(items) {
-  return '<div class="m-kpis">' + items.map(k => '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(k[0]) + '</div><div class="m-kpi-valor m-num ' + (k[3] || '') + '">' + k[1] + '</div><div class="m-kpi-pie">' + (k[2] || '') + '</div></div>').join('') + '</div>';
+  return '<div class="m-kpis">' + items.map(k => '<div class="m-kpi"><div class="m-kpi-etiqueta">' + esc(k[0]) + htmlInfo(INFO_CIFRAS[k[0]]) + '</div><div class="m-kpi-valor m-num ' + (k[3] || '') + '">' + k[1] + '</div><div class="m-kpi-pie">' + (k[2] || '') + '</div></div>').join('') + '</div>';
 }
 const chipEstadoMeta = m => {
   const e = ESTADOS_META[m.estado] || ['', ''];
@@ -79,8 +96,8 @@ function htmlMetas(d) {
       ['En curso', String(t.cantidad), t.cantidad === 1 ? 'meta activa' : 'metas activas'],
       ['Atrasadas', String(activas.filter(m => m.estado === 'atrasada' || m.estado === 'vencida').length), 'frente a su plan']
     ]) +
-    (activas.length ? seccion('En curso', activas.map(filaMeta).join(''), 'Cada meta activa entra a tu presupuesto del mes con lo que planeaste apartar.') : '') +
-    (otras.length ? seccion('Logradas, cumplidas o en pausa', otras.map(filaMeta).join('')) : '') + archivadas;
+    (activas.length ? seccion('En curso', activas.map(filaMeta).join(''), 'Cada meta activa entra a tu presupuesto del mes con lo que planeaste apartar.', 'La barra muestra cuánto llevas del total. Toca una meta para ver su plan mes a mes, aportar o usar el dinero.') : '') +
+    (otras.length ? seccion('Logradas, cumplidas o en pausa', otras.map(filaMeta).join(''), '', 'Las metas en pausa no entran al presupuesto. Las logradas ya tienen todo el dinero; márcalas como cumplidas cuando lo uses.') : '') + archivadas;
 }
 
 function vMeta(id) {
@@ -123,7 +140,8 @@ function htmlMeta(m) {
   const viene = m.plan.filter(p => !p.pasado).slice(0, 4);
   if (viene.length) h += seccion('Lo que viene', viene.map(p => fila({ titulo: esc(mesTexto(p.mes)), sub: p.manual ? 'Lo escribiste tú' : 'Automático: Moni reparte lo que falta',
     final: '<strong class="m-num">' + dinero(p.plan) + '</strong>' + (p.aportado > 0 ? '<span class="m-row-sub" style="display:block">llevas ' + dinero(p.aportado) + '</span>' : '') })).join('') +
-    (m.plan.filter(p => !p.pasado).length > viene.length ? '' : ''), 'Toca “Plan por mes” para cambiar lo que apartas en cualquier mes.');
+    (m.plan.filter(p => !p.pasado).length > viene.length ? '' : ''), 'Toca “Plan por mes” para cambiar lo que apartas en cualquier mes.',
+    'Lo que planeas apartar en los próximos meses. Los meses automáticos se recalculan si un mes aportas más o menos de lo planeado.');
 
   if (m.plan.length > 1) {
     const puntos = puntosMeses(m.plan.map(p => p.mes));
@@ -140,7 +158,7 @@ function htmlMeta(m) {
   }
   if (m.movimientos.length) {
     h += seccion('Aportes y usos', m.movimientos.map(x => fila({ titulo: esc(x.Concepto), sub: esc(fechaTxt(x.Fecha)) + ' · ' + (x.tipo === 'Uso' ? 'usado' : 'aporte'),
-      final: '<span class="m-num ' + (x.tipo === 'Uso' ? 'm-negativo' : 'm-positivo') + '">' + dinero(x.Valor) + '</span>', chevron: true, attrs: 'data-acc="mov" data-id="' + esc(x.ID_Mov) + '"' })).join(''));
+      final: '<span class="m-num ' + (x.tipo === 'Uso' ? 'm-negativo' : 'm-positivo') + '">' + dinero(x.Valor) + '</span>', chevron: true, attrs: 'data-acc="mov" data-id="' + esc(x.ID_Mov) + '"' })).join(''), '', 'Aportes: dinero que llevaste al bolsillo de la meta. Usos: gastos que hiciste con ese dinero. Toca uno para verlo o anularlo.');
   }
   if (m.usado > 0) h += '<p class="m-ayuda">Ya usaste ' + dinero(m.usado) + ' de esta meta (no baja lo ahorrado).</p>';
   if (m.Notas) h += '<p class="m-ayuda">' + esc(m.Notas) + '</p>';
@@ -150,7 +168,7 @@ function htmlMeta(m) {
 async function abrirPlanMeta(m) {
   const futuros = m.plan.filter(p => !p.pasado);
   if (!futuros.length) { aviso('La meta ya no tiene meses por delante. Edítala para cambiar la fecha.', true); return; }
-  const cuerpo = '<form novalidate data-form="plan-meta"><p class="m-hoja-mensaje">Escribe lo que puedes apartar en cada mes (puede ser 0). Los meses que dejes vacíos se reparten solos lo que falta: hoy, unos ' + dinero(m.sugerido) + ' cada uno.</p>' +
+  const cuerpo = '<form novalidate data-form="plan-meta"><p class="m-hoja-mensaje">Escribe lo que puedes apartar en cada mes (puede ser 0). Los meses que dejes vacíos se reparten solos lo que falta: hoy, unos ' + dinero(m.sugerido) + ' cada uno.' + htmlInfo('Un valor escrito queda fijo aunque aportes más o menos. Para que un mes vuelva a ser automático, borra su valor.') + '</p>' +
     futuros.map(p => '<div class="m-campo"><label class="m-label" for="pm-' + p.mes + '">' + esc(mesTexto(p.mes)) + (p.aportado > 0 ? ' · llevas ' + dinero(p.aportado) : '') + '</label>' +
       '<input class="m-input m-num" id="pm-' + p.mes + '" data-mes="' + p.mes + '" inputmode="decimal" placeholder="Automático: ' + esc(dinero(p.manual ? m.sugerido : p.plan)) + '" value="' + (p.manual ? esc(String(p.plan)) : '') + '"></div>').join('') +
     '<p class="m-ayuda" id="pm-total" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
@@ -289,19 +307,19 @@ function aplicarRegalos(data) { if (App.reg.anio === data.anio) App.reg.data = d
 async function abrirRegalo(item) {
   const personas = activos('Personas');
   const campos = [
-    { k: 'Para', label: 'Para quién', tipo: 'select', opciones: () => [['Yo', 'Para mí']].concat(personas.map(p => [p.ID_Persona, p.Nombre])),
+    { k: 'Para', label: 'Para quién', tipo: 'select', info: 'Para ti o para alguien de tu lista de personas. Los totales separan lo tuyo de lo que regalas.', opciones: () => [['Yo', 'Para mí']].concat(personas.map(p => [p.ID_Persona, p.Nombre])),
       ayuda: personas.length ? 'Para regalarle a alguien que no está en la lista, agrégalo en Ajustes → Personas.' : 'Para anotar regalos para otros, agrega a las personas en Ajustes → Personas.' },
-    { k: 'Idea', label: 'Qué (opcional)', tipo: 'texto', maxlength: 120, ayuda: 'Puedes dejarlo vacío y juntar varias ideas antes de decidir.' },
-    { k: 'Categoria', label: 'Categoría', tipo: 'select', opciones: () => Object.keys(CATEGORIAS_DESEO).map(k => [k, CATEGORIAS_DESEO[k]]) },
-    { k: 'Estimado', label: 'Cuánto quieres gastar', tipo: 'dinero', requerido: true },
-    { k: 'Ocasion', label: 'Ocasión (opcional)', tipo: 'texto', maxlength: 60, lista: OCASIONES },
-    { k: 'Fecha_Objetivo', label: 'Para cuándo (opcional)', tipo: 'fecha' },
-    { k: 'Prioridad', label: 'Prioridad', tipo: 'select', opciones: () => [['', 'Sin prioridad'], ['Alta', 'Alta'], ['Media', 'Media'], ['Baja', 'Baja']] },
-    { k: 'Estado', label: 'Estado', tipo: 'select', opciones: () => [['Idea', 'Idea'], ['Decidido', 'Decidido'], ['Comprado', 'Comprado'], ['Descartado', 'Descartado']] },
-    { k: 'Enlace', label: 'Enlace (opcional)', tipo: 'texto', maxlength: 500, ayuda: 'La página del producto, para encontrarlo después.' },
-    { k: 'ID_Bolsillo_Plan', label: '¿De qué bolsillo planeas pagarlo? (opcional)', tipo: 'select', opciones: () => opcionesDestino(true),
+    { k: 'Idea', label: 'Qué (opcional)', tipo: 'texto', maxlength: 120, info: 'Lo que piensas comprar. Si todavía no lo sabes, déjalo vacío y anota varias ideas en la lluvia de ideas.', ayuda: 'Puedes dejarlo vacío y juntar varias ideas antes de decidir.' },
+    { k: 'Categoria', label: 'Categoría', tipo: 'select', info: 'Para agrupar tu lista y ver en qué piensas gastar más.', opciones: () => Object.keys(CATEGORIAS_DESEO).map(k => [k, CATEGORIAS_DESEO[k]]) },
+    { k: 'Estimado', label: 'Cuánto quieres gastar', tipo: 'dinero', requerido: true, info: 'Tu tope para esta compra. Al comprar, Moni compara lo que pagaste con este valor.' },
+    { k: 'Ocasion', label: 'Ocasión (opcional)', tipo: 'texto', maxlength: 60, lista: OCASIONES, info: 'Navidad, un cumpleaños, un aniversario… o simplemente porque sí.' },
+    { k: 'Fecha_Objetivo', label: 'Para cuándo (opcional)', tipo: 'fecha', info: 'La fecha en la que lo necesitas, por ejemplo el día del cumpleaños.' },
+    { k: 'Prioridad', label: 'Prioridad', tipo: 'select', info: 'Qué tan importante es frente a lo demás de tu lista, para decidir qué comprar primero.', opciones: () => [['', 'Sin prioridad'], ['Alta', 'Alta'], ['Media', 'Media'], ['Baja', 'Baja']] },
+    { k: 'Estado', label: 'Estado', tipo: 'select', info: 'Idea: lo estás pensando. Decidido: ya sabes qué comprar. Comprado: ya lo tienes. Descartado: no va y sale de los totales.', opciones: () => [['Idea', 'Idea'], ['Decidido', 'Decidido'], ['Comprado', 'Comprado'], ['Descartado', 'Descartado']] },
+    { k: 'Enlace', label: 'Enlace (opcional)', tipo: 'texto', maxlength: 500, info: 'La dirección de la página del producto (empieza por https://).', ayuda: 'La página del producto, para encontrarlo después.' },
+    { k: 'ID_Bolsillo_Plan', label: '¿De qué bolsillo planeas pagarlo? (opcional)', tipo: 'select', opciones: () => opcionesDestino(true), info: 'Si lo pagas con tarjeta de crédito, Moni te recuerda mover ese dinero desde este bolsillo a la reserva de la tarjeta.',
       ayuda: 'Si lo compras con tarjeta de crédito, Moni te recordará pasar ese dinero de este bolsillo a la reserva de la tarjeta.' },
-    { k: 'Aplica', label: 'Cuenta este año', tipo: 'interruptor', ayuda: 'Apágalo si este año no va: no suma en los totales.' },
+    { k: 'Aplica', label: 'Cuenta este año', tipo: 'interruptor', info: 'Apagado, se queda en la lista pero no suma en los totales del año.', ayuda: 'Apágalo si este año no va: no suma en los totales.' },
     { k: 'Notas', label: 'Notas', tipo: 'area' }
   ];
   const v0 = item ? Object.assign({}, item, { Para: item.ParaMi ? 'Yo' : item.ID_Persona, Estado: item.Estado || 'Idea' }) : { Aplica: true, Para: 'Yo', Categoria: 'Otro', Estado: 'Idea' };
@@ -343,8 +361,8 @@ async function abrirDetalleRegalo(id) {
   await abrirHoja({
     titulo: it.Idea || (it.ParaMi ? it.CategoriaNombre : 'Regalo para ' + it.Persona), izq: 'Cerrar', sinGuardar: true,
     cuerpo: '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
-      '<h3 class="m-reg-paso">Lluvia de ideas</h3><div class="m-group">' + (ideas || '<p class="m-ayuda" style="padding:var(--m-space-3)">Anota varias opciones y elige la mejor cuando decidas.</p>') + '</div>' +
-      '<div class="m-campo" style="margin-top:var(--m-space-3)"><label class="m-label" for="idea-texto">Nueva idea</label><input class="m-input" id="idea-texto" maxlength="160" placeholder="Por ejemplo: audífonos inalámbricos"></div>' +
+      '<h3 class="m-reg-paso">Lluvia de ideas' + htmlInfo('Varias opciones para lo mismo, para comparar precios antes de decidir.') + '</h3><div class="m-group">' + (ideas || '<p class="m-ayuda" style="padding:var(--m-space-3)">Anota varias opciones y elige la mejor cuando decidas.</p>') + '</div>' +
+      '<div class="m-campo" style="margin-top:var(--m-space-3)"><div class="m-label-fila"><label class="m-label" for="idea-texto">Nueva idea</label>' + htmlInfo('Anota varias opciones con su precio y su enlace. Cuando decidas, toca “Elegir”: esa idea pasa a ser lo que vas a comprar.') + '</div><input class="m-input" id="idea-texto" maxlength="160" placeholder="Por ejemplo: audífonos inalámbricos"></div>' +
       '<div class="m-cargo-fila" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)"><input class="m-input m-num" id="idea-precio" inputmode="decimal" placeholder="Precio (opcional)" aria-label="Precio de la idea">' +
       '<input class="m-input" id="idea-enlace" placeholder="Enlace (opcional)" aria-label="Enlace de la idea"></div>' +
       '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin:var(--m-space-2) 0 var(--m-space-4)" data-hoja-acc="agregar-idea">Agregar idea</button>' +
@@ -377,7 +395,7 @@ async function abrirMarcarComprado(it) {
   await abrirHoja({
     titulo: 'Ya lo compré',
     cuerpo: '<form novalidate data-form="deseo-comprado"><p class="m-hoja-mensaje">Se anota en tu lista, sin mover ningún saldo. Si quieres que cuente como gasto, usa “Registrar la compra”.</p>' +
-      htmlCampo({ k: 'Precio_Pagado', label: 'Cuánto costó', tipo: 'dinero', requerido: true }, it.Estimado || '', {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+      htmlCampo({ k: 'Precio_Pagado', label: 'Cuánto costó', tipo: 'dinero', requerido: true, info: 'Solo se anota en tu lista para comparar con lo estimado. No crea un gasto ni cambia tus saldos.' }, it.Estimado || '', {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Precio_Pagado', raiz).focus(); },
     alGuardar: async raiz => {
       const v = leerDinero($('#f-Precio_Pagado', raiz).value);

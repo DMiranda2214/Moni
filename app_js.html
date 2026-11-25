@@ -839,9 +839,9 @@ function fila(o) {
   return '<button class="m-row' + (o.clase ? ' ' + o.clase : '') + '" ' + (o.attrs || '') + '>' + cuerpo + '</button>';
 }
 
-function seccion(titulo, filas, pie) {
+function seccion(titulo, filas, pie, info) {
   return '<section class="m-seccion"' + (titulo ? ' aria-label="' + esc(titulo) + '"' : '') + '>' +
-    (titulo ? '<h2 class="m-seccion-titulo">' + esc(titulo) + '</h2>' : '') +
+    (titulo ? '<h2 class="m-seccion-titulo">' + esc(titulo) + (info ? htmlInfo(info) : '') + '</h2>' : '') +
     '<div class="m-group">' + filas + '</div>' + (pie ? '<p class="m-seccion-pie">' + pie + '</p>' : '') + '</section>';
 }
 

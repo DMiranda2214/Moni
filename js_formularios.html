@@ -405,6 +405,25 @@ const INFO_CAMPOS = {
     Vigente: 'El escenario que se usa para calcular tu nómina de cada mes.',
     subsidios: 'Los subsidios que recibes en este escenario.'
   },
+  Metas: {
+    Nombre: 'Cómo la reconoces: “Navidad 2027”, “Viaje a la costa”, “Moto”…',
+    Motivo: 'Para qué es. Solo sirve para ordenarla y mostrarla; no cambia ningún cálculo.',
+    Monto_Objetivo: 'Cuánto necesitas reunir en total para lograrla.',
+    Ahorro_Inicial: 'Lo que ya tenías guardado para esta meta antes de crearla. Cuenta en el avance, pero no mueve dinero.',
+    Fecha_Inicio: 'Desde qué mes empiezas a ahorrar. El plan reparte lo que falta entre este mes y la fecha final.',
+    Fecha_Fin: 'Para cuándo quieres tener el dinero. Si cambias la fecha, Moni vuelve a repartir lo que falta.',
+    ID_Bolsillo: 'El bolsillo donde guardas el dinero de la meta. Los aportes llegan aquí y el renglón del presupuesto apunta a él.',
+    Estado: 'Activa: entra al presupuesto cada mes. En pausa: deja de entrar, sin perder lo ahorrado. Cumplida: ya la lograste.',
+    Notas: 'Lo que quieras recordar de esta meta.'
+  },
+  Inversiones: {
+    Nombre: 'Cómo la reconoces en tu lista.',
+    Tipo: 'Acción, ETF, cripto, fondo, bono u otro. Sirve para ver en qué tienes invertido.',
+    Simbolo: 'El código con el que Google Finance encuentra el activo, por ejemplo NASDAQ:AAPL o CURRENCY:BTCUSD. Con él, Moni trae el precio cada día.',
+    Divisa: 'La moneda en la que está el precio. Si no es en pesos, Moni lo convierte con la tasa de Ajustes → Divisas.',
+    Precio_Manual: 'El valor de una unidad hoy, si Google no tiene el activo. Gana el precio más reciente entre este y el de Google.',
+    Notas: 'Lo que quieras recordar: dónde la compraste, la plataforma, tu estrategia…'
+  },
   Escenarios: {
     Nombre: 'Una versión de tu presupuesto: “Normal”, “Contingencia”…',
     Descripcion: 'Una nota para recordar cuándo usarlo.',
@@ -443,6 +462,18 @@ function htmlInfo(texto) {
     '<span class="m-info-txt" role="tooltip" id="' + id + '">' + esc(texto) + '</span></span>';
 }
 
+/** El globo se abre hacia la derecha del botón; si no cabe en la pantalla (un botón al lado derecho), se corre hacia la izquierda. */
+function acomodarGlobo(caja) {
+  const t = $('.m-info-txt', caja);
+  if (!t) return;
+  t.style.left = '';
+  const r = t.getBoundingClientRect(), margen = 12;
+  if (r.right > window.innerWidth - margen) t.style.left = (-8 - (r.right - (window.innerWidth - margen))) + 'px';
+  else if (r.left < margen) t.style.left = (-8 + (margen - r.left)) + 'px';
+}
+document.addEventListener('mouseover', ev => { const c = ev.target.closest && ev.target.closest('.m-info-caja'); if (c) acomodarGlobo(c); });
+document.addEventListener('focusin', ev => { const c = ev.target.closest && ev.target.closest('.m-info-caja'); if (c) acomodarGlobo(c); });
+
 function cerrarInfos(excepto) {
   $$('.m-info-caja.abierto').forEach(c => { if (c !== excepto) { c.classList.remove('abierto'); const b = $('.m-info', c); if (b) b.setAttribute('aria-expanded', 'false'); } });
 }
@@ -457,6 +488,7 @@ document.addEventListener('click', ev => {
   const abrir = !caja.classList.contains('abierto');
   cerrarInfos(caja);
   caja.classList.toggle('abierto', abrir);
+  if (abrir) acomodarGlobo(caja);
   b.setAttribute('aria-expanded', String(abrir));
 });
 document.addEventListener('keydown', ev => {

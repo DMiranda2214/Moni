@@ -1,5 +1,12 @@
 # Cambios
 
+## 1.18.1 — Ayudas en los módulos nuevos (25 nov 2026)
+- **Mejora:** Metas, Lista de deseos, Inversiones y la Calculadora tienen el botón de ayuda **i**, como el resto de la app:
+  - en cada campo de sus formularios (crear y editar, plan por mes, lluvia de ideas, comprar, vender, dividendo, precio y buscar una inversión);
+  - en sus cifras clave y títulos de sección;
+  - en los resultados de la Calculadora que usan palabras técnicas (tasa EA, mensual vencida, nominal, retención, neto).
+- **Corregido:** el globo de ayuda de un botón al lado derecho de la pantalla se salía por el borde en el celular. Ahora se corre hacia adentro (en toda la app).
+
 ## 1.18.0 — Navegación por intención (25 nov 2026)
 Elegida entre cuatro propuestas, siguiendo las Human Interface Guidelines: secciones planas con nombres de tarea, dos niveles como máximo y las mismas secciones en el celular y en el computador.
 - **Cambia: cuatro secciones según lo que quieres hacer.**
