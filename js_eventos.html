@@ -287,6 +287,7 @@ const ACCIONES = {
   'ocultar-cifras': () => { try { localStorage.setItem('moni.ocultar', cifrasOcultas() ? '0' : '1'); } catch (e) {} render(); },
   buscar: () => abrirBuscador(),
   'lat-alternar': () => alternarLateral(),
+  'lat-plegar': el => alternarSeccionLateral(el.dataset.area),
   ir: el => navegar(el.dataset.ruta),
   volver: () => volver(),
   'actualizar-datos': async () => {

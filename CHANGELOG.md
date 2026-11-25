@@ -1,5 +1,20 @@
 # Cambios
 
+## 1.18.0 — Navegación por intención (25 nov 2026)
+Elegida entre cuatro propuestas, siguiendo las Human Interface Guidelines: secciones planas con nombres de tarea, dos niveles como máximo y las mismas secciones en el celular y en el computador.
+- **Cambia: cuatro secciones según lo que quieres hacer.**
+  - **Mi dinero:** Bolsillos, Movimientos, Ahorro e Inversiones.
+  - **Pagos:** Servicios y suscripciones, Tarjetas y Créditos.
+  - **Planear:** Presupuesto, Ingresos, Metas y Lista de deseos.
+  - **Analizar:** Análisis, Vista anual y Calculadora.
+- **Cambia: la barra lateral** muestra todas las pantallas, a un clic, bajo encabezados que se **pliegan** como en Mail. Lo plegado se recuerda y la sección de la pantalla abierta siempre está a la vista. Contraída, deja solo los íconos.
+- **Cambia: en el celular**, las pestañas son Inicio, Mi dinero, Pagos y Planear (con el **+** en el centro). Arriba de cada pantalla, unas pestañas llevan a las demás de su sección. *Analizar* se abre desde Planear.
+- **Cambia: pantallas que se unen o se separan.**
+  - Los **CDT** viven dentro de **Inversiones** (pestaña *CDT*).
+  - **Nómina** y **Otros ingresos** son **Ingresos**, con una pestaña cada uno.
+  - **Deudas** se separa en **Tarjetas** y **Créditos**, junto a Servicios y suscripciones.
+- **Tus datos no cambian:** las mismas pantallas, ahora en otro lugar.
+
 ## 1.17.0 — Navegación más simple y pantallas más claras (25 nov 2026)
 - **Cambia: la barra lateral** muestra solo las cuatro áreas (Inicio, Dinero, Planear, Deudas) y Ajustes al pie. El área abierta despliega sus pantallas debajo, y la pantalla de entrada de cada área está organizada por secciones, como Ajustes. Planear queda en *Cada mes*, *Ahorrar y comprar*, *Mirar el año* y *Herramientas*.
 - **Cambia:** la *Guía de uso* sale de la barra lateral y de Planear: está en Ajustes.

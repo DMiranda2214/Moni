@@ -465,13 +465,11 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
   .m-lat-item { display: flex; align-items: center; gap: var(--m-space-3); width: 100%; box-sizing: border-box; min-height: var(--m-hit); padding: 0 var(--m-space-3); border: 0; border-radius: 12px; background: transparent; color: var(--m-label-2); font: inherit; font-size: var(--m-text-subheadline); font-weight: 600; text-align: left; cursor: pointer; }
   .m-lat-item:hover { background: var(--m-fill); }
   .m-lat-item[aria-current="page"] { background: var(--m-tint-soft); color: var(--m-tint); }
-  .m-lat-item[aria-current="true"] { color: var(--m-tint); }
-  /* Pantallas del área abierta, debajo de ella (como una lista de Ajustes, sin íconos) */
-  .m-lat-subs { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 var(--m-space-2) calc(var(--m-space-3) + 12px); padding-left: var(--m-space-3); border-left: 1px solid var(--m-separator); }
-  .m-lat-sub { display: flex; align-items: center; width: 100%; min-height: 36px; padding: 0 var(--m-space-3); border: 0; border-radius: 10px; background: transparent; color: var(--m-label-2); font: inherit; font-size: var(--m-text-footnote); font-weight: 500; text-align: left; cursor: pointer; }
-  .m-lat-sub:hover { background: var(--m-fill); }
-  .m-lat-sub[aria-current="page"] { background: var(--m-tint-soft); color: var(--m-tint); font-weight: 600; }
-  body.m-lat-chica .m-lat-subs { display: none; }
+  /* Encabezado de sección que se pliega (como en Mail): un botón, con la flecha a la derecha */
+  .m-lat-grupo { display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box; min-height: 32px; border: 0; background: transparent; font-family: inherit; cursor: pointer; border-radius: 8px; }
+  .m-lat-grupo:hover { background: var(--m-fill); }
+  .m-lat-lista { display: flex; flex-direction: column; gap: 2px; }
+  .m-lat-lista[hidden] { display: none; }
   .m-lat-pie { margin-top: auto; padding-top: var(--m-space-2); border-top: 0.5px solid var(--m-separator); display: flex; flex-direction: column; gap: 2px; }
   .m-lat-usuario { display: flex; align-items: center; gap: var(--m-space-3); padding: var(--m-space-3) var(--m-space-2) 0; font-size: var(--m-text-footnote); font-weight: 700; }
   /* Barra contraída: solo íconos */
@@ -479,6 +477,7 @@ body.m-asistente #contenido { margin-left: 0; padding-bottom: var(--m-space-5); 
   body.m-lat-chica .m-lat-cab { flex-direction: column; padding-left: 0; padding-right: 0; }
   body.m-lat-chica .m-lat-registrar, body.m-lat-chica .m-lat-buscar, body.m-lat-chica .m-lat-item { justify-content: center; padding: 0; }
   body.m-lat-chica .m-lat-grupo { display: none; }
+  body.m-lat-chica .m-lat-lista, body.m-lat-chica .m-lat-lista[hidden] { display: flex; } /* contraída, solo íconos: se ven todas las pantallas */
   body.m-lat-chica .m-lat-sep { display: block; height: 1px; margin: var(--m-space-2) var(--m-space-3); background: var(--m-separator); }
   body.m-lat-chica .m-lat-usuario { justify-content: center; padding-left: 0; padding-right: 0; }
 }

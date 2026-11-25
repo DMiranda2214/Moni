@@ -339,12 +339,12 @@ function htmlNominaGraficos(c) {
 
 /** Presupuesto: cuánto se lleva gastado de cada renglón frente a lo planeado (los 8 más avanzados). */
 /** Deudas: cupo usado de cada tarjeta y avance de pago de cada crédito activo. */
-function htmlMedidoresDeudas(d) {
+function htmlMedidoresDeudas(d, solo) {
   let h = '';
   const tarjetas = d.tarjetas.filter(t => t.Cupo > 0).map(t => { const usado = Math.round((t.Cupo - t.cupoDisponible) * 100) / 100; return { nombre: t.Nombre, valor: usado, tope: t.Cupo, texto: dinero(usado) + ' de ' + dinero(t.Cupo) }; });
-  if (tarjetas.length) h += tarjetaMedidores('deu-cupo', 'Cupo usado', tarjetas);
+  if (tarjetas.length && solo !== 'creditos') h += tarjetaMedidores('deu-cupo', 'Cupo usado', tarjetas);
   const creditos = d.creditos.filter(c => c.Estado === 'Activo' && c.Monto > 0).map(c => { const pagado = Math.round((c.Monto - c.saldo) * 100) / 100; return { nombre: c.Nombre, valor: pagado, tope: c.Monto, texto: dinero(pagado) + ' de ' + dinero(c.Monto) }; });
-  if (creditos.length) h += tarjetaMedidores('deu-creditos', 'Avance de los créditos', creditos);
+  if (creditos.length && solo !== 'tarjetas') h += tarjetaMedidores('deu-creditos', 'Avance de los créditos', creditos);
   return h;
 }
 

@@ -17,29 +17,38 @@ const ACENTOS = {
 };
 // </ACENTOS>
 
-/** Las cuatro áreas de la app. Cada una abre su pantalla de entrada (`ruta`). */
+/**
+ * Navegación por intención (1.18): cuatro secciones que dicen para qué sirve cada parte (Mi dinero, Pagos, Planear y
+ * Analizar), las mismas en la barra lateral y en la barra de pestañas del celular. En el celular, Analizar se abre
+ * desde Planear (las pestañas son máximo cinco, contando el botón de registrar).
+ */
 const TABS = [
   { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: 'inicio' },
-  { id: 'dinero', etiqueta: 'Dinero', icono: 'bolsillos', ruta: 'bolsillos' },
-  { id: 'planear', etiqueta: 'Planear', icono: 'calendario', ruta: 'planear' },
-  { id: 'deudas', etiqueta: 'Deudas', icono: 'tarjetas', ruta: 'tarjetas' }
+  { id: 'dinero', etiqueta: 'Mi dinero', icono: 'bolsillos', ruta: 'bolsillos' },
+  { id: 'pagos', etiqueta: 'Pagos', icono: 'tarjetas', ruta: 'pagos' },
+  { id: 'planear', etiqueta: 'Planear', icono: 'calendario', ruta: 'planear' }
 ];
 
-/** Cada pantalla principal pertenece a un área: el área marca la pestaña (o el grupo de la barra lateral) activa. */
-const AREA_DE_RUTA = {
-  inicio: 'inicio', bolsillos: 'dinero', movimientos: 'dinero', ahorro: 'dinero', cdt: 'dinero', inversiones: 'dinero',
-  planear: 'planear', presupuesto: 'planear', nomina: 'planear', ingresos: 'planear', pagos: 'planear', regalos: 'planear', deseos: 'planear', anual: 'planear', analisis: 'planear',
-  metas: 'planear', calculadora: 'planear',
-  tarjetas: 'deudas', ajustes: 'ajustes', guia: 'ajustes'
-};
-
-/** Grupos de la barra lateral y pestañas internas de Dinero: [ruta, etiqueta, ícono]. */
+/**
+ * Secciones de la barra lateral y pestañas internas de cada área: [ruta, etiqueta, ícono, otras rutas que pertenecen a esa
+ * misma pantalla]. CDT vive dentro de Inversiones y Otros ingresos dentro de Ingresos (con pestañas arriba).
+ */
 const GRUPOS_NAV = [
-  { area: 'dinero', titulo: 'Dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['cdt', 'CDT', 'capas'], ['inversiones', 'Inversiones', 'tendencia']] },
-  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Nómina', 'usuario'], ['ingresos', 'Otros ingresos', 'usuario'], ['pagos', 'Servicios y suscripciones', 'tarjetas'], ['metas', 'Metas', 'meta'], ['deseos', 'Lista de deseos', 'regalo'], ['anual', 'Vista anual', 'calendario'], ['analisis', 'Análisis', 'pulso'], ['calculadora', 'Calculadora', 'calculadora']] },
-  { area: 'deudas', titulo: 'Deudas', items: [['tarjetas', 'Tarjetas y créditos', 'tarjetas']] }
+  { area: 'dinero', titulo: 'Mi dinero', items: [['bolsillos', 'Bolsillos', 'bolsillos'], ['movimientos', 'Movimientos', 'presupuesto'], ['ahorro', 'Ahorro', 'escudo'], ['inversiones', 'Inversiones', 'tendencia', ['cdt']]] },
+  { area: 'pagos', titulo: 'Pagos', items: [['pagos', 'Servicios', 'pulso'], ['tarjetas', 'Tarjetas', 'tarjetas'], ['creditos', 'Créditos', 'banco']] },
+  { area: 'planear', titulo: 'Planear', items: [['presupuesto', 'Presupuesto', 'presupuesto'], ['nomina', 'Ingresos', 'usuario', ['ingresos']], ['metas', 'Metas', 'meta'], ['deseos', 'Lista de deseos', 'regalo', ['regalos']]] },
+  { area: 'analizar', titulo: 'Analizar', items: [['analisis', 'Análisis', 'pulso'], ['anual', 'Vista anual', 'calendario'], ['calculadora', 'Calculadora', 'calculadora']] }
 ];
-const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Deudas', planear: 'Planear' };
+
+/** Cada pantalla principal pertenece a un área: el área marca la sección de la barra lateral (y su pestaña en el celular). */
+const AREA_DE_RUTA = { inicio: 'inicio', planear: 'planear', ajustes: 'ajustes', guia: 'ajustes' };
+GRUPOS_NAV.forEach(g => g.items.forEach(it => { [it[0]].concat(it[3] || []).forEach(r => { AREA_DE_RUTA[r] = g.area; }); }));
+/** La pestaña del celular de cada área (Analizar vive en Planear). */
+const TAB_DE_AREA = { inicio: 'inicio', dinero: 'dinero', pagos: 'pagos', planear: 'planear', analizar: 'planear' };
+/** ¿Esta ruta raíz es (o pertenece a) este elemento de la navegación? */
+const esDelItem = (it, raiz) => it[0] === raiz || (it[3] || []).indexOf(raiz) !== -1;
+
+const TITULOS_BASE = { inicio: 'Inicio', bolsillos: 'Bolsillos', presupuesto: 'Presupuesto', tarjetas: 'Tarjetas', creditos: 'Créditos', planear: 'Planear' };
 
 const ETIQUETAS = {
   TipoCuenta: { Billetera: 'Billetera', Debito: 'Débito', Ahorro: 'Ahorro', Otra: 'Otra' },
@@ -693,7 +702,7 @@ function tituloRuta(ruta) {
   const partes = ruta.split('/');
   if (partes[0] === 'ajustes' && partes.length === 1) return 'Ajustes';
   if (partes[0] === 'movimientos') return 'Movimientos';
-  if (partes[0] === 'nomina') return 'Nómina';
+  if (partes[0] === 'nomina') return 'Ingresos';
   if (partes[0] === 'regalos' || partes[0] === 'deseos') return 'Lista de deseos';
   if (partes[0] === 'metas') return 'Metas';
   if (partes[0] === 'meta') { const m = App.metas && App.metas.data && App.metas.data.items.find(x => x.ID_Meta === partes[1]); return m ? m.Nombre : 'Meta'; }
@@ -703,8 +712,8 @@ function tituloRuta(ruta) {
   if (partes[0] === 'anual') return 'Vista anual';
   if (partes[0] === 'guia') return 'Guía de uso';
   if (partes[0] === 'pagos') return 'Servicios y suscripciones';
-  if (partes[0] === 'ingresos') return 'Otros ingresos';
-  if (partes[0] === 'cdt') return 'CDT';
+  if (partes[0] === 'ingresos') return 'Ingresos';
+  if (partes[0] === 'cdt') return 'Inversiones';
   if (partes[0] === 'ahorro') return partes.length === 1 ? 'Ahorro' : (App.ahoC.data && App.ahoC.id === partes[1] ? App.ahoC.data.cuenta.Nombre : 'Ahorro');
   if (partes[0] === 'tarjeta') return App.tar.data && App.tar.id === partes[1] ? App.tar.data.tarjeta.Nombre : 'Tarjeta';
   if (partes[0] === 'credito') return App.cre.data && App.cre.id === partes[1] ? App.cre.data.credito.Nombre : 'Crédito';
@@ -723,7 +732,7 @@ function render(enfocar) {
   // Navegación principal: barra inferior (celular) y barra lateral (tablet y computador)
   const area = AREA_DE_RUTA[raiz] || '';
   const puedeRegistrar = !!(App.boot && App.boot.instalado && hayBolsillos());
-  const tabHtml = t => '<button class="m-tab" data-acc="tab" data-ruta="' + t.ruta + '"' + (t.id === area ? ' aria-current="page"' : '') + '>' +
+  const tabHtml = t => '<button class="m-tab" data-acc="tab" data-ruta="' + t.ruta + '"' + (t.id === TAB_DE_AREA[area] ? ' aria-current="page"' : '') + '>' +
     '<span class="m-tab-ico">' + ico(t.icono) + '</span><span>' + esc(t.etiqueta) + '</span></button>';
   $('#tabbar').innerHTML = tabHtml(TABS[0]) + tabHtml(TABS[1]) +
     '<div class="m-tab-centro">' + (puedeRegistrar ? '<button class="m-tab-mas" data-acc="menu-registrar" aria-label="Registrar un movimiento">' + ico('plus') + '</button>' : '') + '</div>' +
@@ -747,7 +756,7 @@ function render(enfocar) {
 
   const titulo = vista.ocultarTitulo ? '' : '<h1 class="m-titulo-grande" id="titulo-pantalla" tabindex="-1">' + esc(vista.titulo) + '</h1>';
   $('#vista').classList.toggle('m-ancha', !!vista.ancha);
-  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + pildorasDinero(ruta) + vista.html;
+  $('#vista').innerHTML = titulo + (vista.subtitulo ? '<p class="m-subtitulo">' + esc(vista.subtitulo) + '</p>' : '') + pildorasArea(ruta) + vista.html;
   document.title = (vista.titulo ? vista.titulo + ' · ' : '') + 'Moni';
 
   document.body.classList.toggle('m-asistente', !!vista.asistente);
@@ -775,23 +784,24 @@ function pantalla(ruta) {
     case 'inicio': return vInicio();
     case 'bolsillos': return vBolsillos();
     case 'presupuesto': return vPresupuesto();
-    case 'nomina': return vNomina();
+    case 'nomina': return conPestanasIngresos(vNomina(), 'nomina');
     case 'regalos': case 'deseos': return vRegalos();
     case 'metas': return vMetas();
     case 'meta': return vMeta(partes[1]);
-    case 'inversiones': return vInversiones();
+    case 'inversiones': return conPestanasInversion(vInversiones(), 'inversiones');
     case 'inversion': return vInversion(partes[1]);
     case 'calculadora': return vCalculadora();
     case 'anual': return vAnual();
     case 'analisis': return vAnalisis();
     case 'guia': return vGuia();
     case 'pagos': return vPagos();
-    case 'ingresos': return vIngresos();
-    case 'cdt': return vCdts();
+    case 'ingresos': return conPestanasIngresos(vIngresos(), 'ingresos');
+    case 'cdt': return conPestanasInversion(vCdts(), 'cdt');
     case 'ahorro': return partes.length === 1 ? vAhorro() : vCuentaAhorro(partes[1]);
     case 'bolsillo': return vBolsillo(partes[1]);
     case 'movimientos': return vMovimientos();
-    case 'tarjetas': return vDeudas();
+    case 'tarjetas': return vDeudas('tarjetas');
+    case 'creditos': return vDeudas('creditos');
     case 'tarjeta': return vTarjeta(partes[1]);
     case 'credito': return vCredito(partes[1]);
     case 'planear': return vPlanear();
