@@ -32,11 +32,47 @@ module.exports = function (prueba, assert, crearEntorno) {
     return { e, bco, usa, cop, casa, dolares, bolUsd };
   }
 
-  prueba('divisas: un banco nuevo es en pesos y se puede crear en dólares; otra divisa no se acepta', () => {
+  prueba('divisas: un banco nuevo es en pesos y se puede crear en las monedas comunes del mercado; una que no está no se acepta', () => {
     const e = E();
     assert.strictEqual(e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'A' }).Divisa, 'COP');
     assert.strictEqual(e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'B', Divisa: 'USD' }).Divisa, 'USD');
-    assert.throws(e.falla('guardarCatalogo', 'Bancos', { Nombre: 'C', Divisa: 'JPY' }), /divisa no es válido/);
+    ['EUR', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY', 'CNY', 'MXN', 'BRL', 'CLP', 'PEN', 'ARS', 'UYU'].forEach((d, k) =>
+      assert.strictEqual(e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco ' + k, Divisa: d }).Divisa, d));
+    assert.throws(e.falla('guardarCatalogo', 'Bancos', { Nombre: 'C', Divisa: 'XYZ' }), /divisa no es válido/);
+  });
+
+  prueba('divisas: la lista de la app y la del servidor son las mismas, con nombre y decimales', () => {
+    const e = E();
+    const fs = require('fs'), path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'app_js.html'), 'utf8');
+    const ui = new Function('return ' + src.match(/const DIVISAS_INFO_UI = (\[[\s\S]*?\]);/)[1])();
+    const info = e.llamar('(() => DIVISAS_INFO)');
+    assert.deepStrictEqual(ui.map(x => x[0]), Object.keys(info));
+    ui.forEach(x => { assert.strictEqual(x[2], info[x[0]][1], 'nombre de ' + x[0]); assert.strictEqual(x[3], info[x[0]][2], 'decimales de ' + x[0]); });
+  });
+
+  prueba('divisas: la tasa de una moneda poco usada crea su fila en Config al anotarla; el aviso pide la que falta', () => {
+    const e = E();
+    const antes = e.llamar('getTableData', 'Config').length;
+    assert.ok(!e.llamar('getTableData', 'Config').some(c => c.Clave === 'Tasa_MXN'), 'no se crea de antemano');
+    e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banorte', Divisa: 'MXN' });
+    assert.ok(e.llamar('obtenerAvisos_').some(a => a.id === 'tasa' && /MXN/.test(a.titulo)), 'avisa la tasa del peso mexicano');
+    e.llamar('saveTasaDivisa', 'MXN', '215,35');
+    const cfg = {}; e.llamar('getTableData', 'Config').forEach(c => { cfg[c.Clave] = c.Valor; });
+    assert.strictEqual(cfg.Tasa_MXN, '215.35');
+    assert.strictEqual(cfg.Tasa_MXN_Fuente, 'Manual');
+    assert.strictEqual(e.llamar('getTableData', 'Config').length, antes + 3);
+    assert.strictEqual(e.llamar('tasaDivisa_', 'MXN'), 215.35);
+    assert.ok(!e.llamar('obtenerAvisos_').some(a => a.id === 'tasa'), 'con la tasa, el aviso se va');
+    assert.throws(e.falla('asegurarConfig_', 'Tasa_XYZ'), /No hay parámetro/);
+  });
+
+  prueba('divisas: la moneda del precio sale de la bolsa del símbolo', () => {
+    const e = E();
+    const d = s => e.llamar('divisaDeSimbolo_', s);
+    assert.strictEqual(d('NASDAQ:AAPL'), 'USD'); assert.strictEqual(d('BVC:ECOPETROL'), 'COP'); assert.strictEqual(d('BMV:WALMEX'), 'MXN');
+    assert.strictEqual(d('BVMF:PETR4'), 'BRL'); assert.strictEqual(d('TSE:SHOP'), 'CAD'); assert.strictEqual(d('EPA:MC'), 'EUR');
+    assert.strictEqual(d('CURRENCY:BTCUSD'), 'USD'); assert.strictEqual(d('CURRENCY:BTCEUR'), 'EUR'); assert.strictEqual(d(''), 'COP');
   });
 
   prueba('divisas: no se cambia la divisa de un banco que ya tiene cuentas', () => {

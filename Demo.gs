@@ -197,7 +197,7 @@ function sembrarDatosDemo() {
     { ID_Meta: 'demo-meta-2', Nombre: 'Moto (demo)', Motivo: 'Moto', Monto_Objetivo: 9000000, Ahorro_Inicial: 0, Fecha_Inicio: hoy, Fecha_Fin: sumarMeses_(hoy, 18), ID_Bolsillo: 'demo-bol-general-4', Plan_Mensual: '', Estado: 'Activa', Notas: '', Activo: true, Orden: 2 }
   ]);
   // 1.19: un broker con dinero disponible y una acción comprada con él
-  insertRows('Brokers', [{ ID_Broker: 'demo-brk-1', Nombre: 'Broker Andes (demo)', Divisa: 'COP', Notas: '', Activo: true, Orden: 1 }]);
+  insertRows('Brokers', [{ ID_Broker: 'demo-brk-1', Nombre: 'Broker Andes (demo)', Divisa: 'COP', Notas: '', Activo: true, Orden: 1, Comision_Tipo: 'Porcentaje', Comision_Porcentaje: 0.005, Comision_Minima: 6000, Comision_Fija: '', Comision_Divisa: '' }]);
   insertRows('Inversiones', [
     { ID_Inversion: 'demo-inv-3', Nombre: 'Ecopetrol (demo)', Tipo: 'Accion', Simbolo: 'BVC:ECOPETROL', Divisa: 'COP', Precio_Manual: 2350, Fecha_Precio_Manual: hoy, Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 3, ID_Broker: 'demo-brk-1' },
     { ID_Inversion: 'demo-inv-1', Nombre: 'Bitcoin (demo)', Tipo: 'Cripto', Simbolo: 'CURRENCY:BTCUSD', Divisa: 'USD', Precio_Manual: '', Fecha_Precio_Manual: '', Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 1 },

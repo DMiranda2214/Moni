@@ -62,7 +62,8 @@ Cada cuenta con sus bolsillos y saldos. Si en una cuenta con bolsillos queda din
 - Para pasar dinero entre monedas (por ejemplo, comprar dólares) usa **Mi dinero → Bolsillos → Convertir divisas**: escribes **cuántos dólares compras o vendes** y **la tasa que te dio el banco por cada uno**; Moni calcula cuánto sale y cuánto llega. La TRM de referencia (si la anotaste) solo se muestra para comparar.
 - Si el banco cobra **comisión aparte**, escríbela en el mismo panel y elige de qué bolsillo se cobra (origen o destino). Queda como un gasto de la categoría *Comisión bancaria*, dentro de la misma conversión: al deshacerla se deshace todo junto.
 - Entre bolsillos de la misma moneda, **Mover dinero** funciona igual que siempre.
-- Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones, metas y la lista de deseos funcionan solo en pesos: no ofrecen bolsillos en otras monedas. Las inversiones pueden tener su precio en dólares o euros y se pasan a pesos con la tasa de Ajustes → Divisas.
+- Monedas disponibles: pesos colombianos, dólares, euros, libras, francos suizos, dólares canadienses y australianos, yenes, yuanes, pesos mexicanos, reales, pesos chilenos, soles, pesos argentinos y pesos uruguayos. En **Ajustes → Divisas** ves arriba el dólar, el euro y las monedas que usas; las demás están en *Otras monedas*.
+- Presupuesto, nómina, tarjetas, créditos, ahorro con deuda, suscripciones, metas y la lista de deseos funcionan solo en pesos: no ofrecen bolsillos en otras monedas. Brokers e inversiones pueden estar en cualquiera de esas monedas y se pasan a pesos con la tasa de Ajustes → Divisas.
 
 ### Saldos iniciales
 Se escriben al crear cada cuenta y bolsillo (en el asistente de primeros pasos o en Ajustes). Si algo no cuadra con tu banco, usa **Cuadrar** en la cuenta.
@@ -165,6 +166,7 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
   - En el broker, *Agregar acción o fondo*: búscala y escribe **cuántas tienes** (y, si quieres, el precio promedio al que las compraste). Con el precio de Google Finance, Moni calcula cuánto valen.
   - *Depositar* y *Retirar*: el dinero llega o sale del disponible y, si eliges un bolsillo, también de él (no es gasto ni ingreso). *Ajustar disponible* lo deja como lo ves en la plataforma.
   - *Compré* y *Vendí* en una inversión del broker usan su disponible, en su moneda. *Ajustar cantidad* corrige cuántas tienes sin mover dinero.
+  - **Comisión:** en el broker configura cuánto cobra: un porcentaje (con un mínimo), un valor fijo (en pesos o en su moneda) o ambos. Al comprar o vender, Moni la propone; puedes cambiarla y escribirla como valor o como porcentaje. El broker muestra cuánto has pagado en comisiones.
   - La pantalla de Inversiones muestra cada broker con su disponible y sus inversiones, y abajo *Otras inversiones* (las que no están en un broker).
 - **Agregar una inversión:** **búscala** por nombre o símbolo (Apple, bitcoin, S&P 500, Ecopetrol, VOO). Moni sugiere al instante activos conocidos (acciones de EE. UU. y de la BVC, ETF y cripto), y si no está, *Buscar en Google Finance* prueba el símbolo en las bolsas más comunes y te muestra el nombre y el precio de hoy. Al elegir uno se llenan el nombre, el tipo, el símbolo y la moneda. También puedes escribir todo a mano.
 - **Compré, Vendí, Dividendo:**
@@ -219,7 +221,7 @@ Además de Análisis, **cada módulo trae los suyos**. Pasa el dedo o el cursor 
 
 **Ajustes** está al pie de la barra lateral (en el celular, arriba a la derecha en Inicio y al final de Planear):
 - **Tú:** **Guía de uso** (lo básico, paso a paso, y el glosario), **Perfil** (nombre y zona horaria) y **Apariencia** (claro/oscuro/automático y color).
-- **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, **Divisas** (tasa de referencia del dólar y el euro) y **Cargos y comisiones**. Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
+- **Dinero:** bancos (con su moneda y rendimiento), cuentas, bolsillos y tarjetas, **Divisas** (tasa de referencia de cada moneda) y **Cargos y comisiones**. Una cuenta puede **permitir bolsillos** (Nequi) o ser un solo saldo (débito). Nada se borra de golpe: se **desactiva** y se puede **reactivar**; si algo tiene saldo o depende de otra cosa, la app te dice por qué no se puede.
 - **Presupuesto y nómina:** plantilla del presupuesto, escenarios del presupuesto, mi nómina, subsidios y parámetros de nómina.
 - **Organización:** categorías, personas, hogares (inmuebles), servicios y suscripciones, metas e inversiones (aquí se reactivan las archivadas).
 - **Mantenimiento:** *Avisos de Inicio* (volver a mostrar los ocultos), *Actualizar desde la hoja* (si editaste la hoja a mano), **Recordatorios**, **Mi cuenta**, **Respaldos**, **Registro de errores**, **Diagnóstico** y, solo en desarrollo, *Datos de demostración*.

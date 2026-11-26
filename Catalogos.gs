@@ -121,6 +121,15 @@ function exigirCuentaPesos_(idCuenta, etiqueta) {
 }
 
 /** Pesos que vale una unidad de la divisa, según la tasa que la persona anotó (o null si no hay). */
+/** Monedas distintas de la base que la persona usa: en sus bancos, brokers e inversiones activos (en el orden de DIVISAS). */
+function divisasEnUso_() {
+  const usadas = {};
+  getTableData('Bancos').filter(estaActivo).forEach(b => { usadas[divisaBanco_(b)] = true; });
+  getTableData('Brokers').filter(estaActivo).forEach(b => { usadas[b.Divisa] = true; });
+  getTableData('Inversiones').filter(estaActivo).forEach(i => { usadas[i.Divisa] = true; });
+  return DIVISAS.filter(d => d !== DIVISA_BASE && usadas[d]);
+}
+
 function tasaDivisa_(divisa) {
   if (divisa === DIVISA_BASE) return 1;
   const n = Number(String(cfgValor_('Tasa_' + divisa)).replace(',', '.'));
@@ -656,7 +665,7 @@ const CATALOGOS = {
       const simbolo = simboloInversion_(pick('Simbolo'));
       const datos = {
         Nombre: nombre, Tipo: opcion_(pick('Tipo'), ENUMS.Inversiones.Tipo, 'El tipo', 'Otro'), Simbolo: simbolo,
-        Divisa: opcion_(pick('Divisa'), ENUMS.Inversiones.Divisa, 'La moneda del precio', simbolo && /^(NASDAQ|NYSE|NYSEARCA|NYSEAMERICAN|BATS|CURRENCY):/.test(simbolo) ? 'USD' : DIVISA_BASE),
+        Divisa: opcion_(pick('Divisa'), ENUMS.Inversiones.Divisa, 'La moneda del precio', divisaDeSimbolo_(simbolo)),
         Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
       };
@@ -697,7 +706,16 @@ const CATALOGOS = {
       if (actual && divisa !== (actual.Divisa || DIVISA_BASE) && leer_('Inversiones_Operaciones').some(o => o.ID_Broker === actual.ID_Broker && !esVerdadero(o.Anulado))) {
         throw new Error('No se puede cambiar la moneda de un broker que ya tiene movimientos.');
       }
-      return { Nombre: nombre, Divisa: divisa, Notas: texto_(pick('Notas')).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
+      // Comisión: % del valor de la operación (con un mínimo en la moneda del broker), un valor fijo (en pesos o en su moneda) o ambos
+      const tipo = opcion_(pick('Comision_Tipo'), ENUMS.Brokers.Comision_Tipo, 'Cómo cobra la comisión', '');
+      const conPct = tipo === 'Porcentaje' || tipo === 'Mixta', conFija = tipo === 'Fija' || tipo === 'Mixta';
+      const pct = conPct ? tasa_(pick('Comision_Porcentaje'), 'El porcentaje de la comisión', { requerido: true, min: 0, max: 0.2 }) : '';
+      const minima = conPct ? (numero_(pick('Comision_Minima'), 'La comisión mínima', { min: 0, max: VALOR_MAXIMO }) || '') : '';
+      const fija = conFija ? numero_(pick('Comision_Fija'), 'La comisión fija', { requerido: true, min: 0, max: VALOR_MAXIMO }) : '';
+      const divCom = conFija ? opcion_(pick('Comision_Divisa') || divisa, ENUMS.Brokers.Comision_Divisa, 'La moneda de la comisión fija', divisa) : '';
+      if (divCom && divCom !== divisa && divCom !== DIVISA_BASE) throw new Error('La comisión fija va en pesos o en la moneda del broker (' + divisa + ').');
+      return { Nombre: nombre, Divisa: divisa, Notas: texto_(pick('Notas')).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }),
+        Comision_Tipo: tipo, Comision_Porcentaje: pct, Comision_Minima: minima, Comision_Fija: fija, Comision_Divisa: divCom };
     },
     bloqueos: function (reg) {
       const out = [];

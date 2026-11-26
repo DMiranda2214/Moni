@@ -18,6 +18,54 @@ const buscarInversion = id => App.inv.data && App.inv.data.items.find(i => i.ID_
 const buscarBroker = id => App.inv.data && (App.inv.data.brokers || []).find(b => b.ID_Broker === id);
 /** Monto en la moneda del broker (con centavos si no es en pesos). */
 const enDiv = (n, divisa) => dinero(n, divisa || 'COP');
+
+// <comision>
+/**
+ * La comisión de la tarifa de un broker para una compra o venta de `total` (en su moneda): % del total (con su mínimo) más
+ * el valor fijo. `tasaDe(divisa)` da los pesos de una unidad. null si la fija está en otra moneda y falta su tasa.
+ * Es la misma regla que comisionBroker_ (Inversiones.gs).
+ */
+function comisionSugerida(b, total, tasaDe) {
+  const tipo = (b && b.Comision_Tipo) || '';
+  if (!tipo) return 0;
+  const div = b.Divisa || 'COP';
+  let c = 0;
+  if (tipo === 'Porcentaje' || tipo === 'Mixta') c = Math.max((Number(total) || 0) * (Number(b.Comision_Porcentaje) || 0), Number(b.Comision_Minima) || 0);
+  if (tipo === 'Fija' || tipo === 'Mixta') {
+    const fija = Number(b.Comision_Fija) || 0, enMon = b.Comision_Divisa || div;
+    if (enMon === div) c += fija;
+    else { const tO = tasaDe(enMon), tD = tasaDe(div); if (!tO || !tD) return null; c += fija * tO / tD; }
+  }
+  return Math.round(c * 100) / 100;
+}
+// </comision>
+/** Un número para un campo, a la colombiana y con hasta 2 decimales: 230.000 · 12,5. */
+const numTxt = n => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Math.round(n * 100) / 100);
+const tasaUi = d => d === 'COP' ? 1 : (Number(String(cfg('Tasa_' + d) || '').replace(',', '.')) || 0);
+const pctTxt = x => (Math.round(Number(x) * 1e6) / 1e4).toLocaleString('es-CO', { maximumFractionDigits: 4 }) + ' %';
+/** La tarifa de un broker en palabras: "0,5 % (mínimo US$ 1,00) + $ 5.000". */
+function textoTarifa(b) {
+  const t = b.Comision_Tipo || '', div = b.Divisa || 'COP';
+  if (!t) return 'sin tarifa';
+  const pct = t === 'Porcentaje' || t === 'Mixta' ? pctTxt(b.Comision_Porcentaje) + (Number(b.Comision_Minima) > 0 ? ' (mínimo ' + enDiv(b.Comision_Minima, div) + ')' : '') : '';
+  const fija = t === 'Fija' || t === 'Mixta' ? enDiv(b.Comision_Fija, b.Comision_Divisa || div) : '';
+  return [pct, fija].filter(Boolean).join(' + ');
+}
+
+/** Campo de comisión: se escribe como valor (en la moneda de la operación) o como % del total. */
+function htmlCampoComision(divisa, info) {
+  return '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="f-Comision">Comisión (opcional)</label>' + htmlInfo(info) + '</div>' +
+    '<div class="m-cargo-fila" style="grid-template-columns:minmax(0,1fr) 7.5rem;margin-bottom:0"><input class="m-input m-num" id="f-Comision" inputmode="decimal" autocomplete="off" placeholder="0">' +
+    '<select class="m-input" id="f-Comision_Modo" aria-label="La comisión está en"><option value="valor">en ' + esc(divisa === 'COP' ? 'pesos' : divisa) + '</option><option value="pct">en %</option></select></div>' +
+    '<p class="m-ayuda" id="f-Comision-nota" aria-live="polite"></p></div>';
+}
+/** La comisión escrita, en la moneda de la operación: el valor, o el % del total. '' → 0; NaN si no es un número. */
+function leerComision(raiz, total) {
+  const n = leerDecimal(($('#f-Comision', raiz) || {}).value || '');
+  if (n === '') return 0;
+  if (typeof n !== 'number' || isNaN(n) || n < 0) return NaN;
+  return $('#f-Comision_Modo', raiz).value === 'pct' ? Math.round((Number(total) || 0) * n) / 100 : n;
+}
 const cantidadTxt = n => (Math.round(n * 1e8) / 1e8).toLocaleString('es-CO', { maximumFractionDigits: 8 });
 const rentaTxt = r => r === null || r === undefined ? '' : (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(Math.round(r * 1000) / 10).toLocaleString('es-CO') + ' %';
 
@@ -159,13 +207,13 @@ async function abrirOperacionInversion(i, tipo) {
     !esDiv && { k: 'Cantidad', label: tipo === 'Venta' ? 'Cuántas unidades vendiste (tienes ' + cantidadTxt(i.cantidad) + ')' : 'Cuántas unidades', tipo: 'decimal', requerido: true, ayuda: 'Puede tener decimales (0,005 bitcoin, 12,5 unidades de un fondo).', info: 'Las acciones, unidades o monedas de la operación. Moni suma las compras y resta las ventas para saber cuántas tienes.' },
     !esDiv && { k: 'Precio', label: 'Precio por unidad en ' + i.Divisa + ' (opcional)', tipo: 'decimal', info: 'Lo que valía cada unidad, en la moneda del activo. Si no hay otro precio más reciente, Moni lo usa para valorar la inversión.', ayuda: tasa && i.Divisa !== 'COP' ? 'Con la tasa de hoy (' + dinero(tasa) + ' por ' + i.Divisa + ') Moni calcula el valor en pesos; corrígelo con lo que dijo tu banco o comisionista.' : '' },
     { k: 'Valor', label: esDiv ? 'Cuánto recibiste (en pesos)' : tipo === 'Compra' ? 'Cuánto pagaste en pesos' : 'Cuánto recibiste en pesos', tipo: 'dinero', requerido: true, info: esDiv ? 'El dividendo que te llegó, en pesos. Cuenta como un ingreso.' : 'El total en pesos, sin la comisión. Es lo que mueve tu bolsillo y lo que define tu costo o tu ganancia.' },
-    !esDiv && { k: 'Comision', label: 'Comisión (opcional)', tipo: 'dinero', info: 'Lo que te cobró el comisionista o la plataforma por la operación.', ayuda: tipo === 'Compra' ? 'Se suma a lo que te costó la inversión.' : 'Se descuenta de lo que recibiste.' },
     { k: 'ID_Bolsillo', label: tipo === 'Compra' ? 'Sale de' : 'Llega a', tipo: 'select', opciones: () => grupos, info: 'Si eliges un bolsillo, el dinero sale de él (o llega a él) y cambia su saldo. Si ya lo tenías registrado aparte, deja que no se mueva.' },
     { k: 'Notas', label: 'Notas', tipo: 'area' }
   ].filter(Boolean);
   await abrirHoja({
     titulo: titulo,
-    cuerpo: '<form novalidate data-form="inv-op">' + campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : (c.k === 'Precio' && i.precio ? i.precio : (c.k === 'ID_Bolsillo' ? ultimoBolsillo() : '')), {})).join('') +
+    cuerpo: '<form novalidate data-form="inv-op">' + campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : (c.k === 'Precio' && i.precio ? i.precio : (c.k === 'ID_Bolsillo' ? ultimoBolsillo() : '')), {}) +
+        (c.k === 'Valor' && !esDiv ? htmlCampoComision('COP', 'Lo que te cobró el comisionista o la plataforma, en pesos o como % del valor. ' + (tipo === 'Compra' ? 'Se suma a lo que te costó la inversión.' : 'Se descuenta de lo que recibiste.')) : '')).join('') +
       '<p class="m-ayuda" id="inv-op-res" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => {
       activarEcoDinero(raiz);
@@ -176,16 +224,24 @@ async function abrirOperacionInversion(i, tipo) {
         if (typeof q === 'number' && q > 0 && typeof p === 'number' && p > 0 && tasa && !val.dataset.tocado) {
           val.value = String(Math.round(q * p * tasa)); val.dispatchEvent(new Event('input')); delete val.dataset.tocado;
         }
-        const v = leerDinero(val.value), c = leerDinero(($('#f-Comision', raiz) || {}).value || '') || 0;
-        $('#inv-op-res', raiz).textContent = typeof v === 'number' && v > 0 ? (tipo === 'Compra' ? 'Te cuesta ' + dinero(v + c) + ' en total.' : tipo === 'Venta' ? 'Te quedan ' + dinero(v - c) + '.' : '') : '';
+        resumen();
       };
-      raiz.addEventListener('input', ev => { if (ev.target.id !== 'f-Valor') sugerir(); else { const v = leerDinero(val.value), c = leerDinero(($('#f-Comision', raiz) || {}).value || '') || 0; $('#inv-op-res', raiz).textContent = typeof v === 'number' && v > 0 && !esDiv ? (tipo === 'Compra' ? 'Te cuesta ' + dinero(v + c) + ' en total.' : 'Te quedan ' + dinero(v - c) + '.') : ''; } });
+      const resumen = () => {
+        const v = leerDinero(val.value), c = esDiv ? 0 : (leerComision(raiz, v) || 0);
+        const nota = $('#f-Comision-nota', raiz);
+        if (nota) nota.textContent = $('#f-Comision_Modo', raiz).value === 'pct' && c > 0 ? '= ' + dinero(c) : '';
+        $('#inv-op-res', raiz).textContent = typeof v === 'number' && v > 0 && !esDiv ? (tipo === 'Compra' ? 'Te cuesta ' + dinero(v + c) + ' en total.' : 'Te quedan ' + dinero(v - c) + '.') : '';
+      };
+      raiz.addEventListener('input', ev => { if (ev.target.id !== 'f-Valor') sugerir(); else resumen(); });
+      raiz.addEventListener('change', ev => { if (ev.target.id === 'f-Comision_Modo') resumen(); });
       sugerir();
       const q = $('#f-Cantidad', raiz); (q || val).focus();
     },
     alGuardar: async raiz => {
       const v = leerFormulario(raiz, campos);
-      const op = { ID_Inversion: i.ID_Inversion, Tipo: tipo, Fecha: v.Fecha, Valor: v.Valor, Comision: v.Comision || 0, Precio: v.Precio === '' ? '' : v.Precio, ID_Bolsillo: v.ID_Bolsillo || '', Notas: v.Notas || '' };
+      const com = esDiv ? 0 : leerComision(raiz, v.Valor);
+      if (isNaN(com)) throw new Error('Revisa la comisión.');
+      const op = { ID_Inversion: i.ID_Inversion, Tipo: tipo, Fecha: v.Fecha, Valor: v.Valor, Comision: Math.round(com * 100) / 100, Precio: v.Precio === '' ? '' : v.Precio, ID_Bolsillo: v.ID_Bolsillo || '', Notas: v.Notas || '' };
       if (!esDiv) {
         const q = v.Cantidad;
         if (typeof q !== 'number' || isNaN(q) || q <= 0) throw new Error('Escribe cuántas unidades.');
@@ -268,6 +324,8 @@ function htmlBroker(b) {
     ['En inversiones', b.valorDivisa !== null ? esc(ext ? enDiv(b.valorDivisa, div) : dk(b.valorDivisa)) : dk(b.valor), 'con el precio de hoy'],
     ['Ganancia', dk(b.ganancia), 'en pesos, sin vender', b.ganancia < 0 ? 'm-negativo' : (b.ganancia > 0 ? 'm-positivo' : '')]
   ]);
+  h += '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Comisión: ' + esc(b.Comision_Tipo ? textoTarifa(b) : 'sin tarifa (la escribes en cada operación)') +
+    (b.comisiones > 0 ? ' · has pagado ' + dinero(b.comisiones) + ' en comisiones' : '') + '. <button type="button" class="m-btn-texto" data-acc="editar-broker" data-id="' + id + '" style="display:inline;min-height:0;padding:0">' + (b.Comision_Tipo ? 'Cambiar' : 'Configurar') + '</button></p>';
   h += '<div style="display:flex;flex-wrap:wrap;gap:var(--m-space-2);margin:var(--m-space-4) 0">' +
     '<button class="m-btn m-btn-primary" data-acc="nueva-inversion" data-broker="' + id + '">Agregar acción o fondo</button>' +
     '<button class="m-btn m-btn-secondary" data-acc="broker-dinero" data-tipo="Deposito" data-id="' + id + '">Depositar</button>' +
@@ -385,35 +443,47 @@ async function abrirOperacionBroker(i, b, tipo) {
     !esDiv && { k: 'Cantidad', label: tipo === 'Venta' ? 'Cuántas vendiste (tienes ' + cantidadTxt(i.cantidad) + ')' : 'Cuántas compraste', tipo: 'decimal', requerido: true, ayuda: 'Puede tener decimales (fracciones de acción).', info: 'Las acciones o unidades de la operación.' },
     !esDiv && { k: 'Precio', label: 'Precio por unidad (en ' + i.Divisa + ')', tipo: 'decimal', info: 'A cuánto compraste o vendiste cada una. Con la cantidad, Moni calcula el total.' },
     { k: 'Total', label: esDiv ? 'Cuánto recibiste (en ' + div + ')' : 'Total (en ' + div + ', sin la comisión)', tipo: 'decimal', requerido: true, info: esDiv ? 'El dividendo que llegó a tu disponible en ' + b.Nombre + ', ya sin impuestos.' : 'Cantidad × precio. Es lo que ' + (tipo === 'Compra' ? 'sale de' : 'llega a') + ' tu disponible, antes de la comisión.' },
-    !esDiv && { k: 'Comision', label: 'Comisión (opcional, en ' + div + ')', tipo: 'decimal', info: 'Lo que cobró el broker por la operación.' },
     { k: 'Notas', label: 'Notas', tipo: 'area' }
   ].filter(Boolean);
   await abrirHoja({
     titulo: titulo,
     cuerpo: '<form novalidate data-form="inv-op-broker"><p class="m-hoja-mensaje">Disponible en ' + esc(b.Nombre) + ': ' + esc(enDiv(b.disponible, div)) + '</p>' +
-      campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : (c.k === 'Precio' && i.precio ? i.precio : ''), {})).join('') +
+      campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : (c.k === 'Precio' && i.precio ? i.precio : ''), {}) +
+        (c.k === 'Total' && !esDiv ? htmlCampoComision(div, 'Lo que cobra ' + b.Nombre + ' por la operación, en ' + div + ' o como % del total. ' + (b.Comision_Tipo ? 'Moni propone la de su tarifa (' + textoTarifa(b) + '); cámbiala si te cobraron otra.' : 'Configura su tarifa en Ajustes → Brokers para que Moni la proponga.')) : '')).join('') +
       '<p class="m-ayuda" id="inv-opb-res" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => {
       activarEcoDinero(raiz);
       const tot = $('#f-Total', raiz), res = $('#inv-opb-res', raiz);
       tot.addEventListener('input', () => { tot.dataset.tocado = '1'; });
       const val = id => { const n = leerDecimal((($('#f-' + id, raiz) || {}).value) || ''); return typeof n === 'number' && !isNaN(n) ? n : 0; };
+      const com = $('#f-Comision', raiz), modo = $('#f-Comision_Modo', raiz), nota = $('#f-Comision-nota', raiz);
+      if (com) com.addEventListener('input', () => { com.dataset.tocado = '1'; });
       const pintar = () => {
         const q = val('Cantidad'), p = val('Precio');
-        if (!esDiv && q > 0 && p > 0 && !tot.dataset.tocado && i.Divisa === div) tot.value = String(Math.round(q * p * 100) / 100).replace('.', ',');
-        const t = val('Total'), c = val('Comision');
+        if (!esDiv && q > 0 && p > 0 && !tot.dataset.tocado && i.Divisa === div) tot.value = numTxt(q * p);
+        const t = val('Total');
+        // La comisión de la tarifa del broker, mientras la persona no escriba otra
+        if (com && !com.dataset.tocado && modo.value === 'valor') {
+          const sug = t > 0 ? comisionSugerida(b, t, tasaUi) : 0;
+          com.value = sug ? numTxt(sug) : '';
+          nota.textContent = b.Comision_Tipo ? (sug === null ? 'Falta la tasa para calcular la comisión de la tarifa: escríbela.' : 'Según la tarifa de ' + b.Nombre + ': ' + textoTarifa(b) + '.') : '';
+        } else if (com) nota.textContent = modo.value === 'pct' && t > 0 ? '= ' + enDiv(leerComision(raiz, t) || 0, div) : '';
+        const c = esDiv ? 0 : (leerComision(raiz, t) || 0);
         if (!(t > 0)) { res.textContent = ''; return; }
         const efecto = tipo === 'Compra' ? t + c : tipo === 'Venta' ? t - c : t;
         const queda = tipo === 'Compra' ? b.disponible - efecto : b.disponible + efecto;
         res.textContent = (tipo === 'Compra' ? 'Sale de tu disponible: ' : 'Llega a tu disponible: ') + enDiv(efecto, div) + '. Te quedan ' + enDiv(queda, div) + '.' + (queda < 0 ? ' Quedaría en negativo: deposita primero o ajusta el disponible.' : '');
       };
-      raiz.addEventListener('input', ev => { if (ev.target.id !== 'f-Total') pintar(); else pintar(); });
+      raiz.addEventListener('input', pintar);
+      raiz.addEventListener('change', ev => { if (ev.target.id === 'f-Comision_Modo') { com.dataset.tocado = '1'; pintar(); } });
       pintar();
       ($('#f-Cantidad', raiz) || tot).focus();
     },
     alGuardar: async raiz => {
       const v = leerFormulario(raiz, campos);
-      const op = { ID_Inversion: i.ID_Inversion, Tipo: tipo, Fecha: v.Fecha, Total: v.Total, Comision: v.Comision || 0, Precio: v.Precio === undefined ? '' : v.Precio, Notas: v.Notas || '' };
+      const c = esDiv ? 0 : leerComision(raiz, v.Total);
+      if (isNaN(c)) throw new Error('Revisa la comisión.');
+      const op = { ID_Inversion: i.ID_Inversion, Tipo: tipo, Fecha: v.Fecha, Total: v.Total, Comision: Math.round(c * 100) / 100, Precio: v.Precio === undefined ? '' : v.Precio, Notas: v.Notas || '' };
       if (!esDiv) {
         if (typeof v.Cantidad !== 'number' || isNaN(v.Cantidad) || v.Cantidad <= 0) throw new Error('Escribe cuántas.');
         if (v.Precio !== '' && (typeof v.Precio !== 'number' || isNaN(v.Precio))) throw new Error('Revisa el precio por unidad.');

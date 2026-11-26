@@ -6,15 +6,26 @@
 
 const COL_AUDITORIA = ['Creado_En', 'Actualizado_En'];
 
-/** Divisas que admite un banco. COP es la divisa de la app: presupuesto, nómina, tarjetas y créditos solo la usan a ella. */
-const DIVISAS = ['COP', 'USD', 'EUR'];
+/**
+ * Divisas que admiten bancos, brokers e inversiones: las más comunes del mercado (ISO 4217). COP es la divisa de la app:
+ * presupuesto, nómina, tarjetas y créditos solo la usan a ella. [nombre, nombre en plural, decimales]. La lista de la app
+ * (DIVISAS_INFO_UI en app_js.html) debe ser la misma (lo revisa una prueba).
+ */
+const DIVISAS_INFO = {
+  COP: ['Peso colombiano', 'Pesos', 2], USD: ['Dólar estadounidense', 'Dólares', 2], EUR: ['Euro', 'Euros', 2],
+  GBP: ['Libra esterlina', 'Libras', 2], CHF: ['Franco suizo', 'Francos suizos', 2], CAD: ['Dólar canadiense', 'Dólares canadienses', 2],
+  AUD: ['Dólar australiano', 'Dólares australianos', 2], JPY: ['Yen japonés', 'Yenes', 0], CNY: ['Yuan chino', 'Yuanes', 2],
+  MXN: ['Peso mexicano', 'Pesos mexicanos', 2], BRL: ['Real brasileño', 'Reales', 2], CLP: ['Peso chileno', 'Pesos chilenos', 0],
+  PEN: ['Sol peruano', 'Soles', 2], ARS: ['Peso argentino', 'Pesos argentinos', 2], UYU: ['Peso uruguayo', 'Pesos uruguayos', 2]
+};
+const DIVISAS = Object.keys(DIVISAS_INFO);
 const DIVISA_BASE = 'COP';
 
 /**
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '16';
+const ESQUEMA_VERSION = '17';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -119,7 +130,9 @@ const SCHEMAS = {
   Inversiones_Operaciones: tabla_(['ID_Operacion', 'ID_Inversion', 'Fecha', 'Tipo', 'Cantidad', 'Precio', 'Valor', 'Comision', 'ID_Bolsillo', 'ID_Mov', 'Notas', 'Anulado', 'ID_Broker', 'Valor_Origen', 'Sin_Efectivo'],
     [170, 170, 110, 90, 120, 120, 130, 110, 170, 170, 220, 80, 170, 130, 90]),
   // 1.19: brokers (comisionistas, plataformas de inversión): tienen dinero disponible y las inversiones compradas con él
-  Brokers: tabla_(['ID_Broker', 'Nombre', 'Divisa', 'Notas', 'Activo', 'Orden'], [170, 220, 70, 260, 70, 60]),
+  // 1.20: la comisión que cobra al comprar o vender: un % del valor (con un mínimo), un valor fijo (en pesos o en su moneda) o ambos
+  Brokers: tabla_(['ID_Broker', 'Nombre', 'Divisa', 'Notas', 'Activo', 'Orden', 'Comision_Tipo', 'Comision_Porcentaje', 'Comision_Minima', 'Comision_Fija', 'Comision_Divisa'],
+    [170, 220, 70, 260, 70, 60, 110, 110, 110, 110, 90]),
   Inversiones_Precios: tabla_(['ID_Precio', 'Fecha', 'ID_Inversion', 'Precio', 'Divisa', 'Fuente'], [170, 110, 170, 120, 70, 90]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
   Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400]),
@@ -173,7 +186,7 @@ const ENUMS = {
   },
   Inversiones: { Tipo: ['Accion', 'ETF', 'Cripto', 'Fondo', 'Bono', 'Otro'], Divisa: DIVISAS },
   Inversiones_Operaciones: { Tipo: ['Compra', 'Venta', 'Dividendo', 'Deposito', 'Retiro'] },
-  Brokers: { Divisa: DIVISAS },
+  Brokers: { Divisa: DIVISAS, Comision_Tipo: ['', 'Porcentaje', 'Fija', 'Mixta'], Comision_Divisa: [''].concat(DIVISAS) },
   Inversiones_Precios: { Fuente: ['Google', 'Manual'] }
 };
 
@@ -370,7 +383,13 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Inversiones', columna: 'ID_Broker', valor: '' },
   { tabla: 'Inversiones_Operaciones', columna: 'ID_Broker', valor: '' },
   { tabla: 'Inversiones_Operaciones', columna: 'Valor_Origen', valor: '' },
-  { tabla: 'Inversiones_Operaciones', columna: 'Sin_Efectivo', valor: false }
+  { tabla: 'Inversiones_Operaciones', columna: 'Sin_Efectivo', valor: false },
+  // 1.20: comisión de cada broker (los de antes quedan sin comisión configurada: se escribe en cada operación, como hasta ahora)
+  { tabla: 'Brokers', columna: 'Comision_Tipo', valor: '' },
+  { tabla: 'Brokers', columna: 'Comision_Porcentaje', valor: '' },
+  { tabla: 'Brokers', columna: 'Comision_Minima', valor: '' },
+  { tabla: 'Brokers', columna: 'Comision_Fija', valor: '' },
+  { tabla: 'Brokers', columna: 'Comision_Divisa', valor: '' }
 ];
 
 /**
@@ -571,10 +590,22 @@ function configInicial_() {
   return DEFAULT_CONFIG.map(c => c[0] === 'Anio_Activo' ? [c[0], anio].concat(c.slice(2)) : c);
 }
 
+/**
+ * Las tasas de las divisas (Tasa_GBP, Tasa_GBP_Fecha, Tasa_GBP_Fuente…) no están todas en DEFAULT_CONFIG: su fila se crea
+ * la primera vez que se anota la tasa, para no llenar Config de monedas que la persona no usa.
+ */
+function configDeTasa_(clave) {
+  const m = /^Tasa_([A-Z]{3})(_Fecha|_Fuente)?$/.exec(clave);
+  if (!m || DIVISAS.indexOf(m[1]) === -1 || m[1] === DIVISA_BASE) return null;
+  const nombre = DIVISAS_INFO[m[1]][0].toLowerCase();
+  const desc = m[2] === '_Fecha' ? 'Fecha en que se anotó la tasa del ' + nombre : m[2] === '_Fuente' ? 'De dónde salió la tasa del ' + nombre + ': Manual o Google Finance' : 'Pesos que vale 1 ' + m[1] + ' (' + nombre + ')';
+  return [clave, '', 'Divisas', 'texto', desc];
+}
+
 /** Crea la fila de Config si todavía no existe (las bases ya instaladas no tienen las claves nuevas). */
 function asegurarConfig_(clave) {
   if (getTableData('Config').some(c => c.Clave === clave)) return;
-  const d = configInicial_().find(item => item[0] === clave);
+  const d = configInicial_().find(item => item[0] === clave) || configDeTasa_(clave);
   if (!d) throw new Error('No hay parámetro "' + clave + '".');
   insertRow('Config', { Clave: d[0], Valor: d[1], Grupo: d[2], Tipo: d[3], Descripcion: d[4] });
 }

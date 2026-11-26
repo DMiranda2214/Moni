@@ -9,26 +9,44 @@
  */
 
 const HOJA_TASAS = 'Tasas_Google';
-const MONEDAS_TASA = ['USD', 'EUR'];
+/** Todas las divisas menos la base: el dólar y el euro primero (las filas que ya tenían las hojas de antes). */
+const MONEDAS_TASA = DIVISAS.filter(d => d !== DIVISA_BASE);
 const FUNCION_TASAS = 'actualizarTasasAuto';
 
 function disparadoresTasas_() {
   return ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === FUNCION_TASAS);
 }
 
-/** La hoja auxiliar con las fórmulas; se crea la primera vez. */
+/**
+ * Fórmula de la tasa de una moneda en pesos. Si Google no tiene el par directo (pasa con monedas menos negociadas contra
+ * el peso), la calcula cruzando por el dólar: XXX→USD × USD→COP.
+ */
+function formulaTasa_(m) {
+  if (m === 'USD') return '=GOOGLEFINANCE("CURRENCY:USDCOP")';
+  return '=IFERROR(GOOGLEFINANCE("CURRENCY:' + m + 'COP"),IFERROR(GOOGLEFINANCE("CURRENCY:' + m + 'USD")*GOOGLEFINANCE("CURRENCY:USDCOP"),""))';
+}
+
+/** La hoja auxiliar con las fórmulas; se crea la primera vez y se le agregan las monedas que falten (sin tocar las que ya tiene). */
 function hojaTasas_(ss) {
   let hoja = ss.getSheetByName(HOJA_TASAS);
-  if (hoja) return hoja;
-  hoja = ss.insertSheet(HOJA_TASAS);
-  hoja.getRange(1, 1, 1, 2).setValues([['Moneda', 'Pesos por unidad (Google Finance)']]);
-  MONEDAS_TASA.forEach((m, i) => {
-    hoja.getRange(i + 2, 1).setValue(m);
-    hoja.getRange(i + 2, 2).setFormula('=GOOGLEFINANCE("CURRENCY:' + m + 'COP")');
+  if (!hoja) {
+    hoja = ss.insertSheet(HOJA_TASAS);
+    hoja.getRange(1, 1, 1, 2).setValues([['Moneda', 'Pesos por unidad (Google Finance)']]);
+    try { hoja.getRange(1, 1, 1, 2).setFontWeight('bold'); hoja.setColumnWidth(1, 90); hoja.setColumnWidth(2, 260); } catch (e) {}
+  }
+  const n = Math.max(hoja.getLastRow() - 1, 0);
+  const ya = n ? hoja.getRange(2, 1, n, 1).getValues().map(f => String(f[0]).trim()) : [];
+  let fila = n + 2;
+  MONEDAS_TASA.filter(m => ya.indexOf(m) === -1).forEach(m => {
+    hoja.getRange(fila, 1).setValue(m);
+    hoja.getRange(fila, 2).setFormula(formulaTasa_(m));
+    fila++;
   });
-  try { hoja.getRange(1, 1, 1, 2).setFontWeight('bold'); hoja.setColumnWidth(1, 90); hoja.setColumnWidth(2, 260); } catch (e) {}
   return hoja;
 }
+
+/** Tasa redondeada: 2 decimales desde 100 pesos por unidad; 4 para las monedas que valen poco (peso chileno, yen…). */
+const redondearTasa_ = v => v >= 100 ? Math.round(v * 100) / 100 : Math.round(v * 10000) / 10000;
 
 /**
  * Lee las tasas de la hoja auxiliar y las guarda. Devuelve las que se actualizaron y las que Google aún no entregó
@@ -37,16 +55,20 @@ function hojaTasas_(ss) {
 function actualizarTasasGoogle() {
   const hoja = hojaTasas_(getSpreadsheet());
   SpreadsheetApp.flush();
-  const filas = hoja.getRange(2, 1, MONEDAS_TASA.length, 2).getValues();
+  const filas = hoja.getRange(2, 1, Math.max(hoja.getLastRow() - 1, 1), 2).getValues();
+  // Se guardan el dólar, el euro y las monedas que la persona usa (o que ya tenían tasa): las demás no llenan Config
+  const enUso = divisasEnUso_();
+  const interesa = m => m === 'USD' || m === 'EUR' || enUso.indexOf(m) !== -1 || !!cfgValor_('Tasa_' + m);
   const actualizadas = [], pendientes = [];
   filas.forEach(f => {
     const moneda = String(f[0]).trim(), valor = f[1];
-    if (MONEDAS_TASA.indexOf(moneda) === -1) return;
+    if (MONEDAS_TASA.indexOf(moneda) === -1 || !interesa(moneda)) return;
     if (typeof valor === 'number' && isFinite(valor) && valor > 0 && valor < 1e7) {
-      guardarConfig_('Tasa_' + moneda, String(Math.round(valor * 100) / 100));
+      const tasa = redondearTasa_(valor);
+      guardarConfig_('Tasa_' + moneda, String(tasa));
       guardarConfig_('Tasa_' + moneda + '_Fecha', hoyIso_());
       guardarConfig_('Tasa_' + moneda + '_Fuente', 'Google Finance');
-      actualizadas.push({ moneda: moneda, tasa: Math.round(valor * 100) / 100 });
+      actualizadas.push({ moneda: moneda, tasa: tasa });
     } else {
       pendientes.push(moneda);
     }

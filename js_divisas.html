@@ -5,13 +5,28 @@
 // Divisas: tasas de referencia y conversión entre monedas
 // ---------------------------------------------------------------------------
 
+/** Monedas distintas del peso que la persona usa: en sus bancos, brokers e inversiones activos. */
+function divisasEnUsoUi() {
+  const usadas = {};
+  activos('Bancos').forEach(b => { usadas[b.Divisa || 'COP'] = true; });
+  activos('Brokers').forEach(b => { usadas[b.Divisa || 'COP'] = true; });
+  activos('Inversiones').forEach(i => { usadas[i.Divisa || 'COP'] = true; });
+  return DIVISAS_INFO_UI.map(d => d[0]).filter(d => d !== 'COP' && usadas[d]);
+}
+
 function vDivisas() {
-  const filas = ['USD', 'EUR'].map(d => {
+  const enUso = divisasEnUsoUi();
+  // Arriba: el dólar, el euro, las que usas y las que ya tienen tasa. Las demás, plegadas.
+  const arriba = DIVISAS_INFO_UI.map(d => d[0]).filter(d => d !== 'COP' && (d === 'USD' || d === 'EUR' || enUso.indexOf(d) !== -1 || cfg('Tasa_' + d)));
+  const resto = DIVISAS_INFO_UI.map(d => d[0]).filter(d => d !== 'COP' && arriba.indexOf(d) === -1);
+  const campo = d => {
     const tasa = cfg('Tasa_' + d), fecha = cfg('Tasa_' + d + '_Fecha'), fuente = cfg('Tasa_' + d + '_Fuente');
-    return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(NOMBRE_DIVISA[d].toLowerCase()) + ') vale, en pesos</label>' +
-      '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" data-tipo="dinero" data-divisa="COP" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
-      '<p class="m-ayuda" data-eco="tasa-' + d + '" aria-live="polite"></p>' + (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + (fuente ? ' · ' + esc(fuente) : '') + '</p>' : '') + '</div>';
-  }).join('');
+    return '<div class="m-campo"><label class="m-label" for="tasa-' + d + '">1 ' + d + ' (' + esc(SINGULAR_DIVISA[d].toLowerCase()) + ') vale, en pesos' + (enUso.indexOf(d) !== -1 ? ' · la usas' : '') + '</label>' +
+      '<input class="m-input m-num" id="tasa-' + d + '" data-tasa="' + d + '" inputmode="decimal" autocomplete="off" value="' + (tasa ? esc(String(tasa).replace('.', ',')) : '') + '">' +
+      (fecha ? '<p class="m-ayuda">Anotada el ' + esc(fechaCorta(fecha)) + (fuente ? ' · ' + esc(fuente) : '') + '</p>' : '') + '</div>';
+  };
+  const filas = arriba.map(campo).join('') +
+    (resto.length ? '<details class="m-viz-tabla" style="margin-bottom:var(--m-space-4)"><summary>Otras monedas (' + resto.length + ')</summary><div style="padding-top:var(--m-space-3)">' + resto.map(campo).join('') + '</div></details>' : '');
   return {
     titulo: 'Divisas',
     html: '<div class="m-group" style="padding:var(--m-space-4);margin-bottom:var(--m-space-4)">' +
@@ -20,7 +35,7 @@ function vDivisas() {
       '<p class="m-ayuda">Es la tasa del mercado, no la TRM oficial. Si la actualización automática está activa, reemplaza lo que escribas aquí.</p>' +
       '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-top:var(--m-space-3)" data-acc="tasas-google">Actualizar ahora con Google Finance</button></div>' +
       '<form class="m-group" style="padding:var(--m-space-4)" data-form="tasas" novalidate>' +
-      '<p class="m-subtitulo-cuerpo">O anótala tú. Las monedas se eligen al crear el banco.</p>' +
+      '<p class="m-subtitulo-cuerpo">O anótala tú. La moneda de cada cuenta se elige al crear el banco o el broker.</p>' +
       filas + '<div class="m-error-form" id="tasas-error" role="alert" hidden></div>' +
       '<button type="submit" class="m-btn m-btn-primary" style="width:100%">Guardar</button></form>',
     despues: () => { const f = $('form[data-form="tasas"]'); if (f) activarEcoDinero(f); }

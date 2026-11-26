@@ -387,7 +387,7 @@ async function abrirRegistrar(o) {
     // Compra con tarjeta en otra moneda: cuánto costó allá (la deuda queda en la moneda de la tarjeta)
     (conTarjetas && modo.moneda ? '<div class="m-campo" id="reg-moneda" hidden><div class="m-label-fila"><span class="m-label">¿Pagaste en otra moneda? (opcional)</span></div>' +
       '<div class="m-cargo-fila" style="grid-template-columns:7.5rem minmax(0,1fr)"><select class="m-input" id="f-Divisa_Original" aria-label="Moneda de la compra"><option value="">No, en la de la tarjeta</option>' +
-      ['USD', 'EUR', 'GBP', 'MXN', 'CAD', 'BRL', 'CLP', 'PEN', 'ARS'].map(d => '<option value="' + d + '">' + d + '</option>').join('') + '</select>' +
+      DIVISAS_INFO_UI.filter(d => d[0] !== 'COP').map(d => '<option value="' + d[0] + '">' + d[0] + ' · ' + esc(d[2]) + '</option>').join('') + '</select>' +
       '<input class="m-input m-num" id="f-Valor_Original" inputmode="decimal" aria-label="Valor en esa moneda" placeholder="Valor en esa moneda" disabled></div>' +
       '<p class="m-ayuda">Escribe arriba lo que te cobró la tarjeta en tu moneda. Si tu tarjeta cobra un recargo por compras en otra moneda, aparece abajo.</p></div>' : '') +
     (!edit && modo.cargos ? htmlCargos(modo.tipos.length > 1 ? 'Gasto,Mover' : '') : '') +

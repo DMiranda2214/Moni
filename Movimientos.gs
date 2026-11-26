@@ -220,9 +220,11 @@ function registrarConversion(c) {
 
   // Tasa implícita en pesos por unidad de la otra divisa (si no hay pesos de por medio, la de origen por la de destino)
   let tasaTexto;
-  if (dOrigen === DIVISA_BASE) tasaTexto = '1 ' + dDestino + ' = ' + redondear2_(sale / entra) + ' ' + DIVISA_BASE;
-  else if (dDestino === DIVISA_BASE) tasaTexto = '1 ' + dOrigen + ' = ' + redondear2_(entra / sale) + ' ' + DIVISA_BASE;
-  else tasaTexto = '1 ' + dOrigen + ' = ' + redondear2_(entra / sale) + ' ' + dDestino;
+  // Con 6 cifras significativas: una moneda que vale poco (1 CLP = 4,3127 COP) o un cruce (1 EUR = 1,0842 USD) no pierde precisión
+  const t6 = x => Number(x.toPrecision(6));
+  if (dOrigen === DIVISA_BASE) tasaTexto = '1 ' + dDestino + ' = ' + t6(sale / entra) + ' ' + DIVISA_BASE;
+  else if (dDestino === DIVISA_BASE) tasaTexto = '1 ' + dOrigen + ' = ' + t6(entra / sale) + ' ' + DIVISA_BASE;
+  else tasaTexto = '1 ' + dOrigen + ' = ' + t6(entra / sale) + ' ' + dDestino;
 
   const f = fechaMovimiento_(x.fecha);
   const idGrupo = nuevoId_('grp');

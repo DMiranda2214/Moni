@@ -58,6 +58,7 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 | `Tasa_EUR_Fecha` | — | Divisas | Fecha en que anotaste la tasa del euro *(la gestiona la app)* |
 | `Tasa_USD_Fuente` | — | Divisas | De dónde salió la tasa del dólar: Manual o Google Finance *(la gestiona la app)* |
 | `Tasa_EUR_Fuente` | — | Divisas | De dónde salió la tasa del euro: Manual o Google Finance *(la gestiona la app)* |
+| `Tasa_<XXX>`, `Tasa_<XXX>_Fecha`, `Tasa_<XXX>_Fuente` | — | Divisas | Lo mismo para las demás monedas (GBP, MXN, CLP…). Las filas se crean al anotar la primera tasa de esa moneda (`configDeTasa_`) *(la gestiona la app)* |
 | `Tasa_Auto` | `FALSE` | Divisas | TRUE si la tasa se actualiza sola cada día con Google Finance; la misma tarea actualiza los precios de las inversiones *(la gestiona la app)* |
 | `Inversiones_Ultima` | — | Divisas | Fecha y hora de la última lectura de precios de Google Finance *(la gestiona la app)* |
 | `Recordatorios_Activos` | `FALSE` | Recordatorios | TRUE si los pagos se anotan en Google Calendar *(la gestiona la app)* |
@@ -70,7 +71,7 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 
 `Tipo` indica cómo se valida: `numero`, `moneda` y `porcentaje` (decimal entre 0 y 1: 4 % = `0.04`) exigen un número; `booleano` es `TRUE`/`FALSE`; `seleccion` y `texto` son texto.
 
-**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago, Rendimiento_Base` (`Rendimiento_Base`: `Todo` o `Bolsillos`, sobre qué saldo rinde; `Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: `COP`, `USD` o `EUR`, por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
+**Bancos** — `ID_Banco, Nombre, Color, Icono, Activo, Orden, Divisa, Rendimiento_EA, Rendimiento_Pago, Rendimiento_Base` (`Rendimiento_Base`: `Todo` o `Bolsillos`, sobre qué saldo rinde; `Rendimiento_EA`: tasa efectiva anual en decimal (0,095 = 9,5 %); `Rendimiento_Pago`: `Diario` o `Mensual`. `Divisa`: una de las monedas de `DIVISAS_INFO` (`COP`, `USD`, `EUR`, `GBP`, `CHF`, `CAD`, `AUD`, `JPY`, `CNY`, `MXN`, `BRL`, `CLP`, `PEN`, `ARS` o `UYU`), por defecto `COP`; las cuentas y bolsillos la heredan del banco y no se puede cambiar cuando el banco ya tiene cuentas. Se agrega sola a las bases anteriores al pulsar **Instalar**)
 
 **Cuentas** — `ID_Cuenta, ID_Banco, Nombre, Tipo, Permite_Bolsillos, Fecha_Apertura, Saldo_Real, Fecha_Saldo_Real, Meta, Activo, Orden`
 - `Tipo`: `Billetera`, `Debito`, `Ahorro`, `Otra`.
@@ -195,8 +196,9 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - **Usado**: los gastos con esa misma `Ref`. Se muestra aparte y no baja lo ahorrado.
 - Cada meta activa con plan en un mes agrega a ese presupuesto un renglón de tipo `Fondo` hacia su bolsillo (`agregarMetasAlMes`, repetible y sin duplicar).
 
-**Brokers** (desde 1.19) — `ID_Broker, Nombre, Divisa, Notas, Activo, Orden`
-- La plataforma o comisionista donde la persona invierte. `Divisa`: la moneda de su cuenta (COP, USD o EUR).
+**Brokers** (desde 1.19) — `ID_Broker, Nombre, Divisa, Notas, Activo, Orden, Comision_Tipo, Comision_Porcentaje, Comision_Minima, Comision_Fija, Comision_Divisa`
+- La plataforma o comisionista donde la persona invierte. `Divisa`: la moneda de su cuenta (cualquiera de `DIVISAS_INFO`).
+- Comisión (1.20): `Comision_Tipo` vacío (sin tarifa), `Porcentaje`, `Fija` o `Mixta`. `Comision_Porcentaje` en decimal (0,005 = 0,5 %); `Comision_Minima` en la moneda del broker; `Comision_Fija` en `Comision_Divisa` (la del broker o `COP`). Lo que no aplica al tipo queda vacío. Los brokers de la 1.19 quedan sin tarifa.
 - No guarda saldo: el **disponible** se calcula con sus operaciones en `Inversiones_Operaciones` (depósitos − retiros − compras + ventas + dividendos, en `Valor_Origen`).
 - No se desactiva con disponible distinto de 0 ni con inversiones con unidades. La moneda no cambia si ya tiene operaciones.
 
@@ -204,7 +206,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - `ID_Broker` (1.19): el broker donde está. Vacío en las de antes: quedan como *Otras inversiones*, igual que siempre.
 - `Tipo`: `Accion`, `ETF`, `Cripto`, `Fondo`, `Bono` u `Otro`.
 - `Simbolo`: el de Google Finance, por ejemplo `NASDAQ:AAPL` o `CURRENCY:BTCUSD`.
-- `Divisa`: la moneda del precio (COP, USD o EUR). Se pasa a pesos con `Config.Tasa_<divisa>`.
+- `Divisa`: la moneda del precio (cualquiera de `DIVISAS_INFO`). Se pasa a pesos con `Config.Tasa_<divisa>`. Al escribir el símbolo se propone la de su bolsa (`NASDAQ:` USD, `BVC:` COP, `BMV:` MXN, `BVMF:` BRL, `TSE:` CAD, `EPA:` EUR…; `divisaDeSimbolo_`).
 - El precio vigente es el más reciente entre el de Google, el manual y el de la última operación.
 
 **Inversiones_Operaciones** (desde 1.16) — `ID_Operacion, ID_Inversion, Fecha, Tipo, Cantidad, Precio, Valor, Comision, ID_Bolsillo, ID_Mov, Notas, Anulado, ID_Broker, Valor_Origen, Sin_Efectivo`
@@ -222,7 +224,7 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 
 **Inversiones_Precios** (desde 1.16) — `ID_Precio, Fecha, ID_Inversion, Precio, Divisa, Fuente`. Historial con un precio por día y fuente (`Google` o `Manual`) para los gráficos. Lo escriben `actualizarPreciosGoogle` (hoja auxiliar `Precios_Google`, que no es una tabla) y `guardarPrecioManual`.
 
-**Hojas auxiliares (no son tablas):** `Tasas_Google`, `Precios_Google` y `Buscar_Google` tienen fórmulas `GOOGLEFINANCE` que la app escribe y lee: la tasa del dólar y del euro, el precio de cada inversión con símbolo y la búsqueda de un símbolo. Se pueden borrar sin perder datos; la app las vuelve a crear.
+**Hojas auxiliares (no son tablas):** `Tasas_Google`, `Precios_Google` y `Buscar_Google` tienen fórmulas `GOOGLEFINANCE` que la app escribe y lee: la tasa de cada moneda (con el cruce por el dólar si Google no tiene el par contra el peso), el precio de cada inversión con símbolo y la búsqueda de un símbolo. Se pueden borrar sin perder datos; la app las vuelve a crear.
 **Reportes** — `ID_Reporte, Tipo, Mes, ID_Tarjeta, URL_Drive`
 **Log** — `ID_Log, Fecha_Hora, Nivel, Funcion, Mensaje, Detalle`
 

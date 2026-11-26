@@ -218,4 +218,53 @@ module.exports = function (prueba, assert, crearEntorno) {
     const msft = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Microsoft', Simbolo: 'NASDAQ:MSFT', ID_Broker: b.ID_Broker });
     assert.throws(e.falla('registrarOperacionInversion', { ID_Inversion: msft.ID_Inversion, Fecha: hoy(), Tipo: 'Compra', Cantidad: 1, Total: 400 }), /tasa de USD/);
   });
+
+  // ============================================================= comisiones de brokers (1.20)
+  const CASOS_COMISION = [
+    // [tarifa, total, tasas, esperado]
+    [{ Divisa: 'COP', Comision_Tipo: '' }, 1000000, {}, 0],
+    [{ Divisa: 'COP', Comision_Tipo: 'Porcentaje', Comision_Porcentaje: 0.005, Comision_Minima: 0 }, 1000000, {}, 5000],
+    [{ Divisa: 'COP', Comision_Tipo: 'Porcentaje', Comision_Porcentaje: 0.005, Comision_Minima: 12000 }, 1000000, {}, 12000],
+    [{ Divisa: 'COP', Comision_Tipo: 'Fija', Comision_Fija: 9900, Comision_Divisa: 'COP' }, 50000, {}, 9900],
+    [{ Divisa: 'USD', Comision_Tipo: 'Fija', Comision_Fija: 1, Comision_Divisa: 'USD' }, 300, { USD: 4000 }, 1],
+    [{ Divisa: 'USD', Comision_Tipo: 'Fija', Comision_Fija: 8000, Comision_Divisa: 'COP' }, 300, { USD: 4000 }, 2],
+    [{ Divisa: 'USD', Comision_Tipo: 'Fija', Comision_Fija: 8000, Comision_Divisa: 'COP' }, 300, {}, null],
+    [{ Divisa: 'USD', Comision_Tipo: 'Mixta', Comision_Porcentaje: 0.001, Comision_Minima: 0.5, Comision_Fija: 1, Comision_Divisa: 'USD' }, 2000, { USD: 4000 }, 3]
+  ];
+
+  prueba('brokers: la comisión de la tarifa (porcentaje con mínimo, fija en pesos o en su moneda, o ambas) es la misma en el servidor y en la app', () => {
+    const { e } = escenario();
+    const fs = require('fs'), path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'js_inversiones.html'), 'utf8');
+    const comisionSugerida = new Function(src.slice(src.indexOf('// <comision>'), src.indexOf('// </comision>')) + '\nreturn comisionSugerida;')();
+    CASOS_COMISION.forEach(([b, total, tasas, esperado], k) => {
+      e.ejecutar("guardarConfig_('Tasa_USD', '" + (tasas.USD || '') + "')");
+      assert.strictEqual(e.llamar('comisionBroker_', b, total), esperado, 'servidor, caso ' + k);
+      assert.strictEqual(comisionSugerida(b, total, d => d === 'COP' ? 1 : (tasas[d] || 0)), esperado, 'app, caso ' + k);
+    });
+  });
+
+  prueba('brokers: la tarifa se guarda con el broker y se usa si la operación no trae comisión; la escrita manda', () => {
+    const { e } = escenario();
+    const b = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'Trii', Divisa: 'COP', Disponible: 2000000, Comision_Tipo: 'Porcentaje', Comision_Porcentaje: 0.005, Comision_Minima: 9000 });
+    assert.strictEqual(b.Comision_Porcentaje, 0.005);
+    assert.strictEqual(b.Comision_Fija, '', 'lo que no aplica queda vacío');
+    const eco = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Ecopetrol', Simbolo: 'BVC:ECOPETROL', ID_Broker: b.ID_Broker });
+    // Sin comisión escrita: la de la tarifa (0,5 % de 1.000.000 = 5.000, pero el mínimo es 9.000)
+    let op = e.llamar('registrarOperacionInversion', { ID_Inversion: eco.ID_Inversion, Fecha: hoy(), Tipo: 'Compra', Cantidad: 500, Total: 1000000 });
+    assert.strictEqual(op.Comision, 9000);
+    assert.strictEqual(op.Valor_Origen, 1009000);
+    // Con comisión escrita (aunque sea 0), la escrita
+    op = e.llamar('registrarOperacionInversion', { ID_Inversion: eco.ID_Inversion, Fecha: hoy(), Tipo: 'Venta', Cantidad: 100, Total: 250000, Comision: 0 });
+    assert.strictEqual(op.Comision, 0);
+    const rb = e.llamar('obtenerInversiones').brokers[0];
+    assert.strictEqual(rb.disponible, 2000000 - 1009000 + 250000);
+    assert.strictEqual(rb.comisiones, 9000, 'lo pagado en comisiones');
+    assert.strictEqual(rb.Comision_Tipo, 'Porcentaje');
+    // Validaciones de la tarifa
+    assert.throws(e.falla('guardarCatalogo', 'Brokers', { Nombre: 'X', Comision_Tipo: 'Porcentaje' }), /porcentaje/);
+    assert.throws(e.falla('guardarCatalogo', 'Brokers', { Nombre: 'Y', Divisa: 'USD', Comision_Tipo: 'Fija', Comision_Fija: 2, Comision_Divisa: 'EUR' }), /pesos o en la moneda del broker/);
+    const usd = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'Z', Divisa: 'USD', Comision_Tipo: 'Fija', Comision_Fija: 2 });
+    assert.strictEqual(usd.Comision_Divisa, 'USD', 'sin moneda, la del broker');
+  });
 };

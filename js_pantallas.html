@@ -553,7 +553,7 @@ function vAjustes() {
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
         ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Brokers'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
-        irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' }) +
+        irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares, euros y otras monedas: cuánto valen en pesos' }) +
         irA('ajustes/Cargos_Reglas', { icono: CAT.Cargos_Reglas.icono, titulo: CAT.Cargos_Reglas.plural, sub: 'Comisiones, impuestos, cuota de manejo y seguros', final: n('Cargos_Reglas') })) +
       seccion('Presupuesto y nómina',
         irA('ajustes/plantilla', { icono: 'presupuesto', titulo: 'Plantilla del presupuesto', final: activos('Presupuesto_Plantilla').length }) +
