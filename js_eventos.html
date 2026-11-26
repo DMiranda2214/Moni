@@ -426,7 +426,7 @@ document.addEventListener('submit', async ev => {
     caja.hidden = true; boton.disabled = true;
     try {
       for (const inp of $$('[data-tasa]', f)) {
-        const d = inp.dataset.tasa, n = leerDinero(inp.value);
+        const d = inp.dataset.tasa, n = leerDecimal(inp.value);
         if (n !== '' && isNaN(n)) throw new Error('Revisa la tasa del ' + d + '.');
         const nueva = n === '' ? '' : String(n);
         if (String(cfg('Tasa_' + d)) !== nueva) await api('saveTasaDivisa', d, nueva);

@@ -145,7 +145,7 @@ La **Lista de deseos** usa la tabla `Regalos`: `getRegalos` trae por cada deseo 
 | `getInversiones` | — → `{ items[], archivadas[], totales { costo, valor, ganancia, rentabilidad, realizado, dividendos }, porTipo[], evolucion[] (12 meses), faltaTasa[], ultimaActualizacion, automatico }` |
 | `saveInversion` | `inv` (`Nombre, Tipo, Simbolo, Divisa, Precio_Manual, Notas`); la app usa `saveCatalogo('Inversiones', …)` |
 | `archiveInversion` | `id` (solo sin unidades) |
-| `addOperacionInversion` | `{ ID_Inversion, Fecha, Tipo: Compra\|Venta\|Dividendo, Cantidad, Precio, Valor (pesos), Comision, ID_Bolsillo?, Notas }`. En una inversión de un broker: `Total` y `Comision` en la moneda del broker, sin bolsillo |
+| `addOperacionInversion` | `{ ID_Inversion, Fecha, Tipo: Compra\|Venta\|Dividendo, Cantidad, Precio, Valor (pesos), Comision, ID_Bolsillo?, Notas }`. En una inversión de un broker: `Total` y `Comision` en la moneda del broker, sin bolsillo; sin `Comision`, se usa la de la tarifa del broker |
 | `moveDineroBroker` | `{ ID_Broker, Tipo: Deposito\|Retiro, Fecha, Valor (moneda del broker), ID_Bolsillo?, Valor_Bolsillo? (si el bolsillo está en otra moneda), Notas }` |
 | `setDisponibleBroker` | `(idBroker, valor, fecha)`: deja el disponible en ese valor, sin mover bolsillos |
 | `setCantidadInversion` | `(idInversion, { Cantidad, Precio? (promedio), Fecha? })`: deja la cantidad, sin mover dinero |

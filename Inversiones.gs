@@ -28,6 +28,22 @@ function simboloInversion_(v) {
   return t;
 }
 
+/** Moneda en la que cotiza cada bolsa en Google Finance (para proponer la del precio al escribir el símbolo). */
+const DIVISA_BOLSA = {
+  NASDAQ: 'USD', NYSE: 'USD', NYSEARCA: 'USD', NYSEAMERICAN: 'USD', BATS: 'USD', OTCMKTS: 'USD', BVC: 'COP',
+  BMV: 'MXN', BVMF: 'BRL', SGO: 'CLP', BVL: 'PEN', BCBA: 'ARS', TSE: 'CAD', CVE: 'CAD', TYO: 'JPY', ASX: 'AUD', SWX: 'CHF',
+  EPA: 'EUR', ETR: 'EUR', FRA: 'EUR', AMS: 'EUR', BME: 'EUR', BIT: 'EUR', EBR: 'EUR', ELI: 'EUR', SHA: 'CNY', SHE: 'CNY'
+};
+
+/** La moneda que corresponde a un símbolo: la de su bolsa; la cripto (CURRENCY:BTCUSD) en la moneda del par. */
+function divisaDeSimbolo_(simbolo) {
+  const s = texto_(simbolo).toUpperCase();
+  if (!s) return DIVISA_BASE;
+  if (s.indexOf('CURRENCY:') === 0) { const par = s.slice(9), m = par.slice(-3); return DIVISAS.indexOf(m) !== -1 && par.length > 3 ? m : 'USD'; }
+  const bolsa = s.indexOf(':') !== -1 ? s.split(':')[0] : '';
+  return DIVISA_BOLSA[bolsa] || DIVISA_BASE;
+}
+
 /** Operaciones vigentes de una inversión, en orden de fecha (y de registro). */
 function operacionesDe_(idInversion, ops) {
   return (ops || getTableData('Inversiones_Operaciones')).filter(o => o.ID_Inversion === idInversion && !esVerdadero(o.Anulado))
@@ -150,6 +166,10 @@ function resumenBroker_(b, resumenes, ops) {
     disponible: disponible, disponibleCop: disponibleCop, valor: valor, costo: costo, ganancia: redondear2_(valor - costo),
     valorDivisa: completo ? redondear2_(valorDivisa) : null, totalDivisa: completo ? redondear2_(valorDivisa + disponible) : null,
     total: redondear2_(valor + (disponibleCop || 0)), sinTasa: !tasa, tasa: tasa,
+    Comision_Tipo: texto_(b.Comision_Tipo), Comision_Porcentaje: Number(b.Comision_Porcentaje) || 0, Comision_Minima: Number(b.Comision_Minima) || 0,
+    Comision_Fija: Number(b.Comision_Fija) || 0, Comision_Divisa: texto_(b.Comision_Divisa) || divisa,
+    // Lo pagado en comisiones en este broker (en pesos, con la tasa del día de cada operación)
+    comisiones: redondear2_(ops.filter(o => o.ID_Broker === b.ID_Broker && !esVerdadero(o.Anulado) && !esVerdadero(o.Sin_Efectivo)).reduce((a, o) => a + (Number(o.Comision) || 0), 0)),
     inversiones: items.map(i => i.ID_Inversion),
     movimientos: ops.filter(o => o.ID_Broker === b.ID_Broker && !esVerdadero(o.Anulado) && (o.Tipo === 'Deposito' || o.Tipo === 'Retiro'))
       .sort((x, y) => (x.Fecha < y.Fecha ? 1 : x.Fecha > y.Fecha ? -1 : texto_(x.Creado_En) < texto_(y.Creado_En) ? 1 : -1))
@@ -161,6 +181,25 @@ function resumenesBrokers_() {
   const ops = getTableData('Inversiones_Operaciones');
   const resumenes = resumenesInversiones_();
   return getTableData('Brokers').filter(estaActivo).map(b => resumenBroker_(b, resumenes, ops));
+}
+
+/**
+ * La comisión que cobra un broker por una compra o venta de `total` (en su moneda): % del total (con su mínimo) + valor fijo.
+ * La fija en pesos de un broker en otra moneda se pasa con las tasas de Divisas (sin tasa: null, la persona la escribe).
+ * Sin comisión configurada: 0. Es una sugerencia: en cada operación se puede cambiar.
+ */
+function comisionBroker_(b, total) {
+  const tipo = texto_(b.Comision_Tipo);
+  if (!tipo) return 0;
+  const divisa = DIVISAS.indexOf(b.Divisa) !== -1 ? b.Divisa : DIVISA_BASE;
+  let c = 0;
+  if (tipo === 'Porcentaje' || tipo === 'Mixta') c = Math.max((Number(total) || 0) * (Number(b.Comision_Porcentaje) || 0), Number(b.Comision_Minima) || 0);
+  if (tipo === 'Fija' || tipo === 'Mixta') {
+    const fija = Number(b.Comision_Fija) || 0, enDiv = b.Comision_Divisa || divisa;
+    if (enDiv === divisa) c += fija;
+    else { const tO = tasaDivisa_(enDiv), tD = tasaDivisa_(divisa); if (!tO || !tD) return null; c += fija * tO / tD; }
+  }
+  return redondear2_(c);
 }
 
 function brokerActivo_(id) {
@@ -368,7 +407,10 @@ function registrarOperacionBroker_(inv, o, tipo, fecha, cantidad, precio) {
   const tasa = tasaDivisa_(divisa);
   if (!tasa) throw new Error('Falta la tasa de ' + divisa + ' para llevar la operación a pesos. Escríbela (o actívala con Google Finance) en Ajustes → Divisas.');
   const total = numero_(o.Total, tipo === 'Dividendo' ? 'El valor del dividendo' : 'El total', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
-  const comision = tipo === 'Dividendo' ? 0 : numero_(o.Comision, 'La comisión', { min: 0, max: VALOR_MAXIMO }) || 0;
+  // Sin comisión escrita, la de la tarifa del broker; con una (aunque sea 0), la que se escribió
+  const sinEscribir = o.Comision === undefined || o.Comision === null || o.Comision === '';
+  const sugerida = tipo === 'Dividendo' || !sinEscribir ? 0 : comisionBroker_(b, total);
+  const comision = tipo === 'Dividendo' ? 0 : sinEscribir ? (sugerida || 0) : numero_(o.Comision, 'La comisión', { min: 0, max: VALOR_MAXIMO }) || 0;
   const sinEfectivo = tipo === 'Compra' && esVerdadero(o.Sin_Efectivo);
   if (tipo === 'Venta') {
     const pos = posicionInversion_(operacionesDe_(inv.ID_Inversion, leer_('Inversiones_Operaciones')));

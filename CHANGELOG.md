@@ -1,5 +1,17 @@
 # Cambios
 
+## 1.20.0 — Más monedas y comisiones de brokers (26 nov 2026)
+- **Nuevo: monedas comunes del mercado.** Además de pesos, dólares y euros: libra esterlina, franco suizo, dólar canadiense, dólar australiano, yen, yuan, peso mexicano, real brasileño, peso chileno, sol peruano, peso argentino y peso uruguayo. Sirven para bancos, brokers, inversiones y compras con tarjeta en otra moneda.
+  - **Ajustes → Divisas** muestra arriba el dólar, el euro y las monedas que usas; las demás, en *Otras monedas*.
+  - **Google Finance** trae la tasa de todas; si no tiene el par contra el peso, la calcula cruzando por el dólar. Las monedas que valen poco (peso chileno, yen) guardan 4 decimales.
+  - El aviso de Inicio pide la tasa de cada moneda que usas y no tiene tasa (antes solo miraba el dólar y el euro).
+  - Al escribir el símbolo de una inversión, Moni propone la moneda de su bolsa (México, Brasil, Canadá, Europa…).
+  - El yen y el peso chileno se muestran sin decimales. Las conversiones guardan la tasa con 6 cifras.
+- **Nuevo: comisión de cada broker.** Se configura en el broker como un porcentaje del valor (con un mínimo), un valor fijo por operación (en pesos o en la moneda del broker) o ambos. Al comprar o vender, Moni la propone; se puede cambiar y escribir como valor o como porcentaje. La pantalla del broker muestra su tarifa y lo pagado en comisiones.
+- **Mejora:** en las inversiones sin broker, la comisión también se puede escribir como porcentaje.
+- **Corregido:** un porcentaje escrito con punto (0.5) se leía como 5.
+- **Datos:** esquema `17`. Columnas nuevas en `Brokers` (`Comision_Tipo`, `Comision_Porcentaje`, `Comision_Minima`, `Comision_Fija`, `Comision_Divisa`). Los brokers de la 1.19 quedan sin tarifa: la comisión se escribe en cada operación, como antes. Las filas de tasa de una moneda nueva se crean en Config al anotarla.
+
 ## 1.19.0 — Brokers de inversión y fórmulas de tasas (26 nov 2026)
 - **Nuevo: brokers.** En Inversiones registras tu broker (Trii, Hapi, Interactive Brokers…) como un banco para invertir:
   - su moneda (pesos o dólares) y el **dinero disponible** para invertir;

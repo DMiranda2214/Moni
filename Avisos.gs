@@ -66,9 +66,11 @@ function obtenerAvisos_() {
   });
 
   // ---- Sugerencias: configuración que falta ----
-  const hayDolares = bancos.some(b => divisaBanco_(b) !== DIVISA_BASE);
-  if (hayDolares && !esVerdadero(cfgValor_('Tasa_Auto')) && !cfgValor_('Tasa_USD') && !cfgValor_('Tasa_EUR')) {
-    agregar('tasa', 'sugerencia', 'Configura el dólar', 'Tienes dinero en otra moneda: vincula la TRM de Google Finance o anota la tasa para ver su equivalente en pesos.', 'ajustes/divisas');
+  // Monedas que usas (bancos, brokers, inversiones) sin tasa: sus saldos no se pueden ver en pesos
+  const sinTasaDiv = divisasEnUso_().filter(d => !tasaDivisa_(d));
+  if (sinTasaDiv.length && !esVerdadero(cfgValor_('Tasa_Auto'))) {
+    agregar('tasa', 'sugerencia', sinTasaDiv.length === 1 ? 'Configura la tasa del ' + sinTasaDiv[0] : 'Configura las tasas de ' + sinTasaDiv.join(', '),
+      'Tienes dinero o inversiones en otra moneda: vincula Google Finance o anota la tasa para ver su equivalente en pesos.', 'ajustes/divisas');
   }
   const sinTasa = cuentas.filter(c => c.Tipo === 'Ahorro' && !(Number((bancos.find(b => b.ID_Banco === c.ID_Banco) || {}).Rendimiento_EA) > 0));
   if (sinTasa.length) {

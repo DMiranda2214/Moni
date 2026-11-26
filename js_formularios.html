@@ -225,7 +225,7 @@ const CAT = {
       { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Accion', opciones: () => Object.keys(TIPOS_INV).map(k => [k, TIPOS_INV[k]]) },
       { k: 'Simbolo', label: 'Símbolo en Google Finance (opcional)', tipo: 'texto', maxlength: 40, lista: ['CURRENCY:BTCUSD', 'CURRENCY:ETHUSD', 'NASDAQ:AAPL', 'NYSEARCA:VOO', 'BVC:ECOPETROL'],
         ayuda: 'Así Moni trae el precio sola: acciones como NASDAQ:AAPL, cripto como CURRENCY:BTCUSD. Si Google no tiene el activo (pasa con varias acciones de la BVC o los fondos), déjalo vacío y escribe el precio a mano.' },
-      { k: 'Divisa', label: 'Moneda del precio', tipo: 'select', defecto: 'COP', opciones: () => [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']], ayuda: 'En qué moneda está el precio: las acciones de EE. UU. y la cripto, en dólares. Se pasa a pesos con la tasa de Ajustes → Divisas.' },
+      { k: 'Divisa', label: 'Moneda del precio', tipo: 'select', defecto: 'COP', opciones: () => DIVISAS_UI, ayuda: 'En qué moneda está el precio: las acciones de EE. UU. y la cripto, en dólares; las de México, en pesos mexicanos… Moni la propone según la bolsa del símbolo. Se pasa a pesos con la tasa de Ajustes → Divisas.' },
       { k: 'Precio_Manual', label: 'Precio de hoy por unidad (opcional)', tipo: 'decimal', ayuda: 'Si no hay símbolo o Google no lo encuentra: el valor de una acción o de una unidad del fondo, en la moneda de arriba.' },
       { k: 'Cantidad_Inicial', label: 'Cuántas tienes hoy (opcional)', tipo: 'decimal', soloAlCrear: true, ayuda: 'Las acciones o unidades que ya compraste. Moni las multiplica por el precio para saber cuánto valen. No mueven dinero.' },
       { k: 'Precio_Promedio', label: 'Precio promedio al que las compraste (opcional)', tipo: 'decimal', soloAlCrear: true, visible: v => typeof v.Cantidad_Inicial === 'number' && v.Cantidad_Inicial > 0,
@@ -236,12 +236,21 @@ const CAT = {
   Brokers: {
     plural: 'Brokers', singular: 'broker', icono: 'tendencia', id: 'ID_Broker',
     vacio: 'Un broker es la plataforma o comisionista donde inviertes (Trii, Hapi, Interactive Brokers, eToro…). Como un banco: tiene dinero disponible para invertir y las acciones que compras con él.',
-    fila: b => ({ titulo: esc(b.Nombre), sub: (n => n ? n + (n === 1 ? ' inversión' : ' inversiones') : 'Sin inversiones')(activos('Inversiones').filter(i => i.ID_Broker === b.ID_Broker).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : ''), final: '' }),
+    fila: b => ({ titulo: esc(b.Nombre), sub: (n => n ? n + (n === 1 ? ' inversión' : ' inversiones') : 'Sin inversiones')(activos('Inversiones').filter(i => i.ID_Broker === b.ID_Broker).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : '') + (b.Comision_Tipo ? ' · comisión ' + esc(textoTarifa(b)) : ''), final: '' }),
     campos: [
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Trii', 'Hapi', 'Interactive Brokers', 'eToro', 'XTB', 'Acciones & Valores', 'Davivienda Corredores', 'Credicorp Capital', 'Binance'] },
       { k: 'Divisa', label: 'Moneda de la cuenta', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
         ayuda: 'En qué moneda tienes el dinero en el broker: pesos en los colombianos, dólares en los de EE. UU. No se puede cambiar cuando ya tiene movimientos.' },
       { k: 'Disponible', label: 'Dinero disponible hoy para invertir (opcional)', tipo: 'decimal', soloAlCrear: true, ayuda: 'Lo que tienes sin invertir en el broker, en su moneda. Lo puedes ajustar después.' },
+      { k: 'Comision_Tipo', label: 'Comisión al comprar o vender', tipo: 'select', defecto: '',
+        opciones: () => [['', 'No cobra (o la escribo en cada operación)'], ['Porcentaje', 'Un porcentaje del valor'], ['Fija', 'Un valor fijo por operación'], ['Mixta', 'Un porcentaje más un valor fijo']] },
+      { k: 'Comision_Porcentaje', label: 'Porcentaje de la comisión (%)', tipo: 'porcentaje', requerido: true, visible: v => v.Comision_Tipo === 'Porcentaje' || v.Comision_Tipo === 'Mixta',
+        ayuda: 'Del valor de cada compra o venta. Por ejemplo 0,5 si cobra 0,5 %.' },
+      { k: 'Comision_Minima', label: 'Comisión mínima (opcional, en la moneda del broker)', tipo: 'decimal', visible: v => v.Comision_Tipo === 'Porcentaje' || v.Comision_Tipo === 'Mixta',
+        ayuda: 'Si el porcentaje da menos que esto, cobra esto.' },
+      { k: 'Comision_Fija', label: 'Comisión fija por operación', tipo: 'decimal', requerido: true, visible: v => v.Comision_Tipo === 'Fija' || v.Comision_Tipo === 'Mixta' },
+      { k: 'Comision_Divisa', label: 'La comisión fija es en', tipo: 'select', defecto: '', visible: v => v.Comision_Tipo === 'Fija' || v.Comision_Tipo === 'Mixta',
+        opciones: () => [['', 'La moneda del broker'], ['COP', 'Pesos (COP)']], ayuda: 'Algunos brokers en dólares cobran la comisión en pesos. Moni la convierte con la tasa de Ajustes → Divisas.' },
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
@@ -448,6 +457,11 @@ const INFO_CAMPOS = {
     Nombre: 'La plataforma o comisionista donde inviertes: Trii, Hapi, Interactive Brokers…',
     Divisa: 'La moneda de tu cuenta en el broker. El disponible y las compras se anotan en esta moneda y Moni los pasa a pesos con la tasa de Ajustes → Divisas.',
     Disponible: 'El dinero que tienes en el broker sin invertir, como lo ves en la plataforma. No sale de ningún bolsillo: es lo que ya está allá.',
+    Comision_Tipo: 'Lo que te cobra el broker cada vez que compras o vendes. Moni la propone en cada operación y siempre la puedes cambiar.',
+    Comision_Porcentaje: 'El porcentaje del valor de la operación que cobra el broker.',
+    Comision_Minima: 'Lo mínimo que cobra por operación, aunque el porcentaje dé menos.',
+    Comision_Fija: 'Lo que cobra por cada compra o venta, sin importar el valor.',
+    Comision_Divisa: 'Si la comisión fija está en pesos o en la moneda de tu cuenta en el broker.',
     Notas: 'Lo que quieras recordar: el número de cuenta, quién te asesora…'
   },
   Escenarios: {
@@ -634,7 +648,7 @@ function leerFormulario(raiz, campos) {
     if (!el) return;
     if (c.tipo === 'interruptor') v[c.k] = el.checked;
     else if (c.tipo === 'dinero') v[c.k] = leerDinero(el.value);
-    else if (c.tipo === 'porcentaje') { const n = leerDinero(el.value); v[c.k] = n === '' ? '' : (isNaN(n) ? NaN : n / 100); }
+    else if (c.tipo === 'porcentaje') { const n = leerDecimal(el.value); v[c.k] = n === '' ? '' : (isNaN(n) ? NaN : n / 100); }
     else if (c.tipo === 'decimal') v[c.k] = leerDecimal(el.value);
     else if (c.tipo === 'entero') v[c.k] = el.value === '' ? '' : Number(el.value);
     else v[c.k] = el.value.trim();
@@ -748,7 +762,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago', 'ID_Broker'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago', 'ID_Broker', 'Comision_Tipo', 'Comision_Divisa', 'Comision_Minima'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }

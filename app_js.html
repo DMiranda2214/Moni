@@ -79,8 +79,9 @@ function dinero(n, divisa) {
   const d = divisa || (App.boot && App.boot.config && App.boot.config.Moneda) || 'COP';
   const v = Number(n) || 0;
   // En pesos no se muestran centavos... salvo cuando el valor los tiene (un rendimiento, un saldo del banco): así lo que se ve
-  // es lo que se guardó y las sumas cuadran. Las demás monedas siempre llevan dos decimales.
-  const conCentavos = d !== 'COP' || Math.abs(v - Math.round(v)) >= 0.005;
+  // es lo que se guardó y las sumas cuadran. Las demás monedas llevan sus decimales (dos; el yen y el peso chileno, ninguno).
+  const decMoneda = typeof DECIMALES_DIVISA !== 'undefined' && DECIMALES_DIVISA[d] !== undefined ? DECIMALES_DIVISA[d] : 2;
+  const conCentavos = d !== 'COP' ? decMoneda > 0 : Math.abs(v - Math.round(v)) >= 0.005;
   const llave = d + (conCentavos ? '2' : '0');
   if (!_formatos[llave]) {
     const dec = conCentavos ? 2 : 0;
@@ -91,7 +92,7 @@ function dinero(n, divisa) {
 
 /** Convierte lo que se escribe ("1.250.000,50") a número, con la convención de es-CO. */
 /** Una tasa de cambio en pesos, con decimales: $ 4.012,5 */
-const tasaPesos = n => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+const tasaPesos = n => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: n >= 100 ? 2 : 4 }).format(n); // 4 decimales para las que valen poco (CLP, JPY)
 
 /**
  * Un número con decimales que puede venir escrito a la colombiana (1.250,5) o con punto decimal (0.005, 189.5).
@@ -546,8 +547,17 @@ const demoOn = () => !!(App.boot && App.boot.demoHabilitado);
 const cfg = clave => (App.boot && App.boot.config && App.boot.config[clave]) || '';
 
 // Divisas: se elige en el banco; sus cuentas y bolsillos la heredan.
-const DIVISAS_UI = [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']];
-const NOMBRE_DIVISA = { COP: 'Pesos', USD: 'Dólares', EUR: 'Euros' };
+/** Divisas comunes del mercado: [código, nombre, plural, decimales]. Debe ser la misma lista de DIVISAS_INFO (Setup.gs). */
+const DIVISAS_INFO_UI = [
+  ['COP', 'Peso colombiano', 'Pesos', 2], ['USD', 'Dólar estadounidense', 'Dólares', 2], ['EUR', 'Euro', 'Euros', 2],
+  ['GBP', 'Libra esterlina', 'Libras', 2], ['CHF', 'Franco suizo', 'Francos suizos', 2], ['CAD', 'Dólar canadiense', 'Dólares canadienses', 2],
+  ['AUD', 'Dólar australiano', 'Dólares australianos', 2], ['JPY', 'Yen japonés', 'Yenes', 0], ['CNY', 'Yuan chino', 'Yuanes', 2],
+  ['MXN', 'Peso mexicano', 'Pesos mexicanos', 2], ['BRL', 'Real brasileño', 'Reales', 2], ['CLP', 'Peso chileno', 'Pesos chilenos', 0],
+  ['PEN', 'Sol peruano', 'Soles', 2], ['ARS', 'Peso argentino', 'Pesos argentinos', 2], ['UYU', 'Peso uruguayo', 'Pesos uruguayos', 2]
+];
+const DIVISAS_UI = DIVISAS_INFO_UI.map(d => [d[0], d[2] + ' (' + d[0] + ')']);
+const NOMBRE_DIVISA = {}, SINGULAR_DIVISA = {}, DECIMALES_DIVISA = {};
+DIVISAS_INFO_UI.forEach(d => { NOMBRE_DIVISA[d[0]] = d[2]; SINGULAR_DIVISA[d[0]] = d[1]; DECIMALES_DIVISA[d[0]] = d[3]; });
 function divisaDeBanco(idBanco) { const b = porId('Bancos', 'ID_Banco', idBanco); return (b && b.Divisa) || 'COP'; }
 function divisaDeCuenta(idCuenta) { const c = porId('Cuentas', 'ID_Cuenta', idCuenta); return c ? divisaDeBanco(c.ID_Banco) : 'COP'; }
 function divisaDeBolsillo(idBolsillo) { const b = porId('Bolsillos', 'ID_Bolsillo', idBolsillo); return b ? divisaDeCuenta(b.ID_Cuenta) : 'COP'; }
