@@ -568,7 +568,7 @@ module.exports = function (prueba, assert, crearEntorno) {
     e.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Banco real' });
 
     const r = e.llamar('limpiarDatosDemo');
-    assert.ok(r.eliminadas.Presupuesto_Mes === 12 && r.eliminadas.Metas === 2 && r.eliminadas.Inversiones === 2 && r.eliminadas.Deseos_Ideas === 2 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
+    assert.ok(r.eliminadas.Presupuesto_Mes === 12 && r.eliminadas.Metas === 2 && r.eliminadas.Inversiones === 3 && r.eliminadas.Brokers === 1 && r.eliminadas.Inversiones_Operaciones === 4 && r.eliminadas.Deseos_Ideas === 2 && r.eliminadas.Nomina_Pagos === 1 && r.eliminadas.Nomina_Pagos_Detalle >= 3, JSON.stringify(r.eliminadas));
     ['Presupuesto_Plantilla', 'Presupuesto_Mes', 'Nomina_Escenarios', 'Nomina_Conceptos', 'Nomina_Pagos', 'Nomina_Pagos_Detalle', 'Movimientos', 'Subsidios'].forEach(t => {
       assert.strictEqual(e.hojas[t].filas.slice(1).filter(f => f.some(c => c !== '' && c !== undefined)).length, 0, t + ' debe quedar vacía');
     });

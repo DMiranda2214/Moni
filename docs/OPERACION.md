@@ -23,7 +23,7 @@ Si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: deja un ajust
 **Ajustes → Registro de errores** muestra lo que falló en producción (tabla `Log`, últimas 500 entradas). Niveles: **Error** (fallo inesperado o del navegador), **Aviso** (una regla de negocio rechazó algo) e **Info** (hechos como el borrado total o el inicio de operación). Cada entrada lleva la función, el mensaje, la traza y la versión de Moni. También quedan anotados los fallos del respaldo automático. **Copiar el registro** deja un texto listo para pegar en un reporte.
 
 ## Borrar todos los datos
-**Ajustes → Privacidad → Borrar todos mis datos** (función `resetAllData`, en `Reinicio.gs`). Vacía las 31 tablas conservando sus encabezados, listas desplegables y formato, vuelve a sembrar los parámetros, las categorías y el escenario base, apaga las copias automáticas y los disparadores de tasa y recordatorios, y borra el calendario "Moni" de Google Calendar. Exige escribir `BORRAR` (la pantalla y el servidor lo validan). Deja una nota informativa en el registro de errores.
+**Ajustes → Privacidad → Borrar todos mis datos** (función `resetAllData`, en `Reinicio.gs`). Vacía las 38 tablas conservando sus encabezados, listas desplegables y formato, vuelve a sembrar los parámetros, las categorías y el escenario base, apaga las copias automáticas y los disparadores de tasa y recordatorios, y borra el calendario "Moni" de Google Calendar. Exige escribir `BORRAR` (la pantalla y el servidor lo validan). Deja una nota informativa en el registro de errores.
 - **No toca:** el vínculo con la hoja (`SPREADSHEET_ID`, que con varias personas está en las propiedades de cada una) ni `USUARIOS_PERMITIDOS` (la app sigue funcionando), los PDF de Drive ni las copias de "Moni Respaldos", salvo que se marque la opción de mandarlas a la papelera (recuperables unos 30 días desde la papelera de Drive).
 - Es irreversible: antes, **Crear un respaldo ahora** si hay duda.
 - Para no perder la configuración de accesos, no borres las propiedades del script.
@@ -42,7 +42,7 @@ Si Moni y el banco difieren, corrige con **Cuadrar** en la cuenta: deja un ajust
 | "Falta instalar o actualizar la base de datos" | Falta una pestaña o columna (versión nueva) y es una sola hoja | Pulsar **Instalar** (con varias personas se actualiza sola al entrar) |
 | "La tabla … no existe en la base de datos" | Se publicó una versión con tablas nuevas y la hoja aún no se actualizó | Recargar la página: la app vuelve a revisar la hoja y la actualiza; si no, **Instalar** |
 | "Falta tu hoja de Moni" | La hoja vinculada se borró o ya no tienes acceso | Crear una nueva o vincular otra (la anterior no se toca) |
-| "Actualiza el salario mínimo" en Inicio | El salario mínimo guardado es de un año anterior | *Planear → Nómina → Parámetros de nómina* y guardar el nuevo; el aviso se va solo |
+| "Actualiza el salario mínimo" en Inicio | El salario mínimo guardado es de un año anterior | *Ajustes → Parámetros de nómina* y guardar el nuevo; el aviso se va solo |
 | "Google Finance todavía no devolvió la tasa" | La fórmula de la hoja `Tasas_Google` aún no calculó | Esperar unos segundos y reintentar |
 | "Este parámetro lo gestiona la app" | Se intentó editar un parámetro reservado (tasas, recordatorios…) | Cámbialo desde su pantalla (Divisas, Recordatorios) |
 | Una pantalla queda en esqueleto | Respuesta lenta de Google | Esperar 45 s: avisa con un error y **Reintentar**. Si se repite, revisa la conexión |

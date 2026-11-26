@@ -552,7 +552,7 @@ function vAjustes() {
         irA('ajustes/perfil', { icono: 'usuario', titulo: 'Perfil', sub: esc(cfg('Nombre_Usuario') || 'Sin nombre') }) +
         irA('ajustes/apariencia', { icono: 'paleta', titulo: 'Apariencia', sub: esc(etiqueta('Tema', cfg('Tema') || 'Automatico')) + ' · ' + esc((ACENTOS[cfg('Color_Acento')] || ACENTOS.rosa).nombre) })) +
       seccion('Dinero',
-        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
+        ['Bancos', 'Cuentas', 'Bolsillos', 'Tarjetas', 'Brokers'].map(t => irA('ajustes/' + t, { icono: CAT[t].icono, titulo: CAT[t].plural, final: n(t) })).join('') +
         irA('ajustes/divisas', { icono: 'banco', titulo: 'Divisas', sub: 'Dólares y euros: cuánto valen en pesos' }) +
         irA('ajustes/Cargos_Reglas', { icono: CAT.Cargos_Reglas.icono, titulo: CAT.Cargos_Reglas.plural, sub: 'Comisiones, impuestos, cuota de manejo y seguros', final: n('Cargos_Reglas') })) +
       seccion('Presupuesto y nómina',

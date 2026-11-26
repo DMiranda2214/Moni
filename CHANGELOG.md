@@ -1,5 +1,32 @@
 # Cambios
 
+## 1.19.0 — Brokers de inversión y fórmulas de tasas (26 nov 2026)
+- **Nuevo: brokers.** En Inversiones registras tu broker (Trii, Hapi, Interactive Brokers…) como un banco para invertir:
+  - su moneda (pesos o dólares) y el **dinero disponible** para invertir;
+  - las acciones, ETF o fondos que tienes en él, con **cuántas tienes** y, si quieres, su precio promedio. Con el precio de Google Finance, Moni calcula cuánto valen;
+  - *Depositar* y *Retirar* (desde o hacia un bolsillo, también en otra moneda), *Ajustar disponible* y *Ajustar cantidad* para dejar todo como lo muestra la plataforma;
+  - *Compré*, *Vendí* y *Dividendo* en una inversión del broker usan su disponible, en su moneda.
+  - La pantalla de Inversiones agrupa por broker y muestra el total con el disponible. El disponible suma al patrimonio. Hay un broker en los datos de demostración.
+- **Corregido: la cuota de los créditos bancarios no cuadraba con la del banco.** La tasa efectiva anual se pasaba a mensual con un método aproximado (nominal semestral ÷ 12): 24 % EA daba 1,8925 % mensual, que en realidad es 25,2 % EA. Ahora los créditos bancarios usan la equivalencia exacta `(1 + EA)^(1/12) − 1` = 1,8088 %.
+  - Los créditos bancarios que ya tenías muestran un aviso con la tasa y la cuota correctas. *Recalcular cuotas* rehace solo las pendientes con la misma EA; *Dejar como está* quita el aviso. Lo pagado y tus saldos no cambian.
+  - En hojas nuevas, los créditos de autopago también usan la equivalencia exacta. Quien ya usaba Moni conserva su configuración.
+- **Mejora: la Calculadora aplica las fórmulas de ingeniería económica.**
+  - Tasas de **11 tipos**: EA, efectivas semestral, trimestral y mensual, nominales vencidas (NASV, NATV, NAMV) y anticipadas (TA, MA, NATA, NAMA). La pestaña *Tasas* muestra todas las equivalencias, con 4 decimales.
+  - Préstamo: seguros como valor fijo, % mensual sobre el saldo (seguro de vida deudor) o % sobre lo prestado; cobros al desembolso; y **costo efectivo anual** (TIR) con todo incluido.
+  - Ahorro y *¿Cuánto ahorrar?*: aporte al inicio o al final del mes (anualidad anticipada o vencida).
+  - CDT: año de 365 o 360 días e intereses al vencimiento, cada mes o cada trimestre.
+- **Corregido:** los formularios decían "Nueva banco" o "Nueva bolsillo"; ahora "Nuevo".
+- **Datos:** esquema `16` (38 tablas). Se agrega la tabla `Brokers` y las columnas `Inversiones.ID_Broker` e `Inversiones_Operaciones.ID_Broker`, `Valor_Origen` y `Sin_Efectivo`. Solo se agregan: las inversiones y operaciones de antes quedan igual, como *Otras inversiones*.
+
+## 1.18.2 — Documentación al día (25 nov 2026)
+- **Mejora:** la *Guía de uso* (en Ajustes) explica las cuatro secciones, el botón **i** y dónde está cada cosa: metas, lista de deseos, inversiones, ingresos, pagos y Analizar.
+- **Corregido:** el mensaje de la nómina sin configurar indicaba un menú que ya no existe. Ahora dice *Planear → Ingresos → Nómina*.
+- **Documentación** con la navegación por secciones, los módulos de la 1.16 a la 1.18 y las rutas nuevas:
+  - README (tabla por secciones), Empezar, Guía rápida y Manual (rutas, Ajustes y gráficos).
+  - API (endpoints de metas, deseos, inversiones, análisis y cargos), Arquitectura (navegación y ayudas) y Esquema (37 tablas, salario mínimo 2026, subtipos nuevos, hojas auxiliares e invariantes).
+  - Reglas de negocio (metas, lista de deseos, inversiones y calculadora), Glosario y Lista de lanzamiento (qué probar de la 1.16 a la 1.18 y en Google real).
+  - Desarrollo, Operación, Instalación, Seguridad y Comparativa de UX.
+
 ## 1.18.1 — Ayudas en los módulos nuevos (25 nov 2026)
 - **Mejora:** Metas, Lista de deseos, Inversiones y la Calculadora tienen el botón de ayuda **i**, como el resto de la app:
   - en cada campo de sus formularios (crear y editar, plan por mes, lluvia de ideas, comprar, vender, dividendo, precio y buscar una inversión);

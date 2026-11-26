@@ -141,7 +141,7 @@ function calcularNomina_(p, sueldo, subsidios, periodo, opc) {
  */
 function escenarioNomina_(idEsc) {
   const todos = leer_('Nomina_Escenarios').filter(e => estaActivo(e));
-  if (!todos.length) throw new Error('Aún no configuras tu nómina. Escribe tu sueldo en Más → Nómina.');
+  if (!todos.length) throw new Error('Aún no configuras tu nómina. Escribe tu sueldo en Planear → Ingresos → Nómina.');
   const esc = idEsc ? todos.find(e => e.ID_Nomina_Esc === idEsc) : (todos.find(e => esVerdadero(e.Vigente)) || todos[0]);
   if (!esc) throw new Error('El escenario de nómina no existe o está desactivado.');
   return esc;

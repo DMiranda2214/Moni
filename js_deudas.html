@@ -2,7 +2,7 @@
 /* Moni — parte de la aplicación: un bloque de script propio (HTML válido para Apps Script), incluido en el orden de PARTES_JS en Code.gs. */
 'use strict';
 // ---------------------------------------------------------------------------
-// Deudas: tarjetas de crédito y créditos de autopago
+// Pagos → Tarjetas y Pagos → Créditos (antes la pantalla Deudas): tarjetas de crédito y créditos
 // ---------------------------------------------------------------------------
 
 App.deudas = { data: null, cargando: false, error: null };
@@ -370,6 +370,18 @@ function htmlCredito(d) {
       '<button type="button" class="m-btn-texto m-btn-suave" data-acc="tasa-ok">Está bien</button></span></div>';
   }
 
+  // Créditos bancarios de antes de la 1.19: la EA se convertía con un método aproximado y la cuota no cuadraba con el banco
+  const mp = activo ? c.metodoPorRevisar : null;
+  if (mp) {
+    const pctTxt = x => esc(String(Math.round(x * 1e6) / 1e4).replace('.', ','));
+    h += '<div class="m-banner m-pendiente m-pendiente-sugerencia" role="note">' + ico('alerta') +
+      '<span class="m-pendiente-texto"><strong>Tu cuota puede no cuadrar con la del banco</strong> ' +
+      'Moni convirtió ' + pctTxt(mp.EA) + ' % EA a ' + pctTxt(mp.tasaActual) + ' % por cuota con un método aproximado. Con la equivalencia exacta es ' + pctTxt(mp.tasaExacta) + ' %, ' +
+      'y la cuota pendiente pasa de ' + dinero(mp.cuotaActual) + ' a ' + dinero(mp.cuotaExacta) + '. Lo pagado y tus saldos no cambian.</span>' +
+      '<span class="m-pendiente-acciones"><button type="button" class="m-btn-texto" data-acc="tasa-exacta">Recalcular cuotas</button>' +
+      '<button type="button" class="m-btn-texto m-btn-suave" data-acc="tasa-metodo-ok">Dejar como está</button></span></div>';
+  }
+
   const bancario = c.Tipo_Credito === 'Bancario';
   const entidad = bancario && c.ID_Banco ? porId('Bancos', 'ID_Banco', c.ID_Banco) : null;
   h += seccion('Cómo se paga', '<div class="m-row"><dl class="m-detalle" style="margin:0;width:100%">' +
@@ -419,6 +431,10 @@ function aplicarCredito(res) {
 
 /** Corrige la tasa de un crédito creado cuando la app redondeaba las tasas (o confirma que está bien). */
 const confirmarTasaCredito = () => escribirYAvisar('fixTasaCredito', [App.cre.id, { soloConfirmar: true }], { mensaje: 'Listo, la tasa queda como está', aplicar: [aplicarCredito] });
+
+/** Pasa un crédito bancario de antes de la 1.19 a la equivalencia exacta de tasas (misma EA; solo cambian las cuotas pendientes). */
+const recalcularTasaExacta = () => escribirYAvisar('fixTasaCredito', [App.cre.id, { metodo: 'Exacta' }], { mensaje: 'Listo, las cuotas pendientes quedan con la tasa equivalente exacta', aplicar: [aplicarCredito] });
+const dejarMetodoTasa = () => escribirYAvisar('fixTasaCredito', [App.cre.id, { metodo: 'Exacta', soloConfirmar: true }], { mensaje: 'Listo, las cuotas quedan como están', aplicar: [aplicarCredito] });
 
 async function abrirCorregirTasa() {
   const d = App.cre.data;

@@ -14,7 +14,7 @@ const DIVISA_BASE = 'COP';
  * Versión del esquema. Súbela cuando cambie una tabla: la comprobación "todo está listo" se recuerda
  * 6 horas (caché) y la versión evita que esa memoria tape un cambio recién desplegado.
  */
-const ESQUEMA_VERSION = '15';
+const ESQUEMA_VERSION = '16';
 
 /** Lo que se recuerda de una revisión correcta: cambia con cada versión de la app, así una versión nueva siempre vuelve a revisar la hoja. */
 function firmaEsquema_() { return ESQUEMA_VERSION + '|' + (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''); }
@@ -112,10 +112,14 @@ const SCHEMAS = {
   Metas: tabla_(['ID_Meta', 'Nombre', 'Motivo', 'Monto_Objetivo', 'Ahorro_Inicial', 'Fecha_Inicio', 'Fecha_Fin', 'ID_Bolsillo', 'Plan_Mensual', 'Estado', 'Notas', 'Activo', 'Orden'],
     [170, 220, 120, 130, 120, 110, 110, 170, 300, 90, 220, 70, 60]),
   // 1.16: inversiones (acciones, ETF, cripto, fondos…), sus operaciones y el historial de precios
-  Inversiones: tabla_(['ID_Inversion', 'Nombre', 'Tipo', 'Simbolo', 'Divisa', 'Precio_Manual', 'Fecha_Precio_Manual', 'Precio_Google', 'Fecha_Precio_Google', 'Notas', 'Activo', 'Orden'],
-    [170, 220, 90, 170, 70, 120, 120, 120, 120, 220, 70, 60]),
-  Inversiones_Operaciones: tabla_(['ID_Operacion', 'ID_Inversion', 'Fecha', 'Tipo', 'Cantidad', 'Precio', 'Valor', 'Comision', 'ID_Bolsillo', 'ID_Mov', 'Notas', 'Anulado'],
-    [170, 170, 110, 90, 120, 120, 130, 110, 170, 170, 220, 80]),
+  Inversiones: tabla_(['ID_Inversion', 'Nombre', 'Tipo', 'Simbolo', 'Divisa', 'Precio_Manual', 'Fecha_Precio_Manual', 'Precio_Google', 'Fecha_Precio_Google', 'Notas', 'Activo', 'Orden', 'ID_Broker'],
+    [170, 220, 90, 170, 70, 120, 120, 120, 120, 220, 70, 60, 170]),
+  // Valor y Comision siempre en pesos. Valor_Origen: el dinero que entra o sale del broker, en su moneda (1.19).
+  // Sin_Efectivo: unidades que la persona ya tenía (no salen del disponible del broker).
+  Inversiones_Operaciones: tabla_(['ID_Operacion', 'ID_Inversion', 'Fecha', 'Tipo', 'Cantidad', 'Precio', 'Valor', 'Comision', 'ID_Bolsillo', 'ID_Mov', 'Notas', 'Anulado', 'ID_Broker', 'Valor_Origen', 'Sin_Efectivo'],
+    [170, 170, 110, 90, 120, 120, 130, 110, 170, 170, 220, 80, 170, 130, 90]),
+  // 1.19: brokers (comisionistas, plataformas de inversión): tienen dinero disponible y las inversiones compradas con él
+  Brokers: tabla_(['ID_Broker', 'Nombre', 'Divisa', 'Notas', 'Activo', 'Orden'], [170, 220, 70, 260, 70, 60]),
   Inversiones_Precios: tabla_(['ID_Precio', 'Fecha', 'ID_Inversion', 'Precio', 'Divisa', 'Fuente'], [170, 110, 170, 120, 70, 90]),
   Reportes: tabla_(['ID_Reporte', 'Tipo', 'Mes', 'ID_Tarjeta', 'URL_Drive'], [170, 120, 90, 170, 320]),
   Log: tabla_(['ID_Log', 'Fecha_Hora', 'Nivel', 'Funcion', 'Mensaje', 'Detalle'], [170, 160, 80, 180, 300, 400]),
@@ -137,7 +141,7 @@ const ENUMS = {
   Movimientos: {
     Tipo_Mov: ['Gasto', 'Ingreso', 'Transferencia', 'Ajuste'],
     Subtipo: ['', 'Para_Gastos', 'Reposicion', 'Interes', 'Retencion', 'GMF', 'Pago_TC', 'Reserva_TC', 'Pago_Cuota', 'Nomina', 'Distribucion', 'Conversion', 'Comision', 'CDT_Apertura', 'CDT_Retorno',
-      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta', 'Dividendo', 'Aporte_Meta'],
+      'Impuesto', 'Cambio_Divisa', 'Cuota_Manejo', 'Seguro', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta', 'Dividendo', 'Aporte_Meta', 'Broker_Deposito', 'Broker_Retiro'],
     Origen: ['App', 'Demo', 'Import']
   },
   Compras_TC: { Fuente: ['Personal', 'Ppto', 'Guardar', 'Otro'], Origen: ['App', 'Demo', 'Import'] },
@@ -168,7 +172,8 @@ const ENUMS = {
     Estado: ['Activa', 'Pausada', 'Cumplida']
   },
   Inversiones: { Tipo: ['Accion', 'ETF', 'Cripto', 'Fondo', 'Bono', 'Otro'], Divisa: DIVISAS },
-  Inversiones_Operaciones: { Tipo: ['Compra', 'Venta', 'Dividendo'] },
+  Inversiones_Operaciones: { Tipo: ['Compra', 'Venta', 'Dividendo', 'Deposito', 'Retiro'] },
+  Brokers: { Divisa: DIVISAS },
   Inversiones_Precios: { Fuente: ['Google', 'Manual'] }
 };
 
@@ -233,7 +238,7 @@ const DEFAULT_CONFIG = [
   ['Tasa_Interes_Cesantias', '0.12', 'Nomina', 'porcentaje', 'Tasa legal de intereses de cesantías'],
   ['Cesantias_Dias_Actual', '360', 'Nomina', 'numero', 'Días del año de cesantías con el sueldo actual (360 = todo el año; menos si el sueldo cambió)'],
   ['Cesantias_Sueldo_Anterior', '0', 'Nomina', 'moneda', 'Sueldo que tenías antes del cambio, para los días restantes del año de cesantías (0 = sin cambio)'],
-  ['Credito_Metodo_Tasa', 'Excel', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica: Excel o Exacta'],
+  ['Credito_Metodo_Tasa', 'Exacta', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica en los créditos de autopago: Exacta, (1 + EA)^(1/n) − 1, o Excel (la del Excel de referencia). Los bancarios siempre usan la exacta'],
   ['Tasa_USD', '', 'Divisas', 'texto', 'Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos'],
   ['Tasa_USD_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del dólar'],
   ['Tasa_EUR', '', 'Divisas', 'texto', 'Pesos que vale 1 euro'],
@@ -360,7 +365,12 @@ const MIGRACIONES_COLUMNAS = [
   { tabla: 'Regalos', columna: 'Fecha_Objetivo', valor: '' },
   { tabla: 'Regalos', columna: 'Precio_Pagado', valor: '' },
   // 1.16: un renglón del presupuesto puede ser el aporte del mes a una meta
-  { tabla: 'Presupuesto_Mes', columna: 'ID_Meta', valor: '' }
+  { tabla: 'Presupuesto_Mes', columna: 'ID_Meta', valor: '' },
+  // 1.19: brokers. Las inversiones y operaciones que ya existen quedan fuera de un broker ("Otras inversiones"), como estaban
+  { tabla: 'Inversiones', columna: 'ID_Broker', valor: '' },
+  { tabla: 'Inversiones_Operaciones', columna: 'ID_Broker', valor: '' },
+  { tabla: 'Inversiones_Operaciones', columna: 'Valor_Origen', valor: '' },
+  { tabla: 'Inversiones_Operaciones', columna: 'Sin_Efectivo', valor: false }
 ];
 
 /**

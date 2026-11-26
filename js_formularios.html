@@ -217,14 +217,31 @@ const CAT = {
   Inversiones: {
     plural: 'Inversiones', singular: 'inversión', icono: 'tendencia', id: 'ID_Inversion',
     vacio: 'Acciones, ETF, cripto, fondos… con su precio de Google Finance o el que tú escribas.',
-    fila: i => ({ titulo: esc(i.Nombre), sub: esc(TIPOS_INV[i.Tipo] || 'Otro') + (i.Simbolo ? ' · ' + esc(i.Simbolo) : ''), final: '' }),
+    fila: i => { const b = i.ID_Broker ? porId('Brokers', 'ID_Broker', i.ID_Broker) : null; return { titulo: esc(i.Nombre), sub: esc(TIPOS_INV[i.Tipo] || 'Otro') + (i.Simbolo ? ' · ' + esc(i.Simbolo) : '') + (b ? ' · ' + esc(b.Nombre) : ''), final: '' }; },
     campos: [
+      { k: 'ID_Broker', label: 'Dónde la tienes', tipo: 'select', visible: () => activos('Brokers').length > 0,
+        opciones: () => [['', 'Fuera de un broker']].concat(activos('Brokers').map(b => [b.ID_Broker, b.Nombre + ((b.Divisa || 'COP') !== 'COP' ? ' (' + b.Divisa + ')' : '')])) },
       { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 80, lista: ['Bitcoin', 'Ethereum', 'Apple', 'Ecopetrol', 'S&P 500 (VOO)', 'Fondo de inversión'] },
       { k: 'Tipo', label: 'Qué es', tipo: 'select', defecto: 'Accion', opciones: () => Object.keys(TIPOS_INV).map(k => [k, TIPOS_INV[k]]) },
       { k: 'Simbolo', label: 'Símbolo en Google Finance (opcional)', tipo: 'texto', maxlength: 40, lista: ['CURRENCY:BTCUSD', 'CURRENCY:ETHUSD', 'NASDAQ:AAPL', 'NYSEARCA:VOO', 'BVC:ECOPETROL'],
         ayuda: 'Así Moni trae el precio sola: acciones como NASDAQ:AAPL, cripto como CURRENCY:BTCUSD. Si Google no tiene el activo (pasa con varias acciones de la BVC o los fondos), déjalo vacío y escribe el precio a mano.' },
       { k: 'Divisa', label: 'Moneda del precio', tipo: 'select', defecto: 'COP', opciones: () => [['COP', 'Pesos (COP)'], ['USD', 'Dólares (USD)'], ['EUR', 'Euros (EUR)']], ayuda: 'En qué moneda está el precio: las acciones de EE. UU. y la cripto, en dólares. Se pasa a pesos con la tasa de Ajustes → Divisas.' },
       { k: 'Precio_Manual', label: 'Precio de hoy por unidad (opcional)', tipo: 'decimal', ayuda: 'Si no hay símbolo o Google no lo encuentra: el valor de una acción o de una unidad del fondo, en la moneda de arriba.' },
+      { k: 'Cantidad_Inicial', label: 'Cuántas tienes hoy (opcional)', tipo: 'decimal', soloAlCrear: true, ayuda: 'Las acciones o unidades que ya compraste. Moni las multiplica por el precio para saber cuánto valen. No mueven dinero.' },
+      { k: 'Precio_Promedio', label: 'Precio promedio al que las compraste (opcional)', tipo: 'decimal', soloAlCrear: true, visible: v => typeof v.Cantidad_Inicial === 'number' && v.Cantidad_Inicial > 0,
+        ayuda: 'En la moneda del precio. Sirve para ver tu ganancia; si no lo sabes, déjalo vacío y cuentan al precio de hoy.' },
+      { k: 'Notas', label: 'Notas', tipo: 'area' }
+    ]
+  },
+  Brokers: {
+    plural: 'Brokers', singular: 'broker', icono: 'tendencia', id: 'ID_Broker',
+    vacio: 'Un broker es la plataforma o comisionista donde inviertes (Trii, Hapi, Interactive Brokers, eToro…). Como un banco: tiene dinero disponible para invertir y las acciones que compras con él.',
+    fila: b => ({ titulo: esc(b.Nombre), sub: (n => n ? n + (n === 1 ? ' inversión' : ' inversiones') : 'Sin inversiones')(activos('Inversiones').filter(i => i.ID_Broker === b.ID_Broker).length) + ((b.Divisa || 'COP') !== 'COP' ? ' · ' + esc(NOMBRE_DIVISA[b.Divisa] || b.Divisa) : ''), final: '' }),
+    campos: [
+      { k: 'Nombre', label: 'Nombre', tipo: 'texto', requerido: true, maxlength: 60, lista: ['Trii', 'Hapi', 'Interactive Brokers', 'eToro', 'XTB', 'Acciones & Valores', 'Davivienda Corredores', 'Credicorp Capital', 'Binance'] },
+      { k: 'Divisa', label: 'Moneda de la cuenta', tipo: 'select', requerido: true, defecto: 'COP', opciones: () => DIVISAS_UI,
+        ayuda: 'En qué moneda tienes el dinero en el broker: pesos en los colombianos, dólares en los de EE. UU. No se puede cambiar cuando ya tiene movimientos.' },
+      { k: 'Disponible', label: 'Dinero disponible hoy para invertir (opcional)', tipo: 'decimal', soloAlCrear: true, ayuda: 'Lo que tienes sin invertir en el broker, en su moneda. Lo puedes ajustar después.' },
       { k: 'Notas', label: 'Notas', tipo: 'area' }
     ]
   },
@@ -422,7 +439,16 @@ const INFO_CAMPOS = {
     Simbolo: 'El código con el que Google Finance encuentra el activo, por ejemplo NASDAQ:AAPL o CURRENCY:BTCUSD. Con él, Moni trae el precio cada día.',
     Divisa: 'La moneda en la que está el precio. Si no es en pesos, Moni lo convierte con la tasa de Ajustes → Divisas.',
     Precio_Manual: 'El valor de una unidad hoy, si Google no tiene el activo. Gana el precio más reciente entre este y el de Google.',
+    ID_Broker: 'El broker donde la compraste. Así sus compras y ventas salen y vuelven al disponible de ese broker. “Fuera de un broker” es como antes: el dinero sale de un bolsillo.',
+    Cantidad_Inicial: 'Las acciones o unidades que ya tienes. Con el precio de Google Finance, Moni calcula cuánto valen hoy.',
+    Precio_Promedio: 'Lo que pagaste en promedio por cada una. Define tu costo y tu ganancia.',
     Notas: 'Lo que quieras recordar: dónde la compraste, la plataforma, tu estrategia…'
+  },
+  Brokers: {
+    Nombre: 'La plataforma o comisionista donde inviertes: Trii, Hapi, Interactive Brokers…',
+    Divisa: 'La moneda de tu cuenta en el broker. El disponible y las compras se anotan en esta moneda y Moni los pasa a pesos con la tasa de Ajustes → Divisas.',
+    Disponible: 'El dinero que tienes en el broker sin invertir, como lo ves en la plataforma. No sale de ningún bolsillo: es lo que ya está allá.',
+    Notas: 'Lo que quieras recordar: el número de cuenta, quién te asesora…'
   },
   Escenarios: {
     Nombre: 'Una versión de tu presupuesto: “Normal”, “Contingencia”…',
@@ -685,7 +711,7 @@ async function abrirFormulario(tabla, id, defaults) {
   }
 
   await abrirHoja({
-    titulo: existente ? 'Editar ' + def.singular : 'Nueva ' + def.singular,
+    titulo: existente ? 'Editar ' + def.singular : (/^(cuenta|tarjeta|categoría|persona|meta|inversión|regla)/.test(def.singular) ? 'Nueva ' : 'Nuevo ') + def.singular,
     cuerpo: '<form novalidate data-form="catalogo">' + cuerpo + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
     alAbrir: raiz => {
       activarEcoDinero(raiz);
@@ -722,7 +748,7 @@ async function abrirFormulario(tabla, id, defaults) {
         if (v.copiarDe) opciones.copiarDe = v.copiarDe;
         delete envio.copiarDe;
       }
-      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
+      const vacioPermitido = ['ID_Bolsillo_Personal', 'ID_Bolsillo_Destino', 'ID_Categoria', 'ID_Credito', 'ID_Tarjeta', 'ID_Bolsillo', 'ID_Servicio', 'ID_Empresa', 'ID_Bolsillo_Plan', 'Renglon', 'Rendimiento_EA', 'Rendimiento_Pago', 'Rendimiento_Base', 'URL_Pago', 'ID_Broker'].concat(campos.filter(c => c.tipo === 'fecha').map(c => c.k));
       Object.keys(envio).forEach(k => { if (envio[k] === '' && vacioPermitido.indexOf(k) === -1) delete envio[k]; });
       if (!existente && defaults) Object.keys(defaults).forEach(k => { if (envio[k] === undefined) envio[k] = defaults[k]; });
       if (tabla === 'Nomina_Escenarios') { opciones.subsidios = v.subsidios || []; delete envio.subsidios; }
@@ -732,6 +758,7 @@ async function abrirFormulario(tabla, id, defaults) {
         ['Saldo_Real', 'Meta'].forEach(k => { if (v[k] === '' && existente && existente[k] !== '' && existente[k] !== undefined) envio[k] = ''; });
       }
       await api('saveCatalogo', tabla, envio, opciones);
+      if ((tabla === 'Brokers' || tabla === 'Inversiones') && App.inv) App.inv.data = null; // cambian el disponible y lo invertido
       await refrescarParcial({ tablas: [tabla] });
       render();
       aviso(existente ? 'Cambios guardados' : 'Se agregó ' + def.singular);
@@ -739,8 +766,8 @@ async function abrirFormulario(tabla, id, defaults) {
     extra: {
       'pedir-desactivar': raiz => { $('#confirma', raiz).hidden = false; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = true; $('[data-hoja-acc="desactivar"]', raiz).focus(); },
       'cancelar-desactivar': raiz => { $('#confirma', raiz).hidden = true; $('[data-hoja-acc="pedir-desactivar"]', raiz).hidden = false; },
-      'desactivar': async () => { await api('disableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Desactivado'); return true; },
-      'reactivar': async () => { await api('enableCatalogo', tabla, id); await refrescarParcial({ tablas: [tabla] }); render(); aviso('Reactivado'); return true; }
+      'desactivar': async () => { await api('disableCatalogo', tabla, id); if (App.inv) App.inv.data = null; await refrescarParcial({ tablas: [tabla] }); render(); aviso('Desactivado'); return true; },
+      'reactivar': async () => { await api('enableCatalogo', tabla, id); if (App.inv) App.inv.data = null; await refrescarParcial({ tablas: [tabla] }); render(); aviso('Reactivado'); return true; }
     }
   });
 }

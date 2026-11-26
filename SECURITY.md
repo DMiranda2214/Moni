@@ -1,7 +1,7 @@
 # Seguridad y privacidad
 
 ## Dónde están los datos
-Cada persona tiene **su propia hoja de Google Sheets** en **su** Google Drive (y sus respaldos en su Drive). Moni no tiene servidor propio ni envía datos a servicios de terceros: todo ocurre dentro de Google (Hojas, Drive, Calendar). La tasa del dólar, si la activas, la calcula la fórmula `GOOGLEFINANCE` de tu propia hoja.
+Cada persona tiene **su propia hoja de Google Sheets** en **su** Google Drive (y sus respaldos en su Drive). Moni no tiene servidor propio ni envía datos a servicios de terceros: todo ocurre dentro de Google (Hojas, Drive, Calendar). La tasa del dólar (si la activas), los precios de tus inversiones y la búsqueda de un símbolo los calcula la fórmula `GOOGLEFINANCE` de tu propia hoja (hojas auxiliares `Tasas_Google`, `Precios_Google` y `Buscar_Google`); la app no se conecta a ningún servicio externo ni pide permisos para hacerlo.
 
 **Quien administra la aplicación no puede ver las hojas de las personas**: la app corre "como el usuario que accede", así que todo lo que lee o escribe es de esa persona y con sus permisos. Tampoco puede arreglárselas: si algo se daña, se recupera de los respaldos de la dueña.
 

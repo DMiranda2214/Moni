@@ -63,7 +63,7 @@ Al abrir el Sheet aparece el menú **Moni** con: instalar o verificar la base, l
 ## Lista de comprobación
 - [ ] El Sheet tiene las 29 pestañas.
 - [ ] La URL `/exec` abre la app y muestra la bienvenida con el asistente de primeros pasos.
-- [ ] *Ajustes → Diagnóstico* dice *"31 tablas esperadas · todas listas"*.
+- [ ] *Ajustes → Diagnóstico* dice *"38 tablas esperadas · todas listas"*.
 - [ ] *Ajustes → Respaldos → Crear un respaldo ahora* funciona.
 - [ ] Probado desde el celular y desde el computador.
 

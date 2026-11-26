@@ -406,8 +406,12 @@ module.exports = function (prueba, assert, crearEntorno) {
   prueba('crédito: la vista previa calcula la cuota con EA y no escribe nada', () => {
     const x = escenario();
     const total = x.e.llamar('obtenerSaldos').total;
-    const p = x.e.llamar('previsualizarCredito', { Nombre: 'Crédito A', ID_Cuenta_Ahorro: x.ahorroCta.ID_Cuenta, ID_Bolsillo_Pago: x.pagos.ID_Bolsillo, Fecha_Inicio: hoy(), Monto: 2400000, Periodicidad: 'Quincenal', Num_Periodos: 48, EA: 0.10 });
-    assert.strictEqual(p.cuota, 55140.9);
+    const p = x.e.llamar('previsualizarCredito', { Nombre: 'Crédito A', ID_Cuenta_Ahorro: x.ahorroCta.ID_Cuenta, ID_Bolsillo_Pago: x.pagos.ID_Bolsillo, Fecha_Inicio: hoy(), Monto: 2400000, Periodicidad: 'Quincenal', Num_Periodos: 48, EA: 0.10, Metodo_Tasa: 'Excel' });
+    assert.strictEqual(p.cuota, 55140.9, 'método del Excel de referencia (autopago)');
+    // Instalación nueva: la equivalencia exacta (1,1)^(1/24) − 1 da una cuota menor
+    const exacta = x.e.llamar('previsualizarCredito', { Nombre: 'Crédito A', ID_Cuenta_Ahorro: x.ahorroCta.ID_Cuenta, ID_Bolsillo_Pago: x.pagos.ID_Bolsillo, Fecha_Inicio: hoy(), Monto: 2400000, Periodicidad: 'Quincenal', Num_Periodos: 48, EA: 0.10 });
+    assert.ok(Math.abs(exacta.tasaPeriodica - (Math.pow(1.1, 1 / 24) - 1)) < 1e-9, 'por defecto, la equivalencia exacta');
+    assert.ok(exacta.cuota < 55140.9);
     assert.strictEqual(p.cuotas, 48);
     assert.ok(p.interesTotal > 240000 && p.interesTotal < 260000);
     assert.strictEqual(x.e.llamar('obtenerSaldos').total, total);

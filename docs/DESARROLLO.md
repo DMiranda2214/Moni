@@ -42,9 +42,9 @@ prueba('lo que se prueba', () => {
 
 Las pruebas usan el **reloj real** (`bogota()` en los helpers): no asumas un día del mes (una fecha "el día 10" falla del 1 al 9 porque no se permiten movimientos futuros). Usa fechas relativas a hoy.
 
-Archivos de pruebas: `test_catalogos`, `test_movimientos`, `test_presupuesto`, `test_deudas`, `test_extras` (ahorro, regalos, respaldos, suscripciones…), `test_divisas`, `test_graficos`, `test_recordatorios`, `test_logs`, `test_reinicio`, `test_cdt`, `test_avisos`, `test_multiusuario` y `test_produccion` (arma el paquete de producción y comprueba que no lleve datos de demostración).
+Archivos de pruebas: `test_catalogos`, `test_movimientos`, `test_presupuesto`, `test_deudas`, `test_extras` (ahorro, regalos, respaldos, suscripciones…), `test_divisas`, `test_graficos`, `test_recordatorios`, `test_logs`, `test_reinicio`, `test_cdt`, `test_avisos`, `test_multiusuario`, `test_produccion` (arma el paquete de producción y comprueba que no lleve datos de demostración), `test_migracion_datos` (actualiza una hoja de la 1.10.0 y la compara celda por celda), `test_integridad`, `test_unificacion`, `test_cargos`, `test_metas_deseos` (metas y Lista de deseos), `test_inversiones` (costo promedio, Google Finance y búsqueda) y `test_herramientas` (fórmulas de la Calculadora y glosario de la Guía).
 
-Los límites de lo que se prueba así: la lógica y las reglas sí; el rendimiento real, los permisos de Google, `GOOGLEFINANCE` (el simulador no calcula fórmulas), los avisos reales de Calendar y la interfaz en un celular real **no**. La interfaz (`app_js.html`) solo pasa la revisión de sintaxis y de contraste: sus flujos se prueban a mano en la vista previa (`npm run vista`) y en el entorno de desarrollo. Eso se verifica con la [lista de lanzamiento](LANZAMIENTO.md).
+Los límites de lo que se prueba así: la lógica y las reglas sí; el rendimiento real, los permisos de Google, `GOOGLEFINANCE` (el simulador no calcula fórmulas), los avisos reales de Calendar y la interfaz en un celular real **no**. La interfaz (`app_js.html` y las partes `js_*.html`) pasa la revisión de sintaxis y de contraste, y sus fórmulas puras (`CALC`) se prueban en Node. Sus flujos se prueban en la vista previa (`npm run vista -- --demo`, a mano o con Playwright, que ya viene instalado en este entorno) y en el entorno de desarrollo. Eso se verifica con la [lista de lanzamiento](LANZAMIENTO.md).
 
 ## Convenciones
 - **Español** en nombres de dominio y mensajes; funciones privadas terminan en `_`.
@@ -58,14 +58,14 @@ Los límites de lo que se prueba así: la lógica y las reglas sí; el rendimien
 ### Un catálogo nuevo (una tabla editable)
 1. `Setup.gs`: añade la tabla a `SCHEMAS` (con `Activo` y `Orden`), sus `ENUMS` y `COLUMNAS_TEXTO` si guarda fechas.
 2. `Catalogos.gs`: añade su definición a `CATALOGOS` (`id`, `prefijo`, `normalizar`, `bloqueos`). Con eso ya funcionan `listCatalogo`, `saveCatalogo`, `disableCatalogo`… y viaja en `getBootstrap`.
-3. `app_js.html`: añade su entrada a `CAT` (títulos, campos, `fila`). Con eso Ajustes ya lo edita.
+3. `js_formularios.html`: añade su entrada a `CAT` (títulos, campos, `fila`) y los textos de ayuda de sus campos a `INFO_CAMPOS` (el botón **i**). Con eso Ajustes ya lo edita (y agrégalo a la lista de Ajustes en `vAjustes`).
 4. Actualiza los conteos de tablas en los tests (`setupDatabase crea las N tablas`), `docs/ESQUEMA.md` y los números de tablas de los documentos.
 5. **Sube `ESQUEMA_VERSION`** en `Setup.gs` (y la versión de la app): así la revisión recordada de las hojas ya creadas se repite y la tabla nueva se crea sola al entrar.
 6. Si el catálogo es de la persona y debe viajar en el arranque, revisa `armarBootstrap_` y `getRefresco` (`RELACIONADAS_`).
 
 ### Una pantalla nueva
 1. Función `vXxx()` que devuelve `{ titulo, html, acciones, despues }` y, si carga datos, un estado `App.xxx = { data, cargando, error }` con `cargarEn(App.xxx, 'ruta', 'getXxx', [])`.
-2. Añádela a `pantalla()` (`case`), a `tituloRuta()` y enlázala (por ejemplo, desde *Más*).
+2. Añádela a `pantalla()` (`case`) y a `tituloRuta()`, y ubícala en su sección en `GRUPOS_NAV` (`app_js.html`): con eso aparece en la barra lateral, en las píldoras del celular y en la búsqueda. Si pertenece a una pantalla que ya existe (como CDT dentro de Inversiones), agrégala como ruta extra del elemento y usa `subPestanas`.
 3. Si una escritura la afecta, ponla en `null` dentro de `aplicarEscritura`.
 4. Endpoint(s) en `Api.gs`.
 

@@ -45,6 +45,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | Función | Parámetros |
 |---|---|
 | `addMovimiento` | `m, vista` — `m.Afecta_Saldos = false` lo registra como histórico (cuenta en informes, no en saldos) |
+| `getCargosSugeridos` | `operacion, ctx { idBolsillo, idTarjeta, idCredito, valor }` — los cargos (comisiones, impuestos…) que proponen las reglas de *Cargos y comisiones* para esa operación |
 | `addTransferencia` | `t { origen, destino, valor, fecha, concepto, notas, itemPpto, afectaSaldos }, vista` (con `afectaSaldos: false` es un traslado histórico) |
 | `voidMovimiento` | `idMov, vista` |
 | `voidVarios` | `ids, vista` |
@@ -98,12 +99,13 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `getCredito` | `idCredito` |
 | `previewPagoCredito` | `idCredito, valor` |
 | `payCredito` | `idCredito, valor, fecha, idBolsillo` |
+| `fixTasaCredito` | `idCredito, datos` — corrige la tasa de un crédito creado cuando las tasas se redondeaban (solo rehace las cuotas pendientes) |
 | `voidPagoCredito` | `idPago` |
 | `editPagoCredito` | `idCredito, numCuota, valor` — corrige lo pagado en una cuota ya pagada y rehace el cronograma; no toca saldos |
 | `saveCredito` | `idCredito, datos` |
 | `cancelCredito` | `idCredito` |
 
-## Ahorro, regalos y vistas
+## Ahorro, Lista de deseos y vistas
 
 | Función | Parámetros |
 |---|---|
@@ -116,7 +118,41 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `saveRegalo` | `r` |
 | `deleteRegalo` | `idRegalo` |
 | `payRegalo` | `idRegalo, valor, idBolsillo, fecha` (con `idBolsillo` = `"T:<idTarjeta>"` es una compra con tarjeta; `getRegalos` trae `pendientes[]`: lo que falta mover a la reserva) |
+| `saveIdeaDeseo` | `{ ID_Idea?, ID_Regalo, Texto, Precio, Enlace }` — agrega o edita una idea de la lluvia de ideas; devuelve la lista del año |
+| `deleteIdeaDeseo` | `idIdea` |
+| `chooseIdeaDeseo` | `idIdea` — la idea pasa a ser la del deseo (y su precio, el estimado si estaba en 0) |
 | `getAnual` | `anio` |
+
+La **Lista de deseos** usa la tabla `Regalos`: `getRegalos` trae por cada deseo `ParaMi`, `Categoria`, `Estado`, `ideas[]`…, y además `porPersona`, `porCategoria` y `totales.paraMi / paraOtros`. `saveRegalo` acepta `Para: 'Yo'` (sin persona), `Categoria`, `Ocasion`, `Prioridad`, `Estado`, `Enlace`, `Fecha_Objetivo` y `Precio_Pagado` (comprado sin registrar el gasto).
+
+## Metas
+
+| Función | Parámetros |
+|---|---|
+| `getMetas` | — → `{ items[], archivadas[], totales { objetivo, ahorrado, falta, planMes, aportadoMes, cantidad }, mes }`; cada meta trae `plan[] { mes, plan, aportado, manual, pasado }`, `acumulado[]`, `estado` (`al_dia`, `atrasada`, `vencida`, `lograda`, `cumplida`, `pausada`), `porMesParaLlegar`, `sinCubrir` y `movimientos[]` |
+| `saveMeta` | `meta` — crea o edita (`Nombre, Motivo, Monto_Objetivo, Ahorro_Inicial, Fecha_Inicio, Fecha_Fin, ID_Bolsillo, Estado, Notas`) y pone al día sus renglones del presupuesto; la app usa `saveCatalogo('Metas', …)` |
+| `saveMetaPlan` | `idMeta, plan` — `{ 'AAAA-MM': valor }` de los meses escritos a mano (un mes vacío vuelve al reparto automático) |
+| `addAporteMeta` | `idMeta, idOrigen, valor, fecha` — traslado al bolsillo de la meta (cuenta en el renglón del mes si existe) |
+| `addUsoMeta` | `idMeta, valor, fecha, concepto, idCategoria` — gasto desde el bolsillo de la meta |
+| `archiveMeta` / `restoreMeta` | `idMeta` |
+
+`addSuscripcionesPpto` y `generarPresupuesto` también agregan los renglones de las metas (tipo `Fondo`); `getPresupuesto` trae `faltanMetas`.
+
+## Inversiones
+
+| Función | Parámetros |
+|---|---|
+| `getInversiones` | — → `{ items[], archivadas[], totales { costo, valor, ganancia, rentabilidad, realizado, dividendos }, porTipo[], evolucion[] (12 meses), faltaTasa[], ultimaActualizacion, automatico }` |
+| `saveInversion` | `inv` (`Nombre, Tipo, Simbolo, Divisa, Precio_Manual, Notas`); la app usa `saveCatalogo('Inversiones', …)` |
+| `archiveInversion` | `id` (solo sin unidades) |
+| `addOperacionInversion` | `{ ID_Inversion, Fecha, Tipo: Compra\|Venta\|Dividendo, Cantidad, Precio, Valor (pesos), Comision, ID_Bolsillo?, Notas }`. En una inversión de un broker: `Total` y `Comision` en la moneda del broker, sin bolsillo |
+| `moveDineroBroker` | `{ ID_Broker, Tipo: Deposito\|Retiro, Fecha, Valor (moneda del broker), ID_Bolsillo?, Valor_Bolsillo? (si el bolsillo está en otra moneda), Notas }` |
+| `setDisponibleBroker` | `(idBroker, valor, fecha)`: deja el disponible en ese valor, sin mover bolsillos |
+| `setCantidadInversion` | `(idInversion, { Cantidad, Precio? (promedio), Fecha? })`: deja la cantidad, sin mover dinero |
+| `voidOperacionInversion` | `idOperacion` (devuelve el dinero al bolsillo) |
+| `savePrecioManual` | `idInversion, precio, fecha` |
+| `updatePreciosGoogle` | — lee los precios de la hoja auxiliar `Precios_Google` (también lo hace la tarea diaria de la tasa del dólar) |
+| `searchSimbolo` | `texto` — prueba el símbolo en las bolsas comunes con `GOOGLEFINANCE` (hoja auxiliar `Buscar_Google`) → `[{ simbolo, nombre, precio, divisa, tipo }]` |
 
 ## Servicios y suscripciones
 
@@ -151,6 +187,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `updateTasasGoogle` | — |
 | `saveTasaAuto` | `activar` |
 | `getGraficos` | `opciones` (`{ mes: 'AAAA-MM', meses: 3\|6\|12, divisa }`) |
+| `getAnalisis` | — → la pantalla Análisis completa: patrimonio de 12 meses, flujo, categorías, deudas, proyección de 90 días y cargos del año |
 | `getLogs` | `opciones` (`{ soloErrores, limite }`) |
 | `clearLogs` | — |
 | `logClientError` | `mensaje, detalle` *(el navegador reporta sus errores aquí; no pasa por `responder_`)* |

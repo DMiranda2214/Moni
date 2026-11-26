@@ -840,6 +840,30 @@ function savePrecioManual(idInversion, precio, fecha) {
   });
 }
 
+/** Lleva dinero a un broker o lo saca (con o sin bolsillo). */
+function moveDineroBroker(d) {
+  return responder_(function () {
+    const r = moverDineroBroker(d);
+    return resultadoEscritura_(r.ID_Mov ? [r.ID_Mov] : [], undefined, { idOperacion: r.ID_Operacion, inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() });
+  });
+}
+
+/** Deja el disponible de un broker como dice la plataforma. */
+function setDisponibleBroker(idBroker, valor, fecha) {
+  return responder_(function () {
+    ajustarDisponibleBroker(idBroker, valor, fecha);
+    return { inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() };
+  });
+}
+
+/** Deja la cantidad de una inversión en las unidades que ya tienes (sin mover dinero). */
+function setCantidadInversion(idInversion, d) {
+  return responder_(function () {
+    const r = ajustarCantidadInversion(idInversion, d);
+    return { idOperacion: r ? r.ID_Operacion : '', inversiones: obtenerInversiones(), patrimonio: resumenPatrimonio_() };
+  });
+}
+
 /** Busca un símbolo en Google Finance (por la hoja auxiliar Buscar_Google). */
 function searchSimbolo(texto) {
   return responder_(function () { return buscarSimbolosGoogle(texto); });

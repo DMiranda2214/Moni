@@ -707,6 +707,7 @@ function tituloRuta(ruta) {
   if (partes[0] === 'metas') return 'Metas';
   if (partes[0] === 'meta') { const m = App.metas && App.metas.data && App.metas.data.items.find(x => x.ID_Meta === partes[1]); return m ? m.Nombre : 'Meta'; }
   if (partes[0] === 'inversiones') return 'Inversiones';
+  if (partes[0] === 'broker') { const b = App.inv && App.inv.data && (App.inv.data.brokers || []).find(x => x.ID_Broker === partes[1]); return b ? b.Nombre : 'Broker'; }
   if (partes[0] === 'inversion') { const i = App.inv && App.inv.data && App.inv.data.items.find(x => x.ID_Inversion === partes[1]); return i ? i.Nombre : 'Inversión'; }
   if (partes[0] === 'calculadora') return 'Calculadora';
   if (partes[0] === 'anual') return 'Vista anual';
@@ -790,6 +791,7 @@ function pantalla(ruta) {
     case 'meta': return vMeta(partes[1]);
     case 'inversiones': return conPestanasInversion(vInversiones(), 'inversiones');
     case 'inversion': return vInversion(partes[1]);
+    case 'broker': return vBroker(partes[1]);
     case 'calculadora': return vCalculadora();
     case 'anual': return vAnual();
     case 'analisis': return vAnalisis();

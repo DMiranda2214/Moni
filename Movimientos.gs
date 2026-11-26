@@ -62,7 +62,7 @@ function conRef_(fila) {
  * conversiones entre divisas, que son traslados) ni el dinero que entra o sale de una inversión (abrir o cobrar el
  * capital de un CDT): el dinero solo cambia de lugar. Sí cambian el saldo del bolsillo.
  */
-const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta']; // el desembolso de un crédito es una deuda, no un ingreso
+const SUBTIPOS_INVERSION = ['CDT_Apertura', 'CDT_Retorno', 'Desembolso', 'Inversion_Compra', 'Inversion_Venta', 'Broker_Deposito', 'Broker_Retiro']; // el desembolso de un crédito es una deuda, no un ingreso
 
 function esIngresoOGasto_(m) {
   return m.Tipo_Mov !== 'Transferencia' && SUBTIPOS_INVERSION.indexOf(m.Subtipo) === -1;
