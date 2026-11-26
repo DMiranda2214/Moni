@@ -8,6 +8,10 @@
  *   Dinero     = una compra con bolsillo es un Ajuste negativo (Inversion_Compra) y una venta uno positivo (Inversion_Venta):
  *                el dinero cambia de lugar, no es gasto ni ingreso (SUBTIPOS_INVERSION). Un dividendo sí es un ingreso.
  *
+ * Brokers (1.19): un broker es como un banco para invertir. Tiene dinero disponible (en su moneda) y las inversiones que
+ * se compran con él. Disponible = depósitos − retiros − compras + ventas + dividendos (Valor_Origen de sus operaciones;
+ * las que tienen Sin_Efectivo son unidades que la persona ya tenía y no lo tocan). Una inversión sin broker sigue como antes.
+ *
  * GOOGLEFINANCE solo existe como fórmula de hoja, así que, como con las tasas (TasasGoogle.gs), la app mantiene una hoja
  * auxiliar, Precios_Google, con una fórmula por inversión y lee lo que Google devolvió. Cada lectura queda en el historial
  * (Inversiones_Precios, uno por día y fuente) para los gráficos.
@@ -79,7 +83,7 @@ function resumenInversion_(inv, ops) {
   const ganancia = redondear2_(valor - pos.costo);
   return {
     ID_Inversion: inv.ID_Inversion, Nombre: inv.Nombre, Tipo: inv.Tipo || 'Otro', TipoNombre: TIPOS_INVERSION[inv.Tipo] || 'Otro', Simbolo: inv.Simbolo || '',
-    Divisa: divisa, Notas: inv.Notas || '', Activo: estaActivo(inv),
+    Divisa: divisa, Notas: inv.Notas || '', Activo: estaActivo(inv), ID_Broker: texto_(inv.ID_Broker),
     Precio_Manual: Number(inv.Precio_Manual) || 0, Fecha_Precio_Manual: texto_(inv.Fecha_Precio_Manual),
     Precio_Google: Number(inv.Precio_Google) || 0, Fecha_Precio_Google: texto_(inv.Fecha_Precio_Google),
     cantidad: pos.cantidad, costo: pos.costo, valor: valor, ganancia: ganancia, rentabilidad: pos.costo > 0 ? Math.round(ganancia / pos.costo * 10000) / 10000 : null,
@@ -87,7 +91,8 @@ function resumenInversion_(inv, ops) {
     precio: precio ? precio.precio : null, fechaPrecio: precio ? precio.fecha : '', fuentePrecio: precio ? precio.fuente : '',
     sinPrecio: !precio, sinTasa: sinTasa, tasa: tasa,
     operaciones: propias.slice().reverse().map(o => ({ ID_Operacion: o.ID_Operacion, Fecha: o.Fecha, Tipo: o.Tipo, Cantidad: Number(o.Cantidad) || 0, Precio: Number(o.Precio) || 0,
-      Valor: Number(o.Valor) || 0, Comision: Number(o.Comision) || 0, ID_Bolsillo: o.ID_Bolsillo || '', Notas: o.Notas || '' }))
+      Valor: Number(o.Valor) || 0, Comision: Number(o.Comision) || 0, ID_Bolsillo: o.ID_Bolsillo || '', Notas: o.Notas || '',
+      ID_Broker: texto_(o.ID_Broker), Valor_Origen: o.Valor_Origen === '' || o.Valor_Origen === undefined ? null : Number(o.Valor_Origen), Sin_Efectivo: esVerdadero(o.Sin_Efectivo) }))
   };
 }
 
@@ -98,20 +103,163 @@ function resumenesInversiones_() {
   });
 }
 
-/** Lo invertido en acciones, cripto… (para el patrimonio): valor de hoy de las activas. */
+/** Lo invertido en acciones, cripto… (para el patrimonio): valor de hoy de las activas más el disponible de los brokers. */
 function resumenInversiones_() {
   const activas = resumenesInversiones_().filter(i => i.Activo);
+  const efectivo = resumenesBrokers_().reduce((a, b) => a + (b.disponibleCop || 0), 0);
   return {
-    valor: redondear2_(activas.reduce((a, i) => a + i.valor, 0)), costo: redondear2_(activas.reduce((a, i) => a + i.costo, 0)),
-    cantidad: activas.filter(i => i.cantidad > 0).length
+    valor: redondear2_(activas.reduce((a, i) => a + i.valor, 0) + efectivo), costo: redondear2_(activas.reduce((a, i) => a + i.costo, 0)),
+    efectivo: redondear2_(efectivo), cantidad: activas.filter(i => i.cantidad > 0).length
   };
 }
 
-/** Valor de las inversiones al cierre de cada mes (para el patrimonio de 12 meses): con el último precio conocido hasta ese día. */
-function valorInversionesMensual_(meses) {
-  const invs = getTableData('Inversiones').filter(estaActivo);
-  if (!invs.length) return meses.map(() => 0);
+// ---------- Brokers ----------
+
+/** Dinero disponible en un broker, en su moneda (hasta `hasta`, AAAA-MM-DD, si se indica). */
+function efectivoBroker_(idBroker, ops, hasta) {
+  return redondear2_((ops || getTableData('Inversiones_Operaciones')).reduce((a, o) => {
+    if (o.ID_Broker !== idBroker || esVerdadero(o.Anulado) || esVerdadero(o.Sin_Efectivo)) return a;
+    if (hasta && texto_(o.Fecha) > hasta) return a;
+    const v = Number(o.Valor_Origen) || 0;
+    if (o.Tipo === 'Deposito' || o.Tipo === 'Venta' || o.Tipo === 'Dividendo') return a + v;
+    if (o.Tipo === 'Retiro' || o.Tipo === 'Compra') return a - v;
+    return a;
+  }, 0));
+}
+
+/**
+ * Resumen de un broker: disponible y valor de sus inversiones en su moneda y en pesos.
+ * El valor en su moneda usa el precio directo si está en la misma moneda; si no, pasa por pesos con las tasas de Divisas.
+ */
+function resumenBroker_(b, resumenes, ops) {
+  const divisa = DIVISAS.indexOf(b.Divisa) !== -1 ? b.Divisa : DIVISA_BASE;
+  const tasa = tasaDivisa_(divisa);
+  const items = resumenes.filter(i => i.Activo && i.ID_Broker === b.ID_Broker);
+  const disponible = efectivoBroker_(b.ID_Broker, ops);
+  let valorDivisa = 0, completo = true;
+  items.forEach(i => {
+    if (!(i.cantidad > 0)) return;
+    if (i.precio && i.Divisa === divisa) valorDivisa += i.cantidad * i.precio;
+    else if (tasa && !i.sinTasa && !i.sinPrecio) valorDivisa += i.valor / tasa;
+    else completo = false;
+  });
+  const valor = redondear2_(items.reduce((a, i) => a + i.valor, 0)), costo = redondear2_(items.reduce((a, i) => a + i.costo, 0));
+  const disponibleCop = tasa ? redondear2_(disponible * tasa) : null;
+  return {
+    ID_Broker: b.ID_Broker, Nombre: b.Nombre, Divisa: divisa, Notas: b.Notas || '', Activo: estaActivo(b),
+    disponible: disponible, disponibleCop: disponibleCop, valor: valor, costo: costo, ganancia: redondear2_(valor - costo),
+    valorDivisa: completo ? redondear2_(valorDivisa) : null, totalDivisa: completo ? redondear2_(valorDivisa + disponible) : null,
+    total: redondear2_(valor + (disponibleCop || 0)), sinTasa: !tasa, tasa: tasa,
+    inversiones: items.map(i => i.ID_Inversion),
+    movimientos: ops.filter(o => o.ID_Broker === b.ID_Broker && !esVerdadero(o.Anulado) && (o.Tipo === 'Deposito' || o.Tipo === 'Retiro'))
+      .sort((x, y) => (x.Fecha < y.Fecha ? 1 : x.Fecha > y.Fecha ? -1 : texto_(x.Creado_En) < texto_(y.Creado_En) ? 1 : -1))
+      .map(o => ({ ID_Operacion: o.ID_Operacion, Fecha: o.Fecha, Tipo: o.Tipo, Valor: Number(o.Valor_Origen) || 0, ID_Bolsillo: o.ID_Bolsillo || '', Notas: o.Notas || '' }))
+  };
+}
+
+function resumenesBrokers_() {
   const ops = getTableData('Inversiones_Operaciones');
+  const resumenes = resumenesInversiones_();
+  return getTableData('Brokers').filter(estaActivo).map(b => resumenBroker_(b, resumenes, ops));
+}
+
+function brokerActivo_(id) {
+  const b = buscarPorId_(leer_('Brokers'), 'ID_Broker', id);
+  if (!b) throw new Error('El broker no existe.');
+  if (!estaActivo(b)) throw new Error('El broker "' + b.Nombre + '" está desactivado.');
+  return b;
+}
+
+/**
+ * Lleva dinero a un broker (Deposito) o lo saca (Retiro). Con bolsillo, el dinero sale de él (o llega a él) como un ajuste
+ * que no es gasto ni ingreso (Broker_Deposito / Broker_Retiro); sin bolsillo solo se anota.
+ * @param {Object} d { ID_Broker, Tipo: 'Deposito'|'Retiro', Fecha, Valor (en la moneda del broker), ID_Bolsillo?, Valor_Bolsillo? (si el bolsillo está en otra moneda), Notas? }
+ */
+function moverDineroBroker(d, opc) {
+  if (!d || typeof d !== 'object') throw new Error('Faltan los datos.');
+  const b = brokerActivo_(d.ID_Broker);
+  const divisa = DIVISAS.indexOf(b.Divisa) !== -1 ? b.Divisa : DIVISA_BASE;
+  const tipo = opcion_(d.Tipo, ['Deposito', 'Retiro'], 'El tipo');
+  const fecha = fechaMovimiento_(d.Fecha);
+  const valor = numero_(d.Valor, 'El valor', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  const idBolsillo = texto_(d.ID_Bolsillo);
+  let enBolsillo = 0;
+  if (idBolsillo) {
+    exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', idBolsillo, 'El bolsillo');
+    const divB = divisaDeBolsillo_(idBolsillo);
+    enBolsillo = divB === divisa ? valor : numero_(d.Valor_Bolsillo, 'Lo que ' + (tipo === 'Deposito' ? 'sale del' : 'llega al') + ' bolsillo (en ' + divB + ')', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  }
+  if (tipo === 'Retiro' && !(opc && opc.sinRevisar)) {
+    const disp = efectivoBroker_(b.ID_Broker, leer_('Inversiones_Operaciones'));
+    if (valor > disp + 0.005) throw new Error('En ' + b.Nombre + ' tienes ' + disp + ' ' + divisa + ' disponibles: no puedes retirar más.');
+  }
+  const tasa = tasaDivisa_(divisa);
+  const idOp = nuevoId_('iop');
+  return transaccion_(alDeshacer => {
+    let idMov = '';
+    if (idBolsillo) {
+      const mov = registrarMovimiento({ Tipo_Mov: 'Ajuste', Subtipo: tipo === 'Deposito' ? 'Broker_Deposito' : 'Broker_Retiro', Valor: tipo === 'Deposito' ? -enBolsillo : enBolsillo,
+        Fecha: fecha, ID_Bolsillo: idBolsillo, Concepto: (tipo === 'Deposito' ? 'Depósito en ' : 'Retiro de ') + b.Nombre, Notas: MARCA_INVERSION + idOp });
+      idMov = mov.ID_Mov;
+      alDeshacer(() => anularMovimiento(idMov));
+    }
+    const fila = { ID_Operacion: idOp, ID_Inversion: '', Fecha: fecha, Tipo: tipo, Cantidad: '', Precio: '', Valor: tasa ? redondear2_(valor * tasa) : '', Comision: 0,
+      ID_Bolsillo: idBolsillo, ID_Mov: idMov, Notas: texto_(d.Notas).slice(0, 300), Anulado: false, ID_Broker: b.ID_Broker, Valor_Origen: valor, Sin_Efectivo: false };
+    insertRow('Inversiones_Operaciones', fila);
+    return fila;
+  });
+}
+
+/** Deja el disponible de un broker en `nuevo` (lo que dice la plataforma): anota la diferencia, sin mover dinero de bolsillos. */
+function ajustarDisponibleBroker(idBroker, nuevo, fecha) {
+  const b = brokerActivo_(idBroker);
+  const objetivo = numero_(nuevo, 'El disponible', { requerido: true, min: 0, max: VALOR_MAXIMO });
+  const dif = redondear2_(objetivo - efectivoBroker_(b.ID_Broker, leer_('Inversiones_Operaciones')));
+  if (Math.abs(dif) < 0.01) return null;
+  return moverDineroBroker({ ID_Broker: b.ID_Broker, Tipo: dif > 0 ? 'Deposito' : 'Retiro', Fecha: fecha, Valor: Math.abs(dif), Notas: 'Ajuste del disponible a ' + objetivo }, { sinRevisar: true });
+}
+
+/**
+ * Deja la cantidad de una inversión en `d.Cantidad` (las acciones o unidades que ya tienes), sin mover dinero.
+ * Si sube, el costo es el precio promedio que se indique (o el precio de hoy: sin ganancia). Si baja, sale costo en
+ * proporción, sin ganancia ni pérdida.
+ * @param {Object} d { Cantidad, Precio? (precio promedio de compra, en la moneda del precio), Fecha? }
+ */
+function ajustarCantidadInversion(idInversion, d) {
+  const inv = inversionActiva_(idInversion);
+  const x = d || {};
+  const nueva = numero_(x.Cantidad, 'La cantidad', { requerido: true, min: 0, max: VALOR_MAXIMO, decimales: 8 });
+  const pos = posicionInversion_(operacionesDe_(idInversion, leer_('Inversiones_Operaciones')));
+  const dif = Math.round((nueva - pos.cantidad) * 1e8) / 1e8;
+  if (Math.abs(dif) < 1e-9) return null;
+  const fecha = fechaMovimiento_(x.Fecha);
+  const divisa = inv.Divisa || DIVISA_BASE, tasa = tasaDivisa_(divisa);
+  const promedio = x.Precio === '' || x.Precio === undefined || x.Precio === null ? null : numero_(x.Precio, 'El precio promedio', { min: 0, max: VALOR_MAXIMO, decimales: 8 });
+  let fila;
+  if (dif > 0) {
+    const ref = promedio || (precioVigente_(inv, pos) || {}).precio || 0;
+    fila = { Tipo: 'Compra', Cantidad: dif, Valor: ref && tasa ? redondear2_(dif * ref * tasa) : 0,
+      Notas: 'Ya las tenía' + (promedio ? ' · precio promedio ' + promedio + ' ' + divisa : ref ? ' · al precio de ese día' : ' · sin costo conocido') };
+  } else {
+    const q = -dif;
+    fila = { Tipo: 'Venta', Cantidad: q, Valor: pos.cantidad > 0 ? redondear2_(pos.costo * Math.min(1, q / pos.cantidad)) : 0, Notas: 'Cantidad ajustada (sin venta)' };
+  }
+  fila = Object.assign({ ID_Operacion: nuevoId_('iop'), ID_Inversion: idInversion, Fecha: fecha, Precio: '', Comision: 0, ID_Bolsillo: '', ID_Mov: '', Anulado: false,
+    ID_Broker: texto_(inv.ID_Broker), Valor_Origen: '', Sin_Efectivo: true }, fila);
+  insertRow('Inversiones_Operaciones', fila);
+  return fila;
+}
+
+/**
+ * Valor de las inversiones al cierre de cada mes (para el patrimonio de 12 meses): con el último precio conocido hasta ese
+ * día, más el disponible de los brokers a esa fecha (con la tasa de hoy). `sinEfectivo` deja solo las inversiones.
+ */
+function valorInversionesMensual_(meses, sinEfectivo) {
+  const invs = getTableData('Inversiones').filter(estaActivo);
+  const brokers = sinEfectivo ? [] : getTableData('Brokers').filter(estaActivo);
+  if (!invs.length && !brokers.length) return meses.map(() => 0);
+  const ops = getTableData('Inversiones_Operaciones');
+  const efectivoMes = fin => brokers.reduce((a, b) => { const t = tasaDivisa_(DIVISAS.indexOf(b.Divisa) !== -1 ? b.Divisa : DIVISA_BASE); return a + (t ? efectivoBroker_(b.ID_Broker, ops, fin) * t : 0); }, 0);
   const historial = getTableData('Inversiones_Precios');
   return meses.map(mes => {
     const fin = finDeMes_(mes);
@@ -124,7 +272,7 @@ function valorInversionesMensual_(meses) {
       if (texto_(inv.Fecha_Precio_Manual) && inv.Fecha_Precio_Manual <= fin && (!precios.length || inv.Fecha_Precio_Manual >= precios[0].Fecha) && Number(inv.Precio_Manual) > 0) precio = Number(inv.Precio_Manual);
       const tasa = tasaDivisa_(inv.Divisa || DIVISA_BASE);
       return a + (precio && tasa ? pos.cantidad * precio * tasa : pos.costo);
-    }, 0));
+    }, efectivoMes(fin)));
   });
 }
 
@@ -136,7 +284,9 @@ function obtenerInversiones() {
   const porTipo = {};
   activas.filter(i => i.valor > 0).forEach(i => { porTipo[i.TipoNombre] = redondear2_((porTipo[i.TipoNombre] || 0) + i.valor); });
   const meses = mesesHasta_(hoyIso_().slice(0, 7), 12);
-  const valores = valorInversionesMensual_(meses);
+  const valores = valorInversionesMensual_(meses, true);
+  const brokers = resumenesBrokers_();
+  const efectivo = redondear2_(brokers.reduce((a, b) => a + (b.disponibleCop || 0), 0));
   const ops = getTableData('Inversiones_Operaciones');
   const costos = meses.map(m => redondear2_(getTableData('Inversiones').filter(estaActivo).reduce((a, inv) => a + posicionInversion_(operacionesDe_(inv.ID_Inversion, ops), finDeMes_(m)).costo, 0)));
   const costo = suma(i => i.costo), valor = suma(i => i.valor);
@@ -144,10 +294,11 @@ function obtenerInversiones() {
     items: activas.sort((a, b) => b.valor - a.valor),
     archivadas: todas.filter(i => !i.Activo).map(i => ({ ID_Inversion: i.ID_Inversion, Nombre: i.Nombre })),
     totales: { costo: costo, valor: valor, ganancia: redondear2_(valor - costo), rentabilidad: costo > 0 ? Math.round((valor - costo) / costo * 10000) / 10000 : null,
-      realizado: suma(i => i.realizado), dividendos: suma(i => i.dividendos) },
+      realizado: suma(i => i.realizado), dividendos: suma(i => i.dividendos), efectivo: efectivo, total: redondear2_(valor + efectivo) },
+    brokers: brokers,
     porTipo: Object.keys(porTipo).map(k => ({ nombre: k, valor: porTipo[k] })).sort((a, b) => b.valor - a.valor),
     evolucion: meses.map((m, k) => ({ mes: m, valor: valores[k], costo: costos[k] })),
-    faltaTasa: activas.filter(i => i.sinTasa).map(i => i.Divisa).filter((d, k, l) => l.indexOf(d) === k),
+    faltaTasa: activas.filter(i => i.sinTasa).map(i => i.Divisa).concat(brokers.filter(b => b.sinTasa).map(b => b.Divisa)).filter((d, k, l) => l.indexOf(d) === k),
     ultimaActualizacion: texto_(cfgValor_('Inversiones_Ultima')),
     automatico: esVerdadero(cfgValor_('Tasa_Auto'))
   };
@@ -173,6 +324,7 @@ function registrarOperacionInversion(o) {
   const cantidad = tipo === 'Dividendo' ? 0 : numero_(o.Cantidad, 'La cantidad', { requerido: true, min: 0, max: VALOR_MAXIMO, decimales: 8 });
   if (tipo !== 'Dividendo' && !(cantidad > 0)) throw new Error('La cantidad debe ser mayor que cero.');
   const precio = o.Precio === '' || o.Precio === undefined || o.Precio === null ? '' : numero_(o.Precio, 'El precio', { min: 0, max: VALOR_MAXIMO, decimales: 8 });
+  if (texto_(inv.ID_Broker)) return registrarOperacionBroker_(inv, o, tipo, fecha, cantidad, precio);
   const valor = numero_(o.Valor, tipo === 'Dividendo' ? 'El valor del dividendo' : 'El valor en pesos', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
   const comision = numero_(o.Comision, 'La comisión', { min: 0, max: VALOR_MAXIMO }) || 0;
   if (tipo === 'Venta') {
@@ -203,6 +355,32 @@ function registrarOperacionInversion(o) {
     insertRow('Inversiones_Operaciones', fila);
     return fila;
   });
+}
+
+/**
+ * Compra, venta o dividendo de una inversión que está en un broker: el dinero sale o entra del disponible del broker, en su
+ * moneda (`Total` + `Comision`). Valor y Comisión se guardan en pesos con la tasa de hoy, para el costo y la ganancia.
+ * Una compra con `Sin_Efectivo` es de unidades que ya tenías: no toca el disponible.
+ */
+function registrarOperacionBroker_(inv, o, tipo, fecha, cantidad, precio) {
+  const b = brokerActivo_(inv.ID_Broker);
+  const divisa = DIVISAS.indexOf(b.Divisa) !== -1 ? b.Divisa : DIVISA_BASE;
+  const tasa = tasaDivisa_(divisa);
+  if (!tasa) throw new Error('Falta la tasa de ' + divisa + ' para llevar la operación a pesos. Escríbela (o actívala con Google Finance) en Ajustes → Divisas.');
+  const total = numero_(o.Total, tipo === 'Dividendo' ? 'El valor del dividendo' : 'El total', { requerido: true, min: 0.01, max: VALOR_MAXIMO });
+  const comision = tipo === 'Dividendo' ? 0 : numero_(o.Comision, 'La comisión', { min: 0, max: VALOR_MAXIMO }) || 0;
+  const sinEfectivo = tipo === 'Compra' && esVerdadero(o.Sin_Efectivo);
+  if (tipo === 'Venta') {
+    const pos = posicionInversion_(operacionesDe_(inv.ID_Inversion, leer_('Inversiones_Operaciones')));
+    if (cantidad > pos.cantidad + 1e-9) throw new Error('Solo tienes ' + pos.cantidad + ' de ' + inv.Nombre + ': no puedes vender más.');
+    if (comision > total) throw new Error('La comisión no puede ser mayor que lo que recibiste.');
+  }
+  const efecto = tipo === 'Compra' ? total + comision : tipo === 'Venta' ? total - comision : total;
+  const fila = { ID_Operacion: nuevoId_('iop'), ID_Inversion: inv.ID_Inversion, Fecha: fecha, Tipo: tipo, Cantidad: cantidad, Precio: precio,
+    Valor: redondear2_(total * tasa), Comision: redondear2_(comision * tasa), ID_Bolsillo: '', ID_Mov: '', Notas: texto_(o.Notas).slice(0, 300), Anulado: false,
+    ID_Broker: b.ID_Broker, Valor_Origen: redondear2_(efecto), Sin_Efectivo: sinEfectivo };
+  insertRow('Inversiones_Operaciones', fila);
+  return fila;
 }
 
 /** Anula una operación (y su movimiento de dinero). Una compra no se puede anular si deja vendido más de lo que había. */

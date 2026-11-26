@@ -660,6 +660,10 @@ const CATALOGOS = {
         Notas: texto_(pick('Notas')).slice(0, 300),
         Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 })
       };
+      // 1.19: el broker donde está (vacío: "Otras inversiones", como las de antes)
+      const idBroker = texto_(pick('ID_Broker'));
+      if (idBroker && (!actual || texto_(actual.ID_Broker) !== idBroker)) brokerActivo_(idBroker);
+      datos.ID_Broker = idBroker;
       // Un precio escrito a mano lleva su fecha (si cambia, es de hoy)
       if (item.Precio_Manual !== undefined) {
         const p = item.Precio_Manual === '' || item.Precio_Manual === null ? '' : numero_(item.Precio_Manual, 'El precio', { min: 0, max: VALOR_MAXIMO, decimales: 8 });
@@ -673,6 +677,39 @@ const CATALOGOS = {
     bloqueos: function (reg) {
       const pos = posicionInversion_(operacionesDe_(reg.ID_Inversion));
       return pos.cantidad > 0 ? ['todavía tienes ' + pos.cantidad + ' unidades (registra la venta primero)'] : [];
+    },
+    // Al crearla se puede decir cuántas unidades ya tienes (y a qué precio promedio): quedan sin mover dinero
+    despues: function (registro, actual, entrada) {
+      if (!actual && entrada && Number(entrada.Cantidad_Inicial) > 0) {
+        ajustarCantidadInversion(registro.ID_Inversion, { Cantidad: entrada.Cantidad_Inicial, Precio: entrada.Precio_Promedio, Fecha: entrada.Fecha_Inicial });
+      }
+    }
+  },
+
+  // 1.19: brokers (el disponible y las inversiones de cada uno viven en Inversiones.gs)
+  Brokers: {
+    id: 'ID_Broker', prefijo: 'brk', etiqueta: 'El broker',
+    normalizar: function (item, actual, filas) {
+      const pick = k => item[k] !== undefined ? item[k] : actual && actual[k];
+      const nombre = textoRequerido_(pick('Nombre'), 'El nombre').slice(0, 60);
+      exigirNombreUnico_(filas, nombre, actual, 'ID_Broker');
+      const divisa = opcion_(pick('Divisa'), ENUMS.Brokers.Divisa, 'La moneda', DIVISA_BASE);
+      if (actual && divisa !== (actual.Divisa || DIVISA_BASE) && leer_('Inversiones_Operaciones').some(o => o.ID_Broker === actual.ID_Broker && !esVerdadero(o.Anulado))) {
+        throw new Error('No se puede cambiar la moneda de un broker que ya tiene movimientos.');
+      }
+      return { Nombre: nombre, Divisa: divisa, Notas: texto_(pick('Notas')).slice(0, 300), Orden: numero_(item.Orden, 'El orden', { entero: true, min: 0 }) };
+    },
+    bloqueos: function (reg) {
+      const out = [];
+      const disp = efectivoBroker_(reg.ID_Broker, getTableData('Inversiones_Operaciones'));
+      if (Math.abs(disp) >= 0.01) out.push('todavía tiene ' + disp + ' ' + (reg.Divisa || DIVISA_BASE) + ' disponibles (retíralos o ajústalos a 0)');
+      const con = resumenesInversiones_().filter(i => i.Activo && i.ID_Broker === reg.ID_Broker && i.cantidad > 0).length;
+      if (con) out.push('tiene ' + con + (con === 1 ? ' inversión' : ' inversiones') + ' con unidades');
+      return out;
+    },
+    // El dinero que ya tienes en el broker al crearlo (sin moverlo de un bolsillo)
+    despues: function (registro, actual, entrada) {
+      if (!actual && entrada && Number(entrada.Disponible) > 0) ajustarDisponibleBroker(registro.ID_Broker, entrada.Disponible, entrada.Fecha_Inicial);
     }
   },
 

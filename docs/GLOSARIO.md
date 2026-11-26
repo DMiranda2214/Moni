@@ -63,6 +63,7 @@
 | **Atrasada (meta)** | Llevas menos de lo que decía su plan hasta el mes pasado. Moni te dice cuánto apartar desde ahora para llegar a tiempo |
 | **Lista de deseos** | Lo que quieres regalar (y a quién) o comprarte, con cuánto quieres gastar. Es informativa: registrar el gasto es opcional |
 | **Lluvia de ideas** | Varias opciones para un mismo deseo, con su precio y su enlace; eliges una cuando decidas |
+| **Broker** | La plataforma o comisionista donde inviertes (Trii, Hapi, Interactive Brokers…). Tiene dinero **disponible** para invertir y las inversiones que compras con él |
 | **Inversión** | Acciones, ETF, cripto, fondos o bonos. Su valor es la cantidad que tienes por el precio de hoy, pasado a pesos |
 | **Símbolo** | El código de un activo en Google Finance: `NASDAQ:AAPL`, `NYSEARCA:VOO`, `BVC:ECOPETROL` o, para la cripto, `CURRENCY:BTCUSD` |
 | **Costo promedio** | Lo que pagaste por las unidades que tienes, con sus comisiones. Al vender una parte, sale la misma proporción del costo |

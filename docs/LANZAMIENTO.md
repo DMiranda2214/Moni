@@ -26,7 +26,7 @@ Lista para pasar a producción y compartir la app. Sirve para cada versión nuev
 - [ ] Primeros pasos: tocar lo ya agregado lo abre para editarlo.
 
 ## 2 ter. Qué probar de la 1.16 a la 1.18 en desarrollo
-- [ ] Una hoja de una versión anterior recibe sola las tablas `Metas`, `Deseos_Ideas`, `Inversiones`, `Inversiones_Operaciones` e `Inversiones_Precios`, y las columnas nuevas de `Regalos` y `Presupuesto_Mes`. *Ajustes → Diagnóstico* dice 37 tablas.
+- [ ] Una hoja de una versión anterior recibe sola las tablas `Metas`, `Deseos_Ideas`, `Inversiones`, `Inversiones_Operaciones` e `Inversiones_Precios`, y las columnas nuevas de `Regalos` y `Presupuesto_Mes`. *Ajustes → Diagnóstico* dice 38 tablas (1.19 agrega `Brokers` y las columnas `ID_Broker`, `Valor_Origen` y `Sin_Efectivo`).
 - [ ] Los regalos que ya existían aparecen iguales en **Planear → Lista de deseos** (persona, idea, estimado y lo gastado).
 - [ ] **Metas:**
   - [ ] Crear una meta, poner un mes en 0 en *Plan por mes* y ver que los demás meses se reparten lo que falta.

@@ -15,6 +15,9 @@ function aplicarInversiones(res) {
   if (res && res.patrimonio) App.boot.patrimonio = res.patrimonio;
 }
 const buscarInversion = id => App.inv.data && App.inv.data.items.find(i => i.ID_Inversion === id);
+const buscarBroker = id => App.inv.data && (App.inv.data.brokers || []).find(b => b.ID_Broker === id);
+/** Monto en la moneda del broker (con centavos si no es en pesos). */
+const enDiv = (n, divisa) => dinero(n, divisa || 'COP');
 const cantidadTxt = n => (Math.round(n * 1e8) / 1e8).toLocaleString('es-CO', { maximumFractionDigits: 8 });
 const rentaTxt = r => r === null || r === undefined ? '' : (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(Math.round(r * 1000) / 10).toLocaleString('es-CO') + ' %';
 
@@ -47,19 +50,33 @@ function filaInversion(i) {
 
 function htmlInversiones(d) {
   const t = d.totales;
-  if (!d.items.length) {
-    return vacio('tendencia', 'Aún no tienes inversiones', 'Anota tus acciones, ETF, cripto o fondos. Con el símbolo de Google Finance (por ejemplo NASDAQ:AAPL o CURRENCY:BTCUSD) Moni trae el precio cada día; si Google no lo tiene, escribes el precio tú. Suman a tu patrimonio.',
-      '<button class="m-btn m-btn-primary" data-acc="nueva-inversion">Agregar mi primera inversión</button>');
+  const brokers = d.brokers || [];
+  if (!d.items.length && !brokers.length) {
+    return vacio('tendencia', 'Aún no tienes inversiones', 'Empieza por tu broker (Trii, Hapi, Interactive Brokers…): anota el dinero que tienes disponible y cuántas acciones tienes. Con Google Finance, Moni calcula cuánto valen cada día. También puedes anotar inversiones sueltas. Suman a tu patrimonio.',
+      '<div style="display:flex;flex-direction:column;gap:var(--m-space-2)"><button class="m-btn m-btn-primary" data-acc="nuevo-broker">Agregar mi broker</button>' +
+      '<button class="m-btn m-btn-secondary" data-acc="nueva-inversion">Agregar una inversión suelta</button></div>');
   }
   let h = '';
   if (d.faltaTasa && d.faltaTasa.length) h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Para pasar a pesos lo que está en ' + esc(d.faltaTasa.join(' y ')) + ' falta la tasa. Escríbela (o actívala con Google Finance) en Ajustes → Divisas. Mientras tanto, esas inversiones valen lo que pagaste.</span>' +
     '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/divisas">Ir</button></div>';
-  h += cabeceraDestacada('Tus inversiones valen hoy', dinero(t.valor), 'Pagaste ' + dinero(t.costo) + (t.rentabilidad !== null ? ' · ' + esc(rentaTxt(t.rentabilidad)) : ''));
+  const conEfectivo = brokers.length > 0;
+  h += cabeceraDestacada(conEfectivo ? 'Tienes en inversiones' : 'Tus inversiones valen hoy', dinero(conEfectivo ? t.total : t.valor),
+    (conEfectivo ? 'Inversiones ' + dinero(t.valor) + ' · disponible ' + dinero(t.efectivo) + ' · ' : '') + 'Pagaste ' + dinero(t.costo) + (t.rentabilidad !== null ? ' · ' + esc(rentaTxt(t.rentabilidad)) : ''));
   h += cifrasClave([
     ['Ganancia', dk(t.ganancia), 'sin vender todavía', t.ganancia < 0 ? 'm-negativo' : (t.ganancia > 0 ? 'm-positivo' : '')],
     ['Al vender', dk(t.realizado), 'ganado en ventas', t.realizado < 0 ? 'm-negativo' : ''],
     ['Dividendos', dk(t.dividendos), 'recibidos']
   ]);
+  // Un grupo por broker (su disponible y sus inversiones con unidades) y, aparte, las inversiones sueltas
+  brokers.forEach(b => {
+    const suyas = d.items.filter(i => i.ID_Broker === b.ID_Broker && i.cantidad > 0);
+    h += seccion(b.Nombre, filaDisponible(b) + suyas.map(filaInversion).join(''), suyas.length ? '' : 'Toca el disponible para agregar las acciones que tienes en ' + esc(b.Nombre) + '.',
+      'Lo que tienes en este broker: el dinero disponible para invertir y lo que valen tus inversiones con el precio de hoy.');
+  });
+  const sueltas = d.items.filter(i => !i.ID_Broker || !buscarBroker(i.ID_Broker));
+  const conUnidades = sueltas.filter(i => i.cantidad > 0), sinUnidades = d.items.filter(i => !(i.cantidad > 0) && (!i.ID_Broker || !buscarBroker(i.ID_Broker)));
+  if (conUnidades.length) h += seccion(brokers.length ? 'Otras inversiones' : 'Tus inversiones', conUnidades.map(filaInversion).join(''), '', 'El valor de hoy de cada inversión y su rentabilidad frente a lo que pagaste (costo promedio). Toca una para registrar compras, ventas, dividendos o su precio.');
+  if (sinUnidades.length) h += seccion('Sin unidades', sinUnidades.map(filaInversion).join(''), 'Las que vendiste por completo o en las que aún no registras una compra.');
   const conSimbolo = d.items.some(i => i.Simbolo);
   if (conSimbolo) h += '<div class="m-acciones-fila" style="margin:var(--m-space-3) 0"><button class="m-btn m-btn-secondary" data-acc="precios-google">Actualizar precios</button>' +
     '<p class="m-ayuda">' + (d.ultimaActualizacion ? 'Última actualización: ' + esc(d.ultimaActualizacion.replace('T', ' ').slice(0, 16)) + '. ' : '') +
@@ -75,9 +92,8 @@ function htmlInversiones(d) {
     h += tarjetaViz('inv-tipo', 'En qué tienes invertido', vizBarrasH({ items: d.porTipo.map(x => ({ nombre: x.nombre, valor: x.valor, detalle: porcentajeDe(x.valor, t.valor) + ' del total' })), divisa: 'COP' }),
       tablaViz(['Tipo', 'Valor', '%'], d.porTipo.map(x => [x.nombre, dinero(x.valor), porcentajeDe(x.valor, t.valor)])));
   }
-  const conUnidades = d.items.filter(i => i.cantidad > 0), sinUnidades = d.items.filter(i => !(i.cantidad > 0));
-  if (conUnidades.length) h += seccion('Tus inversiones', conUnidades.map(filaInversion).join(''), '', 'El valor de hoy de cada inversión y su rentabilidad frente a lo que pagaste (costo promedio). Toca una para registrar compras, ventas, dividendos o su precio.');
-  if (sinUnidades.length) h += seccion('Sin unidades', sinUnidades.map(filaInversion).join(''), 'Las que vendiste por completo o en las que aún no registras una compra.');
+  h += '<div class="m-acciones-fila" style="margin:var(--m-space-3) 0"><button class="m-btn m-btn-secondary" data-acc="nuevo-broker">Agregar un broker</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="nueva-inversion">Agregar una inversión</button></div>';
   if (d.archivadas.length) h += '<p class="m-ayuda">Archivadas: ' + d.archivadas.map(a => esc(a.Nombre)).join(', ') + '. Puedes reactivarlas en Ajustes → Inversiones.</p>';
   return h;
 }
@@ -106,24 +122,34 @@ function htmlInversion(i) {
     '<div><div class="m-resumen-etiqueta">Ganancia' + htmlInfo(INFO_CIFRAS['Ganancia']) + '</div><strong class="m-num ' + claseSaldo(i.ganancia) + (i.ganancia > 0 ? ' m-positivo' : '') + '">' + dinero(i.ganancia) + (i.rentabilidad !== null ? ' (' + esc(rentaTxt(i.rentabilidad)) + ')' : '') + '</strong></div></div>' +
     ((i.realizado || i.dividendos) ? '<div class="m-resumen-fila"><div><div class="m-resumen-etiqueta">Ganado al vender' + htmlInfo(INFO_CIFRAS['Ganado al vender']) + '</div><strong class="m-num">' + dinero(i.realizado) + '</strong></div><div><div class="m-resumen-etiqueta">Dividendos' + htmlInfo(INFO_CIFRAS['Dividendos']) + '</div><strong class="m-num">' + dinero(i.dividendos) + '</strong></div></div>' : '') +
     (i.sinTasa ? '<p class="m-ayuda">Falta la tasa de ' + esc(i.Divisa) + ' para pasarla a pesos (Ajustes → Divisas).</p>' : '') + '</div>';
+  const b = i.ID_Broker ? buscarBroker(i.ID_Broker) : null;
+  if (b) h += '<div style="height:var(--m-space-3)"></div>' + fila({ icono: 'tendencia', titulo: 'En ' + esc(b.Nombre), sub: 'Disponible ' + esc(enDiv(b.disponible, b.Divisa)), chevron: true, attrs: 'data-acc="broker" data-id="' + esc(b.ID_Broker) + '"' });
   h += '<div style="display:flex;flex-wrap:wrap;gap:var(--m-space-2);margin:var(--m-space-4) 0">' +
     '<button class="m-btn m-btn-primary" data-acc="inv-op" data-tipo="Compra" data-id="' + id + '">Compré</button>' +
     (i.cantidad > 0 ? '<button class="m-btn m-btn-secondary" data-acc="inv-op" data-tipo="Venta" data-id="' + id + '">Vendí</button>' : '') +
     '<button class="m-btn m-btn-secondary" data-acc="inv-op" data-tipo="Dividendo" data-id="' + id + '">Dividendo</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="inv-cantidad" data-id="' + id + '">Ajustar cantidad</button>' +
     '<button class="m-btn m-btn-secondary" data-acc="inv-precio" data-id="' + id + '">Escribir el precio</button></div>';
   if (i.operaciones.length) {
-    h += seccion('Operaciones', i.operaciones.map(o => fila({
-      titulo: esc(o.Tipo === 'Compra' ? 'Compra' : o.Tipo === 'Venta' ? 'Venta' : 'Dividendo') + (o.Cantidad ? ' · ' + esc(cantidadTxt(o.Cantidad)) + ' u.' : ''),
-      sub: esc(fechaTxt(o.Fecha) + (o.Precio ? ' · a ' + dinero(o.Precio, i.Divisa) : '') + (o.Comision ? ' · comisión ' + dinero(o.Comision) : '') + (o.ID_Bolsillo ? '' : ' · sin mover dinero')),
-      final: '<span class="m-num ' + (o.Tipo === 'Compra' ? '' : 'm-positivo') + '">' + dinero(o.Valor) + '</span>', chevron: true, attrs: 'data-acc="inv-anular" data-id="' + esc(o.ID_Operacion) + '"'
-    })).join(''), 'Toca una operación para anularla (el dinero vuelve a su bolsillo).', 'Compras, ventas y dividendos de esta inversión, de la más reciente a la más antigua.');
-  } else h += '<p class="m-ayuda">Registra tu primera compra con “Compré”: cuántas unidades y cuánto pagaste en pesos.</p>';
+    const nombreOp = { Compra: 'Compra', Venta: 'Venta', Dividendo: 'Dividendo' };
+    h += seccion('Operaciones', i.operaciones.map(o => {
+      const deBroker = o.ID_Broker && o.Valor_Origen !== null && b;
+      const dineroTxt = o.Sin_Efectivo ? (o.Tipo === 'Compra' ? ' · ya las tenías' : ' · cantidad ajustada') : deBroker ? ' · ' + (o.Tipo === 'Compra' ? 'del' : 'al') + ' disponible' : (o.ID_Bolsillo ? '' : ' · sin mover dinero');
+      return fila({
+        titulo: esc(nombreOp[o.Tipo] || o.Tipo) + (o.Cantidad ? ' · ' + esc(cantidadTxt(o.Cantidad)) + ' u.' : ''),
+        sub: esc(fechaTxt(o.Fecha) + (o.Precio ? ' · a ' + dinero(o.Precio, i.Divisa) : '') + (o.Comision && !deBroker ? ' · comisión ' + dinero(o.Comision) : '') + dineroTxt),
+        final: '<span class="m-num ' + (o.Tipo === 'Compra' ? '' : 'm-positivo') + '">' + (deBroker ? enDiv(o.Valor_Origen, b.Divisa) : dinero(o.Valor)) + '</span>', chevron: true, attrs: 'data-acc="inv-anular" data-id="' + esc(o.ID_Operacion) + '"'
+      });
+    }).join(''), b ? 'Toca una operación para anularla (el dinero vuelve al disponible del broker).' : 'Toca una operación para anularla (el dinero vuelve a su bolsillo).', 'Compras, ventas y dividendos de esta inversión, de la más reciente a la más antigua.');
+  } else h += '<p class="m-ayuda">' + (b ? 'Registra tu primera compra con “Compré” (sale del disponible de ' + esc(b.Nombre) + ') o, si ya las tenías, con “Ajustar cantidad”.' : 'Registra tu primera compra con “Compré”: cuántas unidades y cuánto pagaste en pesos. Si ya las tenías, usa “Ajustar cantidad”.') + '</p>';
   if (i.Notas) h += '<p class="m-ayuda">' + esc(i.Notas) + '</p>';
   return h;
 }
 
 /** Compra, venta o dividendo de una inversión. Con bolsillo, el dinero sale o entra de él; sin bolsillo, solo se anota. */
 async function abrirOperacionInversion(i, tipo) {
+  const broker = i.ID_Broker ? buscarBroker(i.ID_Broker) : null;
+  if (broker) return abrirOperacionBroker(i, broker, tipo);
   const tasa = i.Divisa === 'COP' ? 1 : (Number(String(cfg('Tasa_' + i.Divisa) || '').replace(',', '.')) || 0);
   const esDiv = tipo === 'Dividendo';
   const titulo = tipo === 'Compra' ? 'Compré ' + i.Nombre : tipo === 'Venta' ? 'Vendí ' + i.Nombre : 'Dividendo de ' + i.Nombre;
@@ -199,6 +225,208 @@ async function abrirPrecioManual(i) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Brokers: el disponible para invertir y las inversiones de cada uno
+// ---------------------------------------------------------------------------
+
+/** La fila del disponible de un broker (lleva a su pantalla). */
+function filaDisponible(b) {
+  const ext = b.Divisa !== 'COP';
+  return fila({
+    icono: 'cuenta', titulo: 'Disponible',
+    sub: esc((b.inversiones.length ? b.inversiones.length + (b.inversiones.length === 1 ? ' inversión' : ' inversiones') : 'Sin inversiones') + (b.totalDivisa !== null ? ' · en total ' + enDiv(b.totalDivisa, b.Divisa) : '')),
+    final: '<strong class="m-num ' + claseSaldo(b.disponible) + '">' + esc(enDiv(b.disponible, b.Divisa)) + '</strong>' + (ext && b.disponibleCop !== null ? '<span class="m-row-sub m-num" style="display:block">' + dinero(b.disponibleCop) + '</span>' : ''),
+    chevron: true, attrs: 'data-acc="broker" data-id="' + esc(b.ID_Broker) + '"'
+  });
+}
+
+function vBroker(id) {
+  const g = App.inv;
+  const b = buscarBroker(id);
+  let html;
+  if (g.error) html = bloqueError(g.error, 'recargar-inv');
+  else if (!g.data) html = esqueleto(4);
+  else if (!b) html = vacio('tendencia', 'El broker no existe', 'Puede que lo hayas desactivado en Ajustes → Brokers.');
+  else html = htmlBroker(b);
+  return {
+    titulo: b ? b.Nombre : 'Broker', html: html,
+    acciones: b ? '<button class="m-btn-texto" data-acc="editar-broker" data-id="' + esc(b.ID_Broker) + '">Editar</button>' : '',
+    despues: () => { if (!g.data && !g.cargando && !g.error) cargarEn(g, 'broker/' + id, 'getInversiones', []); }
+  };
+}
+
+function htmlBroker(b) {
+  const id = esc(b.ID_Broker), div = b.Divisa, ext = div !== 'COP';
+  const items = App.inv.data.items.filter(i => i.ID_Broker === b.ID_Broker);
+  let h = '';
+  if (b.sinTasa) h += '<div class="m-banner m-pendiente" role="note">' + ico('alerta') + '<span>Falta la tasa de ' + esc(div) + ' para pasar a pesos lo que tienes aquí y sumarlo a tu patrimonio. Escríbela (o actívala con Google Finance) en Ajustes → Divisas.</span>' +
+    '<button class="m-btn-texto" data-acc="ir" data-ruta="ajustes/divisas">Ir</button></div>';
+  h += cabeceraDestacada('Tienes en ' + b.Nombre, b.totalDivisa !== null ? esc(enDiv(b.totalDivisa, div)) : dinero(b.total),
+    ext ? (b.disponibleCop !== null ? 'Unos ' + dinero(b.total) + ' en pesos, con la tasa de hoy' : '') : 'Pagaste ' + dinero(b.costo) + ' por tus inversiones');
+  h += cifrasClave([
+    ['Disponible', esc(ext ? enDiv(b.disponible, div) : dk(b.disponible)), 'para invertir', b.disponible < 0 ? 'm-negativo' : ''],
+    ['En inversiones', b.valorDivisa !== null ? esc(ext ? enDiv(b.valorDivisa, div) : dk(b.valorDivisa)) : dk(b.valor), 'con el precio de hoy'],
+    ['Ganancia', dk(b.ganancia), 'en pesos, sin vender', b.ganancia < 0 ? 'm-negativo' : (b.ganancia > 0 ? 'm-positivo' : '')]
+  ]);
+  h += '<div style="display:flex;flex-wrap:wrap;gap:var(--m-space-2);margin:var(--m-space-4) 0">' +
+    '<button class="m-btn m-btn-primary" data-acc="nueva-inversion" data-broker="' + id + '">Agregar acción o fondo</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="broker-dinero" data-tipo="Deposito" data-id="' + id + '">Depositar</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="broker-dinero" data-tipo="Retiro" data-id="' + id + '">Retirar</button>' +
+    '<button class="m-btn m-btn-secondary" data-acc="broker-ajustar" data-id="' + id + '">Ajustar disponible</button></div>';
+  const con = items.filter(i => i.cantidad > 0), sin = items.filter(i => !(i.cantidad > 0));
+  h += con.length ? seccion('Tus inversiones', con.map(filaInversion).join(''), 'El valor en pesos con el precio de Google Finance (o el que escribiste) y la tasa de hoy.', 'Cada inversión de este broker: cuántas tienes, cuánto valen y cuánto ganas frente a lo que pagaste.')
+    : '<p class="m-ayuda">Agrega las acciones, ETF o fondos que tienes en ' + esc(b.Nombre) + ': búscalos por nombre y escribe cuántas tienes. Moni trae el precio de Google Finance y calcula cuánto valen.</p>';
+  if (sin.length) h += seccion('Sin unidades', sin.map(filaInversion).join(''));
+  if (b.movimientos.length) {
+    h += seccion('Depósitos y retiros', b.movimientos.map(m => fila({
+      titulo: m.Tipo === 'Deposito' ? 'Depósito' : 'Retiro', sub: esc(fechaTxt(m.Fecha) + (m.ID_Bolsillo ? '' : ' · sin mover dinero de un bolsillo') + (m.Notas ? ' · ' + m.Notas : '')),
+      final: '<span class="m-num ' + (m.Tipo === 'Deposito' ? 'm-positivo' : '') + '">' + (m.Tipo === 'Deposito' ? '+' : '−') + esc(enDiv(m.Valor, div)) + '</span>', chevron: true, attrs: 'data-acc="inv-anular" data-id="' + esc(m.ID_Operacion) + '"'
+    })).join(''), 'Toca uno para anularlo (si movió dinero, vuelve a su bolsillo).', 'El dinero que llevaste al broker o sacaste de él. Las compras y ventas están en cada inversión.');
+  }
+  if (b.Notas) h += '<p class="m-ayuda">' + esc(b.Notas) + '</p>';
+  return h;
+}
+
+/** Bolsillos de todas las monedas (para llevar dinero a un broker en dólares desde un bolsillo en dólares o en pesos). */
+function bolsillosTodasDivisas() {
+  return ((App.boot.saldos && App.boot.saldos.cuentas) || []).filter(c => c.bolsillos.length).map(c => ({
+    grupo: c.Banco + ' · ' + c.Nombre + (c.Divisa !== 'COP' ? ' (' + c.Divisa + ')' : ''), opciones: c.bolsillos.map(b => [b.ID_Bolsillo, nombreBolsillo(b, c)])
+  }));
+}
+const divisaDeBolsilloUi = idB => { const c = ((App.boot.saldos && App.boot.saldos.cuentas) || []).find(x => x.bolsillos.some(b => b.ID_Bolsillo === idB)); return c ? c.Divisa : 'COP'; };
+
+/** Depositar o retirar dinero de un broker, desde o hacia un bolsillo (o solo anotarlo). */
+async function abrirDineroBroker(b, tipo) {
+  const dep = tipo === 'Deposito';
+  const grupos = [['', dep ? 'No sale de un bolsillo (solo anotarlo)' : 'No llega a un bolsillo (solo anotarlo)']].concat(bolsillosTodasDivisas());
+  const campos = [
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true },
+    { k: 'Valor', label: (dep ? 'Cuánto llega al broker' : 'Cuánto sacas') + ' (en ' + b.Divisa + ')', tipo: 'decimal', requerido: true,
+      info: dep ? 'Lo que se suma a tu disponible en ' + b.Nombre + ', como lo ves en la plataforma.' : 'Lo que sale de tu disponible en ' + b.Nombre + '. Tienes ' + enDiv(b.disponible, b.Divisa) + '.' },
+    { k: 'ID_Bolsillo', label: dep ? 'Sale de' : 'Llega a', tipo: 'select', opciones: () => grupos, info: 'Si eliges un bolsillo, el dinero sale de él (o llega a él) y cambia su saldo. No cuenta como gasto ni como ingreso: el dinero solo cambia de lugar.' },
+    { k: 'Valor_Bolsillo', label: dep ? 'Cuánto salió del bolsillo' : 'Cuánto llegó al bolsillo', tipo: 'decimal', info: 'Si el bolsillo está en otra moneda, lo que se movió en esa moneda (por ejemplo, los pesos que pagaste por esos dólares).' },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ];
+  await abrirHoja({
+    titulo: (dep ? 'Depositar en ' : 'Retirar de ') + b.Nombre,
+    cuerpo: '<form novalidate data-form="broker-dinero">' + campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : '', {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const sel = $('#f-ID_Bolsillo', raiz), otro = $('#f-Valor_Bolsillo', raiz).closest('.m-campo');
+      const ver = () => { const d = sel.value ? divisaDeBolsilloUi(sel.value) : b.Divisa; otro.hidden = !sel.value || d === b.Divisa; const l = otro.querySelector('label'); if (l && sel.value) l.textContent = (dep ? 'Cuánto salió del bolsillo' : 'Cuánto llegó al bolsillo') + ' (en ' + d + ')'; };
+      sel.addEventListener('change', ver); ver();
+      $('#f-Valor', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (typeof v.Valor !== 'number' || isNaN(v.Valor) || v.Valor <= 0) throw new Error('Escribe el valor.');
+      const otraDivisa = v.ID_Bolsillo && divisaDeBolsilloUi(v.ID_Bolsillo) !== b.Divisa;
+      if (otraDivisa && (typeof v.Valor_Bolsillo !== 'number' || isNaN(v.Valor_Bolsillo) || v.Valor_Bolsillo <= 0)) throw new Error('Escribe cuánto se movió en el bolsillo (está en otra moneda).');
+      const res = await api('moveDineroBroker', { ID_Broker: b.ID_Broker, Tipo: tipo, Fecha: v.Fecha, Valor: v.Valor, ID_Bolsillo: v.ID_Bolsillo || '', Valor_Bolsillo: otraDivisa ? v.Valor_Bolsillo : '', Notas: v.Notas || '' });
+      aplicarEscritura(res); aplicarInversiones(res); render();
+      aviso(dep ? 'Depósito registrado' : 'Retiro registrado', { deshacer: () => anularOperacionInversion(res.idOperacion, true) });
+    }
+  });
+}
+
+/** Deja el disponible como lo dice la plataforma (sin mover dinero de bolsillos). */
+async function abrirAjustarDisponible(b) {
+  await abrirHoja({
+    titulo: 'Disponible en ' + b.Nombre,
+    cuerpo: '<form novalidate data-form="broker-ajustar"><p class="m-hoja-mensaje">Escribe el dinero sin invertir que ves hoy en ' + esc(b.Nombre) + '. Moni anota la diferencia; tus bolsillos no cambian.</p>' +
+      htmlCampo({ k: 'Disponible', label: 'Disponible (en ' + b.Divisa + ')', tipo: 'decimal', requerido: true, info: 'Lo que la plataforma muestra como saldo disponible, efectivo o poder de compra (sin contar tus acciones).' }, b.disponible, {}) +
+      htmlCampo({ k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true }, App.boot.hoy, {}) + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); const i = $('#f-Disponible', raiz); i.focus(); i.select && i.select(); },
+    alGuardar: async raiz => {
+      const n = leerDecimal($('#f-Disponible', raiz).value);
+      if (typeof n !== 'number' || isNaN(n) || n < 0) throw new Error('Escribe el disponible (0 o más).');
+      aplicarInversiones(await api('setDisponibleBroker', b.ID_Broker, n, $('#f-Fecha', raiz).value)); render(); aviso('Disponible actualizado');
+    }
+  });
+}
+
+/** Deja la cantidad en las unidades que la persona tiene (sin mover dinero): para anotar lo que ya tenía o corregir. */
+async function abrirAjustarCantidad(i) {
+  const campos = [
+    { k: 'Cantidad', label: 'Cuántas tienes', tipo: 'decimal', requerido: true, info: 'Las acciones o unidades que ves hoy en tu broker o extracto. Moni anota la diferencia sin mover dinero.' },
+    { k: 'Precio', label: 'Precio promedio al que compraste las que agregas (opcional)', tipo: 'decimal', info: 'En ' + i.Divisa + '. Define el costo de las unidades que sumas; si lo dejas vacío, cuentan al precio de hoy (sin ganancia).' },
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true }
+  ];
+  await abrirHoja({
+    titulo: 'Cuántas tienes de ' + i.Nombre,
+    cuerpo: '<form novalidate data-form="inv-cantidad">' + htmlCampo(campos[0], i.cantidad || '', {}) + htmlCampo(campos[1], '', {}) + htmlCampo(campos[2], App.boot.hoy, {}) +
+      '<p class="m-ayuda" id="inv-cant-res" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      const q = $('#f-Cantidad', raiz), p = $('#f-Precio', raiz).closest('.m-campo'), res = $('#inv-cant-res', raiz);
+      const ver = () => {
+        const n = leerDecimal(q.value), sube = typeof n === 'number' && n > i.cantidad + 1e-9;
+        p.hidden = !sube;
+        res.textContent = typeof n === 'number' && !isNaN(n) && Math.abs(n - i.cantidad) > 1e-9 ? (sube ? 'Se suman ' : 'Se quitan ') + cantidadTxt(Math.abs(n - i.cantidad)) + ' unidades, sin mover dinero.' + (i.precio ? ' Valdrían ' + dinero(n * i.precio, i.Divisa) + '.' : '') : '';
+      };
+      q.addEventListener('input', ver); ver(); q.focus(); q.select && q.select();
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (typeof v.Cantidad !== 'number' || isNaN(v.Cantidad) || v.Cantidad < 0) throw new Error('Escribe cuántas tienes (0 o más).');
+      if (v.Precio !== '' && (typeof v.Precio !== 'number' || isNaN(v.Precio))) throw new Error('Revisa el precio promedio.');
+      const res = await api('setCantidadInversion', i.ID_Inversion, { Cantidad: v.Cantidad, Precio: v.Precio, Fecha: v.Fecha });
+      aplicarInversiones(res); render();
+      aviso(res.idOperacion ? 'Cantidad actualizada' : 'La cantidad ya era esa', res.idOperacion ? { deshacer: () => anularOperacionInversion(res.idOperacion, true) } : undefined);
+    }
+  });
+}
+
+/** Compra, venta o dividendo de una inversión en un broker: todo en la moneda del broker, contra su disponible. */
+async function abrirOperacionBroker(i, b, tipo) {
+  const esDiv = tipo === 'Dividendo', div = b.Divisa;
+  const titulo = tipo === 'Compra' ? 'Compré ' + i.Nombre : tipo === 'Venta' ? 'Vendí ' + i.Nombre : 'Dividendo de ' + i.Nombre;
+  const campos = [
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true },
+    !esDiv && { k: 'Cantidad', label: tipo === 'Venta' ? 'Cuántas vendiste (tienes ' + cantidadTxt(i.cantidad) + ')' : 'Cuántas compraste', tipo: 'decimal', requerido: true, ayuda: 'Puede tener decimales (fracciones de acción).', info: 'Las acciones o unidades de la operación.' },
+    !esDiv && { k: 'Precio', label: 'Precio por unidad (en ' + i.Divisa + ')', tipo: 'decimal', info: 'A cuánto compraste o vendiste cada una. Con la cantidad, Moni calcula el total.' },
+    { k: 'Total', label: esDiv ? 'Cuánto recibiste (en ' + div + ')' : 'Total (en ' + div + ', sin la comisión)', tipo: 'decimal', requerido: true, info: esDiv ? 'El dividendo que llegó a tu disponible en ' + b.Nombre + ', ya sin impuestos.' : 'Cantidad × precio. Es lo que ' + (tipo === 'Compra' ? 'sale de' : 'llega a') + ' tu disponible, antes de la comisión.' },
+    !esDiv && { k: 'Comision', label: 'Comisión (opcional, en ' + div + ')', tipo: 'decimal', info: 'Lo que cobró el broker por la operación.' },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ].filter(Boolean);
+  await abrirHoja({
+    titulo: titulo,
+    cuerpo: '<form novalidate data-form="inv-op-broker"><p class="m-hoja-mensaje">Disponible en ' + esc(b.Nombre) + ': ' + esc(enDiv(b.disponible, div)) + '</p>' +
+      campos.map(c => htmlCampo(c, c.k === 'Fecha' ? App.boot.hoy : (c.k === 'Precio' && i.precio ? i.precio : ''), {})).join('') +
+      '<p class="m-ayuda" id="inv-opb-res" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const tot = $('#f-Total', raiz), res = $('#inv-opb-res', raiz);
+      tot.addEventListener('input', () => { tot.dataset.tocado = '1'; });
+      const val = id => { const n = leerDecimal((($('#f-' + id, raiz) || {}).value) || ''); return typeof n === 'number' && !isNaN(n) ? n : 0; };
+      const pintar = () => {
+        const q = val('Cantidad'), p = val('Precio');
+        if (!esDiv && q > 0 && p > 0 && !tot.dataset.tocado && i.Divisa === div) tot.value = String(Math.round(q * p * 100) / 100).replace('.', ',');
+        const t = val('Total'), c = val('Comision');
+        if (!(t > 0)) { res.textContent = ''; return; }
+        const efecto = tipo === 'Compra' ? t + c : tipo === 'Venta' ? t - c : t;
+        const queda = tipo === 'Compra' ? b.disponible - efecto : b.disponible + efecto;
+        res.textContent = (tipo === 'Compra' ? 'Sale de tu disponible: ' : 'Llega a tu disponible: ') + enDiv(efecto, div) + '. Te quedan ' + enDiv(queda, div) + '.' + (queda < 0 ? ' Quedaría en negativo: deposita primero o ajusta el disponible.' : '');
+      };
+      raiz.addEventListener('input', ev => { if (ev.target.id !== 'f-Total') pintar(); else pintar(); });
+      pintar();
+      ($('#f-Cantidad', raiz) || tot).focus();
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      const op = { ID_Inversion: i.ID_Inversion, Tipo: tipo, Fecha: v.Fecha, Total: v.Total, Comision: v.Comision || 0, Precio: v.Precio === undefined ? '' : v.Precio, Notas: v.Notas || '' };
+      if (!esDiv) {
+        if (typeof v.Cantidad !== 'number' || isNaN(v.Cantidad) || v.Cantidad <= 0) throw new Error('Escribe cuántas.');
+        if (v.Precio !== '' && (typeof v.Precio !== 'number' || isNaN(v.Precio))) throw new Error('Revisa el precio por unidad.');
+        op.Cantidad = v.Cantidad;
+      }
+      if (typeof v.Total !== 'number' || isNaN(v.Total) || v.Total <= 0) throw new Error('Escribe el total en ' + div + '.');
+      const res = await api('addOperacionInversion', op);
+      aplicarEscritura(res); aplicarInversiones(res); render();
+      aviso(tipo === 'Compra' ? 'Compra registrada' : tipo === 'Venta' ? 'Venta registrada' : 'Dividendo registrado', { deshacer: () => anularOperacionInversion(res.idOperacion, true) });
+    }
+  });
+}
+
 async function actualizarPreciosInv(el) {
   if (el) { el.disabled = true; el.textContent = 'Consultando Google Finance…'; }
   try {
@@ -263,7 +491,7 @@ function buscarEnCatalogoInv(texto) {
  * Agregar una inversión empieza buscando: en el catálogo de Moni (al instante, por nombre) o, si no está, por su símbolo en
  * Google Finance. Lo elegido llena el formulario (nombre, tipo, símbolo y moneda); también se puede escribir todo a mano.
  */
-async function nuevaInversion() {
+async function nuevaInversion(idBroker) {
   let elegido = null, aMano = false;
   const filaRes = (r, k, origen) => '<button type="button" class="m-row" data-inv-res="' + origen + '" data-i="' + k + '" style="width:100%;text-align:left">' +
     '<span class="m-row-texto"><span class="m-row-titulo" style="display:block">' + esc(r.nombre) + '</span>' +
@@ -310,6 +538,7 @@ async function nuevaInversion() {
   });
   if (!elegido && !aMano) return;
   const def = elegido ? { Nombre: elegido.nombre.replace(/ \((ADR en Nueva York|cripto o divisa, en dólares)\)$/, ''), Tipo: elegido.tipo, Simbolo: elegido.simbolo, Divisa: elegido.divisa || 'USD' } : {};
+  if (idBroker) def.ID_Broker = idBroker;
   await abrirFormulario('Inversiones', null, def);
   App.inv.data = null; render();
 }

@@ -120,4 +120,102 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(r[0].divisa, 'USD');
     assert.strictEqual(r[0].tipo, 'Accion');
   });
+
+  // ============================================================= brokers (1.19)
+  prueba('brokers: disponible inicial y acciones que ya tenía; con el precio de Google se estima cuánto valen', () => {
+    const { e, casa, saldo } = escenario();
+    e.ejecutar("guardarConfig_('Tasa_USD', '4000')");
+    const b = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'Interactive Brokers', Divisa: 'USD', Disponible: 1500 });
+    assert.strictEqual(b.Divisa, 'USD');
+    const aapl = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Apple', Tipo: 'Accion', Simbolo: 'NASDAQ:AAPL', ID_Broker: b.ID_Broker, Cantidad_Inicial: 10, Precio_Promedio: 150 });
+    assert.strictEqual(aapl.ID_Broker, b.ID_Broker);
+    let d = e.llamar('obtenerInversiones');
+    let rb = d.brokers[0];
+    assert.strictEqual(rb.disponible, 1500, 'el disponible inicial');
+    assert.strictEqual(rb.disponibleCop, 6000000);
+    const it = d.items.find(i => i.ID_Inversion === aapl.ID_Inversion);
+    assert.strictEqual(it.cantidad, 10);
+    assert.strictEqual(it.costo, 10 * 150 * 4000, 'costo con el precio promedio');
+    // Google devuelve el precio: valor = cantidad × precio
+    e.llamar('updatePreciosGoogle');
+    e.hojas.Precios_Google.filas[1][2] = 200;
+    d = e.llamar('updatePreciosGoogle').data.inversiones;
+    rb = d.brokers[0];
+    assert.strictEqual(rb.valorDivisa, 2000, '10 acciones × 200 USD');
+    assert.strictEqual(rb.totalDivisa, 3500, 'disponible + acciones');
+    assert.strictEqual(rb.total, 3500 * 4000);
+    assert.strictEqual(d.totales.efectivo, 6000000);
+    assert.strictEqual(d.totales.total, 14000000);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 10000000, 'no movió dinero de los bolsillos');
+    // El patrimonio cuenta el disponible del broker
+    assert.strictEqual(e.llamar('resumenPatrimonio_').activos.inversiones, 14000000);
+  });
+
+  prueba('brokers: depositar desde un bolsillo, comprar y vender contra el disponible, retirar; nada cuenta como gasto o ingreso', () => {
+    const { e, casa, saldo } = escenario();
+    const b = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'Trii', Divisa: 'COP' });
+    const eco = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Ecopetrol', Tipo: 'Accion', Simbolo: 'BVC:ECOPETROL', Divisa: 'COP', ID_Broker: b.ID_Broker });
+    e.llamar('moverDineroBroker', { ID_Broker: b.ID_Broker, Tipo: 'Deposito', Fecha: hoy(), Valor: 1000000, ID_Bolsillo: casa.ID_Bolsillo });
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 9000000, 'sale del bolsillo');
+    const compra = e.llamar('addOperacionInversion', { ID_Inversion: eco.ID_Inversion, Fecha: hoy(), Tipo: 'Compra', Cantidad: 300, Precio: 2000, Total: 600000, Comision: 5000 }).data;
+    let rb = e.llamar('obtenerInversiones').brokers[0];
+    assert.strictEqual(rb.disponible, 1000000 - 605000);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 9000000, 'la compra no toca el bolsillo');
+    e.llamar('addOperacionInversion', { ID_Inversion: eco.ID_Inversion, Fecha: hoy(), Tipo: 'Venta', Cantidad: 100, Precio: 2500, Total: 250000, Comision: 2000 });
+    e.llamar('addOperacionInversion', { ID_Inversion: eco.ID_Inversion, Fecha: hoy(), Tipo: 'Dividendo', Total: 10000 });
+    const d = e.llamar('obtenerInversiones');
+    rb = d.brokers[0];
+    assert.strictEqual(rb.disponible, 1000000 - 605000 + 248000 + 10000);
+    const it = d.items[0];
+    assert.strictEqual(it.cantidad, 200);
+    assert.strictEqual(it.realizado, Math.round((250000 - 2000 - 605000 / 3) * 100) / 100, 'ganancia de la venta con costo promedio');
+    assert.strictEqual(it.dividendos, 10000);
+    assert.throws(e.falla('moverDineroBroker', { ID_Broker: b.ID_Broker, Tipo: 'Retiro', Fecha: hoy(), Valor: 99999999 }), /no puedes retirar más/);
+    const ret = e.llamar('moverDineroBroker', { ID_Broker: b.ID_Broker, Tipo: 'Retiro', Fecha: hoy(), Valor: 100000, ID_Bolsillo: casa.ID_Bolsillo });
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 9100000, 'el retiro llega al bolsillo');
+    const movs = e.llamar('listarMovimientos', {}).items;
+    assert.ok(movs.every(m => m.Tipo_Mov === 'Ajuste' && ['Broker_Deposito', 'Broker_Retiro'].indexOf(m.Subtipo) !== -1), 'solo ajustes que mueven dinero de lugar');
+    assert.ok(movs.every(m => !e.llamar('esIngresoOGasto_', m)), 'no son ingreso ni gasto en los informes');
+    // La compra no se anula mientras haya una venta posterior; anular el retiro devuelve el dinero al broker y saca el del bolsillo
+    assert.throws(e.falla('anularOperacionInversion', compra.idOperacion), /venta posterior/);
+    e.llamar('anularOperacionInversion', ret.ID_Operacion);
+    assert.strictEqual(e.llamar('obtenerInversiones').brokers[0].disponible, 1000000 - 605000 + 248000 + 10000);
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 9000000);
+  });
+
+  prueba('brokers: ajustar disponible y cantidad sin mover dinero; no se desactiva con dinero o acciones', () => {
+    const { e, saldo, casa } = escenario();
+    const b = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'Hapi', Divisa: 'COP', Disponible: 300000 });
+    const voo = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'VOO', Tipo: 'ETF', Divisa: 'COP', Precio_Manual: 1000, ID_Broker: b.ID_Broker });
+    e.llamar('ajustarDisponibleBroker', b.ID_Broker, 250000, hoy());
+    assert.strictEqual(e.llamar('obtenerInversiones').brokers[0].disponible, 250000);
+    e.llamar('ajustarCantidadInversion', voo.ID_Inversion, { Cantidad: 5 });
+    let it = e.llamar('obtenerInversiones').items[0];
+    assert.strictEqual(it.cantidad, 5);
+    assert.strictEqual(it.costo, 5000, 'sin precio promedio: al precio de hoy, sin ganancia');
+    e.llamar('ajustarCantidadInversion', voo.ID_Inversion, { Cantidad: 2 });
+    it = e.llamar('obtenerInversiones').items[0];
+    assert.strictEqual(it.cantidad, 2);
+    assert.strictEqual(it.costo, 2000);
+    assert.strictEqual(it.realizado, 0, 'quitar unidades no es una venta');
+    assert.strictEqual(e.llamar('obtenerInversiones').brokers[0].disponible, 250000, 'el disponible no cambia');
+    assert.strictEqual(saldo(casa.ID_Bolsillo), 10000000);
+    assert.throws(e.falla('desactivarCatalogo', 'Brokers', b.ID_Broker), /disponibles|unidades/);
+    assert.throws(e.falla('guardarCatalogo', 'Brokers', { ID_Broker: b.ID_Broker, Nombre: 'Hapi', Divisa: 'USD' }), /moneda/);
+  });
+
+  prueba('brokers: un broker en dólares sin tasa no inventa pesos, y las inversiones de antes siguen fuera de un broker', () => {
+    const { e, casa } = escenario();
+    e.ejecutar("guardarConfig_('Tasa_USD', '')");
+    const vieja = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Fondo', Tipo: 'Fondo', Divisa: 'COP' });
+    e.llamar('addOperacionInversion', { ID_Inversion: vieja.ID_Inversion, Fecha: hoy(), Tipo: 'Compra', Cantidad: 10, Valor: 100000, ID_Bolsillo: casa.ID_Bolsillo });
+    const b = e.llamar('guardarCatalogo', 'Brokers', { Nombre: 'eToro', Divisa: 'USD', Disponible: 100 });
+    const d = e.llamar('obtenerInversiones');
+    assert.strictEqual(d.brokers[0].disponibleCop, null);
+    assert.ok(d.faltaTasa.indexOf('USD') !== -1);
+    assert.strictEqual(d.items[0].ID_Broker, '', 'la de antes queda sin broker');
+    assert.strictEqual(d.totales.efectivo, 0);
+    const msft = e.llamar('guardarCatalogo', 'Inversiones', { Nombre: 'Microsoft', Simbolo: 'NASDAQ:MSFT', ID_Broker: b.ID_Broker });
+    assert.throws(e.falla('registrarOperacionInversion', { ID_Inversion: msft.ID_Inversion, Fecha: hoy(), Tipo: 'Compra', Cantidad: 1, Total: 400 }), /tasa de USD/);
+  });
 };

@@ -196,13 +196,18 @@ function sembrarDatosDemo() {
     { ID_Meta: 'demo-meta-1', Nombre: 'Viaje a la costa (demo)', Motivo: 'Viaje', Monto_Objetivo: 3000000, Ahorro_Inicial: 400000, Fecha_Inicio: hoy, Fecha_Fin: sumarMeses_(hoy, 8), ID_Bolsillo: 'demo-bol-viaje', Plan_Mensual: JSON.stringify(planViaje), Estado: 'Activa', Notas: '', Activo: true, Orden: 1 },
     { ID_Meta: 'demo-meta-2', Nombre: 'Moto (demo)', Motivo: 'Moto', Monto_Objetivo: 9000000, Ahorro_Inicial: 0, Fecha_Inicio: hoy, Fecha_Fin: sumarMeses_(hoy, 18), ID_Bolsillo: 'demo-bol-general-4', Plan_Mensual: '', Estado: 'Activa', Notas: '', Activo: true, Orden: 2 }
   ]);
+  // 1.19: un broker con dinero disponible y una acción comprada con él
+  insertRows('Brokers', [{ ID_Broker: 'demo-brk-1', Nombre: 'Broker Andes (demo)', Divisa: 'COP', Notas: '', Activo: true, Orden: 1 }]);
   insertRows('Inversiones', [
+    { ID_Inversion: 'demo-inv-3', Nombre: 'Ecopetrol (demo)', Tipo: 'Accion', Simbolo: 'BVC:ECOPETROL', Divisa: 'COP', Precio_Manual: 2350, Fecha_Precio_Manual: hoy, Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 3, ID_Broker: 'demo-brk-1' },
     { ID_Inversion: 'demo-inv-1', Nombre: 'Bitcoin (demo)', Tipo: 'Cripto', Simbolo: 'CURRENCY:BTCUSD', Divisa: 'USD', Precio_Manual: '', Fecha_Precio_Manual: '', Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 1 },
     { ID_Inversion: 'demo-inv-2', Nombre: 'Fondo de inversión (demo)', Tipo: 'Fondo', Simbolo: '', Divisa: 'COP', Precio_Manual: 11250, Fecha_Precio_Manual: hoy, Precio_Google: '', Fecha_Precio_Google: '', Notas: '', Activo: true, Orden: 2 }
   ]);
   insertRows('Inversiones_Operaciones', [
     { ID_Operacion: 'demo-iop-1', ID_Inversion: 'demo-inv-1', Fecha: fechaRelativa_(40), Tipo: 'Compra', Cantidad: 0.005, Precio: 60000, Valor: 1200000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false },
-    { ID_Operacion: 'demo-iop-2', ID_Inversion: 'demo-inv-2', Fecha: fechaRelativa_(60), Tipo: 'Compra', Cantidad: 200, Precio: 10000, Valor: 2000000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false }
+    { ID_Operacion: 'demo-iop-2', ID_Inversion: 'demo-inv-2', Fecha: fechaRelativa_(60), Tipo: 'Compra', Cantidad: 200, Precio: 10000, Valor: 2000000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false },
+    { ID_Operacion: 'demo-iop-3', ID_Inversion: '', Fecha: fechaRelativa_(30), Tipo: 'Deposito', Cantidad: '', Precio: '', Valor: 1500000, Comision: 0, ID_Bolsillo: '', ID_Mov: '', Notas: 'Disponible inicial', Anulado: false, ID_Broker: 'demo-brk-1', Valor_Origen: 1500000, Sin_Efectivo: false },
+    { ID_Operacion: 'demo-iop-4', ID_Inversion: 'demo-inv-3', Fecha: fechaRelativa_(25), Tipo: 'Compra', Cantidad: 400, Precio: 2000, Valor: 800000, Comision: 6000, ID_Bolsillo: '', ID_Mov: '', Notas: '', Anulado: false, ID_Broker: 'demo-brk-1', Valor_Origen: 806000, Sin_Efectivo: false }
   ]);
   retirarParaGastos('demo-cta-4', 'demo-bol-casa', 150000, fechaRelativa_(4), 'Para gastos (demo)');
 

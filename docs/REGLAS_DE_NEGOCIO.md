@@ -173,7 +173,14 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 - **Búsqueda:**
   - El catálogo de la app busca por nombre, símbolo o palabras (sin tildes).
   - *Buscar en Google Finance* prueba el texto tal cual y con `NASDAQ:`, `NYSE:`, `NYSEARCA:`, `BVC:` y como `CURRENCY:<texto>USD` (hoja auxiliar `Buscar_Google`). Deja uno por activo, el que tiene bolsa.
-- **Patrimonio:** lo invertido suma los CDT vigentes y el valor de las inversiones activas. El patrimonio de 12 meses usa el último precio conocido al cierre de cada mes.
+- **Brokers** (1.19). Un broker es como un banco para invertir:
+  - **Disponible** (en la moneda del broker) = depósitos − retiros − compras (total + comisión) + ventas (total − comisión) + dividendos. No se guarda: se calcula con las operaciones.
+  - Al crearlo se anota el disponible de hoy y al agregar una inversión, **cuántas tiene** y su precio promedio (opcional): quedan como `Sin_Efectivo` y no mueven dinero. *Ajustar disponible* y *Ajustar cantidad* anotan la diferencia con lo que muestra la plataforma, también sin mover dinero; quitar unidades así no es una venta (sale costo en proporción, sin ganancia).
+  - Las compras, ventas y dividendos de una inversión en un broker salen o entran del disponible, en su moneda, sin bolsillo. `Valor` y `Comision` se guardan en pesos con la tasa del día para el costo y la ganancia. Sin la tasa de la moneda del broker no se registran (se pide en Ajustes → Divisas).
+  - *Depositar* y *Retirar* pueden mover dinero de un bolsillo (ajustes `Broker_Deposito` y `Broker_Retiro`, que no son gasto ni ingreso). Si el bolsillo está en otra moneda se anota cuánto salió o llegó en ella. No se retira más que el disponible.
+  - **Valor del broker** = disponible + cantidad × precio de cada inversión (Google Finance o manual). En su moneda usa el precio directo si está en la misma moneda; en pesos, la tasa de Divisas.
+  - Las inversiones de antes (sin broker) siguen como *Otras inversiones*, con su dinero en bolsillos, como siempre. Se pueden llevar a un broker editándolas: sus operaciones viejas no tocan el disponible.
+- **Patrimonio:** lo invertido suma los CDT vigentes, el valor de las inversiones activas y el disponible de los brokers en pesos. El patrimonio de 12 meses usa el último precio conocido al cierre de cada mes y el disponible de cada broker a esa fecha.
 
 ## 13. Calculadora
 - Todo se calcula en el navegador (`CALC` en `js_herramientas.html`, con pruebas).

@@ -160,6 +160,12 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 
 ## 13. Inversiones y Calculadora
 **Mi dinero → Inversiones.** Acciones, ETF, cripto, fondos…
+- **Brokers** (Trii, Hapi, Interactive Brokers, eToro…). Funcionan como un banco para invertir:
+  - *Agregar un broker*: nombre, moneda de la cuenta (pesos o dólares) y el **dinero disponible** que tienes hoy.
+  - En el broker, *Agregar acción o fondo*: búscala y escribe **cuántas tienes** (y, si quieres, el precio promedio al que las compraste). Con el precio de Google Finance, Moni calcula cuánto valen.
+  - *Depositar* y *Retirar*: el dinero llega o sale del disponible y, si eliges un bolsillo, también de él (no es gasto ni ingreso). *Ajustar disponible* lo deja como lo ves en la plataforma.
+  - *Compré* y *Vendí* en una inversión del broker usan su disponible, en su moneda. *Ajustar cantidad* corrige cuántas tienes sin mover dinero.
+  - La pantalla de Inversiones muestra cada broker con su disponible y sus inversiones, y abajo *Otras inversiones* (las que no están en un broker).
 - **Agregar una inversión:** **búscala** por nombre o símbolo (Apple, bitcoin, S&P 500, Ecopetrol, VOO). Moni sugiere al instante activos conocidos (acciones de EE. UU. y de la BVC, ETF y cripto), y si no está, *Buscar en Google Finance* prueba el símbolo en las bolsas más comunes y te muestra el nombre y el precio de hoy. Al elegir uno se llenan el nombre, el tipo, el símbolo y la moneda. También puedes escribir todo a mano.
 - **Compré, Vendí, Dividendo:**
   - Anotas las unidades, el precio por unidad (opcional), lo que pagaste o recibiste en pesos y la comisión.

@@ -41,6 +41,8 @@ function cabeceraDestacada(etq, cifra, sub, barra) {
 const dk = v => Math.abs(v) >= 1e6 ? esc(compactoMoneda(v, 'COP')) : dinero(v);
 /** Qué significa cada cifra clave (el botón "i" junto a su nombre). */
 const INFO_CIFRAS = {
+  'Disponible': 'El dinero que tienes en el broker sin invertir, en su moneda. Sube con depósitos, ventas y dividendos; baja con compras y retiros.',
+  'En inversiones': 'Lo que valen hoy tus acciones y fondos en este broker: cantidad × precio de Google Finance (o el que escribiste).',
   'Este mes': 'Lo que llevas apartado este mes frente a lo que planeaste apartar.',
   'En curso': 'Metas activas: cada una entra a tu presupuesto del mes con lo que planeaste.',
   'Atrasadas': 'Metas en las que llevas menos de lo que decía su plan hasta el mes pasado.',

@@ -1,6 +1,6 @@
 # Moni
 
-Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones, metas de ahorro, lista de deseos, inversiones y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.18.2**.
+Finanzas personales sobre **Google Sheets** con una aplicación web hecha en **Google Apps Script**. Ordena tus bolsillos, presupuesto, tarjetas, créditos, suscripciones, metas de ahorro, lista de deseos, inversiones con brokers y nómina colombiana, con una interfaz pensada para el celular y el computador. Versión **1.19.0**.
 
 - **Tus datos son tuyos:** viven en un Google Sheet de tu cuenta. No hay servidores de terceros.
 - **Una persona, una pareja o muchas:** una hoja compartida, o una app única con **una hoja por persona** ([ver](docs/MULTIUSUARIO.md)).
@@ -60,7 +60,7 @@ Se prueba en desarrollo y, cuando está bien, se publica en producción (sin CI/
 | [Glosario](docs/GLOSARIO.md) | Vocabulario de la app |
 | [Arquitectura](docs/ARQUITECTURA.md) | Capas, modelo de datos, convenciones |
 | [API interna](docs/API.md) | Funciones que el frontend llama |
-| [Esquema de datos](docs/ESQUEMA.md) | Las 37 tablas, columna por columna |
+| [Esquema de datos](docs/ESQUEMA.md) | Las 38 tablas, columna por columna |
 | [Desarrollo](docs/DESARROLLO.md) | Pruebas, vista previa local, cómo extender |
 | [Seguridad y privacidad](SECURITY.md) | Acceso, permisos y datos |
 | [Comparativa de UX](docs/UX_COMPARATIVA.md) | Evaluación de usabilidad frente a otras apps |

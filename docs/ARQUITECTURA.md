@@ -21,7 +21,7 @@
    Repo.gs (libro abierto una vez por petición, lectura memorizada, caché, escrituras con bloqueo)
         │
         ▼
-   Google Sheet de la persona (37 tablas)
+   Google Sheet de la persona (38 tablas)
 ```
 
 **Una aplicación, muchas hojas.** Con `MODO_MULTIUSUARIO` la web app corre *como la persona que accede* y cada una trabaja con **su** hoja: el ID, la caché, el bloqueo y los activadores son de esa persona (ver [MULTIUSUARIO.md](MULTIUSUARIO.md)). Sin esa propiedad, la app usa la hoja única del script.
@@ -42,7 +42,7 @@
 |---|---|
 | `Code.gs` | `doGet`, control de acceso, menú del Sheet |
 | `Api.gs` | Funciones públicas; validan la entrada y responden con `responder_` |
-| `Setup.gs` | Esquema de las 37 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
+| `Setup.gs` | Esquema de las 38 tablas, enumeraciones, columnas de texto, parámetros por defecto, instalación idempotente por partes y migración de columnas |
 | `Repo.gs` | Lectura (memorizada por petición), inserción, actualización (`updateRow`, `updateRows_` en lote, comprobando el ID de cada registro), bloqueo reentrante (`tomarBloqueo`, `conBloqueo_`), operaciones todo o nada (`transaccion_`), resultados derivados memorizados (`memoDerivado_`), caché y propiedades de la persona |
 | `Fechas.gs` | Fechas y meses en un solo lugar: zona horaria, hoy, sumar días o meses, días entre fechas, meses anteriores |
 | `Finanzas.gs` | Fórmulas compartidas: tasa diaria, interés compuesto, EA ↔ tasa periódica, cuota francesa y plazo |
@@ -74,12 +74,12 @@
 | `Reinicio.gs` | Borrado total de la información de la persona (con frase de confirmación) |
 
 ## Modelo de datos (resumen)
-37 tablas en cinco grupos:
+38 tablas en cinco grupos:
 - **Configuración:** Config, Bancos, Cuentas, Bolsillos, Tarjetas, Categorias, Personas, Inmuebles, Suscripciones (con los servicios y empresas de pago desde 1.15; `Servicios_Publicos` y `Empresas_Pago` quedan como pestañas viejas sin uso), CDTs, Ingresos_Recurrentes, Escenarios.
 - **Operación:** Movimientos, Compras_TC, Extractos, Presupuesto_Plantilla, Presupuesto_Mes.
 - **Nómina:** Subsidios, Nomina_Escenarios, Nomina_Conceptos, Nomina_Pagos, Nomina_Pagos_Detalle.
 - **Créditos:** Creditos, Creditos_Cronograma, Creditos_Pagos.
-- **Otros:** Regalos (Lista de deseos), Deseos_Ideas, Metas, Inversiones, Inversiones_Operaciones, Inversiones_Precios, Reportes, Log, Cargos_Reglas.
+- **Otros:** Regalos (Lista de deseos), Deseos_Ideas, Metas, Brokers, Inversiones, Inversiones_Operaciones, Inversiones_Precios, Reportes, Log, Cargos_Reglas.
 
 Además hay pestañas auxiliares que no son tablas de datos: `Tasas_Google` (fórmulas de `GOOGLEFINANCE`) y las hojas de consulta `Vista_Bolsillos` y `Vista_Anual`.
 

@@ -1,7 +1,7 @@
 # Moni — Especificación del esquema
 
 Base de datos: un Google Sheet por persona ("Moni — mis finanzas").
-El script de instalación (`setupDatabase`) crea estas 37 tablas, una por pestaña, con los encabezados exactos de abajo.
+El script de instalación (`setupDatabase`) crea estas 38 tablas, una por pestaña, con los encabezados exactos de abajo.
 
 ## Convenciones
 
@@ -51,7 +51,7 @@ Parámetros de la persona (clave → valor). La tabla de abajo sale de `DEFAULT_
 | `Tasa_Interes_Cesantias` | `0.12` | Nomina | Tasa legal de intereses de cesantías |
 | `Cesantias_Dias_Actual` | `360` | Nomina | Días del año de cesantías con el sueldo actual (360 = todo el año; menos si el sueldo cambió) |
 | `Cesantias_Sueldo_Anterior` | `0` | Nomina | Sueldo que tenías antes del cambio, para los días restantes del año de cesantías (0 = sin cambio) |
-| `Credito_Metodo_Tasa` | `Excel` | Creditos | Conversión de tasa EA a periódica: Excel o Exacta |
+| `Credito_Metodo_Tasa` | `Exacta` | Creditos | Conversión de tasa EA a periódica en los créditos de autopago: `Exacta`, (1 + EA)^(1/n) − 1, o `Excel` (la del Excel de referencia). Las hojas instaladas antes de la 1.19 conservan su valor. Los créditos bancarios siempre usan la exacta |
 | `Tasa_USD` | — | Divisas | Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos *(la gestiona la app)* |
 | `Tasa_USD_Fecha` | — | Divisas | Fecha en que anotaste la tasa del dólar *(la gestiona la app)* |
 | `Tasa_EUR` | — | Divisas | Pesos que vale 1 euro *(la gestiona la app)* |
@@ -117,9 +117,9 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - `Ref` (desde 1.10.1): vínculo con lo que generó el movimiento (`Crédito <id>`, `Extracto <id>`, `Regalo <id>`, `Suscripción <id>`, `Ingreso recurrente <id>`, `Distribución <mes>`, `Pago <id>`, `Abono <id>`, `Cargo <id>`, y desde 1.16 `Meta <id>` e `Inversión <id de la operación>`). Antes vivía solo en `Notas`; los movimientos viejos sin `Ref` se siguen leyendo de `Notas`, y si la persona edita esas notas el vínculo se copia a `Ref` primero.
 - `Afecta_Saldos`: `FALSE` = movimiento **histórico** (cuenta en informes, no en saldos); vacío o `TRUE` = afecta saldos (los anteriores a la columna).
 - `Tipo_Mov`: `Gasto`, `Ingreso`, `Transferencia`, `Ajuste`.
-- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion`, `Comision`, `CDT_Apertura`, `CDT_Retorno`, `Impuesto`, `Cambio_Divisa`, `Cuota_Manejo`, `Seguro`, `Desembolso`, y desde 1.16 `Inversion_Compra`, `Inversion_Venta`, `Dividendo` y `Aporte_Meta`.
+- `Subtipo` (opcional): `Para_Gastos`, `Reposicion`, `Interes`, `Retencion`, `GMF`, `Pago_TC`, `Reserva_TC`, `Pago_Cuota`, `Nomina`, `Distribucion`, `Conversion`, `Comision`, `CDT_Apertura`, `CDT_Retorno`, `Impuesto`, `Cambio_Divisa`, `Cuota_Manejo`, `Seguro`, `Desembolso`, y desde 1.16 `Inversion_Compra`, `Inversion_Venta`, `Dividendo` y `Aporte_Meta`, y desde 1.19 `Broker_Deposito` y `Broker_Retiro`.
   - `Conversion`: dos filas con el mismo `ID_Grupo`, cada una en la divisa de su bolsillo, que no suman cero; la tasa implícita va en `Notas`.
-  - **No cuentan como ingreso ni como gasto** (`SUBTIPOS_INVERSION`): `CDT_Apertura`, `CDT_Retorno`, `Desembolso`, `Inversion_Compra` e `Inversion_Venta`. El dinero solo cambia de lugar.
+  - **No cuentan como ingreso ni como gasto** (`SUBTIPOS_INVERSION`): `CDT_Apertura`, `CDT_Retorno`, `Desembolso`, `Inversion_Compra`, `Inversion_Venta`, `Broker_Deposito` y `Broker_Retiro`. El dinero solo cambia de lugar.
 - `ID_Grupo`: une las filas de una misma operación (transferencia, pago de extracto, pago de cuota). **La suma de un grupo de transferencia interna es 0.**
 - `ID_Item_Ppto`: enlaza el gasto con su renglón del presupuesto del mes.
 
@@ -195,20 +195,28 @@ Escenarios de presupuesto (por ejemplo `Normal` y `Contingencia`). Exactamente u
 - **Usado**: los gastos con esa misma `Ref`. Se muestra aparte y no baja lo ahorrado.
 - Cada meta activa con plan en un mes agrega a ese presupuesto un renglón de tipo `Fondo` hacia su bolsillo (`agregarMetasAlMes`, repetible y sin duplicar).
 
-**Inversiones** (desde 1.16) — `ID_Inversion, Nombre, Tipo, Simbolo, Divisa, Precio_Manual, Fecha_Precio_Manual, Precio_Google, Fecha_Precio_Google, Notas, Activo, Orden`
+**Brokers** (desde 1.19) — `ID_Broker, Nombre, Divisa, Notas, Activo, Orden`
+- La plataforma o comisionista donde la persona invierte. `Divisa`: la moneda de su cuenta (COP, USD o EUR).
+- No guarda saldo: el **disponible** se calcula con sus operaciones en `Inversiones_Operaciones` (depósitos − retiros − compras + ventas + dividendos, en `Valor_Origen`).
+- No se desactiva con disponible distinto de 0 ni con inversiones con unidades. La moneda no cambia si ya tiene operaciones.
+
+**Inversiones** (desde 1.16) — `ID_Inversion, Nombre, Tipo, Simbolo, Divisa, Precio_Manual, Fecha_Precio_Manual, Precio_Google, Fecha_Precio_Google, Notas, Activo, Orden, ID_Broker`
+- `ID_Broker` (1.19): el broker donde está. Vacío en las de antes: quedan como *Otras inversiones*, igual que siempre.
 - `Tipo`: `Accion`, `ETF`, `Cripto`, `Fondo`, `Bono` u `Otro`.
 - `Simbolo`: el de Google Finance, por ejemplo `NASDAQ:AAPL` o `CURRENCY:BTCUSD`.
 - `Divisa`: la moneda del precio (COP, USD o EUR). Se pasa a pesos con `Config.Tasa_<divisa>`.
 - El precio vigente es el más reciente entre el de Google, el manual y el de la última operación.
 
-**Inversiones_Operaciones** (desde 1.16) — `ID_Operacion, ID_Inversion, Fecha, Tipo, Cantidad, Precio, Valor, Comision, ID_Bolsillo, ID_Mov, Notas, Anulado`
-- `Tipo`: `Compra`, `Venta` o `Dividendo`.
+**Inversiones_Operaciones** (desde 1.16) — `ID_Operacion, ID_Inversion, Fecha, Tipo, Cantidad, Precio, Valor, Comision, ID_Bolsillo, ID_Mov, Notas, Anulado, ID_Broker, Valor_Origen, Sin_Efectivo`
+- `Tipo`: `Compra`, `Venta` o `Dividendo`; desde 1.19 también `Deposito` y `Retiro` (dinero que entra o sale de un broker, sin `ID_Inversion`).
+- `ID_Broker`, `Valor_Origen` y `Sin_Efectivo` (1.19): la operación de un broker mueve su disponible por `Valor_Origen`, en la moneda del broker (compra: total + comisión; venta: total − comisión). `Sin_Efectivo = TRUE` marca unidades que la persona ya tenía o una cantidad corregida: no tocan el disponible. Las operaciones de antes quedan con estas columnas vacías.
 - `Valor` va en pesos y `Precio` en la `Divisa` de la inversión.
 - La posición se calcula con el **costo promedio**.
 - Movimientos de dinero, solo si la operación tiene bolsillo:
   - Una compra es un `Ajuste` negativo con subtipo `Inversion_Compra`.
   - Una venta es un `Ajuste` positivo con subtipo `Inversion_Venta`.
   - Ninguno de los dos es ingreso ni gasto (`SUBTIPOS_INVERSION`).
+  - Un depósito en un broker desde un bolsillo es un `Ajuste` negativo con subtipo `Broker_Deposito`; un retiro hacia un bolsillo, uno positivo con `Broker_Retiro`. Tampoco son ingreso ni gasto.
   - Un dividendo es un `Ingreso` con subtipo `Dividendo`.
 - Todos llevan `Ref = "Inversión <ID_Operacion>"`.
 
