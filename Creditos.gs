@@ -116,7 +116,9 @@ function normalizarCredito_(c) {
   const periodicidad = opcion_(c.Periodicidad || 'Mensual', ENUMS.Creditos.Periodicidad, 'La periodicidad');
   const n = numero_(c.Num_Periodos, 'El número de cuotas', { requerido: true, entero: true, min: 1, max: 360 });
   const inicio = fechaMovimiento_(c.Fecha_Inicio);
-  const metodo = opcion_(c.Metodo_Tasa || cfgValor_('Credito_Metodo_Tasa') || 'Excel', ENUMS.Creditos.Metodo_Tasa, 'El método de tasa');
+  // Un banco convierte la EA con la equivalencia exacta: (1 + EA)^(1/n) − 1. El método "Excel" (nominal semestral ÷ n)
+  // solo se conserva para los créditos de autopago, que reproducen el Excel de referencia de quien ya lo usaba.
+  const metodo = tipo === 'Bancario' ? 'Exacta' : opcion_(c.Metodo_Tasa || cfgValor_('Credito_Metodo_Tasa') || 'Excel', ENUMS.Creditos.Metodo_Tasa, 'El método de tasa');
 
   let tasa;
   if (c.Tasa_Periodica !== undefined && c.Tasa_Periodica !== '' && c.Tasa_Periodica !== null) {
@@ -448,21 +450,54 @@ function creditosTasaPorRevisar_() {
 }
 
 /**
+ * Hasta la 1.18 los créditos bancarios convertían la EA con el método "Excel" (nominal semestral ÷ periodos): 24 % EA
+ * daba 1,8925 % mensual, que en realidad equivale a 25,2 % EA, y la cuota no cuadraba con la del banco. Los créditos
+ * bancarios activos con ese método se marcan para que la persona decida recalcular las cuotas pendientes con la
+ * equivalencia exacta (misma EA). Nada cambia solo.
+ */
+function metodoPorRevisar_(c) {
+  return c.Estado === 'Activo' && esBancario_(c) && texto_(c.Metodo_Tasa || 'Excel') !== 'Exacta' && texto_(c.Notas).indexOf('[método revisado]') === -1;
+}
+
+function creditosMetodoPorRevisar_() {
+  return getTableData('Creditos').filter(metodoPorRevisar_);
+}
+
+/** Qué pasaría al pasar a la equivalencia exacta: la tasa y la cuota pendiente nuevas (para mostrarlas antes de decidir). */
+function propuestaMetodoExacto_(c, vigente) {
+  const pendientes = vigente.filter(f => f.Estado === 'Pendiente');
+  if (!pendientes.length) return null;
+  const i = Number(c.Tasa_Periodica) || 0;
+  const ea = eaDesdeTasa_(i, c.Periodicidad, c.Metodo_Tasa || 'Excel');
+  const tasa = Math.round(tasaDesdeEA_(ea, c.Periodicidad, 'Exacta') * 1e9) / 1e9;
+  return { EA: Math.round(ea * 1e6) / 1e6, tasaActual: i, tasaExacta: tasa, cuotaActual: Number(pendientes[0].Cuota),
+    cuotaExacta: cuotaFrancesa_(Number(pendientes[0].Saldo_Inicial), tasa, pendientes.length), cuotas: pendientes.length };
+}
+
+/**
  * Corrige la tasa de un crédito: las cuotas pendientes se rehacen con la tasa nueva (mismo número de cuotas pendientes,
  * desde el saldo actual). Las pagadas, los pagos y los movimientos no se tocan. Sin tasa nueva solo marca "revisada".
+ * Con `metodo: 'Exacta'` y sin tasa, conserva la EA y pasa a la equivalencia exacta (créditos bancarios de antes de la 1.19).
  * @param {string} idCredito
- * @param {Object} d { EA?, Tasa_Periodica?, soloConfirmar? }
+ * @param {Object} d { EA?, Tasa_Periodica?, metodo?, soloConfirmar? }
  */
 function corregirTasaCredito(idCredito, d) {
   const c = creditoActivo_(idCredito);
   if (c.Estado !== 'Activo') throw new Error('Solo se puede corregir la tasa de un crédito activo.');
   const x = d || {};
-  const notas = (texto_(c.Notas) + ' [tasa revisada]').trim().slice(0, 300);
+  // Marca de revisión en las notas: la de la tasa redondeada o la del método de conversión.
+  const marca = x.metodo ? ' [método revisado]' : ' [tasa revisada]';
+  const conMarca = n => texto_(n).indexOf(marca.trim()) === -1 ? (texto_(n) + marca).trim().slice(0, 300) : texto_(n);
+  const notas = conMarca(c.Notas);
   if (x.soloConfirmar) { updateRow('Creditos', c, { Notas: notas }); return { idCredito: idCredito, cambio: false }; }
 
+  // Los bancarios (y quien pide pasar a la equivalencia exacta) quedan con el método exacto.
+  const metodoActual = texto_(c.Metodo_Tasa || 'Excel');
+  const metodo = x.metodo === 'Exacta' || esBancario_(c) ? 'Exacta' : metodoActual;
   let tasa;
   if (x.Tasa_Periodica !== undefined && x.Tasa_Periodica !== '') tasa = tasa_(x.Tasa_Periodica, 'La tasa por periodo', { min: 0, max: 1 });
-  else if (x.EA !== undefined && x.EA !== '') tasa = tasaDesdeEA_(tasa_(x.EA, 'La tasa efectiva anual', { min: 0, max: 5 }), c.Periodicidad, c.Metodo_Tasa || 'Excel');
+  else if (x.EA !== undefined && x.EA !== '') tasa = tasaDesdeEA_(tasa_(x.EA, 'La tasa efectiva anual', { min: 0, max: 5 }), c.Periodicidad, metodo);
+  else if (x.metodo === 'Exacta') tasa = tasaDesdeEA_(eaDesdeTasa_(Number(c.Tasa_Periodica) || 0, c.Periodicidad, metodoActual), c.Periodicidad, 'Exacta'); // misma EA
   else throw new Error('Escribe la tasa correcta.');
   tasa = Math.round(tasa * 1e9) / 1e9;
 
@@ -478,7 +513,7 @@ function corregirTasaCredito(idCredito, d) {
   return conBloqueo_(() => {
     updateRows_('Creditos_Cronograma', pendientes.map(f => ({ fila: f, cambios: { Estado: 'Reemplazada' } })));
     insertRows('Creditos_Cronograma', nuevas.map(f => filaCronograma_(idCredito, version, f)));
-    updateRow('Creditos', c, { Tasa_Periodica: tasa, Cuota_Fija: cuota, Num_Periodos: Number(primera.Num) - 1 + nuevas.length, Notas: notas });
+    updateRow('Creditos', c, { Tasa_Periodica: tasa, Cuota_Fija: cuota, Num_Periodos: Number(primera.Num) - 1 + nuevas.length, Notas: notas, Metodo_Tasa: metodo });
     return { idCredito: idCredito, cambio: true, tasa: tasa, cuota: cuota, cuotas: nuevas.length };
   });
 }
@@ -532,7 +567,8 @@ function resumenCredito_(c, vigente, personas, cuentas) {
     avance: monto > 0 ? Math.min(1, Math.round((monto - (c.Estado === 'Activo' ? saldo : 0)) / monto * 1000) / 1000) : 0,
     Tipo_Credito: esBancario_(c) ? 'Bancario' : 'Autopago', ID_Banco: c.ID_Banco || '', Cargos_Cuota: Number(c.Cargos_Cuota) || 0, Detalle_Cargos: c.Detalle_Cargos || '',
     EA: Math.round(eaDesdeTasa_(Number(c.Tasa_Periodica) || 0, c.Periodicidad, c.Metodo_Tasa) * 1e6) / 1e6,
-    tasaPorRevisar: tasaPareceRedondeada_(c)
+    tasaPorRevisar: tasaPareceRedondeada_(c),
+    metodoPorRevisar: metodoPorRevisar_(c) ? propuestaMetodoExacto_(c, vigente) : null
   };
 }
 

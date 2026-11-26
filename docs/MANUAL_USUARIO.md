@@ -171,7 +171,7 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 - **Qué ves:** cuánto valen hoy, cuánto pagaste (costo promedio), la ganancia, lo ganado al vender, los dividendos, en qué tienes invertido y la evolución de los últimos 12 meses.
 - Las inversiones suman a tu **patrimonio neto** y a *Análisis*.
 
-**Analizar → Calculadora.** Préstamo (cuota, intereses y cómo baja el saldo), ahorro en el tiempo, *¿Cuánto ahorrar?* para una meta (con *Crear esta meta*), CDT (intereses, retención y neto) y conversión de tasas (EA, mensual, nominal).
+**Analizar → Calculadora.** Préstamo (cuota, intereses, seguros, cobros al desembolso, costo efectivo anual y cómo baja el saldo), ahorro en el tiempo (aportando al inicio o al final del mes), *¿Cuánto ahorrar?* para una meta (con *Crear esta meta*), CDT (año de 365 o 360 días, intereses al vencimiento, cada mes o cada trimestre, retención y neto) y conversión de tasas entre los 11 tipos (EA, efectivas, nominales vencidas y anticipadas). Escribe la tasa como te la da el banco y elige su tipo: Moni la convierte con las fórmulas de equivalencia, así que la cuota cuadra con la del banco.
 
 ## 14. Análisis, vista anual y gráficos
 **Analizar → Vista anual:** mes a mes, ingreso, plan, real, ahorro, tarjetas y restante. Toca un mes para abrir su presupuesto.

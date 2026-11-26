@@ -37,9 +37,10 @@ module.exports = function (prueba, assert, crearEntorno) {
     const x = escenario();
     const r = nuevoCredito(x, { EA: 0.095 });
     const c = x.e.llamar('obtenerCredito', r.idCredito).credito;
-    const esperado = x.e.llamar('tasaDesdeEA_', 0.095, 'Mensual', 'Excel');
+    const esperado = x.e.llamar('tasaDesdeEA_', 0.095, 'Mensual', 'Exacta');
     assert.ok(Math.abs(c.Tasa_Periodica - esperado) < 1e-9, 'tasa periódica de 9,5 % EA');
-    assert.notStrictEqual(Number(c.Tasa_Periodica.toFixed(9)), Number(x.e.llamar('tasaDesdeEA_', 0.1, 'Mensual', 'Excel').toFixed(9)));
+    assert.ok(Math.abs(c.EA - 0.095) < 1e-6, 'la EA se conserva');
+    assert.notStrictEqual(Number(c.Tasa_Periodica.toFixed(9)), Number(x.e.llamar('tasaDesdeEA_', 0.1, 'Mensual', 'Exacta').toFixed(9)));
   });
 
   prueba('tasas: una tasa por periodo de 0,4 % ya no se vuelve 0 %', () => {
@@ -91,6 +92,69 @@ module.exports = function (prueba, assert, crearEntorno) {
     x.e.llamar('corregirTasaCredito', r.idCredito, { soloConfirmar: true });
     assert.deepStrictEqual(x.e.llamar('obtenerCredito', r.idCredito).cronograma, antes);
     assert.ok(!x.e.llamar('obtenerAvisos_').some(a => a.id === 'tasa_credito_' + r.idCredito));
+  });
+
+  prueba('tasas: un crédito bancario usa la equivalencia exacta aunque la configuración diga Excel', () => {
+    const x = escenario();
+    x.e.ejecutar("updateRow('Config', getTableData('Config').find(c => c.Clave === 'Credito_Metodo_Tasa'), { Valor: 'Excel' })");
+    const r = x.e.llamar('registrarCredito', { Tipo_Credito: 'Bancario', Nombre: 'Libre', Monto: 10000000, EA: 0.24, Periodicidad: 'Mensual', Num_Periodos: 36,
+      Fecha_Inicio: hoy(), ID_Bolsillo_Pago: x.pagos.ID_Bolsillo });
+    const c = x.e.llamar('obtenerCredito', r.idCredito).credito;
+    assert.ok(Math.abs(c.Tasa_Periodica - 0.018087582) < 1e-9, '24 % EA → 1,8088 % mensual, no 1,8925 %');
+    assert.strictEqual(r.cuota, x.e.llamar('cuotaFrancesa_', 10000000, c.Tasa_Periodica, 36));
+    assert.strictEqual(c.metodoPorRevisar, null);
+    // El autopago sigue con lo que diga la configuración (el Excel de referencia de quien ya usaba Moni)
+    const a = nuevoCredito(x, { EA: 0.10 });
+    assert.ok(Math.abs(x.e.llamar('obtenerCredito', a.idCredito).credito.Tasa_Periodica - x.e.llamar('tasaDesdeEA_', 0.10, 'Mensual', 'Excel')) < 1e-9);
+  });
+
+  prueba('tasas: un crédito bancario viejo con el método aproximado avisa y se recalcula con la misma EA solo si la persona quiere', () => {
+    const x = escenario();
+    const r = x.e.llamar('registrarCredito', { Tipo_Credito: 'Bancario', Nombre: 'Carro', Monto: 10000000, EA: 0.24, Periodicidad: 'Mensual', Num_Periodos: 36,
+      Fecha_Inicio: hace(2), ID_Bolsillo_Pago: x.pagos.ID_Bolsillo });
+    // Simula un crédito bancario creado en la 1.13–1.18, con la tasa convertida por el método "Excel"
+    const h = x.e.hojas.Creditos.filas, col = k => h[0].indexOf(k);
+    h[1][col('Metodo_Tasa')] = 'Excel';
+    h[1][col('Tasa_Periodica')] = x.e.llamar('tasaDesdeEA_', 0.24, 'Mensual', 'Excel');
+    x.e.ejecutar('invalidateCache()');
+    x.e.llamar('corregirTasaCredito', r.idCredito, { Tasa_Periodica: h[1][col('Tasa_Periodica')] }); // cronograma con la tasa vieja
+    h[1][col('Metodo_Tasa')] = 'Excel';
+    h[1][col('Notas')] = '';
+    x.e.ejecutar('invalidateCache()');
+    x.e.llamar('registrarPagoCredito', r.idCredito, undefined, hoy());
+    const antes = x.e.llamar('obtenerCredito', r.idCredito);
+    const mp = antes.credito.metodoPorRevisar;
+    assert.ok(mp, 'propone revisar el método');
+    assert.ok(Math.abs(mp.EA - 0.24) < 1e-6 && mp.cuotaExacta < mp.cuotaActual, 'misma EA, cuota menor');
+    assert.ok(x.e.llamar('obtenerAvisos_').some(a => a.id === 'metodo_credito_' + r.idCredito), 'aparece el aviso');
+    const saldo = x.saldo(x.pagos.ID_Bolsillo);
+    x.e.llamar('corregirTasaCredito', r.idCredito, { metodo: 'Exacta' });
+    const d = x.e.llamar('obtenerCredito', r.idCredito);
+    assert.deepStrictEqual(d.cronograma[0], antes.cronograma[0], 'la cuota pagada no cambia');
+    assert.ok(Math.abs(d.credito.Tasa_Periodica - 0.018087582) < 1e-9);
+    assert.ok(Math.abs(d.credito.EA - 0.24) < 1e-6, 'conserva la EA');
+    assert.strictEqual(d.credito.Cuota_Fija, mp.cuotaExacta);
+    assert.strictEqual(d.cronograma.length, 36);
+    assert.ok(Math.abs(d.cronograma[35].Saldo_Final) < 0.01, 'termina en cero');
+    assert.strictEqual(x.saldo(x.pagos.ID_Bolsillo), saldo, 'no mueve dinero');
+    assert.strictEqual(d.credito.metodoPorRevisar, null);
+    assert.ok(!x.e.llamar('obtenerAvisos_').some(a => a.id === 'metodo_credito_' + r.idCredito), 'el aviso se va');
+  });
+
+  prueba('tasas: dejar el método como está solo quita el aviso del crédito bancario', () => {
+    const x = escenario();
+    const r = x.e.llamar('registrarCredito', { Tipo_Credito: 'Bancario', Nombre: 'Moto', Monto: 5000000, EA: 0.2, Periodicidad: 'Mensual', Num_Periodos: 12,
+      Fecha_Inicio: hoy(), ID_Bolsillo_Pago: x.pagos.ID_Bolsillo });
+    const h = x.e.hojas.Creditos.filas;
+    h[1][h[0].indexOf('Metodo_Tasa')] = 'Excel';
+    x.e.ejecutar('invalidateCache()');
+    const antes = x.e.llamar('obtenerCredito', r.idCredito).cronograma;
+    assert.ok(x.e.llamar('obtenerCredito', r.idCredito).credito.metodoPorRevisar);
+    x.e.llamar('corregirTasaCredito', r.idCredito, { metodo: 'Exacta', soloConfirmar: true });
+    const d = x.e.llamar('obtenerCredito', r.idCredito);
+    assert.deepStrictEqual(d.cronograma, antes);
+    assert.strictEqual(d.credito.metodoPorRevisar, null);
+    assert.ok(!x.e.llamar('obtenerAvisos_').some(a => a.id === 'metodo_credito_' + r.idCredito));
   });
 
   // ---------------------------------------------------------------- filas

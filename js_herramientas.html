@@ -7,50 +7,124 @@
 // ---------------------------------------------------------------------------
 
 // <calc>
+/**
+ * Fórmulas de ingeniería económica (equivalencia de tasas, anualidades y valor del dinero en el tiempo).
+ *   - Tasa efectiva periódica equivalente a una EA:  i_p = (1 + EA)^(1/n) − 1   (n = periodos por año)
+ *   - Nominal anual capitalizable n veces:            j = i_p · n   (i_p = j / n)
+ *   - Anticipada ↔ vencida:                           i_v = i_a / (1 − i_a)   ·   i_a = i_v / (1 + i_v)
+ *   - Cuota fija (anualidad vencida):                 A = P · i / (1 − (1 + i)^−n)
+ *   - Valor futuro de una anualidad:                  F = A · ((1 + i)^n − 1) / i   (× (1 + i) si es anticipada)
+ */
+const TIPOS_TASA = {
+  EA: { n: 1, nombre: 'Efectiva anual (EA)' },
+  SV: { n: 2, nombre: 'Efectiva semestral (vencida)' },
+  TV: { n: 4, nombre: 'Efectiva trimestral (vencida)' },
+  MV: { n: 12, nombre: 'Efectiva mensual (MV)' },
+  NASV: { n: 2, nominal: true, nombre: 'Nominal anual semestre vencido (NASV)' },
+  NATV: { n: 4, nominal: true, nombre: 'Nominal anual trimestre vencido (NATV)' },
+  NAMV: { n: 12, nominal: true, nombre: 'Nominal anual mes vencido (NAMV)' },
+  TA: { n: 4, anticipada: true, nombre: 'Efectiva trimestral anticipada (TA)' },
+  MA: { n: 12, anticipada: true, nombre: 'Efectiva mensual anticipada (MA)' },
+  NATA: { n: 4, nominal: true, anticipada: true, nombre: 'Nominal anual trimestre anticipado (NATA)' },
+  NAMA: { n: 12, nominal: true, anticipada: true, nombre: 'Nominal anual mes anticipado (NAMA)' }
+};
 const CALC = {
-  // ---- Tasas ----
+  // ---- Tasas: todo se convierte pasando por la efectiva anual ----
+  /** La EA equivalente a una tasa de cualquier tipo (en decimal: 0,24 = 24 %). */
+  aEA: (tasa, tipo) => {
+    const t = TIPOS_TASA[tipo] || TIPOS_TASA.EA;
+    let p = t.nominal ? tasa / t.n : tasa;          // tasa efectiva del periodo
+    if (t.anticipada) p = p / (1 - p);              // anticipada → vencida
+    return Math.pow(1 + p, t.n) - 1;
+  },
+  /** La tasa de un tipo equivalente a una EA. */
+  desdeEA: (ea, tipo) => {
+    const t = TIPOS_TASA[tipo] || TIPOS_TASA.EA;
+    let p = Math.pow(1 + ea, 1 / t.n) - 1;          // efectiva vencida del periodo
+    if (t.anticipada) p = p / (1 + p);              // vencida → anticipada
+    return t.nominal ? p * t.n : p;
+  },
   mensualDeEA: ea => Math.pow(1 + ea, 1 / 12) - 1,
   eaDeMensual: m => Math.pow(1 + m, 12) - 1,
-  /** Tasa mensual desde lo que la persona escribe: EA, mensual vencida (MV) o nominal anual mes vencido (NAMV). */
-  mensualDe: (tasa, tipo) => tipo === 'MV' ? tasa : tipo === 'NAMV' ? tasa / 12 : CALC.mensualDeEA(tasa),
+  /** Tasa efectiva mensual (vencida) equivalente a lo que la persona escribe, de cualquier tipo. */
+  mensualDe: (tasa, tipo) => CALC.desdeEA(CALC.aEA(tasa, tipo), 'MV'),
 
-  // ---- Préstamo (cuota fija) ----
+  // ---- Préstamo (cuota fija, sistema francés) ----
   cuota: (monto, i, n) => n <= 0 ? 0 : (i === 0 ? monto / n : monto * i / (1 - Math.pow(1 + i, -n))),
-  amortizacion: (monto, i, n, extra) => {
+  /**
+   * Tabla de amortización. `seguro` puede ser un valor fijo por cuota (número) o { modo, valor }:
+   *   fijo: el mismo valor en cada cuota · saldo: un % mensual sobre el saldo de ese mes (seguro de vida deudor)
+   *   · monto: un % mensual sobre lo prestado.
+   */
+  amortizacion: (monto, i, n, seguro) => {
+    const s = typeof seguro === 'object' && seguro ? seguro : { modo: 'fijo', valor: Number(seguro) || 0 };
     const c = CALC.cuota(monto, i, n), filas = [];
     let saldo = monto;
     for (let k = 1; k <= n && saldo > 0.005; k++) {
+      const seg = s.modo === 'saldo' ? saldo * s.valor : s.modo === 'monto' ? monto * s.valor : (s.valor || 0);
       const interes = saldo * i, capital = Math.min(saldo, c - interes);
       saldo = Math.max(0, saldo - capital);
-      filas.push({ num: k, cuota: capital + interes + (extra || 0), interes: interes, capital: capital, seguros: extra || 0, saldo: saldo });
+      filas.push({ num: k, cuota: capital + interes + seg, interes: interes, capital: capital, seguros: seg, saldo: saldo });
     }
     return filas;
   },
+  /** Tasa interna de retorno mensual: la r con la que el valor presente de los pagos es igual a lo recibido. */
+  tirMensual: (recibido, pagos) => {
+    const vp = r => pagos.reduce((a, p, k) => a + p / Math.pow(1 + r, k + 1), 0);
+    if (!(recibido > 0) || !pagos.length) return 0;
+    let lo = -0.99, hi = 1;
+    for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (vp(m) > recibido) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  },
+  /** Costo efectivo anual de un crédito: la EA real con seguros y cobros iniciales incluidos (TIR de los flujos). */
+  costoEfectivoEA: (monto, cobrosIniciales, filas) => {
+    const r = CALC.tirMensual(monto - (cobrosIniciales || 0), filas.map(f => f.cuota));
+    return Math.pow(1 + r, 12) - 1;
+  },
 
   // ---- Ahorro ----
-  /** Lo que tendrás mes a mes: lo de hoy más un aporte al final de cada mes, con interés compuesto mensual. */
-  ahorro: (inicial, aporte, i, meses) => {
+  /**
+   * Lo que tendrás mes a mes: lo de hoy más un aporte cada mes, con interés compuesto mensual.
+   * Aporte vencido (al final del mes, por defecto) o anticipado (al inicio: rinde ese mes).
+   */
+  ahorro: (inicial, aporte, i, meses, anticipado) => {
     const filas = [];
     let saldo = inicial, aportes = inicial;
     for (let k = 1; k <= meses; k++) {
-      saldo = saldo * (1 + i) + aporte; aportes += aporte;
+      saldo = anticipado ? (saldo + aporte) * (1 + i) : saldo * (1 + i) + aporte;
+      aportes += aporte;
       filas.push({ mes: k, saldo: saldo, aportes: aportes, intereses: saldo - aportes });
     }
     return filas;
   },
-  /** Cuánto aportar cada mes para llegar a `objetivo` en `meses`, con lo que ya tienes. */
-  aporteParaMeta: (objetivo, inicial, i, meses) => {
+  /** Cuánto aportar cada mes para llegar a `objetivo` en `meses`, con lo que ya tienes (vencido o anticipado). */
+  aporteParaMeta: (objetivo, inicial, i, meses, anticipado) => {
     if (meses <= 0) return Math.max(0, objetivo - inicial);
     const f = Math.pow(1 + i, meses);
-    const p = i === 0 ? (objetivo - inicial) / meses : (objetivo - inicial * f) * i / (f - 1);
+    let p = i === 0 ? (objetivo - inicial) / meses : (objetivo - inicial * f) * i / (f - 1);
+    if (anticipado && i > 0) p = p / (1 + i);
     return Math.max(0, p);
   },
 
   // ---- CDT ----
-  cdt: (capital, ea, dias, retencion) => {
-    const intereses = capital * (Math.pow(1 + ea, dias / 365) - 1);
+  /**
+   * Intereses de un CDT: capital × ((1 + EA)^(días/base) − 1), con año de 365 días (o 360, el año comercial que usan
+   * algunos bancos). Si paga intereses cada mes o cada trimestre, cada pago se calcula sobre el capital (no se
+   * reinvierte), y lo que sobre del plazo se paga al final.
+   */
+  cdt: (capital, ea, dias, retencion, opc) => {
+    const o = opc || {}, base = o.base === 360 ? 360 : 365;
+    const per = o.pago === 'mensual' ? (base === 360 ? 30 : 365 / 12) : o.pago === 'trimestral' ? (base === 360 ? 90 : 365 / 4) : 0;
+    const interesDe = d => capital * (Math.pow(1 + ea, d / base) - 1);
+    let intereses, porPeriodo = 0, periodos = 0;
+    if (per > 0 && dias >= per) {
+      periodos = Math.floor(dias / per + 1e-9);
+      porPeriodo = interesDe(per);
+      intereses = porPeriodo * periodos + interesDe(Math.max(0, dias - periodos * per));
+    } else intereses = interesDe(dias);
     const ret = intereses * (retencion || 0);
-    return { intereses: intereses, retencion: ret, neto: intereses - ret, total: capital + intereses - ret, porMes: (intereses - ret) / (dias / 30) };
+    return { intereses: intereses, retencion: ret, neto: intereses - ret, total: capital + intereses - ret, porMes: (intereses - ret) / (dias / 30),
+      porPeriodo: porPeriodo * (1 - (retencion || 0)), periodos: periodos };
   }
 };
 // </calc>
@@ -62,19 +136,25 @@ const INFO_CALC = {
   'prestamo.monto': 'El dinero que te desembolsa el banco, sin intereses.',
   'prestamo.plazo': 'En cuántas cuotas mensuales lo pagas.',
   'prestamo.tasa': 'La tasa que te ofrecen. Compara siempre la efectiva anual (EA): incluye el efecto de cobrar intereses cada mes.',
-  'prestamo.tipoTasa': 'Cómo viene expresada la tasa. EA: efectiva anual. MV: mensual vencida. NAMV: nominal anual que se divide en 12.',
+  'prestamo.tipoTasa': 'Cómo viene expresada la tasa. EA: efectiva anual. MV: efectiva mensual. NAMV: nominal anual que se divide en 12. Las anticipadas (MA, TA, NAMA, NATA) cobran el interés al inicio del periodo y salen más caras. Moni las convierte todas con las fórmulas de equivalencia.',
+  'prestamo.segModo': 'Algunos bancos cobran un valor fijo por cuota; el seguro de vida deudor suele ser un % mensual sobre lo que aún debes, y baja con cada pago.',
   'prestamo.seguros': 'Lo que el banco suma a cada cuota aparte del interés: seguro de vida deudores, de desempleo, cuota de manejo…',
+  'prestamo.cobros': 'Lo que te descuentan al desembolsar. No cambia la cuota, pero sí lo que realmente te cuesta el crédito: por eso sube el costo efectivo anual.',
   'ahorro.inicial': 'Lo que ya tienes guardado al empezar.',
-  'ahorro.aporte': 'Lo que agregas al final de cada mes.',
+  'ahorro.aporte': 'Lo que agregas cada mes.',
+  'ahorro.momento': 'Si lo apartas al inicio del mes, ese aporte gana intereses ese mismo mes (anualidad anticipada).',
   'ahorro.tasa': 'Lo que te paga tu cuenta, bolsillo o fondo al año, en efectiva anual. El interés se suma cada mes (interés compuesto).',
   'ahorro.meses': 'Por cuánto tiempo ahorras.',
   'meta.objetivo': 'Lo que necesitas reunir.',
   'meta.inicial': 'Lo que ya tienes para esa meta.',
   'meta.fecha': 'Para cuándo lo necesitas. Moni cuenta los meses desde este.',
   'meta.tasa': 'Lo que rinde el lugar donde ahorras. Con 0, el aporte es lo que falta dividido entre los meses.',
+  'meta.momento': 'Si apartas al inicio de cada mes, necesitas un poco menos porque cada aporte rinde un mes más.',
   'cdt.capital': 'Lo que pones en el CDT.',
   'cdt.tasa': 'La tasa efectiva anual que te ofrece el banco.',
   'cdt.dias': 'Cuántos días queda el dinero en el CDT.',
+  'cdt.base': 'La mayoría de bancos usa 365 días. Algunos usan el año comercial de 360: con la misma tasa y plazo, pagan un poco más.',
+  'cdt.pago': 'Si te pagan los intereses cada mes o trimestre, ese dinero sale del CDT y no se reinvierte, así que el total es algo menor que al vencimiento.',
   'cdt.retencion': 'El porcentaje de los intereses que el banco retiene para impuestos. En Colombia suele ser 4 %.',
   'tasas.tasa': 'La tasa que quieres convertir, en porcentaje.',
   'tasas.tipo': 'Cómo viene expresada la tasa que escribiste.'
@@ -83,6 +163,8 @@ const INFO_CALC = {
 const INFO_RES = {
   'Tasa mensual': 'Lo que cobra el préstamo cada mes, en efectivo.',
   'Tasa EA': 'La tasa efectiva anual equivalente: la que sirve para comparar créditos entre sí.',
+  'Costo efectivo anual': 'Lo que de verdad te cuesta el crédito al año, sumando seguros y cobros al desembolso. Se calcula con la tasa interna de retorno (TIR) de lo que recibes y lo que pagas.',
+  'Pagas de seguros': 'La suma de los seguros y cargos de todas las cuotas.',
   'Efectiva anual': 'Lo que rinde o cuesta al año, contando el interés sobre el interés de cada mes.',
   'Mensual vencida': 'La tasa de cada mes, pagada al final del mes.',
   'Nominal mes vencido': 'La tasa mensual multiplicada por 12. Es menor que la efectiva anual.',
@@ -104,7 +186,9 @@ function campoCalc(grupo, k, label, valor, o) {
 const dr = n => dinero(Math.round(n));
 const numCalc = v => { const n = leerDecimal(v); return typeof n === 'number' && !isNaN(n) ? n : 0; };
 const pctCalc = v => numCalc(v) / 100;
-const pct1 = n => (Math.round(n * 100) / 100).toLocaleString('es-CO') + ' %';
+const pct1 = (n, d) => { const f = Math.pow(10, d || 2); return (Math.round(n * f) / f).toLocaleString('es-CO', { maximumFractionDigits: d || 2 }) + ' %'; };
+/** Tasas con 4 decimales, como las muestran los bancos (1,8088 % MV). */
+const pctT = n => pct1(n, 4);
 const filaRes = (etq, valor, clase) => '<div><div class="m-resumen-etiqueta">' + esc(etq) + htmlInfo(INFO_RES[etq]) + '</div><strong class="m-num ' + (clase || '') + '">' + valor + '</strong></div>';
 
 // ---------------------------------------------------------------------------
@@ -113,77 +197,118 @@ const filaRes = (etq, valor, clase) => '<div><div class="m-resumen-etiqueta">' +
 
 const TABS_CALC = [['prestamo', 'Préstamo'], ['ahorro', 'Ahorro'], ['meta', '¿Cuánto ahorrar?'], ['cdt', 'CDT'], ['tasas', 'Tasas']];
 const DEF_CALC = {
-  prestamo: { monto: '10.000.000', plazo: '36', tasa: '24', tipoTasa: 'EA', seguros: '0' },
-  ahorro: { inicial: '0', aporte: '300.000', tasa: '9', meses: '24' },
-  meta: { objetivo: '5.000.000', inicial: '0', fecha: '', tasa: '9' },
-  cdt: { capital: '5.000.000', tasa: '10', dias: '360', retencion: '4' },
+  prestamo: { monto: '10.000.000', plazo: '36', tasa: '24', tipoTasa: 'EA', segModo: 'fijo', seguros: '0', cobros: '0' },
+  ahorro: { inicial: '0', aporte: '300.000', tasa: '9', meses: '24', momento: 'vencido' },
+  meta: { objetivo: '5.000.000', inicial: '0', fecha: '', tasa: '9', momento: 'vencido' },
+  cdt: { capital: '5.000.000', tasa: '10', dias: '360', retencion: '4', base: '365', pago: 'vencimiento' },
   tasas: { tasa: '12', tipo: 'EA' }
 };
-const TIPOS_TASA = [['EA', 'Efectiva anual (EA)'], ['MV', 'Mensual vencida (MV)'], ['NAMV', 'Nominal anual mes vencido (NAMV)']];
+/** Opciones de los selectores de tipo de tasa (de TIPOS_TASA, la misma tabla que usan las fórmulas). */
+const OPCIONES_TASA = Object.keys(TIPOS_TASA).map(k => [k, TIPOS_TASA[k].nombre]);
+const MODOS_SEGURO = [['fijo', 'Un valor fijo en cada cuota'], ['saldo', '% mensual sobre lo que debes'], ['monto', '% mensual sobre lo prestado']];
+const MOMENTOS_APORTE = [['vencido', 'Al final de cada mes'], ['anticipado', 'Al inicio de cada mes']];
+const BASES_CDT = [['365', 'Año de 365 días'], ['360', 'Año comercial de 360 días']];
+const PAGOS_CDT = [['vencimiento', 'Todo al vencimiento'], ['mensual', 'Cada mes'], ['trimestral', 'Cada trimestre']];
 
 function valoresCalc(tab) {
   const c = App.calc;
   if (!c.v[tab]) c.v[tab] = Object.assign({}, DEF_CALC[tab]);
+  else Object.keys(DEF_CALC[tab]).forEach(k => { if (c.v[tab][k] === undefined) c.v[tab][k] = DEF_CALC[tab][k]; });
   if (tab === 'meta' && !c.v.meta.fecha) c.v.meta.fecha = mesMas(App.boot.hoy.slice(0, 7), 12) + '-01';
   return c.v[tab];
+}
+
+/** Campos del préstamo: el de seguros cambia de significado (pesos o %) según cómo los cobra el banco. */
+function formPrestamo(v) {
+  const enPct = v.segModo !== 'fijo';
+  return campoCalc('prestamo', 'monto', 'Cuánto te prestan', v.monto) + campoCalc('prestamo', 'plazo', 'Plazo en meses', v.plazo) +
+    campoCalc('prestamo', 'tasa', 'Tasa de interés (%)', v.tasa, { ayuda: 'Escríbela como te la da el banco y elige abajo de qué tipo es.' }) +
+    campoCalc('prestamo', 'tipoTasa', 'Tipo de tasa', v.tipoTasa, { opciones: OPCIONES_TASA }) +
+    campoCalc('prestamo', 'segModo', 'Cómo cobran los seguros', v.segModo, { opciones: MODOS_SEGURO }) +
+    '<div data-seguro>' + campoCalc('prestamo', 'seguros', enPct ? 'Seguros (% mensual)' : 'Seguros y cargos por cuota', v.seguros,
+      { ayuda: enPct ? 'Por ejemplo 0,1 para el seguro de vida deudor que cobra 0,1 % al mes.' : 'Lo que el banco suma a cada cuota: seguro de vida, de desempleo, cuota de manejo…' }) + '</div>' +
+    campoCalc('prestamo', 'cobros', 'Cobros al desembolso (opcional)', v.cobros, { ayuda: 'Estudio de crédito, comisión de apertura o avalúo que te descuentan del préstamo.' });
 }
 
 function vCalculadora() {
   const tab = App.calc.tab, v = valoresCalc(tab);
   const pildoras = '<div class="m-pildoras" role="tablist" aria-label="Qué calcular">' + TABS_CALC.map(t => '<button class="m-pildora" role="tab" data-acc="calc-tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === tab) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
   let form = '';
-  if (tab === 'prestamo') form = campoCalc(tab, 'monto', 'Cuánto te prestan', v.monto) + campoCalc(tab, 'plazo', 'Plazo en meses', v.plazo) +
-    campoCalc(tab, 'tasa', 'Tasa de interés (%)', v.tasa, { ayuda: 'Como te la dé el banco. La tasa de usura es el tope legal de la EA.' }) + campoCalc(tab, 'tipoTasa', 'Tipo de tasa', v.tipoTasa, { opciones: TIPOS_TASA }) +
-    campoCalc(tab, 'seguros', 'Seguros y cargos por cuota (opcional)', v.seguros, { ayuda: 'Lo que el banco suma a cada cuota: seguro de vida, de desempleo…' });
+  if (tab === 'prestamo') form = formPrestamo(v);
   if (tab === 'ahorro') form = campoCalc(tab, 'inicial', 'Lo que tienes hoy', v.inicial) + campoCalc(tab, 'aporte', 'Cuánto ahorras cada mes', v.aporte) +
+    campoCalc(tab, 'momento', 'Cuándo lo apartas', v.momento, { opciones: MOMENTOS_APORTE }) +
     campoCalc(tab, 'tasa', 'Rentabilidad anual (% EA)', v.tasa, { ayuda: 'Lo que te paga tu cuenta, bolsillo o fondo. Pon 0 si lo guardas sin rendimiento.' }) + campoCalc(tab, 'meses', 'Durante cuántos meses', v.meses);
   if (tab === 'meta') form = campoCalc(tab, 'objetivo', 'Cuánto necesitas', v.objetivo) + campoCalc(tab, 'inicial', 'Lo que ya tienes', v.inicial) +
-    campoCalc(tab, 'fecha', 'Para cuándo', v.fecha, { tipo: 'date' }) + campoCalc(tab, 'tasa', 'Rentabilidad anual (% EA)', v.tasa);
+    campoCalc(tab, 'fecha', 'Para cuándo', v.fecha, { tipo: 'date' }) + campoCalc(tab, 'tasa', 'Rentabilidad anual (% EA)', v.tasa) +
+    campoCalc(tab, 'momento', 'Cuándo lo apartas', v.momento, { opciones: MOMENTOS_APORTE });
   if (tab === 'cdt') form = campoCalc(tab, 'capital', 'Cuánto inviertes', v.capital) + campoCalc(tab, 'tasa', 'Tasa (% EA)', v.tasa) +
-    campoCalc(tab, 'dias', 'Plazo en días', v.dias, { ayuda: 'Los CDT suelen ser a 90, 180, 360 o 540 días.' }) + campoCalc(tab, 'retencion', 'Retención en la fuente sobre los intereses (%)', v.retencion, { ayuda: 'En Colombia, por lo general, 4 % de los intereses.' });
-  if (tab === 'tasas') form = campoCalc(tab, 'tasa', 'Tasa (%)', v.tasa) + campoCalc(tab, 'tipo', 'Es una tasa', v.tipo, { opciones: TIPOS_TASA });
+    campoCalc(tab, 'dias', 'Plazo en días', v.dias, { ayuda: 'Los CDT suelen ser a 90, 180, 360 o 540 días.' }) +
+    campoCalc(tab, 'base', 'Cómo cuenta el año el banco', v.base, { opciones: BASES_CDT }) +
+    campoCalc(tab, 'pago', 'Cuándo te pagan los intereses', v.pago, { opciones: PAGOS_CDT }) +
+    campoCalc(tab, 'retencion', 'Retención en la fuente sobre los intereses (%)', v.retencion, { ayuda: 'En Colombia, por lo general, 4 % de los intereses.' });
+  if (tab === 'tasas') form = campoCalc(tab, 'tasa', 'Tasa (%)', v.tasa) + campoCalc(tab, 'tipo', 'Es una tasa', v.tipo, { opciones: OPCIONES_TASA });
   const html = pildoras + '<form class="m-group" style="padding:var(--m-space-4)" data-form="calc" novalidate>' + form + '</form>' +
     '<div id="calc-res" aria-live="polite">' + resultadoCalc(tab, v) + '</div>' +
-    '<p class="m-ayuda">Son cálculos de referencia con cuota fija e interés compuesto. Tu banco puede redondear distinto o sumar otros cobros.</p>';
+    '<p class="m-ayuda">Son cálculos de referencia con las fórmulas de equivalencia de tasas e interés compuesto. Tu banco puede redondear distinto en cada cuota.</p>';
   return {
     titulo: 'Calculadora', html: html,
     despues: () => {
       const f = $('[data-form="calc"]');
       if (!f) return;
+      const recalcular = () => { VIZ.items = {}; $('#calc-res').innerHTML = resultadoCalc(tab, v); };
       f.addEventListener('input', ev => {
-        if (!ev.target.dataset.calc) return;
+        if (!ev.target.dataset.calc || ev.target.tagName === 'SELECT') return;
         v[ev.target.dataset.calc] = ev.target.value;
-        VIZ.items = {}; $('#calc-res').innerHTML = resultadoCalc(tab, v);
+        recalcular();
       });
-      f.addEventListener('change', ev => { if (ev.target.tagName === 'SELECT' || ev.target.type === 'date') { v[ev.target.dataset.calc] = ev.target.value; VIZ.items = {}; $('#calc-res').innerHTML = resultadoCalc(tab, v); } });
+      f.addEventListener('change', ev => {
+        if (ev.target.tagName !== 'SELECT' && ev.target.type !== 'date') return;
+        v[ev.target.dataset.calc] = ev.target.value;
+        if (ev.target.dataset.calc === 'segModo') {
+          const caja = f.querySelector('[data-seguro]');
+          if (caja) caja.outerHTML = (() => { const t = document.createElement('div'); t.innerHTML = formPrestamo(v); return t.querySelector('[data-seguro]').outerHTML; })();
+        }
+        recalcular();
+      });
     }
   };
 }
 
+/** Los seguros del préstamo como los espera CALC.amortizacion (valor fijo en pesos o % mensual en decimal). */
+const seguroCalc = v => v.segModo === 'saldo' || v.segModo === 'monto' ? { modo: v.segModo, valor: pctCalc(v.seguros) } : { modo: 'fijo', valor: numCalc(v.seguros) };
+
 function resultadoCalc(tab, v) {
   const caja = (cuerpo) => '<div class="m-group m-saldo-grande">' + cuerpo + '</div><div style="height:var(--m-space-4)"></div>';
   if (tab === 'prestamo') {
-    const monto = numCalc(v.monto), n = Math.round(numCalc(v.plazo)), i = CALC.mensualDe(pctCalc(v.tasa), v.tipoTasa), seg = numCalc(v.seguros);
+    const monto = numCalc(v.monto), n = Math.round(numCalc(v.plazo)), tasa = pctCalc(v.tasa);
     if (!(monto > 0) || !(n > 0)) return '<p class="m-ayuda">Escribe el monto y el plazo.</p>';
+    const ea = CALC.aEA(tasa, v.tipoTasa), i = CALC.mensualDe(tasa, v.tipoTasa), seg = seguroCalc(v), cobros = numCalc(v.cobros);
     const tabla = CALC.amortizacion(monto, i, n, seg), cuota = CALC.cuota(monto, i, n);
-    const intereses = tabla.reduce((a, f) => a + f.interes, 0);
+    const intereses = tabla.reduce((a, f) => a + f.interes, 0), seguros = tabla.reduce((a, f) => a + f.seguros, 0);
+    const variable = seg.modo === 'saldo' && seg.valor > 0;
+    const costo = CALC.costoEfectivoEA(monto, cobros, tabla), conExtras = seguros > 0 || cobros > 0;
+    const primera = tabla.length ? tabla[0].cuota : 0;
     const puntos = [{ x: '0', anio: '', titulo: 'Al inicio', previo: '' }].concat(tabla.map(f => ({ x: String(f.num), anio: '', titulo: 'Cuota ' + f.num, previo: '' })));
-    return caja('<div class="m-resumen-etiqueta">Cuota mensual</div><div class="m-resumen-cifra m-num">' + dr(cuota + seg) + '</div>' +
-      (seg ? '<p class="m-ayuda" style="margin:0">' + dr(cuota) + ' de capital e interés + ' + dr(seg) + ' de seguros</p>' : '') +
-      '<div class="m-resumen-fila">' + filaRes('Pagas de intereses', dr(intereses)) + filaRes('Pagas en total', dr(monto + intereses + seg * tabla.length)) + '</div>' +
-      '<div class="m-resumen-fila">' + filaRes('Tasa mensual', pct1(i * 100)) + filaRes('Tasa EA', pct1(CALC.eaDeMensual(i) * 100)) + '</div>') +
+    const columnas = seguros > 0 ? ['Cuota', 'Interés', 'Capital', 'Seguros', 'Total', 'Saldo'] : ['Cuota', 'Interés', 'Capital', 'Saldo'];
+    const filas = tabla.map(f => seguros > 0 ? [String(f.num), dr(f.interes), dr(f.capital), dr(f.seguros), dr(f.cuota), dr(f.saldo)] : [String(f.num), dr(f.interes), dr(f.capital), dr(f.saldo)]);
+    return caja('<div class="m-resumen-etiqueta">' + (variable ? 'Primera cuota' : 'Cuota mensual') + '</div><div class="m-resumen-cifra m-num">' + dr(primera) + '</div>' +
+      (seguros > 0 ? '<p class="m-ayuda" style="margin:0">' + dr(cuota) + ' de capital e interés + ' + dr(tabla[0].seguros) + ' de seguros' + (variable ? '. Los seguros bajan a medida que pagas.' : '') + '</p>' : '') +
+      '<div class="m-resumen-fila">' + filaRes('Pagas de intereses', dr(intereses)) + (seguros > 0 ? filaRes('Pagas de seguros', dr(seguros)) : '') + filaRes('Pagas en total', dr(monto + intereses + seguros + cobros)) + '</div>' +
+      '<div class="m-resumen-fila">' + filaRes('Tasa mensual', pctT(i * 100)) + filaRes('Tasa EA', pctT(ea * 100)) + (conExtras ? filaRes('Costo efectivo anual', pctT(costo * 100)) : '') + '</div>' +
+      (cobros > 0 ? '<p class="m-ayuda" style="margin:0">Recibes ' + dr(monto - cobros) + ' porque te descuentan ' + dr(cobros) + ' al desembolsar.</p>' : '')) +
       tarjetaViz('calc-saldo', 'Cómo baja lo que debes',
         vizLinea({ puntos: puntos, series: [{ nombre: 'Saldo', clave: 'viz-acento', valores: [monto].concat(tabla.map(f => f.saldo)) }], divisa: 'COP', alto: 170, etiqueta: 'Saldo del préstamo cuota a cuota' }),
-        tablaViz(['Cuota', 'Interés', 'Capital', 'Saldo'], tabla.map(f => [String(f.num), dr(f.interes), dr(f.capital), dr(f.saldo)])));
+        tablaViz(columnas, filas));
   }
   if (tab === 'ahorro') {
     const meses = Math.min(600, Math.round(numCalc(v.meses))), i = CALC.mensualDeEA(pctCalc(v.tasa));
     if (!(meses > 0)) return '<p class="m-ayuda">Escribe por cuántos meses.</p>';
-    const filas = CALC.ahorro(numCalc(v.inicial), numCalc(v.aporte), i, meses), u = filas[filas.length - 1];
+    const filas = CALC.ahorro(numCalc(v.inicial), numCalc(v.aporte), i, meses, v.momento === 'anticipado'), u = filas[filas.length - 1];
     const paso = Math.max(1, Math.ceil(meses / 24)), muestras = filas.filter((f, k) => k % paso === paso - 1 || k === filas.length - 1);
     const puntos = muestras.map(f => ({ x: String(f.mes), anio: '', titulo: 'Mes ' + f.mes, previo: '' }));
     return caja('<div class="m-resumen-etiqueta">Tendrás en ' + meses + ' meses</div><div class="m-resumen-cifra m-num">' + dr(u.saldo) + '</div>' +
-      '<div class="m-resumen-fila">' + filaRes('Pusiste', dr(u.aportes)) + filaRes('Ganaste en intereses', dr(u.intereses), 'm-positivo') + '</div>') +
+      '<div class="m-resumen-fila">' + filaRes('Pusiste', dr(u.aportes)) + filaRes('Ganaste en intereses', dr(u.intereses), 'm-positivo') + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Con ' + pctT(i * 100) + ' efectivo mensual, equivalente al ' + pct1(pctCalc(v.tasa) * 100) + ' EA.</p>') +
       tarjetaViz('calc-ahorro', 'Cómo crece tu ahorro',
         vizLinea({ puntos: puntos, series: [{ nombre: 'Total', clave: 'viz-s1', valores: muestras.map(f => f.saldo) }, { nombre: 'Lo que pusiste', clave: 'viz-s2', valores: muestras.map(f => f.aportes) }], divisa: 'COP', alto: 180, etiqueta: 'Ahorro acumulado por mes' }),
         tablaViz(['Mes', 'Total', 'Pusiste', 'Intereses'], muestras.map(f => [String(f.mes), dr(f.saldo), dr(f.aportes), dr(f.intereses)])));
@@ -193,7 +318,7 @@ function resultadoCalc(tab, v) {
     if (!v.fecha || v.fecha <= hoy) return '<p class="m-ayuda">Elige una fecha futura.</p>';
     const meses = Math.max(1, (Number(v.fecha.slice(0, 4)) - Number(hoy.slice(0, 4))) * 12 + Number(v.fecha.slice(5, 7)) - Number(hoy.slice(5, 7)));
     const i = CALC.mensualDeEA(pctCalc(v.tasa)), objetivo = numCalc(v.objetivo), inicial = numCalc(v.inicial);
-    const aporte = CALC.aporteParaMeta(objetivo, inicial, i, meses);
+    const aporte = CALC.aporteParaMeta(objetivo, inicial, i, meses, v.momento === 'anticipado');
     return caja('<div class="m-resumen-etiqueta">Aparta cada mes</div><div class="m-resumen-cifra m-num">' + dr(Math.ceil(aporte / 100) * 100) + '</div>' +
       '<p class="m-ayuda" style="margin:0">Durante ' + meses + ' meses, hasta el ' + esc(fechaTxt(v.fecha)) + '. Sin rendimiento serían ' + dr(Math.max(0, (objetivo - inicial) / meses)) + ' al mes.</p>' +
       '<div class="m-acciones-fila" style="margin-top:var(--m-space-3)"><button class="m-btn m-btn-primary" data-acc="calc-crear-meta">Crear esta meta</button></div>');
@@ -201,16 +326,21 @@ function resultadoCalc(tab, v) {
   if (tab === 'cdt') {
     const capital = numCalc(v.capital), dias = Math.round(numCalc(v.dias));
     if (!(capital > 0) || !(dias > 0)) return '<p class="m-ayuda">Escribe el capital y el plazo.</p>';
-    const r = CALC.cdt(capital, pctCalc(v.tasa), dias, pctCalc(v.retencion));
-    return caja('<div class="m-resumen-etiqueta">Recibes al final</div><div class="m-resumen-cifra m-num">' + dr(r.total) + '</div>' +
+    const r = CALC.cdt(capital, pctCalc(v.tasa), dias, pctCalc(v.retencion), { base: Number(v.base), pago: v.pago });
+    const periodico = r.periodos > 0, cada = v.pago === 'mensual' ? 'cada mes' : 'cada trimestre';
+    return caja('<div class="m-resumen-etiqueta">' + (periodico ? 'Recibes ' + cada : 'Recibes al final') + '</div><div class="m-resumen-cifra m-num">' + dr(periodico ? r.porPeriodo : r.total) + '</div>' +
+      (periodico ? '<p class="m-ayuda" style="margin:0">' + r.periodos + ' pagos de intereses ya sin retención, y al final te devuelven ' + dr(capital) + (r.total - capital - r.porPeriodo * r.periodos > 0.5 ? ' más ' + dr(r.total - capital - r.porPeriodo * r.periodos) + ' de los días que sobran' : '') + '.</p>' : '') +
       '<div class="m-resumen-fila">' + filaRes('Intereses', dr(r.intereses), 'm-positivo') + filaRes('Retención', dr(r.retencion)) + filaRes('Ganas (neto)', dr(r.neto), 'm-positivo') + '</div>' +
-      '<p class="m-ayuda" style="margin:0">Unos ' + dr(r.porMes) + ' por cada mes de plazo.</p>');
+      (periodico ? '' : '<p class="m-ayuda" style="margin:0">Unos ' + dr(r.porMes) + ' por cada mes de plazo.</p>'));
   }
   if (tab === 'tasas') {
-    const t = pctCalc(v.tasa), m = CALC.mensualDe(t, v.tipo);
+    const t = pctCalc(v.tasa), ea = CALC.aEA(t, v.tipo), m = CALC.desdeEA(ea, 'MV');
+    const filas = OPCIONES_TASA.map(o => '<tr' + (o[0] === v.tipo ? ' aria-current="true" style="font-weight:600"' : '') + '><td>' + esc(o[1]) + '</td><td class="m-num">' + pctT(CALC.desdeEA(ea, o[0]) * 100) + '</td></tr>').join('');
     return caja('<div class="m-resumen-etiqueta">Equivale a</div>' +
-      '<div class="m-resumen-fila">' + filaRes('Efectiva anual', pct1(CALC.eaDeMensual(m) * 100)) + filaRes('Mensual vencida', pct1(m * 100)) + filaRes('Nominal mes vencido', pct1(m * 12 * 100)) + '</div>' +
-      '<p class="m-ayuda" style="margin:0">Para comparar créditos o inversiones, usa siempre la efectiva anual (EA).</p>');
+      '<div class="m-resumen-fila">' + filaRes('Efectiva anual', pctT(ea * 100)) + filaRes('Mensual vencida', pctT(m * 100)) + filaRes('Nominal mes vencido', pctT(m * 12 * 100)) + '</div>' +
+      '<p class="m-ayuda" style="margin:0">Para comparar créditos o inversiones, usa siempre la efectiva anual (EA).</p>') +
+      '<section class="m-seccion" aria-labelledby="calc-equiv"><h2 class="m-seccion-titulo" id="calc-equiv">Todas las equivalencias' + htmlInfo('Son la misma tasa expresada de otra forma: con cualquiera de ellas pagas o ganas lo mismo en un año.') + '</h2>' +
+      '<div class="m-group" style="padding:var(--m-space-2) var(--m-space-4)"><table class="m-tabla"><thead><tr><th scope="col">Tipo</th><th scope="col">Tasa</th></tr></thead><tbody>' + filas + '</tbody></table></div></section>';
   }
   return '';
 }

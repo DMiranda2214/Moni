@@ -217,6 +217,8 @@ const ACCIONES = {
   'corregir-cuota': el => abrirCorregirCuota(Number(el.dataset.num)),
   'tasa-ok': () => confirmarTasaCredito(),
   'tasa-corregir': () => abrirCorregirTasa(),
+  'tasa-exacta': () => recalcularTasaExacta(),
+  'tasa-metodo-ok': () => dejarMetodoTasa(),
   'pago-credito': async el => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero al bolsillo y la cuota vuelve a quedar pendiente. Si el pago incluía un abono, el plazo vuelve al anterior.' });
     if (ok) anularPagoCreditoYAvisar(el.dataset.id);

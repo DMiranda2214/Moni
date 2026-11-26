@@ -59,6 +59,12 @@ function obtenerAvisos_() {
       'Las versiones anteriores redondeaban las tasas con decimales (9,5 % quedaba en 10 %). Confirma que la tasa está bien o corrígela: solo cambian las cuotas pendientes.', 'credito/' + c.ID_Credito);
   });
 
+  // Créditos bancarios con la conversión aproximada de la tasa: la cuota no cuadra con la del banco (la persona decide)
+  creditosMetodoPorRevisar_().forEach(c => {
+    agregar('metodo_credito_' + c.ID_Credito, 'sugerencia', 'La cuota de “' + c.Nombre + '” puede no cuadrar con la del banco',
+      'Moni convertía la tasa efectiva anual con un método aproximado que cobra de más. Puedes recalcular las cuotas pendientes con la misma EA: lo pagado no cambia.', 'credito/' + c.ID_Credito);
+  });
+
   // ---- Sugerencias: configuración que falta ----
   const hayDolares = bancos.some(b => divisaBanco_(b) !== DIVISA_BASE);
   if (hayDolares && !esVerdadero(cfgValor_('Tasa_Auto')) && !cfgValor_('Tasa_USD') && !cfgValor_('Tasa_EUR')) {

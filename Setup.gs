@@ -233,7 +233,7 @@ const DEFAULT_CONFIG = [
   ['Tasa_Interes_Cesantias', '0.12', 'Nomina', 'porcentaje', 'Tasa legal de intereses de cesantías'],
   ['Cesantias_Dias_Actual', '360', 'Nomina', 'numero', 'Días del año de cesantías con el sueldo actual (360 = todo el año; menos si el sueldo cambió)'],
   ['Cesantias_Sueldo_Anterior', '0', 'Nomina', 'moneda', 'Sueldo que tenías antes del cambio, para los días restantes del año de cesantías (0 = sin cambio)'],
-  ['Credito_Metodo_Tasa', 'Excel', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica: Excel o Exacta'],
+  ['Credito_Metodo_Tasa', 'Exacta', 'Creditos', 'seleccion', 'Conversión de tasa EA a periódica en los créditos de autopago: Exacta, (1 + EA)^(1/n) − 1, o Excel (la del Excel de referencia). Los bancarios siempre usan la exacta'],
   ['Tasa_USD', '', 'Divisas', 'texto', 'Pesos que vale 1 dólar (TRM que tú escribes). Sirve para ver el equivalente en pesos'],
   ['Tasa_USD_Fecha', '', 'Divisas', 'texto', 'Fecha en que anotaste la tasa del dólar'],
   ['Tasa_EUR', '', 'Divisas', 'texto', 'Pesos que vale 1 euro'],

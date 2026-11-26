@@ -66,7 +66,9 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 
 ## 5. Créditos de autopago
 - Te prestas desde una **cuenta de ahorro** (el desembolso sale del ahorro) y pagas con **amortización francesa**; cada cuota **vuelve al ahorro**.
-- **Tasa:** la EA se convierte a periódica con el método del Excel (`2·((1+EA)^(1/2) − 1)/períodos`, quincenal o mensual) o con el método exacto, según `Credito_Metodo_Tasa`.
+- **Tasa:** la EA se convierte a periódica con la **equivalencia exacta** `(1 + EA)^(1/n) − 1` (n = 12 mensual, 24 quincenal) o con el método del Excel de referencia (`2·((1+EA)^(1/2) − 1)/n`), según `Credito_Metodo_Tasa`. Desde la 1.19 las instalaciones nuevas usan la exacta; quien ya tenía `Excel` lo conserva en sus créditos de autopago.
+- **Créditos bancarios:** **siempre** usan la equivalencia exacta, que es la que usan los bancos. El método del Excel no es una tasa equivalente: 24 % EA daba 1,8925 % mensual, que en realidad es 25,2 % EA, y la cuota salía más alta que la del banco.
+- **Bancarios de antes de la 1.19** (método `Excel`): un aviso en Inicio y en el crédito muestra la tasa y la cuota con la equivalencia exacta. *Recalcular cuotas* rehace solo las pendientes desde el saldo de hoy, con la **misma EA** y el mismo número de cuotas (`corregirTasaCredito` con `metodo: 'Exacta'`), y deja `Metodo_Tasa = Exacta`. *Dejar como está* solo quita el aviso. Lo pagado, los pagos y los saldos no cambian.
 - **Cuota fija** y tasa fijas. Un **abono mayor que la cuota recalcula el plazo** (la última cuota se ajusta). Un abono mayor que el saldo cobra solo lo necesario.
 - El **cronograma** es versionado: al recalcular por un pago nuevo, el anterior queda como *Reemplazada*.
 - **Corregir una cuota pagada** (`editarPagoCredito`): se cambia el valor pagado de esa cuota (≥ cuota fija, sin pasar de lo que se debe) y el cronograma completo se **rehace** pagando de nuevo, en orden, todas las cuotas pagadas con sus valores, con la misma cuota fija y tasa. No toca movimientos ni saldos; si la cuota venía como pagada al crear el crédito, se crea su registro de pago sin movimiento. Si lo corregido haría que otro pago sobrepase la deuda, se rechaza con un mensaje y no cambia nada. El cronograma anterior se sustituye (no se conserva como *Reemplazada*).
@@ -175,8 +177,15 @@ El estimado replica la hoja "Estimado nómina" del Excel original: cada línea t
 
 ## 13. Calculadora
 - Todo se calcula en el navegador (`CALC` en `js_herramientas.html`, con pruebas).
-- **Préstamo:** cuota fija `P·i / (1 − (1+i)^−n)`, más los seguros por cuota. La tasa mensual sale de la EA (`(1+EA)^(1/12) − 1`), de la mensual vencida o de la nominal mes vencido (÷ 12).
-- **Ahorro:** interés compuesto mensual con el aporte al final de cada mes.
-- **¿Cuánto ahorrar?:** el aporte que, con lo que ya tienes y la rentabilidad, llega a la meta en los meses que quedan. *Crear esta meta* abre el formulario de Metas lleno.
-- **CDT:** intereses = capital × ((1 + EA)^(días/365) − 1); neto = intereses − retención.
+- **Equivalencia de tasas** (ingeniería económica). Toda tasa pasa por la efectiva anual:
+  - efectiva del periodo ↔ EA: `i_p = (1 + EA)^(1/n) − 1`, `EA = (1 + i_p)^n − 1` (n = 1, 2, 4 o 12 periodos al año);
+  - nominal ↔ efectiva del periodo: `i_p = j / n` (NASV, NATV, NAMV, NATA, NAMA);
+  - anticipada ↔ vencida: `i_v = i_a / (1 − i_a)`, `i_a = i_v / (1 + i_v)` (TA, MA, NATA, NAMA).
+  - Cifras de control: 24 % EA = 1,8088 % MV = 21,7051 % NAMV; 12 % NATV = 3 % TV = 12,5509 % EA; 2 % MA = 2,0408 % MV = 27,4345 % EA.
+- **Préstamo:** cuota fija `P·i / (1 − (1+i)^−n)` con la tasa efectiva mensual equivalente a la que se escribe, de cualquier tipo. Los seguros pueden ser un valor fijo por cuota, un % mensual sobre el saldo (seguro de vida deudor: baja con cada pago) o un % mensual sobre lo prestado. Los cobros al desembolso (estudio de crédito, comisión) se restan de lo recibido.
+- **Costo efectivo anual:** la TIR mensual `r` que iguala lo recibido (monto − cobros al desembolso) con el valor presente de las cuotas con seguros, llevada a EA: `(1 + r)^12 − 1`. Sin seguros ni cobros es igual a la tasa EA.
+- **Ahorro:** interés compuesto mensual a la tasa equivalente a la EA. Aporte al final de cada mes (anualidad vencida) o al inicio (anticipada: `F = A·((1+i)^n − 1)/i·(1+i)`).
+- **¿Cuánto ahorrar?:** el aporte que, con lo que ya tienes y la rentabilidad, llega a la meta en los meses que quedan: `A = (M − S·(1+i)^n)·i / ((1+i)^n − 1)`, dividido entre `(1+i)` si se aparta al inicio del mes. *Crear esta meta* abre el formulario de Metas lleno.
+- **CDT:** intereses = capital × ((1 + EA)^(días/base) − 1), con año de 365 días (o 360, el comercial). Si paga intereses cada mes o trimestre, cada pago es capital × ((1 + EA)^(días del periodo/base) − 1), sin reinvertir; lo que sobre del plazo se paga al final. Neto = intereses − retención.
+- **Tasas:** muestra la tasa escrita en los 11 tipos (EA, efectivas semestral, trimestral y mensual, nominales vencidas y anticipadas).
 
