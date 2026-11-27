@@ -1,5 +1,16 @@
 # Cambios
 
+## 1.21.0 — Editar en tarjetas, orden de las listas y rendimientos corregidos (27 nov 2026)
+- **Nuevo: editar compras con tarjeta.** Toca la compra y elige *Editar*: concepto, valor, fecha, categoría, notas y lo que costó en otra moneda. Si la fecha cae en otro corte, pasa a ese extracto. Si apartó dinero en la reserva, el traslado se ajusta en su lugar, sin movimientos nuevos. No se editan las compras de un extracto pagado.
+- **Nuevo: editar abonos de tarjeta** (valor, fecha, notas o quién lo pagó). Si salió de un bolsillo, su gasto cambia también.
+- **Mejora: orden de las listas.** Movimientos, compras, abonos, aportes a metas, operaciones de inversión y depósitos de brokers van con la fecha más reciente arriba y, el mismo día, **lo último que registraste arriba**. Antes, en compras, abonos y metas, los del mismo día salían con el primero registrado arriba.
+- **Corregido: rendimientos de las cuentas de ahorro.**
+  - Se calculaban sobre el saldo al *inicio* de cada día: lo que depositabas empezaba a rendir al día siguiente y lo que retirabas seguía rindiendo ese día. Ahora usan el saldo al *cierre* del día, como liquidan los bancos.
+  - El saldo inicial rendía desde el primer día del mes aunque la cuenta o el bolsillo se hubieran creado después. Ahora rinde desde su apertura.
+  - *Registrar este rendimiento* proponía la fecha de hoy, pero la estimación llega hasta ayer: la siguiente estimación se saltaba el día de hoy. Ahora propone la fecha de ayer.
+  - El rendimiento se puede registrar en un bolsillo de la cuenta (bancos que pagan en cada bolsillo o cajita), para que siga rindiendo.
+- **Datos:** no cambia el esquema. Los rendimientos ya registrados no se tocan; solo cambia la estimación de lo que falta por registrar.
+
 ## 1.20.0 — Más monedas y comisiones de brokers (26 nov 2026)
 - **Nuevo: monedas comunes del mercado.** Además de pesos, dólares y euros: libra esterlina, franco suizo, dólar canadiense, dólar australiano, yen, yuan, peso mexicano, real brasileño, peso chileno, sol peruano, peso argentino y peso uruguayo. Sirven para bancos, brokers, inversiones y compras con tarjeta en otra moneda.
   - **Ajustes → Divisas** muestra arriba el dólar, el euro y las monedas que usas; las demás, en *Otras monedas*.

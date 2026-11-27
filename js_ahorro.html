@@ -66,7 +66,7 @@ function htmlRendimientoEstimado(a) {
       '<div><dt>Acumulado este mes</dt><dd class="m-num m-positivo">' + dinero(e.acumuladoMes) + '</dd></div>' +
       '<div><dt><strong>Por registrar</strong></dt><dd class="m-num"><strong>' + dinero(e.pendiente) + '</strong></dd></div></dl></div>' +
     (e.pendiente > 0 ? '<div class="m-row"><button class="m-btn m-btn-secondary" style="width:100%" data-acc="rend-estimado">Registrar este rendimiento</button></div>' : ''),
-    e.dias > 0 ? 'Calculado desde el ' + esc(fechaTxt(e.desde)) + ' hasta el ' + esc(fechaTxt(e.hasta)) + ' (' + e.dias + (e.dias === 1 ? ' día' : ' días') + '), sobre tu saldo de cada día. Es una estimación: tu banco puede redondear distinto.' : 'Todavía no ha terminado ningún día desde el último rendimiento.');
+    e.dias > 0 ? 'Calculado desde el ' + esc(fechaTxt(e.desde)) + ' hasta el ' + esc(fechaTxt(e.hasta)) + ' (' + e.dias + (e.dias === 1 ? ' día' : ' días') + '), sobre tu saldo al cierre de cada día. Es una estimación: tu banco puede redondear distinto.' : 'Todavía no ha terminado ningún día desde el último rendimiento.');
 }
 
 function htmlCuentaAhorro(d) {
@@ -99,16 +99,25 @@ function aplicarAhorro(res) {
 async function abrirRendimiento(pre) {
   const d = App.ahoC.data;
   if (!d) return;
+  // Los bolsillos de la cuenta: el rendimiento puede ir al saldo general o a un bolsillo (hay bancos que lo pagan en cada "cajita")
+  const cta = ((App.boot.saldos && App.boot.saldos.cuentas) || []).find(c => c.ID_Cuenta === d.cuenta.ID_Cuenta);
+  const bols = cta ? cta.bolsillos : [];
+  const e = d.cuenta.rendimientoEstimado;
+  const sugerido = (e && e.base === 'Bolsillos' ? bols.filter(b => !b.Es_Interno).sort((a, b) => b.Saldo - a.Saldo)[0] : null) || bols.find(b => b.Es_Interno) || bols[0];
+  // La estimación llega hasta ayer: se registra con esa fecha para que el día de hoy entre en la próxima estimación
+  const fecha = pre && pre.hasta ? pre.hasta : App.boot.hoy;
   const cuerpo = '<form novalidate data-form="rendimiento"><div class="m-campo"><div class="m-label" id="lbl-rend">Qué quieres registrar</div><div class="m-segmentado" role="radiogroup" aria-labelledby="lbl-rend">' +
     [['Interes', 'Interés'], ['Retencion', 'Retención'], ['GMF', 'GMF']].map((x, i) => '<label><input type="radio" name="rend" value="' + x[0] + '"' + (i === 0 ? ' checked' : '') + '><span>' + x[1] + '</span></label>').join('') + '</div></div>' +
     htmlCampo({ k: 'Valor', label: 'Valor', tipo: 'dinero', requerido: true, ayuda: pre ? 'Es una estimación con la tasa de tu banco. Si tu banco te muestra otro valor, escribe el de él.' : 'El interés suma al ahorro; la retención y el GMF lo descuentan.' }, pre ? pre.valor : '', {}) +
-    '<div class="m-campo"><label class="m-label" for="f-Fecha">Fecha</label><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + App.boot.hoy + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
+    (bols.length > 1 ? '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="f-Bolsillo">Dónde queda</label>' + htmlInfo('Si tu banco paga el rendimiento en cada bolsillo o cajita, elige ese bolsillo: así sigue rindiendo. Si no, déjalo en el saldo general de la cuenta.') + '</div>' +
+      '<select class="m-input" id="f-Bolsillo">' + bols.map(b => '<option value="' + esc(b.ID_Bolsillo) + '"' + (sugerido && b.ID_Bolsillo === sugerido.ID_Bolsillo ? ' selected' : '') + '>' + esc(nombreBolsillo(b, cta)) + '</option>').join('') + '</select></div>' : '') +
+    '<div class="m-campo"><div class="m-label-fila"><label class="m-label" for="f-Fecha">Fecha</label>' + htmlInfo('La estimación cubre hasta el día anterior a hoy, por eso se sugiere esa fecha: el día de hoy se suma en la próxima.') + '</div><input class="m-input" id="f-Fecha" type="date" max="' + App.boot.hoy + '" value="' + esc(fecha) + '"></div><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>';
   await abrirHoja({
     titulo: 'Rendimiento', cuerpo: cuerpo, alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
     alGuardar: async raiz => {
       const v = leerDinero($('#f-Valor', raiz).value);
       if (v === '' || isNaN(v)) throw new Error('Escribe el valor.');
-      const res = await api('addRendimiento', { ID_Cuenta: d.cuenta.ID_Cuenta, Tipo: $('input[name="rend"]:checked', raiz).value, Valor: v, Fecha: $('#f-Fecha', raiz).value });
+      const res = await api('addRendimiento', { ID_Cuenta: d.cuenta.ID_Cuenta, Tipo: $('input[name="rend"]:checked', raiz).value, Valor: v, Fecha: $('#f-Fecha', raiz).value, ID_Bolsillo: ($('#f-Bolsillo', raiz) || {}).value || '' });
       aplicarEscritura(res); aplicarAhorro(res); render(); aviso('Rendimiento registrado');
     }
   });

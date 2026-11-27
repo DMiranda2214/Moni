@@ -39,7 +39,8 @@ module.exports = function (prueba, assert, crearEntorno) {
     return plano({
       saldos: e.llamar('obtenerSaldos'),
       tarjetas: tarjetas,
-      detalleTarjetas: tarjetas.map(t => e.llamar('obtenerTarjeta', t.ID_Tarjeta)),
+      // Desde la 1.21 las compras y abonos del mismo día salen con lo último registrado arriba: se comparan los datos, no el orden
+      detalleTarjetas: tarjetas.map(t => { const d = e.llamar('obtenerTarjeta', t.ID_Tarjeta); ['compras', 'pagos'].forEach(k => (d[k] || []).sort((x, y) => String(x.ID_Compra || x.ID_Pago).localeCompare(String(y.ID_Compra || y.ID_Pago)))); return d; }),
       creditos: creditos,
       detalleCreditos: creditos.map(c => e.llamar('obtenerCredito', c.ID_Credito)),
       deudaAhorro: e.llamar('deudaConAhorro_'),

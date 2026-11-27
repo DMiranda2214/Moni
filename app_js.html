@@ -635,7 +635,15 @@ function fusionarItems(lista, items, verAnulados, enRango) {
     if (it.Anulado && !verAnulados) { if (i >= 0) lista.splice(i, 1); return; }
     if (i >= 0) lista[i] = it; else if (enRango(it)) lista.unshift(it);
   });
-  lista.sort((a, b) => (a.Fecha < b.Fecha ? 1 : a.Fecha > b.Fecha ? -1 : 0));
+  lista.sort(masRecienteArriba);
+}
+
+/** Fecha más reciente arriba y, el mismo día, lo último registrado arriba (la misma regla que masRecienteArriba_ del servidor). */
+function masRecienteArriba(a, b) {
+  const fa = String(a.Fecha || ''), fb = String(b.Fecha || '');
+  if (fa !== fb) return fa < fb ? 1 : -1;
+  const ca = String(a.Creado_En || ''), cb = String(b.Creado_En || '');
+  return ca === cb ? 0 : (ca < cb ? 1 : -1);
 }
 
 /** Aplica el resultado de una escritura: saldos, últimos movimientos y la lista que se está viendo. */

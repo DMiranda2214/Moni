@@ -170,7 +170,7 @@ function htmlTarjeta(d) {
       sub: esc(fechaCorta(p.Fecha)) + (p.Pagador ? ' · no movió tus bolsillos' : (p.Bolsillo ? ' · sale de ' + esc(p.Bolsillo) : '')),
       final: '<span class="m-monto">' + dinero(p.Valor) + '</span>', clase: p.Editable ? '' : 'm-inactivo',
       attrs: p.Editable ? 'data-acc="abono" data-id="' + esc(p.ID_Pago) + '"' : '', deshabilitada: !p.Editable
-    })).join(''), 'Un abono baja la deuda y libera cupo; no aparta dinero en la reserva. Toca uno para anularlo.');
+    })).join(''), 'Un abono baja la deuda y libera cupo; no aparta dinero en la reserva. Toca uno para editarlo o anularlo.');
   }
   return h;
 }
@@ -260,11 +260,104 @@ async function abrirDetalleCompra(id) {
   if (c.Categoria) filas.push(['Categoría', esc(c.Categoria)]);
   if (c.Notas) filas.push(['Notas', esc(c.Notas)]);
   if (c.Pagado) filas.push(['Estado', 'En un extracto pagado']);
+  if (c.Divisa_Original) filas.push(['Pagaste', esc(dinero(c.Valor_Original, c.Divisa_Original))]);
+  let siguiente = null;
   await abrirHoja({
     titulo: 'Compra', izq: 'Cerrar', sinGuardar: true,
     cuerpo: '<p class="m-subtitulo" style="padding:0 0 var(--m-space-3);margin:0;font-weight:600;color:var(--m-label)">' + esc(c.Concepto) + '</p><dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
-      (c.Pagado ? '<p class="m-ayuda">Para anularla, primero anula el pago del extracto.</p>' : '<button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular la compra</button>'),
-    extra: { anular: () => api('voidCompraTC', id).then(res => { aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Compra anulada', { deshacer: () => restaurarCompraYAvisar(id) }); }) }
+      (c.Pagado ? '<p class="m-ayuda">Para editarla o anularla, primero anula el pago del extracto.</p>'
+        : '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="editar">Editar</button><button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular la compra</button>'),
+    extra: {
+      editar: () => { siguiente = () => abrirEditarCompra(c); return Promise.resolve(); },
+      anular: () => api('voidCompraTC', id).then(res => { aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Compra anulada', { deshacer: () => restaurarCompraYAvisar(id) }); })
+    }
+  });
+  if (siguiente) siguiente();
+}
+
+/** Edita una compra con tarjeta que no está en un extracto pagado. Si apartó dinero, la reserva se ajusta sola. */
+async function abrirEditarCompra(c) {
+  const td = App.tar.data;
+  const campos = [
+    { k: 'Concepto', label: 'Concepto', tipo: 'texto', requerido: true, maxlength: 120 },
+    { k: 'Valor', label: 'Valor (lo que te cobró la tarjeta)', tipo: 'dinero', requerido: true, info: c.ApartoDinero ? 'Esta compra apartó dinero en la reserva: el traslado se ajusta al valor nuevo.' : 'Lo que suma esta compra a la deuda del corte.' },
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true, info: 'Si la fecha cae en otro corte, la compra pasa a ese extracto (siempre que no esté pagado).' },
+    { k: 'ID_Categoria', label: 'Categoría (opcional)', tipo: 'select', opciones: () => [['', 'Sin categoría']].concat(activos('Categorias').filter(x => x.Tipo === 'Gasto').map(x => [x.ID_Categoria, x.Nombre])) },
+    c.Divisa_Original && { k: 'Valor_Original', label: 'Lo que costó en ' + c.Divisa_Original, tipo: 'decimal', requerido: true },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ].filter(Boolean);
+  await abrirHoja({
+    titulo: 'Editar compra',
+    cuerpo: '<form novalidate data-form="editar-compra">' + campos.map(k => htmlCampo(k, c[k.k] === undefined ? '' : c[k.k], {})).join('') +
+      (c.ID_Item_Ppto ? '<p class="m-ayuda">El renglón del presupuesto y de dónde salió el dinero no se cambian aquí: si te equivocaste en eso, anula la compra y regístrala de nuevo.</p>' : '') +
+      '<p class="m-ayuda" id="ec-corte" aria-live="polite"></p><button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => {
+      activarEcoDinero(raiz);
+      const f = $('#f-Fecha', raiz), nota = $('#ec-corte', raiz);
+      const ver = () => { const m = f.value ? mesDeCorte(f.value, td.tarjeta.Dia_Corte) : c.Mes_Extracto; nota.textContent = m !== c.Mes_Extracto ? 'Con esta fecha la compra pasa al corte de ' + mesTexto(m).toLowerCase() + '.' : ''; };
+      f.addEventListener('change', ver); ver();
+      $('#f-Concepto', raiz).focus();
+    },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (typeof v.Valor !== 'number' || isNaN(v.Valor) || v.Valor <= 0) throw new Error('Escribe el valor.');
+      const cambios = { Concepto: v.Concepto, Valor: v.Valor, Fecha: v.Fecha, ID_Categoria: v.ID_Categoria || '', Notas: v.Notas || '' };
+      if (c.Divisa_Original) { if (typeof v.Valor_Original !== 'number' || isNaN(v.Valor_Original) || v.Valor_Original <= 0) throw new Error('Escribe lo que costó en ' + c.Divisa_Original + '.'); cambios.Divisa_Original = c.Divisa_Original; cambios.Valor_Original = v.Valor_Original; }
+      const res = await api('editCompraTC', c.ID_Compra, cambios);
+      aplicarEscritura(res); aplicarTarjeta(res); render();
+      aviso(res.tarjeta && res.tarjeta.mes !== c.Mes_Extracto ? 'Compra actualizada: pasó al corte de ' + mesTexto(res.tarjeta.mes).toLowerCase() : 'Compra actualizada');
+    }
+  });
+}
+
+/** El corte (AAAA-MM) al que va una compra de esa fecha: hasta el día de corte, ese mes; después, el siguiente. Igual que calcularMesExtracto_. */
+function mesDeCorte(fecha, diaCorte) {
+  const y = Number(fecha.slice(0, 4)), m = Number(fecha.slice(5, 7)), d = Number(fecha.slice(8, 10));
+  const ultimo = new Date(y, m, 0).getDate();
+  return d <= Math.min(Number(diaCorte), ultimo) ? fecha.slice(0, 7) : mesMas(fecha.slice(0, 7), 1);
+}
+
+/** Detalle de un abono: editarlo o anularlo. */
+async function abrirDetalleAbono(id) {
+  const td = App.tar.data;
+  const p = td && (td.pagos || []).find(x => x.ID_Pago === id);
+  if (!p) return;
+  let siguiente = null;
+  const filas = [['Valor', dinero(p.Valor)], ['Fecha', esc(fechaTxt(p.Fecha))], ['Lo pagó', esc(p.Pagador || 'Tú') + (p.Bolsillo ? ' · desde ' + esc(p.Bolsillo) : '')]];
+  if (p.Notas) filas.push(['Notas', esc(p.Notas)]);
+  await abrirHoja({
+    titulo: 'Abono', izq: 'Cerrar', sinGuardar: true,
+    cuerpo: '<dl class="m-detalle">' + filas.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('') + '</dl>' +
+      '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="editar">Editar</button><button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular el abono</button>',
+    extra: {
+      editar: () => { siguiente = () => abrirEditarAbono(p); return Promise.resolve(); },
+      anular: () => anularAbonoYAvisar(id)
+    }
+  });
+  if (siguiente) siguiente();
+}
+
+async function abrirEditarAbono(p) {
+  const td = App.tar.data;
+  const maximo = Math.round((td.totales.saldo + p.Valor) * 100) / 100;
+  const campos = [
+    { k: 'Valor', label: 'Valor del abono', tipo: 'dinero', requerido: true, ayuda: 'Hasta ' + dinero(maximo) + ', lo que se debe de este corte.', info: p.Bolsillo ? 'El gasto en ' + p.Bolsillo + ' cambia al valor nuevo.' : 'No se mueve ningún bolsillo tuyo.' },
+    p.Pagador && { k: 'Pagador', label: 'Quién lo pagó', tipo: 'texto', requerido: true, maxlength: 60 },
+    { k: 'Fecha', label: 'Fecha', tipo: 'fecha', requerido: true },
+    { k: 'Notas', label: 'Notas', tipo: 'area' }
+  ].filter(Boolean);
+  await abrirHoja({
+    titulo: 'Editar abono',
+    cuerpo: '<form novalidate data-form="editar-abono">' + campos.map(k => htmlCampo(k, p[k.k] === undefined ? '' : p[k.k], {})).join('') + '<button type="submit" hidden tabindex="-1" aria-hidden="true"></button></form>',
+    alAbrir: raiz => { activarEcoDinero(raiz); $('#f-Valor', raiz).focus(); },
+    alGuardar: async raiz => {
+      const v = leerFormulario(raiz, campos);
+      if (typeof v.Valor !== 'number' || isNaN(v.Valor) || v.Valor <= 0) throw new Error('Escribe el valor del abono.');
+      const cambios = { Valor: v.Valor, Fecha: v.Fecha, Notas: v.Notas || '' };
+      if (p.Pagador) cambios.Pagador = v.Pagador;
+      const res = await api('editAbonoTarjeta', p.ID_Pago, cambios);
+      aplicarEscritura(res); aplicarTarjeta(res); render(); aviso('Abono actualizado');
+    }
   });
 }
 

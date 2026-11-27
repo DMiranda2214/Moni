@@ -47,7 +47,7 @@ function divisaDeSimbolo_(simbolo) {
 /** Operaciones vigentes de una inversión, en orden de fecha (y de registro). */
 function operacionesDe_(idInversion, ops) {
   return (ops || getTableData('Inversiones_Operaciones')).filter(o => o.ID_Inversion === idInversion && !esVerdadero(o.Anulado))
-    .sort((a, b) => (a.Fecha < b.Fecha ? -1 : a.Fecha > b.Fecha ? 1 : texto_(a.Creado_En) < texto_(b.Creado_En) ? -1 : 1));
+    .sort((a, b) => -masRecienteArriba_(a, b)); // de la más antigua a la más reciente (el costo promedio se calcula en orden)
 }
 
 /**
@@ -172,7 +172,7 @@ function resumenBroker_(b, resumenes, ops) {
     comisiones: redondear2_(ops.filter(o => o.ID_Broker === b.ID_Broker && !esVerdadero(o.Anulado) && !esVerdadero(o.Sin_Efectivo)).reduce((a, o) => a + (Number(o.Comision) || 0), 0)),
     inversiones: items.map(i => i.ID_Inversion),
     movimientos: ops.filter(o => o.ID_Broker === b.ID_Broker && !esVerdadero(o.Anulado) && (o.Tipo === 'Deposito' || o.Tipo === 'Retiro'))
-      .sort((x, y) => (x.Fecha < y.Fecha ? 1 : x.Fecha > y.Fecha ? -1 : texto_(x.Creado_En) < texto_(y.Creado_En) ? 1 : -1))
+      .sort(masRecienteArriba_)
       .map(o => ({ ID_Operacion: o.ID_Operacion, Fecha: o.Fecha, Tipo: o.Tipo, Valor: Number(o.Valor_Origen) || 0, ID_Bolsillo: o.ID_Bolsillo || '', Notas: o.Notas || '' }))
   };
 }

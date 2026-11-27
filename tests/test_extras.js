@@ -592,6 +592,116 @@ module.exports = function (prueba, assert, crearEntorno) {
     assert.strictEqual(todo.saldoBase, 500000, 'con "todo", ese mismo saldo sí rinde');
   });
 
+  prueba('rendimiento estimado: rinde sobre el saldo al cierre de cada día (lo que entra un día rinde desde ese día)', () => {
+    const e2 = E();
+    const td = Math.pow(1.1, 1 / 365) - 1;
+    const cuenta = { ID_Cuenta: 'c1', Fecha_Apertura: '2027-03-01' };
+    const banco = { Rendimiento_EA: 0.1, Rendimiento_Pago: 'Mensual', Rendimiento_Base: 'Todo' };
+    const bols = [{ ID_Bolsillo: 'b1', ID_Cuenta: 'c1', Saldo_Apertura: 0, Creado_En: '2027-03-01T08:00:00' }];
+    // Un depósito el día 5: rinde los días 5 a 10 (6 días), no desde el 6
+    const r = e2.llamar('estimarRendimiento_', cuenta, banco, bols, [{ ID_Bolsillo: 'b1', Fecha: '2027-03-05', Valor: 1000000 }], '2027-03-11');
+    assert.strictEqual(r.dias, 10);
+    assert.strictEqual(r.pendiente, Math.round(1000000 * td * 6 * 100) / 100);
+    // Un retiro el día 8: ese día ya no rinde lo retirado
+    const r2 = e2.llamar('estimarRendimiento_', cuenta, banco, bols, [{ ID_Bolsillo: 'b1', Fecha: '2027-03-05', Valor: 1000000 }, { ID_Bolsillo: 'b1', Fecha: '2027-03-08', Valor: -1000000 }], '2027-03-11');
+    assert.strictEqual(r2.pendiente, Math.round(1000000 * td * 3 * 100) / 100, 'días 5, 6 y 7');
+  });
+
+  prueba('rendimiento estimado: el saldo inicial rinde desde que la cuenta o el bolsillo existen, no desde el inicio del mes', () => {
+    const e2 = E();
+    const td = Math.pow(1.1, 1 / 365) - 1;
+    const banco = { Rendimiento_EA: 0.1, Rendimiento_Pago: 'Mensual', Rendimiento_Base: 'Todo' };
+    const cuenta = { ID_Cuenta: 'c1', Fecha_Apertura: '2027-03-08' };
+    const bols = [{ ID_Bolsillo: 'b1', ID_Cuenta: 'c1', Saldo_Apertura: 1000000, Creado_En: '2027-03-08T10:00:00' }];
+    const r = e2.llamar('estimarRendimiento_', cuenta, banco, bols, [], '2027-03-11');
+    assert.strictEqual(r.pendiente, Math.round(1000000 * td * 3 * 100) / 100, 'solo los días 8, 9 y 10');
+    assert.strictEqual(r.saldoBase, 1000000);
+    // Un bolsillo creado después de la cuenta: su saldo inicial cuenta desde que se creó
+    const bols2 = [{ ID_Bolsillo: 'b1', ID_Cuenta: 'c1', Saldo_Apertura: 0, Creado_En: '2027-03-01T10:00:00' }, { ID_Bolsillo: 'b2', ID_Cuenta: 'c1', Saldo_Apertura: 500000, Creado_En: '2027-03-10T09:00:00' }];
+    const r2 = e2.llamar('estimarRendimiento_', { ID_Cuenta: 'c1', Fecha_Apertura: '2027-03-01' }, banco, bols2, [], '2027-03-11');
+    assert.strictEqual(r2.pendiente, Math.round(500000 * td * 1 * 100) / 100, 'solo el día 10');
+  });
+
+  prueba('rendimiento: se puede registrar en un bolsillo de la cuenta (y no en uno de otra)', () => {
+    const e2 = E();
+    const banco = e2.llamar('guardarCatalogo', 'Bancos', { Nombre: 'Digital', Rendimiento_EA: 0.1, Rendimiento_Base: 'Bolsillos' });
+    const cta = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Cajitas', Tipo: 'Ahorro', Permite_Bolsillos: true });
+    const cajita = e2.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: cta.ID_Cuenta, Nombre: 'Viaje', Saldo_Apertura: 1000000 });
+    const otra = e2.llamar('guardarCatalogo', 'Cuentas', { ID_Banco: banco.ID_Banco, Nombre: 'Otra', Tipo: 'Ahorro', Permite_Bolsillos: true });
+    const ajeno = e2.llamar('guardarCatalogo', 'Bolsillos', { ID_Cuenta: otra.ID_Cuenta, Nombre: 'Ajeno' });
+    const mov = e2.llamar('registrarRendimiento', { ID_Cuenta: cta.ID_Cuenta, Tipo: 'Interes', Valor: 2500, Fecha: hoy(), ID_Bolsillo: cajita.ID_Bolsillo });
+    assert.strictEqual(mov.ID_Bolsillo, cajita.ID_Bolsillo);
+    assert.strictEqual(e2.llamar('mapaSaldosBolsillos_')[cajita.ID_Bolsillo], 1002500, 'el interés queda en la cajita y sigue rindiendo');
+    assert.throws(e2.falla('registrarRendimiento', { ID_Cuenta: cta.ID_Cuenta, Tipo: 'Interes', Valor: 10, Fecha: hoy(), ID_Bolsillo: ajeno.ID_Bolsillo }), /no es de la cuenta/);
+    // Sin bolsillo, al saldo general de la cuenta (como siempre)
+    const sinB = e2.llamar('registrarRendimiento', { ID_Cuenta: cta.ID_Cuenta, Tipo: 'Interes', Valor: 10, Fecha: hoy() });
+    assert.strictEqual(sinB.ID_Bolsillo, e2.llamar('bolsilloDeCuenta_', cta.ID_Cuenta).ID_Bolsillo);
+  });
+
+  prueba('tarjeta: editar una compra que apartó dinero ajusta la reserva en su lugar; cambiar la fecha la lleva a otro corte', () => {
+    const { e, t, mercado, reserva, item, saldo } = escenarioTC();
+    const c = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Mercado', Valor: 120000, Fecha: hoy(), ID_Item_Ppto: item.ID_Item });
+    const movsAntes = e.llamar('getTableData', 'Movimientos').length;
+    const r = e.llamar('editarCompraTC', c.ID_Compra, { Concepto: 'Mercado grande', Valor: 150000 });
+    assert.strictEqual(r.ids.length, 2, 'las dos patas del traslado a la reserva');
+    assert.strictEqual(saldo(mercado.ID_Bolsillo), 400000 - 150000);
+    assert.strictEqual(saldo(reserva.ID_Bolsillo), 150000);
+    assert.strictEqual(e.llamar('getTableData', 'Movimientos').length, movsAntes, 'no crea movimientos nuevos ni anulados');
+    const comp = e.llamar('getTableData', 'Compras_TC').find(x => x.ID_Compra === c.ID_Compra);
+    assert.strictEqual(comp.Valor, 150000); assert.strictEqual(comp.Concepto, 'Mercado grande');
+    assert.strictEqual(e.llamar('obtenerPresupuestoMes', mes()).items.find(i => i.ID_Item === item.ID_Item).Real, 150000, 'el renglón cuenta el valor nuevo una sola vez');
+    // Otra fecha en otro corte: la compra cambia de extracto
+    const antes = bogota(-40 * 86400000);
+    const mesAntes = e.llamar('calcularMesExtracto_', antes, 28);
+    const r2 = e.llamar('editarCompraTC', c.ID_Compra, { Fecha: antes });
+    assert.strictEqual(r2.mes, mesAntes);
+    assert.notStrictEqual(r2.mes, r2.mesAnterior);
+    assert.strictEqual(e.llamar('obtenerTarjeta', t.ID_Tarjeta, mesAntes).compras[0].ID_Compra, c.ID_Compra);
+  });
+
+  prueba('tarjeta: una compra no se edita si dejaría el corte con más abonos que deuda, ni si su extracto está pagado', () => {
+    const { e, t, personal } = escenarioTC();
+    const c = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Ropa', Valor: 100000, Fecha: hoy() });
+    const mesC = c.Mes_Extracto;
+    e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Mes: mesC, Valor: 80000, Fecha: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    assert.throws(e.falla('editarCompraTC', c.ID_Compra, { Valor: 50000 }), /abonos/);
+    e.llamar('editarCompraTC', c.ID_Compra, { Valor: 90000 });
+    e.llamar('pagarExtracto', t.ID_Tarjeta, mesC, hoy(), personal.ID_Bolsillo, []);
+    assert.throws(e.falla('editarCompraTC', c.ID_Compra, { Valor: 1 }), /extracto pagado/);
+  });
+
+  prueba('tarjeta: editar un abono cambia también su gasto; no puede pasar de lo que se debe', () => {
+    const { e, t, personal, saldo } = escenarioTC();
+    const c = e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'Ropa', Valor: 100000, Fecha: hoy() });
+    const a = e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Mes: c.Mes_Extracto, Valor: 30000, Fecha: hoy(), ID_Bolsillo: personal.ID_Bolsillo });
+    assert.strictEqual(saldo(personal.ID_Bolsillo), 470000);
+    e.llamar('editarAbonoTarjeta', a.idPago, { Valor: 45000, Notas: 'corregido' });
+    assert.strictEqual(saldo(personal.ID_Bolsillo), 455000, 'el gasto del abono cambió');
+    const d = e.llamar('obtenerTarjeta', t.ID_Tarjeta, c.Mes_Extracto);
+    assert.strictEqual(d.totales.abonado, 45000);
+    assert.strictEqual(d.pagos[0].Notas, 'corregido');
+    assert.throws(e.falla('editarAbonoTarjeta', a.idPago, { Valor: 100001 }), /mayor que lo que se debe/);
+    // Un abono de otra persona: se puede cambiar su nombre
+    const b = e.llamar('registrarAbonoTarjeta', { ID_Tarjeta: t.ID_Tarjeta, Mes: c.Mes_Extracto, Valor: 10000, Fecha: hoy(), Pagador: 'Mamá' });
+    e.llamar('editarAbonoTarjeta', b.idPago, { Pagador: 'Papá' });
+    assert.ok(e.llamar('obtenerTarjeta', t.ID_Tarjeta, c.Mes_Extracto).pagos.some(p => p.Pagador === 'Papá'));
+  });
+
+  prueba('orden: compras, abonos y movimientos del mismo día salen con lo último registrado arriba', () => {
+    const { e, t, personal } = escenarioTC();
+    const nombres = ['Primera', 'Segunda', 'Tercera'];
+    nombres.forEach(n => e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: n, Valor: 1000, Fecha: hoy() }));
+    // Una compra de ayer registrada al final va debajo de las de hoy
+    e.llamar('registrarCompraTC', { ID_Tarjeta: t.ID_Tarjeta, Concepto: 'De ayer', Valor: 1000, Fecha: bogota(-86400000) });
+    const d = e.llamar('obtenerTarjeta', t.ID_Tarjeta);
+    const deHoy = d.compras.filter(c => c.Fecha === hoy()).map(c => c.Concepto);
+    assert.deepStrictEqual(deHoy, ['Tercera', 'Segunda', 'Primera']);
+    if (d.compras.some(c => c.Concepto === 'De ayer')) assert.strictEqual(d.compras[d.compras.length - 1].Concepto, 'De ayer');
+    ['Uno', 'Dos', 'Tres'].forEach(n => e.llamar('registrarMovimiento', { Tipo_Mov: 'Gasto', Fecha: hoy(), Concepto: n, Valor: 10, ID_Bolsillo: personal.ID_Bolsillo }));
+    const movs = e.llamar('listarMovimientos', { mes: hoy().slice(0, 7) }).items.filter(m => ['Uno', 'Dos', 'Tres'].indexOf(m.Concepto) !== -1).map(m => m.Concepto);
+    assert.deepStrictEqual(movs, ['Tres', 'Dos', 'Uno']);
+  });
+
   prueba('suscripciones: entran solas al presupuesto del mes según su periodicidad, y pagarlas marca el renglón', () => {
     const { e, t, personal, m, item } = escenarioTC();
     const mensual = e.llamar('guardarCatalogo', 'Suscripciones', { Nombre: 'Netflix', Valor: 40000, Periodicidad: 'Mensual', Proximo_Cobro: hoy(), ID_Bolsillo: personal.ID_Bolsillo });

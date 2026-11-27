@@ -62,8 +62,10 @@ function resumenCuentaAhorro_(cuenta, bolsillos, movs, saldos, creditos) {
 
 /**
  * Cuánto rindió una cuenta de ahorro desde el último rendimiento registrado (o desde el inicio del mes) hasta ayer.
- * Rinde cada día sobre el saldo con que empezó el día. Si el banco paga a diario, lo ganado se suma al saldo
- * día a día (interés compuesto); si paga cada mes, se suma al saldo al cerrar el mes.
+ * Rinde cada día sobre el saldo al cierre del día (como liquidan los bancos): lo que entra un día rinde desde ese día y
+ * lo que sale ese día ya no rinde. Si el banco paga a diario, lo ganado se suma al saldo día a día (interés compuesto);
+ * si paga cada mes, se suma al saldo al cerrar el mes.
+ * El saldo inicial de cada bolsillo rinde desde que existe (la apertura de la cuenta o la creación del bolsillo), no antes.
  * Es una estimación: el banco puede redondear distinto, así que el valor se puede corregir al registrarlo.
  */
 function estimarRendimiento_(cuenta, banco, bolsillos, movs, hoy) {
@@ -78,7 +80,11 @@ function estimarRendimiento_(cuenta, banco, bolsillos, movs, hoy) {
   const bolsillosQueRinden = bolsillos.filter(rinde);
   const todos = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillos, movs).filter(m => m.Fecha);
   const propios = movimientosDeCuenta_(cuenta.ID_Cuenta, bolsillosQueRinden, movs).filter(m => m.Fecha);
-  const apertura = bolsillosQueRinden.filter(b => b.ID_Cuenta === cuenta.ID_Cuenta).reduce((a, b) => a + (Number(b.Saldo_Apertura) || 0), 0);
+  // El saldo inicial de cada bolsillo cuenta desde que existe: la apertura de la cuenta o la creación del bolsillo (lo último)
+  const fechaCuenta = texto_(cuenta.Fecha_Apertura).slice(0, 10);
+  const aperturas = bolsillosQueRinden.filter(b => b.ID_Cuenta === cuenta.ID_Cuenta && Number(b.Saldo_Apertura)).map(b => ({
+    Fecha: [fechaCuenta, marcaRegistro_(b.Creado_En).slice(0, 10)].filter(Boolean).sort().pop() || '', Valor: Number(b.Saldo_Apertura) || 0 }));
+  const apertura = aperturas.reduce((a, x) => a + x.Valor, 0);
 
   // El último rendimiento registrado se busca en toda la cuenta, caiga en el bolsillo que caiga.
   const ultimo = todos.filter(m => m.Subtipo === 'Interes' && Number(m.Valor) > 0).map(m => String(m.Fecha)).sort().pop();
@@ -91,13 +97,14 @@ function estimarRendimiento_(cuenta, banco, bolsillos, movs, hoy) {
   if (desde < sumarDias_(hoy, -400)) desde = sumarDias_(hoy, -400); // tope razonable
   resultado.desde = desde;
 
-  const ordenados = propios.slice().sort((x, y) => (String(x.Fecha) < String(y.Fecha) ? -1 : 1));
-  let i = 0, base = apertura;
+  const ordenados = aperturas.concat(propios).sort((x, y) => (String(x.Fecha) < String(y.Fecha) ? -1 : String(x.Fecha) > String(y.Fecha) ? 1 : 0));
+  let i = 0, base = 0;
   while (i < ordenados.length && String(ordenados[i].Fecha) < desde) base += Number(ordenados[i++].Valor) || 0;
 
   let capitalizado = 0, enMes = 0, total = 0, dias = 0, mesActualDelBarrido = desde.slice(0, 7), acumMesCorriente = 0;
   for (let d = desde; d <= hasta; d = sumarDias_(d, 1)) {
-    while (i < ordenados.length && String(ordenados[i].Fecha) < d) base += Number(ordenados[i++].Valor) || 0;
+    // Saldo al cierre del día d: incluye lo que entró o salió ese mismo día
+    while (i < ordenados.length && String(ordenados[i].Fecha) <= d) base += Number(ordenados[i++].Valor) || 0;
     if (d.slice(0, 7) !== mesActualDelBarrido) { capitalizado += pago === 'Mensual' ? enMes : 0; enMes = 0; mesActualDelBarrido = d.slice(0, 7); }
     const ganado = (base + capitalizado + (pago === 'Diario' ? total : 0)) * td;
     total += ganado; enMes += ganado; dias++;
@@ -153,13 +160,19 @@ function cuentaAhorroActiva_(idCuenta) {
 
 /**
  * Registra un rendimiento: interés ganado (ingreso), o la retención y el GMF que lo descuentan (gastos).
- * @param {Object} r { ID_Cuenta, Tipo: Interes|Retencion|GMF, Valor, Fecha, Notas }
+ * Por defecto va al saldo general de la cuenta; con `ID_Bolsillo`, a ese bolsillo de la cuenta (hay bancos que pagan el
+ * rendimiento en cada bolsillo o "cajita", y así sigue rindiendo).
+ * @param {Object} r { ID_Cuenta, Tipo: Interes|Retencion|GMF, Valor, Fecha, ID_Bolsillo?, Notas }
  */
 function registrarRendimiento(r) {
   if (!r || typeof r !== 'object') throw new Error('Faltan los datos del rendimiento.');
   const cuenta = cuentaAhorroActiva_(r.ID_Cuenta);
   const tipo = opcion_(r.Tipo, SUBTIPOS_RENDIMIENTO, 'El tipo');
-  const bolsillo = bolsilloDeCuenta_(cuenta.ID_Cuenta);
+  let bolsillo = bolsilloDeCuenta_(cuenta.ID_Cuenta);
+  if (texto_(r.ID_Bolsillo)) {
+    bolsillo = exigirActivo_(leer_('Bolsillos'), 'ID_Bolsillo', texto_(r.ID_Bolsillo), 'El bolsillo');
+    if (bolsillo.ID_Cuenta !== cuenta.ID_Cuenta) throw new Error('El bolsillo "' + bolsillo.Nombre + '" no es de la cuenta ' + cuenta.Nombre + '.');
+  }
   const cat = categoriaPorRol_('Rendimiento');
   const etiqueta = { Interes: 'Rendimientos', Retencion: 'Retención en la fuente', GMF: 'GMF (4x1000)' }[tipo];
   return registrarMovimiento({

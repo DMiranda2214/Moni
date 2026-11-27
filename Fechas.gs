@@ -36,6 +36,24 @@ function ahoraIso_() {
   return Utilities.formatDate(new Date(), zonaHoraria_(), "yyyy-MM-dd'T'HH:mm:ss");
 }
 
+/** La marca de registro (Creado_En) como texto comparable, aunque Sheets la haya convertido en fecha. */
+function marcaRegistro_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, zonaHoraria_(), "yyyy-MM-dd'T'HH:mm:ss");
+  return v === undefined || v === null ? '' : String(v);
+}
+
+/**
+ * El orden de todas las listas (movimientos, compras, abonos, aportes, operaciones…): la fecha más reciente arriba y, el
+ * mismo día, lo último que se registró arriba (si se registraron en el mismo segundo, el que está más abajo en la hoja).
+ */
+function masRecienteArriba_(a, b) {
+  const fa = String(a.Fecha || ''), fb = String(b.Fecha || '');
+  if (fa !== fb) return fa < fb ? 1 : -1;
+  const ca = marcaRegistro_(a.Creado_En), cb = marcaRegistro_(b.Creado_En);
+  if (ca !== cb) return ca < cb ? 1 : -1;
+  return (Number(b._rowIndex || b._fila) || 0) - (Number(a._rowIndex || a._fila) || 0);
+}
+
 function dosDigitos_(n) { return String(n).padStart(2, '0'); }
 
 /** Días que tiene un mes (mes de 1 a 12). */

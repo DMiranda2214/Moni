@@ -88,10 +88,12 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 | `addCompraTC` | `c` |
 | `addGastoTarjeta` | `c, vista` — gasto pagado con tarjeta desde Registrar; con renglón aparta el dinero de su bolsillo, sin renglón no aparta nada |
 | `voidGastoTarjeta` | `idCompra, idItem, vista` |
+| `editCompraTC` | `idCompra, { Concepto?, Valor?, Fecha?, ID_Categoria?, Notas?, Mes_Extracto?, Divisa_Original?, Valor_Original? }` |
 | `voidCompraTC` | `idCompra` |
 | `restoreCompraTC` | `idCompra` |
 | `payExtracto` | `idTarjeta, mes, fecha, idOrigen, aportes?` (`aportes`: `[{ Pagador, Valor }]` de terceros; descuenta además lo ya abonado) |
 | `addAbonoTarjeta` | `{ ID_Tarjeta, Mes, Valor, Fecha, Pagador?, ID_Bolsillo? }` — sin `Pagador` sale de `ID_Bolsillo`; con `Pagador` es de un tercero y no mueve bolsillos |
+| `editAbonoTarjeta` | `idPago, { Valor?, Fecha?, Notas?, Pagador? }` |
 | `voidAbonoTarjeta` | `idPago` |
 | `voidPagoExtracto` | `idExtracto` |
 | `previewCredito` | `c` |
@@ -111,7 +113,7 @@ Funciones públicas de `Api.gs` que el frontend invoca con `google.script.run`. 
 |---|---|
 | `getAhorro` | — |
 | `getCuentaAhorro` | `idCuenta, mes` |
-| `addRendimiento` | `r` |
+| `addRendimiento` | `{ ID_Cuenta, Tipo: Interes\|Retencion\|GMF, Valor, Fecha, ID_Bolsillo? }` |
 | `withdrawAhorro` | `idCuenta, idDestino, valor, fecha, concepto` |
 | `repayAhorro` | `idCuenta, idOrigen, valor, fecha, concepto` |
 | `getRegalos` | `anio` |
