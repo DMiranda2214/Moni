@@ -92,7 +92,8 @@ Escribe tu sueldo (toca la fila *Sueldo base* para cambiarlo) y agrega tus descu
 - El **mes del extracto** se decide por el día de corte.
 - **Pagar el extracto:** una sola acción, todo o nada: si a la reserva le falta, **eliges de qué bolsillo sale** lo que falta; luego se paga el total desde la reserva y se marcan el extracto y las compras como pagados. Se puede **deshacer**.
 - **Aportes de otras personas:** al pagar el extracto, **¿Alguien más aporta al pago?** te deja anotar quién (un nombre libre; Moni sugiere los que ya usaste) y cuánto paga, por ejemplo cuando alguien paga una parte desde un banco que no está en Moni. Eso **no mueve ningún bolsillo tuyo**: solo baja lo que tú pagas desde la reserva. Si entre abonos y aportes se cubre todo el extracto, no sale dinero de tus bolsillos.
-- **Registrar un abono:** botón **Registrar un abono** en el corte que estés viendo. Lo paga *yo, desde un bolsillo mío* (sale de ese bolsillo) u *otra persona* (con su nombre; no mueve tus bolsillos). Un abono **baja la deuda del corte y libera cupo**, pero **no aparta dinero en la reserva**. Quedan en *Abonos y aportes* y se pueden anular; al pagar el extracto se descuentan.
+- **Registrar un abono:** botón **Registrar un abono** en el corte que estés viendo. Lo paga *yo, desde un bolsillo mío* (sale de ese bolsillo) u *otra persona* (con su nombre; no mueve tus bolsillos). Un abono **baja la deuda del corte y libera cupo**, pero **no aparta dinero en la reserva**. Quedan en *Abonos y aportes*; tócalo para **editarlo** (valor, fecha, notas o quién lo pagó) o anularlo. Al pagar el extracto se descuentan.
+- **Editar una compra:** toca la compra y elige **Editar**: concepto, valor, fecha, categoría y notas. Si cambias la fecha a otro corte, pasa a ese extracto. Si la compra apartó dinero en la reserva, el traslado se ajusta solo. No se pueden editar las compras de un extracto ya pagado (anula primero el pago).
 ### Créditos de autopago
 - Un crédito es un préstamo desde tu ahorro hacia ti (o a alguien): monto, plazo, tasa y cuenta de ahorro. Moni calcula la cuota (amortización francesa) y el cronograma antes de guardar.
 - **Pagar cuota:** sale de un bolsillo y **vuelve al ahorro**.
@@ -123,7 +124,7 @@ Cuando registras un gasto, mueves dinero a otra cuenta, compras con tarjeta, pag
 
 ## 9. Ahorro
 **Mi dinero → Ahorro.** Por cada cuenta de ahorro: saldo, meta, rendimientos y **deuda con el ahorro**.
-- **Rendimiento estimado:** si configuraste la tasa de tu banco (Ajustes → Bancos: % EA y si paga cada día o cada mes), Moni calcula cuánto te rinde y lo que falta por registrar; **Registrar este rendimiento** lo anota (corrígelo si tu banco muestra otro valor).
+- **Rendimiento estimado:** si configuraste la tasa de tu banco (Ajustes → Bancos: % EA y si paga cada día o cada mes), Moni calcula cuánto te rinde y lo que falta por registrar; **Registrar este rendimiento** lo anota con la fecha de ayer (el último día que cubre) y puedes elegir en qué bolsillo queda, si tu banco paga en cada bolsillo o cajita. Corrígelo si tu banco muestra otro valor. El cálculo usa tu saldo al cierre de cada día y empieza el día en que abriste la cuenta o creaste el bolsillo.
 - **Rendimiento:** interés (suma), retención y GMF (restan).
 - **Sacar para gastos:** pasa dinero a un bolsillo y queda como algo por **reponer**.
 - **Reponer:** devuelve dinero al ahorro y baja la deuda.

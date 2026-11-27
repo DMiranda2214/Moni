@@ -157,7 +157,7 @@ const ACCIONES = {
   'recargar-anual': () => { App.anual.error = null; App.anual.data = null; render(); },
   'recargar-ana': () => { App.ana.error = null; App.ana.data = null; render(); },
   'recargar-resp': () => { App.resp.error = null; App.resp.data = null; render(); },
-  'rend-estimado': () => { const e = App.ahoC.data && App.ahoC.data.cuenta.rendimientoEstimado; if (e) abrirRendimiento({ valor: e.pendiente }); },
+  'rend-estimado': () => { const e = App.ahoC.data && App.ahoC.data.cuenta.rendimientoEstimado; if (e) abrirRendimiento({ valor: e.pendiente, hasta: e.hasta }); },
   'aportar-ahorro': () => { const d = App.ahoC.data; if (d) abrirRegistrar({ tipo: 'Mover', destino: d.ID_Bolsillo, concepto: 'Aporte a ' + d.cuenta.Nombre }); },
   rendimiento: () => abrirRendimiento(),
   'retirar-ahorro': () => abrirMovimientoAhorro('retirar'),
@@ -208,10 +208,7 @@ const ACCIONES = {
   compra: el => abrirDetalleCompra(el.dataset.id),
   'pagar-extracto': () => abrirPagoExtracto(),
   'abrir-abono': () => abrirAbonoTarjeta(),
-  abono: async el => {
-    const ok = await confirmar({ titulo: 'Anular el abono', accion: 'Anular', mensaje: 'La deuda de ese corte vuelve a subir y, si salió de un bolsillo tuyo, el dinero regresa a él.' });
-    if (ok) anularAbonoYAvisar(el.dataset.id);
-  },
+  abono: el => abrirDetalleAbono(el.dataset.id),
   'anular-pago-extracto': async () => {
     const ok = await confirmar({ titulo: 'Anular el pago', accion: 'Anular', mensaje: 'Se devuelve el dinero a la reserva y a tu bolsillo personal, y las compras quedan pendientes otra vez.' });
     if (ok && App.tar.data && App.tar.data.extracto) anularPagoExtractoYAvisar(App.tar.data.extracto.ID_Extracto);

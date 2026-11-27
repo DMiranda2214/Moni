@@ -655,7 +655,8 @@ async function abrirDetalleMov(id) {
       ? '<button type="button" class="m-btn m-btn-primary" style="width:100%" data-hoja-acc="restaurar">Restaurar movimiento</button>'
       : (it.Editable ? '<button type="button" class="m-btn m-btn-secondary" style="width:100%;margin-bottom:var(--m-space-2)" data-hoja-acc="editar">Editar</button>' : '') +
         '<button type="button" class="m-accion-peligro" data-hoja-acc="anular">Anular' + (it.esTransferencia ? ' traslado' : '') + '</button>' +
-        (!it.Editable && !it.esTransferencia ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Este movimiento lo generó la app y no se edita a mano; si te equivocaste, anúlalo y regístralo de nuevo.</p>' : ''));
+        (it.Subtipo === 'Reserva_TC' || it.Subtipo === 'Pago_TC' ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Es de una tarjeta de crédito: para cambiarlo, edita la compra o el abono en Pagos → Tarjetas y este movimiento se ajusta solo.</p>'
+          : (!it.Editable && !it.esTransferencia ? '<p class="m-ayuda" style="margin-top:var(--m-space-3)">Este movimiento lo generó la app y no se edita a mano; si te equivocaste, anúlalo y regístralo de nuevo.</p>' : '')));
 
   await abrirHoja({
     titulo: 'Movimiento', izq: 'Cerrar', sinGuardar: true, cuerpo: cuerpo,

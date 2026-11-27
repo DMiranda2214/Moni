@@ -140,6 +140,96 @@ function anularCompraTC(idCompra) {
   return { ids: ids, tarjeta: compra.ID_Tarjeta, mes: compra.Mes_Extracto };
 }
 
+/**
+ * Edita una compra con tarjeta: concepto, valor, fecha (y con ella el corte), categoría, notas y moneda original.
+ * - No se edita si está en un extracto pagado, ni se puede llevar a un corte ya pagado.
+ * - Si apartó dinero en la reserva, ese traslado se ajusta al valor, la fecha y el concepto nuevos (en el mismo registro).
+ * - Sus cargos (recargo por otra moneda…) acompañan a la compra si cambia de corte.
+ * - Un corte no puede quedar con más abonos que deuda.
+ * El renglón del presupuesto y de dónde salió el dinero no se cambian aquí: para eso se anula y se registra de nuevo.
+ * @param {string} idCompra
+ * @param {Object} c { Concepto?, Valor?, Fecha?, ID_Categoria?, Notas?, Mes_Extracto?, Divisa_Original?, Valor_Original? }
+ */
+function editarCompraTC(idCompra, c) {
+  const compra = buscarPorId_(leer_('Compras_TC'), 'ID_Compra', idCompra);
+  if (!compra) throw new Error('La compra no existe.');
+  if (esVerdadero(compra.Anulado)) throw new Error('La compra está anulada; restáurala antes de editarla.');
+  if (esVerdadero(compra.Pagado)) throw new Error('Esa compra ya está en un extracto pagado. Anula primero el pago del extracto.');
+  const x = c || {};
+  const tarjeta = buscarPorId_(leer_('Tarjetas'), 'ID_Tarjeta', compra.ID_Tarjeta);
+  const fecha = x.Fecha !== undefined ? fechaMovimiento_(x.Fecha) : compra.Fecha;
+  const concepto = x.Concepto !== undefined ? textoRequerido_(x.Concepto, 'El concepto').slice(0, 120) : compra.Concepto;
+  const valor = x.Valor !== undefined ? numero_(x.Valor, 'El valor', { requerido: true, min: 0.01, max: VALOR_MAXIMO }) : Number(compra.Valor);
+  let mes = compra.Mes_Extracto;
+  if (texto_(x.Mes_Extracto)) mes = mesValido_(x.Mes_Extracto);
+  else if (fecha !== compra.Fecha) mes = calcularMesExtracto_(fecha, tarjeta.Dia_Corte);
+  if (mes !== compra.Mes_Extracto && extractoPagado_(compra.ID_Tarjeta, mes)) throw new Error('El extracto de ' + mes + ' ya está pagado: la compra no puede pasar a ese corte.');
+
+  const cargos = leer_('Compras_TC').filter(k => texto_(k.Ref) === MARCA_CARGO + idCompra && !esVerdadero(k.Anulado));
+  // El corte de donde sale (o que baja de valor) no puede quedar con más abonos que deuda
+  const valorCargos = cargos.reduce((a, k) => a + (Number(k.Valor) || 0), 0);
+  const sale = mes !== compra.Mes_Extracto ? Number(compra.Valor) + valorCargos : Number(compra.Valor) - valor;
+  if (sale > 0.005) {
+    const quedaria = redondear2_(totalCorte_(compra.ID_Tarjeta, compra.Mes_Extracto) - sale);
+    const abonado = abonosPendientes_(compra.ID_Tarjeta, compra.Mes_Extracto);
+    if (abonado > quedaria + 0.005) throw new Error('Ese corte ya tiene abonos por ' + pesos_(abonado) + ': con el cambio la deuda sería de ' + pesos_(quedaria) + '. Anula primero algún abono.');
+  }
+
+  const datos = { Fecha: fecha, Concepto: concepto, Valor: valor, Mes_Extracto: mes,
+    ID_Categoria: x.ID_Categoria !== undefined ? categoriaMovimiento_(x.ID_Categoria, 'Gasto') : compra.ID_Categoria,
+    Notas: x.Notas !== undefined ? texto_(x.Notas).slice(0, 500) : compra.Notas };
+  if (x.Divisa_Original !== undefined) {
+    const d = texto_(x.Divisa_Original).toUpperCase().slice(0, 3);
+    datos.Divisa_Original = d;
+    datos.Valor_Original = d ? numero_(x.Valor_Original, 'El valor en ' + d, { min: 0.01, max: VALOR_MAXIMO, requerido: true }) : '';
+    datos.Tasa = d ? redondear2_(valor / datos.Valor_Original) : '';
+  } else if (texto_(compra.Divisa_Original) && Number(compra.Valor_Original) > 0) datos.Tasa = redondear2_(valor / Number(compra.Valor_Original));
+
+  return conBloqueo_(() => {
+    let ids = [];
+    // El dinero apartado en la reserva sigue a la compra: las dos patas del traslado cambian en su lugar
+    if (compra.ID_Mov_Reserva) {
+      const g = filasDelGrupo_(compra.ID_Mov_Reserva);
+      const vivas = g.filas.filter(f => !esVerdadero(f.Anulado));
+      updateRows_('Movimientos', vivas.map(f => ({ fila: f, cambios: {
+        Valor: Number(f.Valor) < 0 ? -valor : valor, Fecha: fecha, Concepto: ('Reserva ' + tarjeta.Nombre + ': ' + concepto).slice(0, 120) } })));
+      ids = vivas.map(f => f.ID_Mov);
+    }
+    updateRow('Compras_TC', compra, datos);
+    if (mes !== compra.Mes_Extracto && cargos.length) updateRows_('Compras_TC', cargos.map(k => ({ fila: k, cambios: { Mes_Extracto: mes, Fecha: fecha } })));
+    return { ids: ids, tarjeta: compra.ID_Tarjeta, mes: mes, mesAnterior: compra.Mes_Extracto };
+  });
+}
+
+/**
+ * Edita un abono que aún no se aplicó a un extracto pagado: valor, fecha, notas y, si lo pagó otra persona, su nombre.
+ * Si salió de un bolsillo, su gasto cambia en el mismo registro. El abono no puede pasar de lo que se debe del corte.
+ * @param {string} idPago
+ * @param {Object} a { Valor?, Fecha?, Notas?, Pagador? }
+ */
+function editarAbonoTarjeta(idPago, a) {
+  const p = buscarPorId_(leer_('Pagos_Tarjeta'), 'ID_Pago', idPago);
+  if (!p || p.Tipo !== 'Abono') throw new Error('El abono no existe.');
+  if (esVerdadero(p.Anulado)) throw new Error('El abono está anulado.');
+  if (p.ID_Extracto) throw new Error('Ese abono ya se aplicó a un extracto pagado. Anula primero el pago del extracto.');
+  const x = a || {};
+  const valor = x.Valor !== undefined ? numero_(x.Valor, 'El valor del abono', { requerido: true, min: 0.01, max: VALOR_MAXIMO }) : Number(p.Valor);
+  const fecha = x.Fecha !== undefined ? fechaMovimiento_(x.Fecha) : p.Fecha;
+  const saldo = redondear2_(totalCorte_(p.ID_Tarjeta, p.Mes) - abonosPendientes_(p.ID_Tarjeta, p.Mes) + Number(p.Valor));
+  if (valor > saldo + 0.005) throw new Error('El abono (' + pesos_(valor) + ') es mayor que lo que se debe de ese corte (' + pesos_(saldo) + ').');
+  const datos = { Valor: valor, Fecha: fecha, Notas: x.Notas !== undefined ? texto_(x.Notas).slice(0, 300) : p.Notas };
+  if (p.Pagador && x.Pagador !== undefined) datos.Pagador = textoRequerido_(x.Pagador, 'El nombre de quien paga').slice(0, 60);
+  return conBloqueo_(() => {
+    let ids = [];
+    if (p.ID_Mov) {
+      const mov = buscarPorId_(leer_('Movimientos'), 'ID_Mov', p.ID_Mov);
+      if (mov && !esVerdadero(mov.Anulado)) { updateRow('Movimientos', mov, { Valor: -valor, Fecha: fecha }); ids = [mov.ID_Mov]; }
+    }
+    updateRow('Pagos_Tarjeta', p, datos);
+    return { ids: ids, tarjeta: p.ID_Tarjeta, mes: p.Mes };
+  });
+}
+
 /** Deshace la anulación de una compra. */
 function restaurarCompraTC(idCompra) {
   const compra = buscarPorId_(leer_('Compras_TC'), 'ID_Compra', idCompra);
@@ -349,12 +439,13 @@ function obtenerTarjeta(idTarjeta, mes) {
   });
 
   const compras = todas.filter(c => c.Mes_Extracto === m)
-    .sort((a, b) => (b.Fecha > a.Fecha ? 1 : b.Fecha < a.Fecha ? -1 : 0))
+    .sort(masRecienteArriba_)
     .map(c => ({
       ID_Compra: c.ID_Compra, Fecha: c.Fecha, Concepto: c.Concepto, Valor: Number(c.Valor) || 0, Fuente: c.Fuente,
       Pagado: esVerdadero(c.Pagado), ID_Categoria: c.ID_Categoria || '',
       Categoria: (buscarPorId_(categorias, 'ID_Categoria', c.ID_Categoria) || {}).Nombre || '',
-      ID_Item_Ppto: c.ID_Item_Ppto || '', Notas: c.Notas || '', ApartoDinero: !!c.ID_Mov_Reserva
+      ID_Item_Ppto: c.ID_Item_Ppto || '', Notas: c.Notas || '', ApartoDinero: !!c.ID_Mov_Reserva,
+      Divisa_Original: c.Divisa_Original || '', Valor_Original: Number(c.Valor_Original) || '', Mes_Extracto: c.Mes_Extracto
     }));
 
   const porFuente = { Personal: 0, Ppto: 0, Guardar: 0, Otro: 0 };
@@ -367,8 +458,8 @@ function obtenerTarjeta(idTarjeta, mes) {
   const saldoCorte = extracto ? 0 : Math.max(0, redondear2_(total - abonado));
   // El cupo usado es lo comprado sin pagar menos lo ya abonado a esos cortes
   const usado = Math.max(0, redondear2_(todas.filter(c => !esVerdadero(c.Pagado)).reduce((a, c) => a + (Number(c.Valor) || 0), 0) - abonosPendientes_(idTarjeta)));
-  const pagosDelMes = pagosT.filter(p => p.Mes === m).sort((a, b) => (b.Fecha > a.Fecha ? 1 : b.Fecha < a.Fecha ? -1 : 0)).map(p => ({
-    ID_Pago: p.ID_Pago, Fecha: p.Fecha, Valor: Number(p.Valor) || 0, Tipo: p.Tipo, Pagador: p.Pagador || '', Bolsillo: p.ID_Mov ? nombreBolsillo((buscarPorId_(leer_('Movimientos'), 'ID_Mov', p.ID_Mov) || {}).ID_Bolsillo) : '',
+  const pagosDelMes = pagosT.filter(p => p.Mes === m).sort(masRecienteArriba_).map(p => ({
+    ID_Pago: p.ID_Pago, Fecha: p.Fecha, Valor: Number(p.Valor) || 0, Tipo: p.Tipo, Pagador: p.Pagador || '', Notas: p.Notas || '', Bolsillo: p.ID_Mov ? nombreBolsillo((buscarPorId_(leer_('Movimientos'), 'ID_Mov', p.ID_Mov) || {}).ID_Bolsillo) : '',
     Editable: p.Tipo === 'Abono' && !p.ID_Extracto
   }));
   // Nombres de quienes han pagado antes (de cualquier tarjeta), los más usados primero, para sugerirlos

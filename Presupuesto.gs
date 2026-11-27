@@ -307,7 +307,7 @@ function movimientosParaVincular(idItem) {
   return getTableData('Movimientos', { excludeAnulados: true })
     .filter(m => !m.ID_Item_Ppto && !m.Subtipo && m.Fecha && (m.Fecha.slice(0, 7) === item.Mes || m.Fecha.slice(0, 7) === anterior) &&
       (apartar ? (m.Tipo_Mov === 'Transferencia' && Number(m.Valor) > 0) : m.Tipo_Mov === 'Gasto'))
-    .sort((x, y) => String(y.Fecha).localeCompare(String(x.Fecha)))
+    .sort(masRecienteArriba_)
     .slice(0, 40)
     .map(m => ({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: Math.abs(Number(m.Valor) || 0), ID_Bolsillo: m.ID_Bolsillo }));
 }

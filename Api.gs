@@ -568,6 +568,20 @@ function addCompraTC(c) {
   });
 }
 
+function editCompraTC(idCompra, cambios) {
+  return responder_(function () {
+    const r = editarCompraTC(idCompra, cambios);
+    return resultadoTarjeta_(r.tarjeta, r.mes, r.ids);
+  });
+}
+
+function editAbonoTarjeta(idPago, cambios) {
+  return responder_(function () {
+    const r = editarAbonoTarjeta(idPago, cambios);
+    return resultadoTarjeta_(r.tarjeta, r.mes, r.ids);
+  });
+}
+
 function voidCompraTC(idCompra) {
   return responder_(function () {
     const r = anularCompraTC(idCompra);

@@ -73,13 +73,13 @@ function aportesMetas_() {
           x.porMes[mes] = redondear2_((x.porMes[mes] || 0) + v);
           x.aportado = redondear2_(x.aportado + v);
         }
-        x.movimientos.push({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: v, tipo: 'Aporte' });
+        x.movimientos.push({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: v, tipo: 'Aporte', Creado_En: marcaRegistro_(m.Creado_En), _rowIndex: m._rowIndex });
       } else if (m.Tipo_Mov === 'Gasto' && ref.indexOf(MARCA_META) === 0) {
         x.usado = redondear2_(x.usado - v);
-        x.movimientos.push({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: v, tipo: 'Uso' });
+        x.movimientos.push({ ID_Mov: m.ID_Mov, Fecha: m.Fecha, Concepto: m.Concepto, Valor: v, tipo: 'Uso', Creado_En: marcaRegistro_(m.Creado_En), _rowIndex: m._rowIndex });
       }
     });
-    Object.keys(r).forEach(id => r[id].movimientos.sort((a, b) => (a.Fecha < b.Fecha ? 1 : a.Fecha > b.Fecha ? -1 : 0)));
+    Object.keys(r).forEach(id => { r[id].movimientos.sort(masRecienteArriba_); r[id].movimientos.forEach(x => { delete x._rowIndex; }); });
     return r;
   });
 }

@@ -376,7 +376,7 @@ function listarMovimientos(f) {
       ID_Bolsillo: m.ID_Bolsillo, Bolsillo: nombreBolsillo(m.ID_Bolsillo), Cuenta: nombreCuenta(m.ID_Bolsillo), Divisa: divisas.bolsillos[m.ID_Bolsillo] || DIVISA_BASE,
       ID_Categoria: m.ID_Categoria || '', Categoria: catPorId[m.ID_Categoria] ? catPorId[m.ID_Categoria].Nombre : '',
       ID_Grupo: m.ID_Grupo || '', ID_Item_Ppto: m.ID_Item_Ppto || '', Notas: m.Notas || '', Anulado: esVerdadero(m.Anulado), Afecta_Saldos: afectaSaldos_(m),
-      Creado_En: m.Creado_En || '', _fila: m._rowIndex, Valor: Number(m.Valor) || 0,
+      Creado_En: marcaRegistro_(m.Creado_En), _fila: m._rowIndex, Valor: Number(m.Valor) || 0,
       esTransferencia: m.Tipo_Mov === 'Transferencia', Editable: !m.ID_Grupo && !m.Subtipo
     };
     if (!base.esTransferencia) { items.push(base); return; }
@@ -404,8 +404,7 @@ function listarMovimientos(f) {
     items = items.filter(i => [i.Concepto, i.Notas, i.Bolsillo, i.Categoria, i.Origen, i.Destino, i.Contraparte].some(x => texto_(x).toLowerCase().indexOf(t) !== -1));
   }
 
-  items.sort((a, b) => (b.Fecha > a.Fecha ? 1 : b.Fecha < a.Fecha ? -1 : 0) ||
-    (b.Creado_En > a.Creado_En ? 1 : b.Creado_En < a.Creado_En ? -1 : 0) || (b._fila - a._fila));
+  items.sort(masRecienteArriba_);
 
   // Totales sobre lo que se ve; los traslados no son ingreso ni gasto. Solo de una divisa: la del bolsillo o
   // la cuenta que se mira; sin filtro, pesos (no se suman divisas distintas).
@@ -419,7 +418,7 @@ function listarMovimientos(f) {
   });
 
   const limite = Number(filtro.limite) > 0 ? Number(filtro.limite) : 300;
-  items.forEach(i => { delete i._fila; delete i.Creado_En; });
+  items.forEach(i => { delete i._fila; }); // Creado_En se queda: la app lo usa para ordenar lo que agrega sin volver a pedir la lista
   return {
     items: items.slice(0, limite),
     total: items.length,
